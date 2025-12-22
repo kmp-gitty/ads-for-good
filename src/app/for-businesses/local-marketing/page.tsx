@@ -1,3 +1,9 @@
+export const metadata = {
+    title: "direct mail marketing | reach potential customers right around the corner",
+    description:
+      "Professional and affordable direct mail marketing for your business. Reach local customers with relevant messaging to get more business.",
+  };
+
 export default function LocalMarketingDetailPage() {
     return (
       <main className="bg-orange-50 text-neutral-900 flex justify-center px-4 pt-16 pb-24">

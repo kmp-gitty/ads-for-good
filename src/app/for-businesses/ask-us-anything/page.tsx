@@ -1,10 +1,16 @@
+export const metadata = {
+    title: "business questions | have a marketing team on standby, and ask anything related to your business",
+    description:
+      "Have business questions, but want something flexible? Get guidance and information from marketing and entrepreneurial pros that have done it before.",
+  };
+
 export default function AskUsAnythingPage() {
     return (
       <main className="bg-white text-neutral-900 flex flex-col items-center px-4 pt-16 pb-24">
         {/* Hero / Intro */}
         <section className="w-full max-w-4xl text-left">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-orange-500">
-            Ask Us Anything
+            Ask Us Anything For Your Business
           </h1>
           <p className="mt-5 text-lg text-neutral-700">
             A simple way for small and medium businesses to get honest, practical answers about

@@ -1,12 +1,18 @@
 import Link from "next/link";
 
+export const metadata = {
+  title: "ads for Good network | websites that help in more ways than one",
+  description:
+    "Most ad networks just want you on their site to take your data and use you for company revenue. Our network aims to be useful and serve relevant ads that don't just take.",
+};
+
 export default function AdNetworkPage() {
     return (
       <main className="bg-white text-neutral-900 flex flex-col items-center px-4 pt-16 pb-24">
         {/* Hero / Intro */}
         <section className="w-full max-w-4xl text-left">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-orange-500">
-            ad Network
+            ad Network: ads that give, not just take
           </h1>
           <p className="mt-5 text-lg text-neutral-700">
             We're people that get bored easily, use the web to search for and solve any problem, and want to change what people currently do already - for Good.

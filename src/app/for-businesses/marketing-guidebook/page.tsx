@@ -1,3 +1,9 @@
+export const metadata = {
+    title: "diy marketing guidance | on demand marketing information",
+    description:
+      "Prefer to do things on your own, but just need a little help? Use our downloadable digital guidebook to learn how marketing is done by fortune 500 companies to make their strategies your own.",
+  };
+
 export default function MarketingGuidebookPage() {
     return (
       <main className="bg-white text-neutral-900 flex justify-center px-4 pt-16 pb-24">

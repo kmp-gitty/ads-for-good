@@ -1,5 +1,11 @@
 import Link from "next/link";
 
+export const metadata = {
+    title: "about ads for Good | Ad tactics and information with people in mind",
+    description:
+      "Former corporate ad pros using their knowledge to make ads less creepy, and use advertising for community impact instead of just profit.",
+  };
+
 export default function AboutPage() {
     return (
       <main className="bg-white text-neutral-900 flex flex-col items-center px-4 pt-16 pb-24">

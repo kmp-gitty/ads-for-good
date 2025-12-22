@@ -1,6 +1,12 @@
 import Link from "next/link";
 import Image from "next/image";
 
+export const metadata = {
+  title: "privacy and data | take back control",
+  description:
+    "You'd be surprised how many companies have and how many ways there are to use your data. Learn free tips to take back some control and enact our paid services for even more protection.",
+};
+
 export default function PrivacyProtectionPage() {
     return (
       <main className="bg-white text-neutral-900">
@@ -10,7 +16,7 @@ export default function PrivacyProtectionPage() {
             {/* Left: text */}
             <div className="flex-1">
               <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-orange-500">
-                Privacy protection, without needing a law degree.
+                Privacy protection: understand ad data without needing a law degree.
               </h1>
               <p className="mt-6 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-xl">
                 Everyone wants your data: apps, retailers, ad platforms, even the random sites you

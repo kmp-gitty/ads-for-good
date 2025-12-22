@@ -1,4 +1,11 @@
+
 import Link from "next/link";
+
+export const metadata = {
+  title: "ads for Good | Ethical advertising consulting and tips for small businesses and people",
+  description:
+    "ads for Good is a mission-driven ad company focused on educating people about the ad industry and privacy protection, and consulting businesses on ethical and proper marketing tactics.",
+};
 
 export default function HomePage() {
   return (

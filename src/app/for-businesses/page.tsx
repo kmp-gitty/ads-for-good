@@ -1,5 +1,11 @@
 import Link from "next/link";
 
+export const metadata = {
+  title: "business services | questions, consulting, guidance, and direct mail",
+  description:
+    "Our various marketing and business services aim to do one thing: teach the corporate marketing strategies big businesses use, but make it ethical and useful for small & medium businesses.",
+};
+
 export default function ForBusinessesPage() {
   return (
     <main className="bg-white text-neutral-900">
@@ -8,7 +14,7 @@ export default function ForBusinessesPage() {
       <section className="flex items-center justify-center px-4 pt-16 pb-20">
         <div className="w-full max-w-5xl text-left">
           <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-orange-500">
-            for Businesses: for the small & medium businesses and for your area.
+            for Businesses: info for the small & medium businesses, marketing tactics for your area.
           </h1>
           <p className="mt-6 text-lg text-neutral-700 max-w-3xl">
             We take the kind of thinking usually reserved for giant brands and apply it to real

@@ -1,3 +1,9 @@
+export const metadata = {
+    title: "business consulting | face to face discussions for your business problems",
+    description:
+      "Talk through your marketing or general business problems with our team. Take the time to review ideas, mock strategies, and answer any business questions you have.",
+  };
+
 export default function ConsultancyPage() {
     return (
       <main className="bg-orange-50 text-neutral-900 flex justify-center px-4 pt-16 pb-24">
@@ -6,7 +12,7 @@ export default function ConsultancyPage() {
           {/* Left: Hero copy */}
           <div className="flex-1">
             <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-orange-500">
-              Consulting, without the agency song and dance.
+              Marketing & Business Consulting, without the agency song and dance.
             </h1>
   
             <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
