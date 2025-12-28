@@ -17,15 +17,28 @@ export function Footer() {
 
         {/* Middle: Footer nav items */}
         <div className="hidden md:flex items-center gap-10 text-sm text-neutral-700">
-        <Link href="/for-people" className="hover:text-neutral-900 cursor-pointer">
-    for People
-  </Link>
+          <Link href="/for-people" className="hover:text-neutral-900 cursor-pointer">
+            for People
+          </Link>
+
           <Link href="/for-businesses" className="hover:text-neutral-900 cursor-pointer">
-    for Businesses
-  </Link>
-  <Link href="/network" className="hover:underline hover:text-orange-500 transition">
-    our Network
-  </Link>
+            for Businesses
+          </Link>
+
+          <Link
+            href="/network"
+            className="hover:underline hover:text-orange-500 transition"
+          >
+            our Network
+          </Link>
+
+          {/* NEW: Sitemap */}
+          <Link
+            href="/site-map"
+            className="text-orange-500 hover:underline transition"
+          >
+            Sitemap
+          </Link>
         </div>
 
         {/* Right: Contact Button */}
