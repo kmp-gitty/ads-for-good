@@ -88,6 +88,12 @@ export async function GET(req, ctx) {
   }
 
   // 6) Redirect (tracking redirects should be 302)
-  return Response.redirect(redirectTo, 302);
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: redirectTo,
+      "X-Robots-Tag": "noindex, nofollow",
+    },
+  });
 }
 
