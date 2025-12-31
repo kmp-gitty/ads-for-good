@@ -1,5 +1,5 @@
 export const metadata = {
-    title: "philanthropic impact | how our ads and services are different",
+    title: "philanthropic impact | how ads for Good services are different",
     description:
       "Putting our money where our heart is. Using advertising revenue and profits for the betterment of our people and our communities.",
   };

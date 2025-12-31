@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 type Satellite = {
   id: number;
@@ -10,6 +11,7 @@ type Satellite = {
   tagline: string;
   description: string;
   slug: string; // for future internal articles, e.g. /network/home-tips-companion
+  image: string;
 };
 
 const SITES_PER_LOAD = 8;
@@ -18,12 +20,13 @@ const SITES_PER_LOAD = 8;
 const satellites: Satellite[] = [
   {
     id: 1,
-    name: "Sites coming soon",
-    category: "Home & Everyday",
-    tagline: "Tiny tools for everyday house chaos.",
+    name: "Steps to Miles Calculator",
+    category: "Fitness & Health",
+    tagline: "Calculate how far your steps have taken you.",
     description:
-      "Quick calculators, checklists, and how-tos for home projects, chores, and the little life admin tasks that always pile up.",
-    slug: "home-helper-hub",
+      "An easy to use calculator for estimating how far you've gone based on how many steps you've taken.",
+    slug: "steps2miles",
+    image: "/images/Steps2Miles_Logo.png"
   }
   // Add more as you create satellites...
 ];
@@ -82,10 +85,15 @@ export default function NetworkClient() {
                 className="flex flex-col rounded-3xl bg-orange-50/40 border border-orange-100 overflow-hidden shadow-sm"
               >
                 {/* Top media area (image placeholder) */}
-                <div className="relative bg-neutral-200/60 h-40">
-                  <div className="flex h-full w-full items-center justify-center text-xs text-neutral-600">
-                    Logo / preview placeholder
-                  </div>
+                <div className="relative h-40 bg-neutral-200/60">
+                    <Image
+                        src={site.image}
+                        alt={`${site.name} preview`}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                        priority={site.id === 1}
+                    />
 
                   {/* Category badge */}
                   <div className="absolute bottom-2 right-2 rounded-full bg-white/90 px-3 py-1 text-[10px] font-medium text-neutral-700 shadow-sm">
@@ -106,18 +114,31 @@ export default function NetworkClient() {
                   </p>
 
                   {/* Learn more row – will later link to a detail article */}
-                  <div className="mt-4 flex items-center justify-between">
+                  {/* Bottom row: Learn more (left) + Go to Calculator (right) */}
+                    <div className="mt-4 flex items-center justify-between gap-3">
                     <Link
-                      href="#"
-                      // Later: href={`/network/${site.slug}`}
-                      className="text-sm font-medium text-orange-500 hover:underline"
+                        href={`/network/${site.slug}`}
+                        className="group inline-flex items-center gap-2 text-sm font-medium text-orange-500 hover:underline"
                     >
-                      Learn more
+                        Learn more
+                        <span
+                        aria-hidden="true"
+                        className="text-lg transition-transform group-hover:translate-x-0.5"
+                        >
+                        →
+                        </span>
                     </Link>
-                    <span className="text-lg" aria-hidden="true">
-                      →
-                    </span>
-                  </div>
+
+                    <a
+                        href="https://steps2miles.com#calculator"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-sm font-medium text-black hover:underline"
+                    >
+                        Go to Calculator <span aria-hidden="true">↑</span>
+                    </a>
+                    </div>
+
                 </div>
               </article>
             ))}
