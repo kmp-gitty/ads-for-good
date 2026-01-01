@@ -15,7 +15,7 @@ export default function PrivacyProtectionPage() {
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-16 md:flex-row md:items-center">
             {/* Left: text */}
             <div className="flex-1">
-              <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-orange-500">
+            <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
                 Privacy protection: understand ad data without needing a law degree.
               </h1>
               <p className="mt-6 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-xl">

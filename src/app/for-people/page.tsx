@@ -13,7 +13,7 @@ export default function ForPeoplePage() {
       {/* Title / Hero Section */}
       <section className="flex items-center justify-center px-4 pt-16 pb-20">
         <div className="w-full max-w-5xl text-left">
-          <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-orange-500">
+        <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
             for People: Education, Privacy Protection & ad Network
           </h1>
           <p className="mt-6 text-lg text-neutral-700 max-w-3xl">
@@ -28,7 +28,7 @@ export default function ForPeoplePage() {
         <section className="w-full">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-16 md:flex-row md:items-center transition hover:bg-orange-100">
             {/* Media */}
-            <div className="flex-1 rounded-3xl border border-orange-200 bg-white shadow-sm overflow-hidden h-40">
+            <div className="flex-1 rounded-3xl border border-neutral-900 bg-white shadow-sm overflow-hidden aspect-[16/10]">
               <Image
                 src="/images/EducationWallpaper.png"
                 alt="Education about digital media and advertising"
@@ -73,7 +73,7 @@ export default function ForPeoplePage() {
             </div>
 
             {/* Media */}
-            <div className="flex-1 rounded-3xl border border-neutral-900 bg-white shadow-sm overflow-hidden h-40">
+            <div className="flex-1 rounded-3xl border border-neutral-900 bg-white shadow-sm overflow-hidden aspect-[16/10]">
               <Image
                 src="/images/PrivacyProtectionWallpaper.png"
                 alt="Privacy and data protection illustration"
@@ -91,7 +91,7 @@ export default function ForPeoplePage() {
         <section className="w-full">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-16 md:flex-row md:items-center transition hover:bg-orange-100">
             {/* Media */}
-            <div className="flex-1 rounded-3xl border border-orange-200 bg-white shadow-sm overflow-hidden h-40">
+            <div className="flex-1 rounded-3xl border border-neutral-900 bg-white shadow-sm overflow-hidden aspect-[16/10]">
               <Image
                 src="/images/adNetworkWallpaper.png"
                 alt="Network of ethical advertising sites"
@@ -136,7 +136,7 @@ export default function ForPeoplePage() {
             </div>
 
             {/* Media */}
-            <div className="flex-1 rounded-3xl border border-neutral-900 bg-white shadow-sm overflow-hidden h-40">
+            <div className="flex-1 rounded-3xl border border-neutral-900 bg-white shadow-sm overflow-hidden aspect-[16/10]">
               <Image
                 src="/images/OwnaBusinessWallpaper.png"
                 alt="Local businesses and marketing illustration"

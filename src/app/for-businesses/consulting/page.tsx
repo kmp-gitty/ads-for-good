@@ -11,7 +11,7 @@ export const metadata = {
   
           {/* Left: Hero copy */}
 <div className="flex-1">
-  <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-orange-500">
+  <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
     Marketing & Business Consulting, without the agency song and dance.
   </h1>
 

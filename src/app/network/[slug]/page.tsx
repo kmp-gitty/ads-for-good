@@ -96,7 +96,7 @@ export default async function NetworkDetailPage({
             {page.title}
           </h1>
 
-          <p className="mt-4 text-slate-900">{page.description}</p>
+          <div className="mt-4 text-slate-900">{page.description}</div>
 
           <div className="mt-6 flex flex-wrap gap-3">
             <a

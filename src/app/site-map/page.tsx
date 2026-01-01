@@ -11,7 +11,7 @@ export default function SitemapPage() {
       <section className="w-full max-w-6xl">
         {/* Page title */}
         <header className="mb-10">
-          <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-orange-500">
+          <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
             Sitemap
           </h1>
           <p className="mt-4 text-sm sm:text-base text-neutral-700 max-w-2xl">
@@ -71,6 +71,16 @@ export default function SitemapPage() {
                   Marketing Guidebook
                 </Link>
               </li>
+
+              <li>
+                <Link
+                  href="/for-businesses/digital-property-audit"
+                  className="text-orange-500 hover:underline"
+                >
+                  Digital Property Audit
+                </Link>
+              </li>
+
               <li>
                 <Link
                   href="/for-businesses/local-marketing"

@@ -10,7 +10,7 @@ export const metadata = {
         <section className="w-full max-w-6xl flex flex-col gap-10 md:flex-row md:items-start">
           {/* Left: Hero copy */}
           <div className="flex-1">
-            <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-orange-500">
+            <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
               Local marketing: not just nearby, within your neighborhoods.
             </h1>
             <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">

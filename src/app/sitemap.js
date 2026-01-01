@@ -17,6 +17,7 @@ export default function sitemap() {
       { url: `${baseUrl}/for-businesses/ask-us-anything`, lastModified: new Date() },
       { url: `${baseUrl}/for-businesses/consulting`, lastModified: new Date() },
       { url: `${baseUrl}/for-businesses/marketing-guidebook`, lastModified: new Date() },
+      { url: `${baseUrl}/for-businesses/digital-property-audit`, lastModified: new Date() },
       { url: `${baseUrl}/for-businesses/local-marketing`, lastModified: new Date() },
   
       // Contact

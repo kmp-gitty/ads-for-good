@@ -15,7 +15,15 @@ export function Footer() {
           </span>
         </Link>
 
-        {/* Middle: Footer nav items */}
+        {/* ✅ Mobile-only: Sitemap centered */}
+        <Link
+          href="/site-map"
+          className="md:hidden text-sm font-medium text-orange-500 hover:underline transition"
+        >
+          Sitemap
+        </Link>
+
+        {/* Middle: Footer nav items (desktop only) */}
         <div className="hidden md:flex items-center gap-10 text-sm text-neutral-700">
           <Link href="/for-people" className="hover:text-neutral-900 cursor-pointer">
             for People
@@ -32,7 +40,7 @@ export function Footer() {
             our Network
           </Link>
 
-          {/* NEW: Sitemap */}
+          {/* Sitemap (desktop) */}
           <Link
             href="/site-map"
             className="text-orange-500 hover:underline transition"
@@ -52,4 +60,5 @@ export function Footer() {
     </footer>
   );
 }
+
 
