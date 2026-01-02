@@ -15,8 +15,20 @@ export default function ContactPageClient() {
           </h1>
           <p className="mt-3 text-center text-neutral-700 max-w-xl mx-auto">
             Whether you're a consumer looking for help or a business wanting to partner,
-            we're here to listen. Select the category below — forms coming soon.
-          </p>
+            we're here to listen - use the forms below.
+            <br /><br />
+            Our physical location is in Manayunk, Philadelphia, PA. Never been? Great small town vibe next to a big city. But, we're a remote team that helps people and clients all over.
+            <br /><br />
+            Where we have roots & connections:
+            </p>
+
+            <ul className="mt-3 text-center text-neutral-700 max-w-xl mx-auto list-disc list-inside">
+            <li>Manayunk, Philadelphia, PA</li>
+            <li>Wernersville & Reading, PA</li>
+            <li>San Francisco, CA</li>
+            <li>Las Vegas, NV</li>
+            <li>Honolulu, HI</li>
+            </ul>
   
           {/* Two Columns */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mt-16">
