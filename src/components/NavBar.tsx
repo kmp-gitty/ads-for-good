@@ -93,7 +93,8 @@ export function NavBar() {
                   </div>
 
                   {/* ============================== */}
-{/*  FOR BUSINESSES COLUMN        */}
+{/* ============================== */}
+{/*  FOR BUSINESSES COLUMN         */}
 {/* ============================== */}
 <div>
   <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
@@ -122,11 +123,21 @@ export function NavBar() {
 
     <li>
       <Link
-        href="/for-businesses/ask-us-anything"
+        href="/for-businesses/marketing-advice"
         className="flex items-center gap-2 hover:text-orange-500"
       >
         <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
-        Ask Us Anything
+        Marketing Advice On Demand
+      </Link>
+    </li>
+
+    <li>
+      <Link
+        href="/for-businesses/digital-property-audit"
+        className="flex items-center gap-2 hover:text-orange-500"
+      >
+        <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
+        Digital Health Check
       </Link>
     </li>
 
@@ -148,11 +159,11 @@ export function NavBar() {
   <ul className="mt-2 space-y-1 text-sm">
     <li>
       <Link
-        href="/for-businesses/digital-property-audit"
+        href="/for-businesses/digital-profile-management"
         className="flex items-center gap-2 hover:text-orange-500"
       >
         <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
-        Digital Property Audit
+        Digital Profile Management
       </Link>
     </li>
 
@@ -178,21 +189,11 @@ export function NavBar() {
 
     <li>
       <Link
-        href="/for-businesses/paid-ads"
+        href="/for-businesses/digital-ads"
         className="flex items-center gap-2 hover:text-orange-500"
       >
         <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
-        Paid Ads
-      </Link>
-    </li>
-
-    <li>
-      <Link
-        href="/for-businesses/digital-profile-management"
-        className="flex items-center gap-2 hover:text-orange-500"
-      >
-        <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
-        Digital Profile Management
+        Digital Ads
       </Link>
     </li>
 
@@ -271,7 +272,7 @@ export function NavBar() {
 
               <div className="pt-2 border-t border-orange-100" />
 
-              {/* for Businesses */}
+             {/* for Businesses (mobile) */}
 <Link
   href="/for-businesses"
   onClick={() => setMobileOpen(false)}
@@ -283,6 +284,7 @@ export function NavBar() {
 <p className="pl-3 pt-1 text-xs font-semibold text-neutral-800">
   For Ideas &amp; Guidance
 </p>
+
 <Link
   href="/for-businesses/marketing-guidebook"
   onClick={() => setMobileOpen(false)}
@@ -290,13 +292,23 @@ export function NavBar() {
 >
   Marketing Guidebook
 </Link>
+
 <Link
-  href="/for-businesses/ask-us-anything"
+  href="/for-businesses/marketing-advice"
   onClick={() => setMobileOpen(false)}
   className="pl-6 hover:text-orange-500"
 >
-  Ask Us Anything
+  Marketing Advice On Demand
 </Link>
+
+<Link
+  href="/for-businesses/digital-property-audit"
+  onClick={() => setMobileOpen(false)}
+  className="pl-6 hover:text-orange-500"
+>
+  Digital Health Check
+</Link>
+
 <Link
   href="/for-businesses/consulting"
   onClick={() => setMobileOpen(false)}
@@ -308,34 +320,7 @@ export function NavBar() {
 <p className="pl-3 pt-3 text-xs font-semibold text-neutral-800">
   For Operation &amp; Execution
 </p>
-<Link
-  href="/for-businesses/digital-property-audit"
-  onClick={() => setMobileOpen(false)}
-  className="pl-6 hover:text-orange-500"
->
-  Digital Property Audit
-</Link>
-<Link
-  href="/for-businesses/website-builds-updates"
-  onClick={() => setMobileOpen(false)}
-  className="pl-6 hover:text-orange-500"
->
-  Website Builds &amp; Updates
-</Link>
-<Link
-  href="/for-businesses/seo-services"
-  onClick={() => setMobileOpen(false)}
-  className="pl-6 hover:text-orange-500"
->
-  SEO Services
-</Link>
-<Link
-  href="/for-businesses/paid-ads"
-  onClick={() => setMobileOpen(false)}
-  className="pl-6 hover:text-orange-500"
->
-  Paid Ads
-</Link>
+
 <Link
   href="/for-businesses/digital-profile-management"
   onClick={() => setMobileOpen(false)}
@@ -343,6 +328,31 @@ export function NavBar() {
 >
   Digital Profile Management
 </Link>
+
+<Link
+  href="/for-businesses/website-builds-updates"
+  onClick={() => setMobileOpen(false)}
+  className="pl-6 hover:text-orange-500"
+>
+  Website Builds &amp; Updates
+</Link>
+
+<Link
+  href="/for-businesses/seo-services"
+  onClick={() => setMobileOpen(false)}
+  className="pl-6 hover:text-orange-500"
+>
+  SEO Services
+</Link>
+
+<Link
+  href="/for-businesses/digital-ads"
+  onClick={() => setMobileOpen(false)}
+  className="pl-6 hover:text-orange-500"
+>
+  Digital Ads
+</Link>
+
 <Link
   href="/for-businesses/local-marketing"
   onClick={() => setMobileOpen(false)}
@@ -350,6 +360,7 @@ export function NavBar() {
 >
   Local Direct Mail
 </Link>
+
 
 
               <div className="pt-2 border-t border-orange-100" />

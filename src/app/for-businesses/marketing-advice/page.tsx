@@ -12,7 +12,7 @@ export const metadata = {
           {/* Hero / Intro */}
           <section className="text-left">
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-orange-500">
-              Ask Us Anything For Your Business
+              Ask Us Anything: On-Demand Marketing Advice For Your Business
             </h1>
   
             <p className="mt-4 sm:mt-5 text-base sm:text-lg text-neutral-700 leading-relaxed max-w-3xl">

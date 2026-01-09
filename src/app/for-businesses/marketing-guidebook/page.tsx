@@ -34,7 +34,7 @@ export default function MarketingGuidebookPage() {
             >
               Buy the guidebook here.
             </a>
-            {" "}$50 gets you the 16 page marketing guidebook to better your business at your own pace.
+            {" "}$25 gets you the 16 page marketing guidebook to better your business at your own pace.
           </p>
         </div>
 

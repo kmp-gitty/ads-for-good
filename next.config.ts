@@ -1,8 +1,18 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   reactCompiler: true,
+
+  async redirects() {
+    return [
+      {
+        source: "/ask-us-anything",
+        destination: "/marketing-advice",
+        permanent: true, // 301 redirect
+      },
+    ];
+  },
 };
 
 export default nextConfig;
+

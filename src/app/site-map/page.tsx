@@ -52,7 +52,7 @@ export default function SitemapPage() {
             <ul className="mt-4 space-y-2 text-sm">
               <li>
                 <Link
-                  href="/for-businesses/ask-us-anything"
+                  href="/for-businesses/marketing-advice"
                   className="text-orange-500 hover:underline"
                 >
                   Ask Us Anything

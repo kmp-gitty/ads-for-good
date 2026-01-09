@@ -14,7 +14,7 @@ export default function sitemap() {
   
       // For Businesses section
       { url: `${baseUrl}/for-businesses`, lastModified: new Date() },
-      { url: `${baseUrl}/for-businesses/ask-us-anything`, lastModified: new Date() },
+      { url: `${baseUrl}/for-businesses/marketing-advice`, lastModified: new Date() },
       { url: `${baseUrl}/for-businesses/consulting`, lastModified: new Date() },
       { url: `${baseUrl}/for-businesses/marketing-guidebook`, lastModified: new Date() },
       { url: `${baseUrl}/for-businesses/digital-property-audit`, lastModified: new Date() },
