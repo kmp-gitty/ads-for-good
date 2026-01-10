@@ -245,10 +245,10 @@ export const metadata = {
                       For this service, we can answer questions and guide you. If you want an in-depth
                       review, see our{" "}
                       <a
-                        href="https://www.ads4good.com/for-businesses/digital-property-audit"
+                        href="https://www.ads4good.com/for-businesses//digital-health-check"
                         className="text-orange-500 underline hover:text-orange-600"
                       >
-                        Digital Property Audit
+                        Digital Health Check
                       </a>
                       .
                     </>
@@ -304,10 +304,10 @@ export const metadata = {
                 </a>
   
                 <a
-                  href="https://www.ads4good.com/for-businesses/digital-property-audit"
+                  href="https://www.ads4good.com/for-businesses//digital-health-check"
                   className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                 >
-                  In-Depth Digital Property Audit
+                  In-Depth Digital Health Check
                 </a>
   
                 <a

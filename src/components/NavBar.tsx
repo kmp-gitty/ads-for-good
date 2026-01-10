@@ -133,7 +133,7 @@ export function NavBar() {
 
     <li>
       <Link
-        href="/for-businesses/digital-property-audit"
+        href="/for-businesses/digital-health-check"
         className="flex items-center gap-2 hover:text-orange-500"
       >
         <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
@@ -302,7 +302,7 @@ export function NavBar() {
 </Link>
 
 <Link
-  href="/for-businesses/digital-property-audit"
+  href="/for-businesses/digital-health-check"
   onClick={() => setMobileOpen(false)}
   className="pl-6 hover:text-orange-500"
 >

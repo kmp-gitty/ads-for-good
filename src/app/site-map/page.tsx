@@ -74,10 +74,10 @@ export default function SitemapPage() {
 
               <li>
                 <Link
-                  href="/for-businesses/digital-property-audit"
+                  href="/for-businesses/digital-health-check"
                   className="text-orange-500 hover:underline"
                 >
-                  Digital Property Audit
+                  Digital Health Check
                 </Link>
               </li>
 

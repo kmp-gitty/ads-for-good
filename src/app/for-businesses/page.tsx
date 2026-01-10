@@ -27,7 +27,7 @@ export default function ForBusinessesPage() {
       {/* Section 1 – Ask Us Anything */}
       {/* ------------------------------------------- */}
       <section className="w-full bg-orange-50">
-        <Link href="/for-businesses/ask-us-anything" className="block">
+        <Link href="/for-businesses/marketing-advice" className="block">
           <div
             className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-16
                        md:flex-row md:items-center rounded-3xl transition hover:bg-orange-100 cursor-pointer"
@@ -127,24 +127,24 @@ export default function ForBusinessesPage() {
       </section>
 
             {/* ------------------------------------------- */}
-      {/* Section 4 – Digital Property Audit */}
+      {/* Section 4 – Digital Health Check */}
       {/* Background: white */}
       {/* ------------------------------------------- */}
       <section className="w-full bg-white">
-        <Link href="/for-businesses/digital-property-audit" className="block">
+        <Link href="/for-businesses/digital-health-check" className="block">
           <div
             className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-16
                        md:flex-row md:items-center rounded-3xl transition hover:bg-orange-100 cursor-pointer"
           >
             {/* Text (now first) */}
             <div className="flex-1">
-              <h2 className="text-2xl font-semibold text-orange-500">Digital Property Audit</h2>
+              <h2 className="text-2xl font-semibold text-orange-500">Digital Health Check</h2>
               <p className="mt-4 text-sm text-neutral-800 leading-relaxed">
                 Know your website and social profiles could do more? Think there's something else out there you could use, but don't know what? We'll audit all of your digital properties to figure out what's broken, how to make things better, and provide new ideas to try.
                 <br /><br />
                 One Example: we'll walkthrough every page and link on your site to figure out what's broken and how you could convert customers better.
                 <br /><br />
-                $1,000 gets you a full digital property audit, including: audit, assessment, instructions, and any recommendations.
+                $500 gets you a full digital property review, including: audit, assessment, instructions, and any recommendations.
               </p>
             </div>
 

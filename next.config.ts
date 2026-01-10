@@ -10,6 +10,11 @@ const nextConfig: NextConfig = {
         destination: "/marketing-advice",
         permanent: true, // 301 redirect
       },
+      {
+        source: "/for-businesses/digital-property-audit",
+        destination: "/for-businesses/digital-health-check",
+        permanent: true,
+      },
     ];
   },
 };
