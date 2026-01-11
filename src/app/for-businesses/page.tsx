@@ -165,7 +165,7 @@ export default function ForBusinessesPage() {
       {/* Background: pale orange */}
       {/* ------------------------------------------- */}
       <section className="w-full bg-orange-50 pb-24">
-        <Link href="/for-businesses/local-marketing" className="block">
+        <Link href="/for-businesses/direct-mail" className="block">
           <div
             className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-16
                        md:flex-row md:items-center rounded-3xl transition hover:bg-orange-100 cursor-pointer"

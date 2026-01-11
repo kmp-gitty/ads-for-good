@@ -157,16 +157,7 @@ export function NavBar() {
     For Operation &amp; Execution
   </p>
   <ul className="mt-2 space-y-1 text-sm">
-    <li>
-      <Link
-        href="/for-businesses/digital-profile-management"
-        className="flex items-center gap-2 hover:text-orange-500"
-      >
-        <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
-        Digital Profile Management
-      </Link>
-    </li>
-
+   
     <li>
       <Link
         href="/for-businesses/website-builds-updates"
@@ -174,6 +165,16 @@ export function NavBar() {
       >
         <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
         Website Builds &amp; Updates
+      </Link>
+    </li>
+
+    <li>
+      <Link
+        href="/for-businesses/digital-profile-management"
+        className="flex items-center gap-2 hover:text-orange-500"
+      >
+        <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
+        Digital Profile Management
       </Link>
     </li>
 
@@ -199,11 +200,20 @@ export function NavBar() {
 
     <li>
       <Link
-        href="/for-businesses/local-marketing"
+        href="/for-businesses/direct-mail"
         className="flex items-center gap-2 hover:text-orange-500"
       >
         <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
         Local Direct Mail
+      </Link>
+    </li>
+    <li>
+      <Link
+        href="/for-businesses/marketing-team"
+        className="flex items-center gap-2 hover:text-orange-500"
+      >
+        <span className="h-1.5 w-1.5 bg-neutral-800 rounded-[2px]" />
+        Be My Marketing Team
       </Link>
     </li>
   </ul>
@@ -354,11 +364,19 @@ export function NavBar() {
 </Link>
 
 <Link
-  href="/for-businesses/local-marketing"
+  href="/for-businesses/direct-mail"
   onClick={() => setMobileOpen(false)}
   className="pl-6 hover:text-orange-500"
 >
   Local Direct Mail
+</Link>
+
+<Link
+        href="/for-businesses/marketing-team"
+        onClick={() => setMobileOpen(false)}
+        className="pl-6 hover:text-orange-500"
+    >
+        Be My Marketing Team
 </Link>
 
 

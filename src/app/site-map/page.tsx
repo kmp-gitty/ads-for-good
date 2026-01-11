@@ -83,7 +83,7 @@ export default function SitemapPage() {
 
               <li>
                 <Link
-                  href="/for-businesses/local-marketing"
+                  href="/for-businesses/direct-mail"
                   className="text-orange-500 hover:underline"
                 >
                   Local Direct Mail

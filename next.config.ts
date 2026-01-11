@@ -15,6 +15,11 @@ const nextConfig: NextConfig = {
         destination: "/for-businesses/digital-health-check",
         permanent: true,
       },
+      {
+        source: "/for-businesses/local-marketing",
+        destination: "/for-businesses/direct-mail",
+        permanent: true,
+      },
     ];
   },
 };

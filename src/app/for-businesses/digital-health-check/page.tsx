@@ -172,7 +172,7 @@ export const metadata = {
         <div className="mx-auto w-full max-w-6xl px-4 pb-24">
           {/* Who this is for / not for */}
           <section className="mt-10 grid gap-6 md:grid-cols-2">
-            <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+            <div className="rounded-3xl border-1 border-black bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
               <h3 className="text-sm font-semibold text-neutral-900">Who this is for</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                 <li>Business owners looking for help, but not commitment</li>
@@ -181,7 +181,7 @@ export const metadata = {
               </ul>
             </div>
   
-            <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+            <div className="rounded-3xl border-1 border-black bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
               <h3 className="text-sm font-semibold text-neutral-900">Who this is not for</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                 <li>Businesses looking for a long-term engagement</li>
@@ -356,7 +356,7 @@ export const metadata = {
                 </a>
   
                 <a
-                  href="https://www.ads4good.com/for-businesses/local-marketing"
+                  href="https://www.ads4good.com/for-businesses/direct-mail"
                   className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                 >
                   Direct Mail Campaigns
