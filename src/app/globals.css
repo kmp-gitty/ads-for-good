@@ -24,3 +24,17 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes kwDance {
+  0% { transform: translateY(0px) rotate(0deg); opacity: 0.98; }
+  25% { transform: translateY(-3px) rotate(-0.6deg); opacity: 1; }
+  50% { transform: translateY(1px) rotate(0.6deg); opacity: 0.98; }
+  75% { transform: translateY(-2px) rotate(0.2deg); opacity: 1; }
+  100% { transform: translateY(0px) rotate(0deg); opacity: 0.98; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kw-float {
+    animation: none !important;
+  }
+}
