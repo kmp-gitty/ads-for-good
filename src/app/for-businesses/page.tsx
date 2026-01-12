@@ -90,7 +90,7 @@ export default function ForBusinessesPage() {
     cards: [
       {
         title: "Website Builds & Updates",
-        href: "/for-businesses/website",
+        href: "/for-businesses/website-builds-updates",
         pricingLabel: "Options:",
         pricing: [
           { label: "New Site Build", value: "$1,000" },
@@ -100,13 +100,13 @@ export default function ForBusinessesPage() {
       },
       {
         title: "Digital Profile Management",
-        href: "/for-businesses/digital-profiles",
+        href: "/for-businesses/digital-profile-management",
         pricingLabel: "Month to month",
         pricing: [{ label: "All profiles", value: "$200/mo" }],
       },
       {
         title: "SEO Services",
-        href: "/for-businesses/seo",
+        href: "/for-businesses/seo-services",
         pricingLabel: "2 Month minimum",
         pricing: [
           { label: "Initial analysis & planning", value: "$250" },

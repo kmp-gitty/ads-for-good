@@ -1,12 +1,10 @@
-import ProfileOutlineCompact from "./ProfileOutlineCompact";
-
 export const metadata = {
-  title: "Digital Profile Management for Small Businesses | Ads for Good",
+  title: "Outsourced Marketing Team for Small Businesses | Ads for Good",
   description:
-    "Ongoing profile management services. We maintain Google Business, Yelp, Facebook, and other key listings to keep your digital presence accurate, consistent, and responsive.",
+    "Work with an experienced outsourced marketing team for your small business. Strategy, execution, SEO, paid ads, and ongoing support - without the cost of a full-time hire.",
 };
 
-export default function DigitalProfileManagementPage() {
+export default function MarketingTeamPage() {
   return (
     <main className="bg-white text-neutral-900 flex flex-col items-center px-4 pt-16 pb-24">
       {/* HERO SECTION */}
@@ -14,26 +12,27 @@ export default function DigitalProfileManagementPage() {
         {/* Left: Hero copy */}
         <div className="flex-1">
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-            Digital Listing Management: Save Time and Gain Reassurance.
+            Built for Small Businesses: Your Marketing Team
           </h1>
 
           <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-            Your business gets evaluated before you ever hear from a customer — usually through your
-            online profiles, reviews, photos, categories, and listings.
-            <br />
-            <br />
-            Digital Profile Management keeps your online presence accurate, consistent, and up-to-date across
-            the platforms people actually use, so you show up and look more trustworthy when they find you.
-            <br />
-            <br />
+            Some people like to DIY. Sometimes you just want a clear,
+            step-by-step playbook you can follow on your own time — without digging through
+            a hundred blogs and YouTube videos.
+            <br /><br />
+            The marketing guidebook is built for small and medium businesses who want to
+            understand the &quot;why&quot; and the &quot;how&quot; of modern marketing, in
+            plain language, with examples you can copy and adapt.
+            <br /><br />
             <a
               href="https://forms.gle/mSm6dfmz8AhVzjkw9"
               target="_blank"
               rel="noopener noreferrer"
               className="text-orange-500 underline hover:text-orange-600"
             >
-              Set up Digital Profile Management here.
+              Buy the guidebook here.
             </a>
+            {" "}$25 gets you the 16 page marketing guidebook to better your business at your own pace.
           </p>
         </div>
 
@@ -44,25 +43,26 @@ export default function DigitalProfileManagementPage() {
             <div className="mb-4 h-40 w-full overflow-hidden rounded-2xl bg-neutral-100">
               <img
                 src="/images/MarketingGuidebook.png"
-                alt="Digital Profile Management"
+                alt="Marketing Guidebook Cover"
                 className="object-contain w-full h-full"
               />
             </div>
 
             <h2 className="text-sm font-semibold text-neutral-900">
-              What We Manage: $200/mo
+              What This Guidebook Covers:
             </h2>
 
             <ul className="mt-3 space-y-1.5 text-xs sm:text-sm text-neutral-800 list-disc list-inside">
-              <li>Information, accuracy, & consistency across platforms</li>
-              <li>Business info (hours, services, categories, contact paths)</li>
-              <li>Photos, descriptions, and trust signals</li>
-              <li>Review monitoring + responses</li>
-              <li>New profile opportunities (if you&apos;re missing key listings)</li>
+              <li>Information about Free & Paid tools for your business</li>
+              <li>How to get the most out of the mainstream digital channels</li>
+              <li>Paid Search, Paid Social, & Ecommerce advice</li>
+              <li>Big business ad facts</li>
+              <li>Practical instructions to make simple, yet effective, changes</li>
             </ul>
 
             <p className="mt-3 text-xs sm:text-sm text-neutral-800 leading-relaxed">
-              The goal is simple: look legitimate, show up more, and remove customer friction while giving you time back to run your business.
+              You'll learn what the thing is, why the thing is important, and how to implement
+              the thing (if you choose).
             </p>
           </div>
         </div>
@@ -73,84 +73,87 @@ export default function DigitalProfileManagementPage() {
         <div className="mx-auto w-full max-w-6xl px-4 py-16">
           <div className="max-w-6xl">
             <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-              What does profile management really mean?
+              A sneak peek of what's inside.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed">
-              Your profiles aren&apos;t “set it and forget it", but take effort to manage. It can be hard to track and manage all of your business's listings, especially when best practices and algorithms change constantly across different platforms. We'll do the tedious part, so you can focus on your business.
+              Disclaimer: I believe in "if it ain't broke, don't fix it". If you're running a successful business, and for the past 30 years you've found that word of mouth and a simple website works - I don't want you buying this, it won't be helpful.<br /><br />
+              However, if you think there's more on the table and you've been thinking of taking marketing and digital tools more seriously - this guidebook is the perfect place to start.
             </p>
           </div>
 
           <div className="mt-10 grid gap-6 md:grid-cols-3">
-            {/* Pill 1 */}
+            {/* Tool 1 */}
             <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
               <h3 className="text-sm font-semibold text-neutral-900">
-                Information Consistency
+                Free Tools: aka "Owned & Operated"
               </h3>
               <p className="mt-2 text-xs text-neutral-700">
-                Across platforms, your business information should be uniform, accurate, and correct.
+                What can you do with the free tools you already have (or can easily setup)?
               </p>
 
               <ul className="mt-2 space-y-1 text-xs text-neutral-700">
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  General business information and hours
+                  Website & other digital properties (Facebook page, IG page, etc)
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Clean-up and unification
+                  Profiles: Google, Yelp, etc
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Contact path updates and access
+                  Other things: Content, email, software, etc
                 </li>
               </ul>
             </div>
 
-            {/* Pill 2 */}
+            {/* Tool 2 */}
             <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
               <h3 className="text-sm font-semibold text-neutral-900">
-                Trust & Completeness
+                Paid Tools: Search, Social, Ecommerce, & More
               </h3>
               <p className="mt-2 text-xs text-neutral-700">
-                Make it easy for customers to trust you — and keep up with profile trends.
+                What can you do with paid tools to grow your business?
               </p>
 
               <ul className="mt-2 space-y-1 text-xs text-neutral-700">
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Full profiles, updating missing sections
+                  The big ad platforms: Paid Search & Paid Social
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Best practices and key platform changes
+                  Ecommerce: Selling on Amazon
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Eliminating duplicates and incorrect listings
+                  Other things: SEO, Programmatic Ads, TV, OOH (Out of Home)
                 </li>
               </ul>
             </div>
 
-            {/* Pill 3 */}
+            {/* Tool 3 */}
             <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
               <h3 className="text-sm font-semibold text-neutral-900">
-                Review & Community Management
+                General Tips Across Sections
               </h3>
-              <p className="mt-2 text-xs text-neutral-700">
-                Respond appropriately and in a timely manner to inquiries, comments, and reviews.
-              </p>
+
               <ul className="mt-2 space-y-1 text-xs text-neutral-700">
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Review responses and moderation
+                  What is a marketing guidebook and how do I use it?
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Comment responses and moderation
+                  How should I interpret marketing topics for my business?
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Increase review and follow count
+                  How can I apply these marketing tactics to my business?
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
+                  What are some examples across marketing topics I can implement?
                 </li>
               </ul>
             </div>
@@ -165,34 +168,66 @@ export default function DigitalProfileManagementPage() {
           <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
             <h3 className="text-sm font-semibold text-neutral-900">Who this is for</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-              <li>Owners who want profiles handled by someone else</li>
-              <li>Businesses with outdated / inconsistent listings</li>
-              <li>Anyone who wants to show up and look more legitimate online</li>
+              <li>Business owners doing marketing theselves</li>
+              <li>Anyone curious about simple improvements</li>
+              <li>Owners in-between “I think there's more” and “I don't know how”</li>
             </ul>
           </div>
 
           <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
             <h3 className="text-sm font-semibold text-neutral-900">Who this is not for</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-              <li>Businesses who want a one-time audit only</li>
-              <li>Teams looking for paid ads strategy</li>
-              <li>Anyone wanting a DIY solution</li>
+              <li>Businesses looking for a long-term engagement</li>
+              <li>Teams looking for execution instead of advice</li>
+              <li>Anyone wanting a custom solution</li>
             </ul>
           </div>
         </section>
 
-        {/* Outline (compact + selectable) */}
-        <section className="mt-12">
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-neutral-900">
-            Profiles & Listings We Maintain
-          </h2>
-
-          <p className="mt-3 text-base sm:text-lg text-neutral-700 leading-relaxed max-w-4xl">
-            Use the selector below to jump through the common listings we manage. Don't see one you use? No worries, this list is just an example. This service includes management for ALL profiles you want to hand-off.
-          </p>
-
-          <ProfileOutlineCompact />
-        </section>
+{/* Process */}
+<section className="mt-12">
+            <h2 className="text-xl font-semibold tracking-tight text-orange-500">
+              What&apos;s the process?
+            </h2>
+            <p className="mt-2 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-3xl">
+              This service is designed to be hands-off for you and your business. Answer a couple of
+              questions upfront, then let us do our thing. From payment to completion, this service takes
+              3–5 business days.
+            </p>
+  
+            <div className="mt-6 grid gap-6 md:grid-cols-3 items-start">
+              {/* WHITE backgrounds here */}
+              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+                <h3 className="text-sm font-semibold text-neutral-900">What we need from you</h3>
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
+                  <li>Send the get started email or complete the form</li>
+                  <li>Answer 2 questions</li>
+                  <li>What digital properties does your business use?</li>
+                  <li>What are your biggest concerns about them?</li>
+                  <li>Then we get to work</li>
+                </ul>
+              </div>
+  
+              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+                <h3 className="text-sm font-semibold text-neutral-900">What we&apos;ll do</h3>
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
+                  <li>A real human finds & evaluates all digital properties you appear on</li>
+                  <li>Pass 1 (consumer): how easy is it to trust & navigate?</li>
+                  <li>Pass 2 (marketer): what&apos;s broken, missing, or unclear?</li>
+                  <li>Document everything and recommend next steps</li>
+                </ul>
+              </div>
+  
+              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+                <h3 className="text-sm font-semibold text-neutral-900">What happens when we&apos;re done</h3>
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
+                  <li>You receive your document (a record of everything we found)</li>
+                  <li>We review it together: findings, fixes, recommendations</li>
+                  <li>You can implement yourself — or we can (included in cost)</li>
+                </ul>
+              </div>
+            </div>
+          </section>
 
         {/* FAQ */}
         <section className="mt-12">
@@ -205,23 +240,30 @@ export default function DigitalProfileManagementPage() {
             {[
               {
                 q: "What's the process for this?",
-                a: "Sign up for service. Tell us which profiles to maintain. Provide access. That's it.",
+                a: "First: fill out the Guidebook Order Form. Second: we'll send you the payment link. Third: we'll send you the guidebook in your preferred file type.",
               },
               {
-                q: "Which platforms do you manage?",
-                a: "Typically: Google, Yelp, Facebook/Instagram, and any other listings you're using.",
+                q: "What file type is the guidebook in?",
+                a: "There are 2 options: PDF or personalized link - both offer access forever.",
               },
               {
-                q: "Is this recurring or one-time?",
-                a: "This is a recurring, month-to-month service.",
+                q: "Is this better than hiring someone?",
+                a: (
+                  <>
+                    Loaded question, so answer is: it depends. If you just want to try some simple steps to see what happens, then yes this is "better". But, if you're already thinking you need live or operational help, then this isn't for you. We'd suggest checking out our{" "}
+                    <a
+                      href="https://www.ads4good.com/for-businesses/consulting"
+                      className="text-orange-500 underline hover:text-orange-600"
+                    >
+                      Consulting Services
+                    </a>
+                    .
+                  </>
+                ),
               },
               {
-                q: "Do you respond to reviews for us?",
-                a: "Yes, comments too. We'll have a meeting to learn your voice and check-in on anything necessary.",
-              },
-              {
-                q: "Do you manage existing profiles only?",
-                a: "No, if we find you're not using a profile you should - we'll create it for you.",
+                q: "Is this good for beginners?",
+                a: "Absolutely. This is meant to be easy to understand and simple to follow for those wanting to try something new for their business.",
               },
             ].map((item) => (
               <details
@@ -286,3 +328,4 @@ export default function DigitalProfileManagementPage() {
     </main>
   );
 }
+  

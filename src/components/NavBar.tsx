@@ -332,19 +332,19 @@ export function NavBar() {
 </p>
 
 <Link
-  href="/for-businesses/digital-profile-management"
-  onClick={() => setMobileOpen(false)}
-  className="pl-6 hover:text-orange-500"
->
-  Digital Profile Management
-</Link>
-
-<Link
   href="/for-businesses/website-builds-updates"
   onClick={() => setMobileOpen(false)}
   className="pl-6 hover:text-orange-500"
 >
   Website Builds &amp; Updates
+</Link>
+
+<Link
+  href="/for-businesses/digital-profile-management"
+  onClick={() => setMobileOpen(false)}
+  className="pl-6 hover:text-orange-500"
+>
+  Digital Profile Management
 </Link>
 
 <Link
