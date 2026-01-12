@@ -36,5 +36,6 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .kw-float {
     animation: none !important;
+    transform: none !important;
   }
 }

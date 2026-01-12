@@ -177,32 +177,33 @@ export default function ForBusinessesPage() {
   return (
     <main className="bg-orange-50 text-neutral-900 overflow-x-hidden">
       {/* HERO */}
-      <section className="mx-auto w-full max-w-6xl px-4 pt-16 pb-10">
+      <section className="mx-auto w-full max-w-6xl px-4 pt-12 sm:pt-16 pb-10">
         <div className="grid gap-10 md:grid-cols-2 md:items-start">
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
+            <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-tight text-orange-500">
               {hero.h1}
             </h1>
             <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
               {hero.description}
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            {/* Mobile-friendly pill nav */}
+            <div className="mt-8 grid gap-3 sm:flex sm:flex-wrap">
               <a
                 href={`#${ideasGuidance.id}`}
-                className="rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 hover:underline"
+                className="w-full sm:w-auto text-center rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 hover:underline"
               >
                 For Ideas &amp; Guidance
               </a>
               <a
                 href={`#${opsExecution.id}`}
-                className="rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 hover:underline"
+                className="w-full sm:w-auto text-center rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 hover:underline"
               >
                 For Operation &amp; Execution
               </a>
               <a
                 href={`#${team.id}`}
-                className="rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 hover:underline"
+                className="w-full sm:w-auto text-center rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 hover:underline"
               >
                 Be My Marketing Team
               </a>
@@ -211,7 +212,7 @@ export default function ForBusinessesPage() {
 
           {/* Right: minimal animated keyword cloud (keep yours as-is) */}
           <div className="min-w-0">
-            <div className="relative h-[300px] sm:h-[360px] w-full overflow-hidden rounded-2xl">
+            <div className="relative h-[260px] sm:h-[360px] w-full overflow-hidden rounded-2xl">
               <div className="absolute -top-10 -left-10 h-40 w-40 rounded-full bg-orange-100/60 blur-3xl" />
               <div className="absolute -bottom-12 -right-12 h-44 w-44 rounded-full bg-orange-100/50 blur-3xl" />
               <div className="absolute top-10 right-12 h-32 w-32 rounded-full bg-orange-100/40 blur-3xl" />
@@ -224,19 +225,22 @@ export default function ForBusinessesPage() {
                   { t: "local direct mail", s: "text-sm sm:text-base font-medium", x: "left-[60%]", y: "top-[40%]" },
                   { t: "marketing advice", s: "text-sm sm:text-base font-medium", x: "left-[72%]", y: "top-[10%]" },
                   { t: "get more customers", s: "text-sm sm:text-base font-medium", x: "left-[70%]", y: "top-[34%]" },
+
                   { t: "DIY marketing guidebook", s: "text-sm sm:text-base", x: "left-[10%]", y: "top-[58%]" },
                   { t: "website updates", s: "text-xs sm:text-sm", x: "left-[52%]", y: "top-[58%]" },
                   { t: "profile management", s: "text-xs sm:text-sm", x: "left-[70%]", y: "top-[52%]" },
                   { t: "SEO services", s: "text-xs sm:text-sm", x: "left-[20%]", y: "top-[74%]" },
                   { t: "digital ads", s: "text-xs sm:text-sm", x: "left-[42%]", y: "top-[78%]" },
-                  { t: "get more leads", s: "text-xs sm:text-sm", x: "left-[52%]", y: "top-[88%]" },
-                  { t: "pressure-test a plan", s: "text-xs sm:text-sm", x: "left-[6%]", y: "top-[28%]" },
-                  { t: "what should we do next?", s: "text-xs sm:text-sm", x: "left-[58%]", y: "top-[26%]" },
-                  { t: "fix what’s broken", s: "text-xs sm:text-sm", x: "left-[32%]", y: "top-[48%]" },
-                  { t: "improve conversions", s: "text-xs sm:text-sm", x: "left-[34%]", y: "top-[66%]" },
-                  { t: "track ROI simply", s: "text-xs sm:text-sm", x: "left-[10%]", y: "top-[86%]" },
-                  { t: "build trust locally", s: "text-xs sm:text-sm", x: "left-[72%]", y: "top-[74%]" },
-                  { t: "get more business", s: "text-xs sm:text-sm", x: "left-[78%]", y: "top-[84%]" },
+
+                  // Hide the tiniest/helper phrases on mobile to reduce crowding
+                  { t: "get more leads", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[52%]", y: "top-[88%]" },
+                  { t: "pressure-test a plan", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[6%]", y: "top-[28%]" },
+                  { t: "what should we do next?", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[58%]", y: "top-[26%]" },
+                  { t: "fix what’s broken", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[32%]", y: "top-[48%]" },
+                  { t: "improve conversions", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[34%]", y: "top-[66%]" },
+                  { t: "track ROI simply", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[10%]", y: "top-[86%]" },
+                  { t: "build trust locally", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[72%]", y: "top-[74%]" },
+                  { t: "get more business", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[78%]", y: "top-[84%]" },
                 ].map((w, i) => (
                   <span
                     key={w.t}
@@ -259,7 +263,6 @@ export default function ForBusinessesPage() {
         id={ideasGuidance.id}
         className="mx-auto w-full max-w-6xl px-4 pt-10 pb-14 scroll-mt-28"
       >
-        {/* Top row: left text + inline guidebook pill */}
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
           <div className="min-w-0">
             <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
@@ -274,7 +277,6 @@ export default function ForBusinessesPage() {
           <div className="min-w-0">
             <div className="rounded-3xl border border-orange-200 bg-white shadow-sm overflow-hidden">
               <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1.5fr_0.55fr_0.75fr_1.1fr] lg:items-center">
-                {/* Title + description */}
                 <div className="min-w-0">
                   <h3 className="text-lg sm:text-xl font-semibold text-neutral-900">
                     {ideasGuidance.horizontalFeature.title}
@@ -284,7 +286,6 @@ export default function ForBusinessesPage() {
                   </p>
                 </div>
 
-                {/* Price */}
                 <div className="min-w-0">
                   <p className="text-[11px] text-neutral-600">{ideasGuidance.horizontalFeature.priceNote}</p>
                   <p className="text-2xl sm:text-3xl font-bold text-neutral-900 leading-none">
@@ -292,24 +293,22 @@ export default function ForBusinessesPage() {
                   </p>
                 </div>
 
-                {/* Buttons (Purchase + Learn below) */}
                 <div className="min-w-0 flex flex-col gap-2">
                   <Link
                     href={ideasGuidance.horizontalFeature.primaryHref}
-                    className="inline-flex w-full lg:w-fit items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
+                    className="inline-flex w-full items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
                   >
                     {ideasGuidance.horizontalFeature.primaryCtaLabel} →
                   </Link>
 
                   <Link
                     href={ideasGuidance.horizontalFeature.learnHref}
-                    className="inline-flex w-full lg:w-fit items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
+                    className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
                   >
                     {ideasGuidance.horizontalFeature.learnLabel}
                   </Link>
                 </div>
 
-                {/* Details */}
                 <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4">
                   <p className="text-sm font-semibold text-neutral-900">
                     {ideasGuidance.horizontalFeature.rightDetailsTitle}
@@ -335,12 +334,10 @@ export default function ForBusinessesPage() {
               key={c.title}
               className="rounded-3xl border border-orange-200 bg-white shadow-sm overflow-hidden flex flex-col"
             >
-              {/* Top content */}
               <div className="p-6 sm:p-7 flex-1 flex flex-col">
                 <h3 className="text-xl font-semibold text-neutral-900">{c.title}</h3>
                 <p className="mt-2 text-sm text-neutral-700">{c.sub}</p>
 
-                {/* Pricing block with consistent height to align buttons */}
                 <div className="mt-5 min-h-[64px]">
                   <p className="text-xs text-neutral-600">{c.priceLabel}</p>
                   <p className="text-3xl font-bold text-neutral-900 leading-none">{c.price}</p>
@@ -350,25 +347,23 @@ export default function ForBusinessesPage() {
                   {c.body}
                 </p>
 
-                {/* Push buttons toward the bottom for alignment */}
-                <div className="mt-auto pt-6 flex flex-wrap gap-3">
+                <div className="mt-auto pt-6 grid gap-3 sm:flex sm:flex-wrap">
                   <Link
                     href={c.primaryHref}
-                    className="inline-flex items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
+                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
                   >
                     {c.primaryCtaLabel} →
                   </Link>
 
                   <Link
                     href={c.learnHref}
-                    className="inline-flex items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
+                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
                   >
                     {c.learnLabel}
                   </Link>
                 </div>
               </div>
 
-              {/* Bottom details */}
               <div className="border-t border-orange-100 bg-orange-50/70 p-6 sm:p-7">
                 <p className="text-sm font-semibold text-neutral-900">{c.bulletsTitle}</p>
                 <ul className="mt-3 space-y-2 text-sm text-neutral-800">
@@ -396,44 +391,42 @@ export default function ForBusinessesPage() {
           </p>
 
           <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-  {opsExecution.cards.map((x) => (
-    <Link
-      key={x.title}
-      href={x.href}
-      className="group rounded-3xl border border-orange-200 bg-white px-6 py-6 shadow-sm transition hover:shadow-md hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-300 flex flex-col"
-    >
-      {/* Title */}
-      <p className="text-sm font-semibold text-neutral-900 group-hover:text-orange-600">
-        {x.title}
-      </p>
+            {opsExecution.cards.map((x) => (
+              <Link
+                key={x.title}
+                href={x.href}
+                className="group rounded-3xl border border-orange-200 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm transition hover:shadow-md hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-300 flex flex-col"
+              >
+                <p className="text-sm font-semibold text-neutral-900 group-hover:text-orange-600">
+                  {x.title}
+                </p>
 
-      {/* Body (fills available height) */}
-      <div className="mt-4 flex-1">
-        <p className="text-xs font-medium text-orange-500">{x.pricingLabel}</p>
+                <div className="mt-4 flex-1">
+                  <p className="text-xs font-medium text-orange-500">{x.pricingLabel}</p>
 
-        <div className="mt-3 space-y-2">
-          {x.pricing.map((p) => (
-            <div
-              key={`${x.title}-${p.label}`}
-              className="flex items-baseline justify-between gap-3"
-            >
-              <span className="text-xs text-neutral-700">{p.label}</span>
-              <span className="text-sm font-semibold text-neutral-900">
-                {p.value}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+                  <div className="mt-3 space-y-2">
+                    {x.pricing.map((p) => (
+                      <div
+                        key={`${x.title}-${p.label}`}
+                        className="flex items-baseline justify-between gap-3"
+                      >
+                        <span className="text-xs text-neutral-700 pr-2">
+                          {p.label}
+                        </span>
+                        <span className="text-sm font-semibold text-neutral-900 whitespace-nowrap">
+                          {p.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-      {/* Footer (forced to bottom) */}
-      <p className="mt-auto pt-5 text-xs text-neutral-700">
-        Click to learn more →
-      </p>
-    </Link>
-  ))}
-</div>
-
+                <p className="mt-auto pt-5 text-xs text-neutral-700">
+                  Click to learn more →
+                </p>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -458,18 +451,17 @@ export default function ForBusinessesPage() {
                 <p className="text-3xl font-bold text-neutral-900">{team.leftPill.price}</p>
               </div>
 
-              {/* Smaller Contact + Learn More */}
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
                 <a
                   href={team.leftPill.href}
-                  className="inline-flex items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
+                  className="inline-flex w-full sm:w-auto items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
                 >
                   {team.leftPill.ctaLabel}
                 </a>
 
                 <Link
                   href={team.leftPill.learnMoreHref}
-                  className="inline-flex items-center justify-center rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-orange-600 hover:bg-orange-100"
+                  className="inline-flex w-full sm:w-auto items-center justify-center rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-orange-600 hover:bg-orange-100"
                 >
                   {team.leftPill.learnMoreLabel}
                 </Link>
@@ -515,6 +507,7 @@ export default function ForBusinessesPage() {
     </main>
   );
 }
+
 
 
 
