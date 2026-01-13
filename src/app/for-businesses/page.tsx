@@ -161,7 +161,7 @@ export default function ForBusinessesPage() {
     rightDetails: {
       title: "How it works",
       paragraphs: [
-        "We don't “take over” — we work with you and own the marketing process together.",
+        "We don't “take over” — we own the marketing process to grow business together.",
         "Start with a conversation, define the problems, set a plan, and execute steadily.",
         "If you don’t need ongoing help, we’ll point you to the right smaller service instead.",
       ],

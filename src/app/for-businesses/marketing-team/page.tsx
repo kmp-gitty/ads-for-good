@@ -16,23 +16,11 @@ export default function MarketingTeamPage() {
           </h1>
 
           <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-            Some people like to DIY. Sometimes you just want a clear,
-            step-by-step playbook you can follow on your own time — without digging through
-            a hundred blogs and YouTube videos.
+            You started your business because of a passion, or you're really good at something, or (like us) you just got tired of listening to someone else. Sound like you?
             <br /><br />
-            The marketing guidebook is built for small and medium businesses who want to
-            understand the &quot;why&quot; and the &quot;how&quot; of modern marketing, in
-            plain language, with examples you can copy and adapt.
+            You got a website, maybe some equipment and a space, and are getting some clients. Going pretty good, but you didn't expect: accounting paperwork, legal documents, and growing a business takes some marketing. Also sound like you?
             <br /><br />
-            <a
-              href="https://forms.gle/mSm6dfmz8AhVzjkw9"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-orange-500 underline hover:text-orange-600"
-            >
-              Buy the guidebook here.
-            </a>
-            {" "}$25 gets you the 16 page marketing guidebook to better your business at your own pace.
+            We built this product for exactly you. We want you to have the more time for your business, while we work on the piece we know: Marketing.
           </p>
         </div>
 
@@ -49,20 +37,19 @@ export default function MarketingTeamPage() {
             </div>
 
             <h2 className="text-sm font-semibold text-neutral-900">
-              What This Guidebook Covers:
+              We can be your Marketing Team - without needing full-time staff:
             </h2>
 
             <ul className="mt-3 space-y-1.5 text-xs sm:text-sm text-neutral-800 list-disc list-inside">
-              <li>Information about Free & Paid tools for your business</li>
-              <li>How to get the most out of the mainstream digital channels</li>
-              <li>Paid Search, Paid Social, & Ecommerce advice</li>
-              <li>Big business ad facts</li>
-              <li>Practical instructions to make simple, yet effective, changes</li>
+              <li>Marketing and business strategy & guidance</li>
+              <li>Website builds, updates, and maintenance</li>
+              <li>SEO and organic search monitoring</li>
+              <li>Paid ads strategy and management across channels</li>
+              <li>Unlimited email access & meeting availability</li>
             </ul>
 
             <p className="mt-3 text-xs sm:text-sm text-neutral-800 leading-relaxed">
-              You'll learn what the thing is, why the thing is important, and how to implement
-              the thing (if you choose).
+              $1,500 a month gets you full force and knowledge of a marketing team - without needing to spend endless time and money.
             </p>
           </div>
         </div>
@@ -73,11 +60,11 @@ export default function MarketingTeamPage() {
         <div className="mx-auto w-full max-w-6xl px-4 py-16">
           <div className="max-w-6xl">
             <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-              A sneak peek of what's inside.
+              The Details on What You Get.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed">
-              Disclaimer: I believe in "if it ain't broke, don't fix it". If you're running a successful business, and for the past 30 years you've found that word of mouth and a simple website works - I don't want you buying this, it won't be helpful.<br /><br />
-              However, if you think there's more on the table and you've been thinking of taking marketing and digital tools more seriously - this guidebook is the perfect place to start.
+              Your Need: Someone to help manage everything marketing related, without making a huge dent on your expenses.<br /><br />
+              This Service: Just that.
             </p>
           </div>
 
@@ -85,24 +72,24 @@ export default function MarketingTeamPage() {
             {/* Tool 1 */}
             <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
               <h3 className="text-sm font-semibold text-neutral-900">
-                Free Tools: aka "Owned & Operated"
+                Strategy & Guidance
               </h3>
               <p className="mt-2 text-xs text-neutral-700">
-                What can you do with the free tools you already have (or can easily setup)?
+                Get some resources for education, and immediately have marketing brains on tap.
               </p>
 
               <ul className="mt-2 space-y-1 text-xs text-neutral-700">
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Website & other digital properties (Facebook page, IG page, etc)
+                  Receive our Marketing Guidebook for some reading
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Profiles: Google, Yelp, etc
+                  Open line for ideas, questions, and discussion
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Other things: Content, email, software, etc
+                  Digital Health Check - we'll do a once-over on everything, make sure it's in order and fix if not
                 </li>
               </ul>
             </div>
@@ -110,24 +97,24 @@ export default function MarketingTeamPage() {
             {/* Tool 2 */}
             <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
               <h3 className="text-sm font-semibold text-neutral-900">
-                Paid Tools: Search, Social, Ecommerce, & More
+                Organic and Free Tools
               </h3>
               <p className="mt-2 text-xs text-neutral-700">
-                What can you do with paid tools to grow your business?
+                We'll manage every unpaid avenue to grow your business. Helping you at each step.
               </p>
 
               <ul className="mt-2 space-y-1 text-xs text-neutral-700">
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  The big ad platforms: Paid Search & Paid Social
+                  Website builds, updates, and maintenance
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Ecommerce: Selling on Amazon
+                  SEO analysis, planning, and organic search growth
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Other things: SEO, Programmatic Ads, TV, OOH (Out of Home)
+                  Digital profile and listing management: reviews, comments, & community
                 </li>
               </ul>
             </div>
@@ -135,25 +122,23 @@ export default function MarketingTeamPage() {
             {/* Tool 3 */}
             <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
               <h3 className="text-sm font-semibold text-neutral-900">
-                General Tips Across Sections
+                Paid and Ad Tools
               </h3>
-
+              <p className="mt-2 text-xs text-neutral-700">
+              We'll manage every paid avenue to grow your business. Upgrades, ads, and software.
+              </p>
               <ul className="mt-2 space-y-1 text-xs text-neutral-700">
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  What is a marketing guidebook and how do I use it?
+                  Planning, prioritization, and performance
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  How should I interpret marketing topics for my business?
+                  Ads analysis, clean-up, and campaign management
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  How can I apply these marketing tactics to my business?
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  What are some examples across marketing topics I can implement?
+                  Education and exploration of the digital marketing, and beyond, industry
                 </li>
               </ul>
             </div>
@@ -168,18 +153,18 @@ export default function MarketingTeamPage() {
           <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
             <h3 className="text-sm font-semibold text-neutral-900">Who this is for</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-              <li>Business owners doing marketing theselves</li>
-              <li>Anyone curious about simple improvements</li>
-              <li>Owners in-between “I think there's more” and “I don't know how”</li>
+              <li>Business owners needing help with marketing management</li>
+              <li>Anyone curious about positive outsourcing</li>
+              <li>Entrepreneurs ready to spend more time on their business</li>
             </ul>
           </div>
 
           <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
             <h3 className="text-sm font-semibold text-neutral-900">Who this is not for</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-              <li>Businesses looking for a long-term engagement</li>
-              <li>Teams looking for execution instead of advice</li>
-              <li>Anyone wanting a custom solution</li>
+              <li>Businesses looking for a short-term engagement</li>
+              <li>Teams looking for advice only</li>
+              <li>Anyone wanting a cookie-cutter solution</li>
             </ul>
           </div>
         </section>
@@ -190,40 +175,39 @@ export default function MarketingTeamPage() {
               What&apos;s the process?
             </h2>
             <p className="mt-2 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-3xl">
-              This service is designed to be hands-off for you and your business. Answer a couple of
-              questions upfront, then let us do our thing. From payment to completion, this service takes
-              3–5 business days.
+              This is our most hands-on service, but because it's the most helpful. We think the process we have makes it easy, and we can go as fast or as slow as you'd like. Always customized to your goals & needs.
             </p>
   
             <div className="mt-6 grid gap-6 md:grid-cols-3 items-start">
               {/* WHITE backgrounds here */}
               <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
-                <h3 className="text-sm font-semibold text-neutral-900">What we need from you</h3>
+                <h3 className="text-sm font-semibold text-neutral-900">1) Discussion & Learning</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-                  <li>Send the get started email or complete the form</li>
-                  <li>Answer 2 questions</li>
-                  <li>What digital properties does your business use?</li>
-                  <li>What are your biggest concerns about them?</li>
-                  <li>Then we get to work</li>
+                  <li>We'll meet to get your story and reason for reaching out</li>
+                  <li>We're going to ask a lot of questions</li>
+                  <li>The goal is to figure out what you need help with most</li>
+                  <li>Then, we'll do our own research and prioritize</li>
+                  <li>First step includes Digital Health Check, SEO & Ad analysis</li>
                 </ul>
               </div>
   
               <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
-                <h3 className="text-sm font-semibold text-neutral-900">What we&apos;ll do</h3>
+                <h3 className="text-sm font-semibold text-neutral-900">2) Access & Updates</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-                  <li>A real human finds & evaluates all digital properties you appear on</li>
-                  <li>Pass 1 (consumer): how easy is it to trust & navigate?</li>
-                  <li>Pass 2 (marketer): what&apos;s broken, missing, or unclear?</li>
-                  <li>Document everything and recommend next steps</li>
+                  <li>We'll have a prioritized list of immediate updates after the Health Check / analyses</li>
+                  <li>We work together to get access to the appropriate channels for us to do our work</li>
+                  <li>Bigger projects take longer, but we can make easy (& impactful) changes first</li>
+                  <li>To be successful long-term, we'll also setup proper marketing tracking</li>
                 </ul>
               </div>
   
               <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
-                <h3 className="text-sm font-semibold text-neutral-900">What happens when we&apos;re done</h3>
+                <h3 className="text-sm font-semibold text-neutral-900">3) Ongoing Work & Success</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-                  <li>You receive your document (a record of everything we found)</li>
-                  <li>We review it together: findings, fixes, recommendations</li>
-                  <li>You can implement yourself — or we can (included in cost)</li>
+                  <li>If not used before, you'll get more valuable marketing information to grow</li>
+                  <li>We'll takeover the tedious profile and listing management</li>
+                  <li>Continue work on bigger projects like ad fixes and management</li>
+                  <li>Open communication, scheduled check-ins, and performance tracking</li>
                 </ul>
               </div>
             </div>
@@ -239,31 +223,31 @@ export default function MarketingTeamPage() {
           <div className="mt-6 space-y-3 max-w-4xl">
             {[
               {
-                q: "What's the process for this?",
-                a: "First: fill out the Guidebook Order Form. Second: we'll send you the payment link. Third: we'll send you the guidebook in your preferred file type.",
+                q: "Do I need to commit to this?",
+                a: "No, this is built to be a month to month service.",
               },
               {
-                q: "What file type is the guidebook in?",
-                a: "There are 2 options: PDF or personalized link - both offer access forever.",
+                q: "How do I know if this service is for me?",
+                a: "1) Have a business? 2) Annoyed at keeping up with the comments, ad spend, website updates, etc? If you said 'yes' to both - we should talk.",
               },
               {
                 q: "Is this better than hiring someone?",
                 a: (
                   <>
-                    Loaded question, so answer is: it depends. If you just want to try some simple steps to see what happens, then yes this is "better". But, if you're already thinking you need live or operational help, then this isn't for you. We'd suggest checking out our{" "}
+                    We think so. You'll get the force and brains of a marketing team, without the impact on your wallet. But, it only makes sense if you're looking to offload all marketing duties. Looking for just a channel or task instead? Check out one of our other{" "}
                     <a
-                      href="https://www.ads4good.com/for-businesses/consulting"
+                      href="https://www.ads4good.com/for-businesses"
                       className="text-orange-500 underline hover:text-orange-600"
                     >
-                      Consulting Services
+                      Business Services
                     </a>
                     .
                   </>
                 ),
               },
               {
-                q: "Is this good for beginners?",
-                a: "Absolutely. This is meant to be easy to understand and simple to follow for those wanting to try something new for their business.",
+                q: "What do I need to provide?",
+                a: "If we work together on everything, as this service is designed, we'll need access to your: website, digital profiles (FB, IG, Google Business Profile, etc), any ads managers you use, and any marketing/reporting/data software you use.",
               },
             ].map((item) => (
               <details
