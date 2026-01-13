@@ -1,4 +1,5 @@
 import Link from "next/link";
+import InquiryLauncher from "@/components/InquiryLauncher";
 
 export function Footer() {
   return (
@@ -49,13 +50,12 @@ export function Footer() {
           </Link>
         </div>
 
-        {/* Right: Contact Button */}
-        <Link
-          href="/contact"
-          className="text-sm font-medium rounded-full px-4 py-1.5 bg-orange-500 text-white hover:bg-orange-600"
-        >
-          Contact
-        </Link>
+       {/* Right: Contact Button */}
+<InquiryLauncher
+  label="Contact"
+  sourceLabel="Footer — Contact CTA"
+  className="text-sm font-medium rounded-full px-4 py-1.5 bg-orange-500 text-white hover:bg-orange-600"
+/>
       </div>
     </footer>
   );

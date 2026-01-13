@@ -1,4 +1,5 @@
 import GuidebookOutlineCompact from "./GuidebookOutlineCompact";
+import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
   title: "Small Business Marketing Guide - DIY Strategy & Playbooks | Ads for Good",
@@ -18,24 +19,27 @@ export default function MarketingGuidebookPage() {
           </h1>
 
           <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-            Some people like to DIY. Sometimes you just want a clear,
-            step-by-step playbook you can follow on your own time — without digging through
-            a hundred blogs and YouTube videos.
-            <br /><br />
-            The marketing guidebook is built for small and medium businesses who want to
-            understand the &quot;why&quot; and the &quot;how&quot; of modern marketing, in
-            plain language, with examples you can copy and adapt.
-            <br /><br />
-            <a
-              href="https://forms.gle/mSm6dfmz8AhVzjkw9"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-orange-500 underline hover:text-orange-600"
-            >
-              Buy the guidebook here.
-            </a>
-            {" "}$25 gets you the 16 page marketing guidebook to better your business at your own pace.
-          </p>
+  Some people like to DIY. Sometimes you just want a clear, step-by-step playbook
+  you can follow on your own time — without digging through a hundred blogs and
+  YouTube videos.
+  <br />
+  <br />
+  The marketing guidebook is built for small and medium businesses who want to
+  understand the &quot;why&quot; and the &quot;how&quot; of modern marketing, in plain
+  language, with examples you can copy and adapt.
+  <br />
+  <br />
+  $25 gets you the 16 page marketing guidebook to better your business at your own pace.
+</p>
+
+{/* CTA pill */}
+<InquiryLauncher
+  label="Buy the Guidebook"
+  defaultServices={["DIY Marketing Guidebook"]}
+  sourceLabel="Marketing Guidebook — Hero CTA"
+  className="mt-6 inline-flex items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+/>
+
         </div>
 
         {/* Right: Card / explainer */}

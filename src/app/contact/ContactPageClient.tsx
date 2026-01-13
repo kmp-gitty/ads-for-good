@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import InquiryLauncher from "@/components/InquiryLauncher";
 
 export default function ContactPageClient() {
     const [peopleFormOpen, setPeopleFormOpen] = useState(false);
@@ -43,32 +44,7 @@ export default function ContactPageClient() {
     Have a question about privacy tools, our education resources, or how our 
     mission works? This area contains a simple form for consumer inquiries.
     <br /><br />
-
-    {/* Toggle link */}
-    <span
-      onClick={() => setPeopleFormOpen((prev) => !prev)}
-      className="italic text-neutral-600 underline cursor-pointer hover:text-orange-500"
-    >
-      Click here to complete for People form. (Will take a second to load)
-    </span>
   </p>
-
-  {/* Dropdown Form Area */}
-  {peopleFormOpen && (
-    <div className="mt-6 rounded-2xl bg-white border border-orange-100 p-4">
-      <iframe
-        src="https://forms.gle/m4of5pfYoM1ky86w9"
-        width="100%"
-        height="700"
-        frameBorder="0"
-        marginHeight={0}
-        marginWidth={0}
-        className="w-full"
-      >
-        Loading…
-      </iframe>
-    </div>
-  )}
 </section>
 
   
@@ -82,36 +58,21 @@ export default function ContactPageClient() {
     Want help with marketing? Interested in partnering with our ad network?
     Curious about ethical advertising programs? This column contains our business inquiry form.
     <br /><br />
-
-    {/* Toggle link */}
-    <span
-      onClick={() => setBusinessFormOpen((prev) => !prev)}
-      className="italic text-neutral-600 underline cursor-pointer hover:text-orange-500"
-    >
-      Complete for Businesses form. (Will take a second to load)
-    </span>
   </p>
-
-  {/* Dropdown Form */}
-  {businessFormOpen && (
-    <div className="mt-6 rounded-2xl bg-white border border-orange-100 p-4">
-      <iframe
-        src="https://forms.gle/eGpPWyMZCp5VeJbq6"
-        width="100%"
-        height="900"
-        frameBorder="0"
-        marginHeight={0}
-        marginWidth={0}
-        className="w-full"
-      >
-        Loading…
-      </iframe>
-    </div>
-  )}
 </section>
 
   
           </div>
+{/* Full-width CTA */}
+<div className="mt-12">
+  <InquiryLauncher
+    label="Fill Out Our Contact Form"
+    defaultServices={["General Contact"]}
+    sourceLabel="Contact Page — Full Width CTA"
+    className="w-full inline-flex items-center justify-center rounded-full bg-orange-500 px-6 py-4 text-base sm:text-lg font-semibold text-white hover:bg-orange-600"
+  />
+</div>
+
         </div>
       </main>
     );

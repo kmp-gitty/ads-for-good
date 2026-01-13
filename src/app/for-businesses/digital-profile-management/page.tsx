@@ -1,4 +1,5 @@
 import ProfileOutlineCompact from "./ProfileOutlineCompact";
+import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
   title: "Digital Profile Management for Small Businesses | Ads for Good",
@@ -12,30 +13,29 @@ export default function DigitalProfileManagementPage() {
       {/* HERO SECTION */}
       <section className="w-full max-w-6xl flex flex-col gap-10 md:flex-row md:items-start">
         {/* Left: Hero copy */}
-        <div className="flex-1">
-          <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-            Digital Listing Management: Save Time and Gain Reassurance.
-          </h1>
+<div className="flex-1 min-w-0 flex flex-col">
+  <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
+    Digital Listing Management: Save Time and Gain Reassurance.
+  </h1>
 
-          <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-            Your business gets evaluated before you ever hear from a customer — usually through your
-            online profiles, reviews, photos, categories, and listings.
-            <br />
-            <br />
-            Digital Profile Management keeps your online presence accurate, consistent, and up-to-date across
-            the platforms people actually use, so you show up and look more trustworthy when they find you.
-            <br />
-            <br />
-            <a
-              href="https://forms.gle/mSm6dfmz8AhVzjkw9"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-orange-500 underline hover:text-orange-600"
-            >
-              Set up Digital Profile Management here.
-            </a>
-          </p>
-        </div>
+  <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
+    Your business gets evaluated before you ever hear from a customer — usually through your
+    online profiles, reviews, photos, categories, and listings.
+    <br />
+    <br />
+    Digital Profile Management keeps your online presence accurate, consistent, and up-to-date
+    across the platforms people actually use, so you show up and look more trustworthy when they find you.
+  </p>
+
+  {/* CTA */}
+  <InquiryLauncher
+    label="Set Up Digital Profile Management"
+    defaultServices={["Digital Profile Management"]}
+    sourceLabel="Digital Profile Management — Hero CTA"
+    className="mt-8 inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+  />
+</div>
+
 
         {/* Right: Card / explainer */}
         <div className="flex-1">

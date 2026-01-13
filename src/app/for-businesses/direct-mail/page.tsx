@@ -1,3 +1,5 @@
+import InquiryLauncher from "@/components/InquiryLauncher";
+
 export const metadata = {
     title: "Direct Mail Marketing | Ads for Good",
     description:
@@ -48,7 +50,7 @@ export const metadata = {
                 </h2>
   
                 <p className="mt-3 text-xs sm:text-sm text-neutral-800 leading-relaxed">
-                  <a href="#ways-to-participate" className="font-semibold text-orange-500 hover:underline">
+                  <a href="#contact-forms" className="font-semibold text-orange-500 hover:underline">
                     for Good local newsletter:{" "}
                   </a>
                   share the cost with other advertisers through a monthly ad card sent to local
@@ -56,7 +58,7 @@ export const metadata = {
                   here.
                   <br />
                   <br />
-                  <a href="#ways-to-participate" className="font-semibold text-orange-500 hover:underline">
+                  <a href="#contact-forms" className="font-semibold text-orange-500 hover:underline">
                     Custom direct mail campaign:{" "}
                   </a>
                   work with us to create a custom campaign for your business. Pricing varies, as it
@@ -202,28 +204,6 @@ export const metadata = {
                     <br />
                     Hero advertiser typically $0.20 per mailpiece, Tile advertiser typically $0.08.
                   </p>
-  
-                  <div className="mt-6 border-t border-neutral-200 pt-4">
-                    <details>
-                      <summary className="cursor-pointer select-none text-sm font-semibold text-neutral-900 hover:text-orange-500">
-                        Become a local newsletter advertiser
-                      </summary>
-  
-                      <div className="mt-4 rounded-2xl bg-orange-50 border border-orange-100 p-4 overflow-hidden">
-                        <iframe
-                          src="https://docs.google.com/forms/d/e/1FAIpQLSeRgG-kjDdwg7AGavc2wMaO_MsRHlOJeVF-IlQXSbwA3z3I3w/viewform?embedded=true"
-                          width="100%"
-                          height="900"
-                          frameBorder="0"
-                          marginHeight={0}
-                          marginWidth={0}
-                          className="w-full max-w-full"
-                        >
-                          Loading…
-                        </iframe>
-                      </div>
-                    </details>
-                  </div>
                 </div>
               </div>
   
@@ -248,34 +228,25 @@ export const metadata = {
                     <br />
                     Pricing dependent on campaign.
                   </p>
-  
-                  <div className="mt-6 border-t border-neutral-200 pt-4">
-                    <details>
-                      <summary className="cursor-pointer select-none text-sm font-semibold text-neutral-900 hover:text-orange-500">
-                        Create your custom campaign
-                      </summary>
-  
-                      <div className="mt-4 rounded-2xl bg-orange-50 border border-orange-100 p-4 overflow-hidden">
-                        <iframe
-                          src="https://docs.google.com/forms/d/e/1FAIpQLSdEmjS678shnDjm0wsuPwq6RBUN8-KUOn_ysSk7a-AwbWcS3A/viewform?embedded=true"
-                          width="100%"
-                          height="900"
-                          frameBorder="0"
-                          marginHeight={0}
-                          marginWidth={0}
-                          className="w-full max-w-full"
-                        >
-                          Loading…
-                        </iframe>
-                      </div>
-                    </details>
-                  </div>
                 </div>
               </div>
             </div>
           </div>
         </section>
   
+{/* Full-width Direct Mail CTA */}
+<section className="mx-auto w-full max-w-6xl px-4 py-10">
+  <div className="rounded-3xl border border-orange-200 bg-orange-50 px-6 py-8 sm:px-10 sm:py-10 flex justify-center">
+    <InquiryLauncher
+      label="Get Started On Your Local Ads Newsletter or Custom Direct Mail Campaign"
+      defaultServices={["Local Direct Mail"]}
+      sourceLabel="Direct Mail — Full Width CTA"
+      className="w-full max-w-3xl text-center rounded-full bg-orange-500 px-8 py-4 text-base sm:text-lg font-semibold text-white hover:bg-orange-600"
+    />
+  </div>
+</section>
+
+
         {/* EVERYTHING BELOW (centered) */}
         <div className="mx-auto w-full max-w-6xl px-4 pb-24">
           {/* Who this is for / not for */}

@@ -1,3 +1,5 @@
+import InquiryLauncher from "@/components/InquiryLauncher";
+
 export const metadata = {
     title: "Digital Advertising Services - Search, Social & Paid Media | Ads for Good",
     description:
@@ -67,45 +69,31 @@ export const metadata = {
               </p>
             </div>
   
-            {/* Right card */}
-            <div className="rounded-3xl border border-orange-200 bg-orange-50 px-5 sm:px-6 py-6 sm:py-8">
-              <h2 className="text-lg font-semibold text-orange-500">
-                Simple Pricing, Maximum Impact.
-              </h2>
-  
-              <p className="mt-3 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-prose">
-                $250 for initial analysis & planning.
-                <br />
-                <br />
-                $100/mo/channel after that.
-                <br />
-                <br />
-                2 month minimum to get started.
-              </p>
-  
-              {/* Dropdown to embed your Google Form */}
-              <div className="mt-6 border-t border-orange-200 pt-4">
-                <details className="rounded-2xl">
-                  <summary className="cursor-pointer select-none text-sm font-semibold text-neutral-900 hover:text-orange-500">
-                    Open the Ask Us Anything form
-                  </summary>
-  
-                  <div className="mt-4 rounded-2xl bg-white border border-orange-100 p-3 sm:p-4 overflow-hidden">
-                    <iframe
-                      src="https://docs.google.com/forms/d/e/1FAIpQLSdiqveFfe-lLC-84BwMVX8EbY06_a5TgxRPdDRvJp9BrmSXew/viewform?embedded=true"
-                      width="100%"
-                      height="900"
-                      frameBorder="0"
-                      marginHeight={0}
-                      marginWidth={0}
-                      className="w-full"
-                    >
-                      Loading…
-                    </iframe>
-                  </div>
-                </details>
-              </div>
-            </div>
+           {/* Right card */}
+<div className="rounded-3xl border border-orange-200 bg-orange-50 px-5 sm:px-6 py-6 sm:py-8 flex flex-col">
+  <h2 className="text-lg font-semibold text-orange-500">
+    Simple Pricing, Maximum Impact.
+  </h2>
+
+  <p className="mt-3 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-prose">
+    $250 for initial analysis &amp; planning.
+    <br />
+    <br />
+    $100/mo/channel after that.
+    <br />
+    <br />
+    2 month minimum to get started.
+  </p>
+
+  {/* CTA */}
+  <InquiryLauncher
+    label="Let’s Talk Ads Management"
+    defaultServices={["Digital Ads"]}
+    sourceLabel="Digital Ads — Pricing Card CTA"
+    className="mt-6 inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+  />
+</div>
+
           </section>
   
           {/* Example questions */}

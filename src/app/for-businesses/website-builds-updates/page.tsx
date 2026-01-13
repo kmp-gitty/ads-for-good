@@ -1,3 +1,5 @@
+import InquiryLauncher from "@/components/InquiryLauncher";
+
 export const metadata = {
     title: "Website Builds - Website Updates | Ads for Good",
     description:
@@ -11,47 +13,31 @@ export const metadata = {
         <div className="mx-auto w-full max-w-6xl px-4 pt-16 pb-16">
           <section className="w-full flex flex-col gap-10 md:flex-row md:items-start">
             {/* Left: Hero copy */}
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-                Website Services: New, Existing, and Upkeep
-              </h1>
-  
-              <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-                If you're looking to get a new website built. Looking to make changes to your existing website. Or, just want someone to monitor and be on stanby for general site maintenance. <br /> <br />This is the right page.
-                <br />
-                <br />
-                <a
-                  href="mailto:katoa@ads4good.com?subject=Website%20Builds%20%26%20Updates&body=Hi%20Katoa%2C%0D%0A%0D%0AI%E2%80%99m%20interested%20in%20Website%20Builds%20%26%20Updates.%20Can%20you%20share%20next%20steps%20and%20what%20you%E2%80%99d%20need%20from%20me%3F"
-                  className="text-orange-500 underline hover:text-orange-600"
-                >
-                  Ready to get started? Send us this email.
-                </a>
-              </p>
-  
-              {/* Dropdown Form */}
-              <div className="mt-6 border-t border-orange-200 pt-4">
-                <details>
-                  <summary className="cursor-pointer select-none text-sm font-semibold text-neutral-900 hover:text-orange-500">
-                    If the email link above didn&apos;t do anything when you clicked it, your settings block
-                    email links — use this form instead.
-                  </summary>
-  
-                  <div className="mt-4 rounded-2xl bg-white border border-orange-100 p-4 overflow-hidden">
-                    <iframe
-                      src="https://docs.google.com/forms/d/e/1FAIpQLSfffYUKSRf30SZ2CBi792g2JO9k1-31Jv78RcTVw2uZI2If8g/viewform?embedded=true"
-                      width="100%"
-                      height="900"
-                      frameBorder="0"
-                      marginHeight={0}
-                      marginWidth={0}
-                      className="w-full max-w-full"
-                    >
-                      Loading…
-                    </iframe>
-                  </div>
-                </details>
-              </div>
-            </div>
+<div className="flex-1 min-w-0 flex flex-col">
+  <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
+    Website Services: New, Existing, and Upkeep
+  </h1>
+
+  <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
+    If you're looking to get a new website built. Looking to make changes to your existing website.
+    Or, just want someone to monitor and be on standby for general site maintenance.
+    <br />
+    <br />
+    This is the right page.
+    <br />
+    <br />
+    Ready to get started?
+  </p>
+
+  {/* CTA */}
+  <InquiryLauncher
+    label="Contact Us About This Service"
+    defaultServices={["Website Builds & Updates"]}
+    sourceLabel="Website Builds & Updates — Hero CTA"
+    className="mt-8 inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+  />
+</div>
+
   
             {/* Right: Card / explainer */}
             <div className="flex-1 min-w-0">

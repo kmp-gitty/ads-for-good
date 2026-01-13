@@ -1,3 +1,5 @@
+import InquiryLauncher from "@/components/InquiryLauncher";
+
 export const metadata = {
   title: "Outsourced Marketing Team for Small Businesses | Ads for Good",
   description:
@@ -51,6 +53,15 @@ export default function MarketingTeamPage() {
             <p className="mt-3 text-xs sm:text-sm text-neutral-800 leading-relaxed">
               $1,500 a month gets you full force and knowledge of a marketing team - without needing to spend endless time and money.
             </p>
+            <div className="mt-6 flex justify-center">
+  <InquiryLauncher
+    label="Contact Us to Be Your Marketing Team"
+    defaultServices={["Be My Marketing Team"]}
+    sourceLabel="Marketing Team Page — Primary CTA"
+    className="w-full text-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+  />
+</div>
+
           </div>
         </div>
       </section>

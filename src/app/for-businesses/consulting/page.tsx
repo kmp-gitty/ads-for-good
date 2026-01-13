@@ -1,3 +1,5 @@
+import InquiryLauncher from "@/components/InquiryLauncher";
+
 export const metadata = {
     title: "Marketing Consulting - Business Consulting | Ads for Good",
     description:
@@ -11,52 +13,29 @@ export const metadata = {
         <div className="mx-auto w-full max-w-6xl px-4 pt-16 pb-16">
           <section className="w-full flex flex-col gap-10 md:flex-row md:items-start">
             {/* Left */}
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-                Marketing &amp; Business Consulting - Start with a Conversation
-              </h1>
-  
-              <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-                There’s value in talking things through before taking action. If you want to discuss
-                strategy, challenges, or ideas before committing to execution, this is the right place.
-                <br />
-                <br />
-                We’ll pressure-test plans, answer questions, and help you decide what actually makes
-                sense — without jumping too quickly.
-                <br />
-                <br />
-                <a
-                  href="mailto:katoa@ads4good.com?subject=Consulting&body=Hi%20Katoa%2C%0D%0A%0D%0ALooking%20to%20learn%20more%20about%20consulting%20with%20you%20for%20either%20advertising%2C%20marketing%20or%20my%20business.%20Can%20you%20help%3F"
-                  className="text-orange-500 underline hover:text-orange-600"
-                >
-                  Ready to get started? Send us this email.
-                </a>
-              </p>
-  
-              {/* Form dropdown */}
-              <div className="mt-6 border-t border-orange-200 pt-4">
-                <details>
-                  <summary className="cursor-pointer select-none text-sm font-semibold text-neutral-900 hover:text-orange-500">
-                    If the email link above didn&apos;t do anything when you clicked it, your settings
-                    blocks email links — use this form instead.
-                  </summary>
-  
-                  <div className="mt-4 rounded-2xl bg-white border border-orange-100 p-4 overflow-hidden">
-                    <iframe
-                      src="https://docs.google.com/forms/d/e/1FAIpQLScLX4QyPNb-rTViF3Q3klF-Wj2vJI30s6Om7UO0HkVb3LdplA/viewform?embedded=true"
-                      width="100%"
-                      height="900"
-                      frameBorder="0"
-                      marginHeight={0}
-                      marginWidth={0}
-                      className="w-full max-w-full"
-                    >
-                      Loading…
-                    </iframe>
-                  </div>
-                </details>
-              </div>
-            </div>
+<div className="flex-1 min-w-0 flex flex-col">
+  <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
+    Marketing &amp; Business Consulting - Start with a Conversation
+  </h1>
+
+  <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
+    There’s value in talking things through before taking action. If you want to discuss
+    strategy, challenges, or ideas before committing to execution, this is the right place.
+    <br />
+    <br />
+    We’ll pressure-test plans, answer questions, and help you decide what actually makes
+    sense — without jumping too quickly.
+  </p>
+
+  {/* CTA */}
+  <InquiryLauncher
+    label="Buy Consulting Hours"
+    defaultServices={["Consulting"]}
+    sourceLabel="Consulting Page — Hero CTA"
+    className="mt-8 inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+  />
+</div>
+
   
             {/* Right */}
             <div className="flex-1 min-w-0">
