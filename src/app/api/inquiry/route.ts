@@ -22,6 +22,29 @@ function escapeHtml(input: string) {
     .replaceAll("'", "&#039;");
 }
 
+function normalizeServices(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter(Boolean).map(String);
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    // try JSON array first
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean).map(String);
+    } catch {
+      // fall back to comma-separated
+      return trimmed
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
 function buildAutoReplyHtml(params: {
   firstName?: string;
   companyName?: string;
@@ -32,23 +55,27 @@ function buildAutoReplyHtml(params: {
   const firstName = params.firstName ? escapeHtml(params.firstName) : "there";
   const companyName = params.companyName ? escapeHtml(params.companyName) : "";
   const website = params.companyWebsite ? escapeHtml(params.companyWebsite) : "—";
+
   const servicesList =
-  params.services && params.services.length
-    ? params.services.map(escapeHtml).join(", ")
-    : "—";
+    params.services && params.services.length
+      ? params.services.map(escapeHtml).join(", ")
+      : "—";
+
   const details = params.details ? escapeHtml(params.details) : "";
 
   return `
   <div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background:#ffffff; color:#111827; padding:24px;">
     <div style="max-width:560px; margin:0 auto; border:1px solid #e5e7eb; border-radius:16px; overflow:hidden;">
       <div style="padding:20px 22px; background:#fff7ed;">
-        <div style="font-size:16px; font-weight:700; color:#111827;">Ads for Good</div>
+        <div style="font-size:16px; font-weight:700; color:#111827;">ads for Good</div>
         <div style="font-size:13px; color:#6b7280; margin-top:4px;">We received your message</div>
       </div>
 
       <div style="padding:22px;">
         <p style="margin:0 0 12px; font-size:15px; line-height:1.5;">
-          Hey ${firstName} — thanks for reaching out${companyName ? ` about <strong>${companyName}</strong>` : ""}.
+          Hey ${firstName} — thanks for reaching out${
+            companyName ? ` about <strong>${companyName}</strong>` : ""
+          }.
         </p>
 
         <p style="margin:0 0 12px; font-size:15px; line-height:1.5;">
@@ -56,19 +83,18 @@ function buildAutoReplyHtml(params: {
         </p>
 
         <div style="margin:18px 0; padding:14px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px;">
-  <div style="font-size:12px; font-weight:700; color:#374151; margin-bottom:8px;">Submission summary</div>
-  <div style="font-size:14px; color:#111827; line-height:1.6;">
-    <div><strong>Company:</strong> ${companyName || "—"}</div>
-    <div><strong>Website:</strong> ${website}</div>
-    <div><strong>Services:</strong> ${servicesList}</div>
-  </div>
-</div>
-
+          <div style="font-size:12px; font-weight:700; color:#374151; margin-bottom:8px;">Submission summary</div>
+          <div style="font-size:14px; color:#111827; line-height:1.6;">
+            <div><strong>Company:</strong> ${companyName || "—"}</div>
+            <div><strong>Website:</strong> ${website}</div>
+            <div><strong>Services:</strong> ${servicesList}</div>
+          </div>
+        </div>
 
         ${
           details
             ? `
-          <div style="margin:18px 0; padding:14px 14px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px;">
+          <div style="margin:18px 0; padding:14px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px;">
             <div style="font-size:12px; font-weight:700; color:#374151; margin-bottom:6px;">Details</div>
             <div style="font-size:14px; color:#111827; white-space:pre-wrap; line-height:1.5;">${details}</div>
           </div>
@@ -96,14 +122,14 @@ export async function POST(req: Request) {
 
     const {
       firstLast,
-      email, // ✅ NEW: required for auto-reply
+      email,
       companyName,
       companyWebsite,
       services,
       details,
       sourceLabel,
       pageUrl,
-      marketingConsent, // client field
+      marketingConsent,
     } = body ?? {};
 
     // Basic validation
@@ -114,15 +140,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // Auto-reply requires a valid-ish email
-    if (!email || typeof email !== "string" || !email.includes("@")) {
+    // Normalize + validate email (once)
+    const replyToEmail =
+      typeof email === "string" ? email.trim().toLowerCase() : "";
+
+    if (!replyToEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyToEmail)) {
       return NextResponse.json(
         { ok: false, error: "Missing or invalid email." },
         { status: 400 }
       );
     }
 
-    // Grab user agent (no IP storage)
+    // Grab user agent from headers (no IP storage)
     const userAgent = req.headers.get("user-agent") || null;
 
     const insertRow = {
@@ -135,10 +164,7 @@ export async function POST(req: Request) {
       page_url: pageUrl || null,
       marketing_opt_in: Boolean(marketingConsent),
       user_agent: userAgent,
-      email: email.trim().toLowerCase(),
-
-      // Optional: store submitter email if your table has a column for it
-      // email: email,
+      email: replyToEmail,
     };
 
     // Insert into Supabase
@@ -155,17 +181,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // --- ✉️ Auto-reply to the user (HTML), non-blocking ---
-    try {
-      const firstName =
-        typeof firstLast === "string" ? firstLast.trim().split(/\s+/)[0] : undefined;
+    const firstName =
+      typeof firstLast === "string" ? firstLast.trim().split(/\s+/)[0] : undefined;
 
-        const servicesArray = Array.isArray(data.services)
-        ? data.services
-        : Array.isArray(services)
-          ? services
-          : [];
-      
+    const servicesArray = normalizeServices(data?.services ?? services);
+
+    // 1) Auto-reply to the user (HTML), non-blocking
+    try {
       const html = buildAutoReplyHtml({
         firstName,
         companyName: data.company_name ?? companyName,
@@ -174,26 +196,47 @@ export async function POST(req: Request) {
         details: data.details ?? details ?? undefined,
       });
 
-      const replyToEmail =
-  typeof email === "string" ? email.trim().toLowerCase() : "";
-
-if (!replyToEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyToEmail)) {
-  return NextResponse.json(
-    { ok: false, error: "Missing or invalid email." },
-    { status: 400 }
-  );
-}
-
       await resend.emails.send({
         to: replyToEmail,
-        from: `ads for Good <${process.env.FROM_EMAIL!}>`,
+        from: `Ads for Good <${process.env.FROM_EMAIL!}>`,
         subject: "We received your message",
         html,
-        replyTo: process.env.FROM_EMAIL!, // lets them reply back to you
+        replyTo: process.env.FROM_EMAIL!,
       });
     } catch (emailError) {
       console.error("Resend auto-reply failed:", emailError);
-      // Do NOT fail submission
+    }
+
+    // 2) Notify you on every submission (plaintext), non-blocking
+    try {
+      const subject = `New inquiry: ${data.company_name || "Unknown company"}`;
+
+      const text = [
+        `Name: ${data.first_last || firstLast}`,
+        `Email: ${data.email || replyToEmail}`,
+        `Company: ${data.company_name || companyName}`,
+        `Website: ${data.company_website || companyWebsite || "—"}`,
+        `Services: ${servicesArray.length ? servicesArray.join(", ") : "—"}`,
+        `Source: ${data.source_label || sourceLabel || "—"}`,
+        `Page URL: ${data.page_url || pageUrl || "—"}`,
+        `Marketing Opt-In: ${data.marketing_opt_in ?? Boolean(marketingConsent)}`,
+        ``,
+        `Details:`,
+        `${data.details || details || "—"}`,
+        ``,
+        `ID: ${data.id || "—"}`,
+        `Submitted: ${data.created_at || "—"}`,
+      ].join("\n");
+
+      await resend.emails.send({
+        to: "katoa@ads4good.com",
+        from: `Ads for Good <${process.env.FROM_EMAIL!}>`,
+        subject,
+        text,
+        replyTo: replyToEmail, // replying from your inbox replies to the submitter
+      });
+    } catch (notifyError) {
+      console.error("Resend notify-to-you failed:", notifyError);
     }
 
     return NextResponse.json({ ok: true });
@@ -204,6 +247,7 @@ if (!replyToEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyToEmail)) {
     );
   }
 }
+
 
 
 
