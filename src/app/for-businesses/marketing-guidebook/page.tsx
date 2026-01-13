@@ -271,7 +271,7 @@ export default function MarketingGuidebookPage() {
                 </a>
   
                 <a
-                  href="https://www.ads4good.com/for-businesses#ops-executionk"
+                  href="https://www.ads4good.com/for-businesses#ops-execution"
                   className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                 >
                   For Operation & Execution

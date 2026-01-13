@@ -1,4 +1,5 @@
 import Link from "next/link";
+import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
   title: "Business Services | Ads for Good",
@@ -232,7 +233,6 @@ export default function ForBusinessesPage() {
                   { t: "SEO services", s: "text-xs sm:text-sm", x: "left-[20%]", y: "top-[74%]" },
                   { t: "digital ads", s: "text-xs sm:text-sm", x: "left-[42%]", y: "top-[78%]" },
 
-                  // Hide the tiniest/helper phrases on mobile to reduce crowding
                   { t: "get more leads", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[52%]", y: "top-[88%]" },
                   { t: "pressure-test a plan", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[6%]", y: "top-[28%]" },
                   { t: "what should we do next?", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[58%]", y: "top-[26%]" },
@@ -294,12 +294,12 @@ export default function ForBusinessesPage() {
                 </div>
 
                 <div className="min-w-0 flex flex-col gap-2">
-                  <Link
-                    href={ideasGuidance.horizontalFeature.primaryHref}
+                  <InquiryLauncher
+                    buttonLabel={`${ideasGuidance.horizontalFeature.primaryCtaLabel} →`}
+                    defaultServices={[ideasGuidance.horizontalFeature.title]}
+                    sourceLabel="For Businesses — Guidebook Primary CTA"
                     className="inline-flex w-full items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
-                  >
-                    {ideasGuidance.horizontalFeature.primaryCtaLabel} →
-                  </Link>
+                  />
 
                   <Link
                     href={ideasGuidance.horizontalFeature.learnHref}
@@ -348,12 +348,12 @@ export default function ForBusinessesPage() {
                 </p>
 
                 <div className="mt-auto pt-6 grid gap-3 sm:flex sm:flex-wrap">
-                  <Link
-                    href={c.primaryHref}
+                  <InquiryLauncher
+                    buttonLabel={`${c.primaryCtaLabel} →`}
+                    defaultServices={[c.title]}
+                    sourceLabel={`For Businesses — ${c.title} Primary CTA`}
                     className="inline-flex w-full sm:w-auto items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
-                  >
-                    {c.primaryCtaLabel} →
-                  </Link>
+                  />
 
                   <Link
                     href={c.learnHref}
@@ -391,42 +391,57 @@ export default function ForBusinessesPage() {
           </p>
 
           <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {opsExecution.cards.map((x) => (
-              <Link
-                key={x.title}
-                href={x.href}
-                className="group rounded-3xl border border-orange-200 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm transition hover:shadow-md hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-300 flex flex-col"
+  {opsExecution.cards.map((x) => (
+    <div
+      key={x.title}
+      className="group relative overflow-hidden rounded-3xl border border-orange-200 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm transition hover:shadow-md hover:border-orange-300 flex flex-col"
+    >
+      {/* ✅ Overlay button fills card and receives clicks */}
+      <InquiryLauncher
+        label="" // keep blank if you don't want visible text
+        defaultServices={[x.title]}
+        sourceLabel={`For Businesses — Ops Card: ${x.title}`}
+        className="absolute inset-0 z-10 rounded-3xl cursor-pointer"
+      />
+
+      {/* ✅ Content does NOT intercept clicks */}
+      <div className="relative z-20 flex flex-col flex-1 pointer-events-none">
+        <p className="text-sm font-semibold text-neutral-900 group-hover:text-orange-600">
+          {x.title}
+        </p>
+
+        <div className="mt-4 flex-1">
+          <p className="text-xs font-medium text-orange-500">{x.pricingLabel}</p>
+
+          <div className="mt-3 space-y-2">
+            {x.pricing.map((p) => (
+              <div
+                key={`${x.title}-${p.label}`}
+                className="flex items-baseline justify-between gap-3"
               >
-                <p className="text-sm font-semibold text-neutral-900 group-hover:text-orange-600">
-                  {x.title}
-                </p>
-
-                <div className="mt-4 flex-1">
-                  <p className="text-xs font-medium text-orange-500">{x.pricingLabel}</p>
-
-                  <div className="mt-3 space-y-2">
-                    {x.pricing.map((p) => (
-                      <div
-                        key={`${x.title}-${p.label}`}
-                        className="flex items-baseline justify-between gap-3"
-                      >
-                        <span className="text-xs text-neutral-700 pr-2">
-                          {p.label}
-                        </span>
-                        <span className="text-sm font-semibold text-neutral-900 whitespace-nowrap">
-                          {p.value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <p className="mt-auto pt-5 text-xs text-neutral-700">
-                  Click to learn more →
-                </p>
-              </Link>
+                <span className="text-xs text-neutral-700 pr-2">{p.label}</span>
+                <span className="text-sm font-semibold text-neutral-900 whitespace-nowrap">
+                  {p.value}
+                </span>
+              </div>
             ))}
           </div>
+        </div>
+
+        {/* ✅ Re-enable clicks ONLY for this link */}
+        <Link
+          href={x.href}
+          className="mt-auto pt-5 text-xs text-neutral-700 hover:underline w-fit pointer-events-auto"
+        >
+          Click to learn more →
+        </Link>
+      </div>
+    </div>
+  ))}
+</div>
+
+
+
         </div>
       </section>
 
@@ -452,12 +467,12 @@ export default function ForBusinessesPage() {
               </div>
 
               <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
-                <a
-                  href={team.leftPill.href}
+                <InquiryLauncher
+                  buttonLabel={team.leftPill.ctaLabel}
+                  defaultServices={[team.leftPill.title]}
+                  sourceLabel="For Businesses — Be My Marketing Team CTA"
                   className="inline-flex w-full sm:w-auto items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
-                >
-                  {team.leftPill.ctaLabel}
-                </a>
+                />
 
                 <Link
                   href={team.leftPill.learnMoreHref}
@@ -507,6 +522,7 @@ export default function ForBusinessesPage() {
     </main>
   );
 }
+
 
 
 
