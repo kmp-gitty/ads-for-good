@@ -38,6 +38,7 @@ export default function InquiryModal({
   );
 
   const [firstLast, setFirstLast] = useState("");
+  const [email, setEmail] = useState(""); // ✅ NEW
   const [companyName, setCompanyName] = useState("");
   const [companyWebsite, setCompanyWebsite] = useState("");
   const [details, setDetails] = useState("");
@@ -59,6 +60,9 @@ export default function InquiryModal({
     setSubmitting(false);
     setSubmitted(false);
     setErrorMsg(null);
+
+    // optional: keep values or reset; I’ll reset email so you don’t accidentally reuse
+    setEmail(""); // ✅ NEW
   }, [open, defaultServices]);
 
   // Close on ESC
@@ -105,6 +109,7 @@ export default function InquiryModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           firstLast,
+          email, // ✅ NEW: required for auto-reply
           companyName,
           companyWebsite,
           services,
@@ -126,6 +131,7 @@ export default function InquiryModal({
 
       // (optional) clear inputs after submit
       setFirstLast("");
+      setEmail(""); // ✅ NEW
       setCompanyName("");
       setCompanyWebsite("");
       setDetails("");
@@ -212,7 +218,22 @@ export default function InquiryModal({
                       />
                     </label>
 
+                    {/* ✅ NEW: Email */}
                     <label className="block">
+                      <span className="text-xs font-semibold text-neutral-700">
+                        Email
+                      </span>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                        placeholder="you@company.com"
+                      />
+                    </label>
+
+                    <label className="block sm:col-span-2">
                       <span className="text-xs font-semibold text-neutral-700">
                         Company Name
                       </span>
@@ -328,6 +349,7 @@ export default function InquiryModal({
     </div>
   );
 }
+
 
 
 
