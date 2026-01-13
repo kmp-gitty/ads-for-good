@@ -24,7 +24,7 @@ export default function ForGoodPage() {
               Current State
             </h2>
             <p className="mt-4 text-sm text-neutral-800">
-              Some situations, 50% of ad revenue is given away: to partner local businesses and charity organizations. In others, 20% of revenue from our services are given away to local community organizations.
+              Some situations, 50% of ad revenue is given away: to partner local businesses and charity organizations. In others, 10%-20% of revenue from our services are given away to local community organizations.
             </p>
           </div>
   

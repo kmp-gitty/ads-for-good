@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Sitemap | ads for Good",
-  description: "Browse all pages on ads for Good.",
+  title: "Sitemap | Ads for Good",
+  description: "Browse all pages on Ads for Good.",
 };
 
 export default function SitemapPage() {
@@ -15,7 +15,7 @@ export default function SitemapPage() {
             Sitemap
           </h1>
           <p className="mt-4 text-sm sm:text-base text-neutral-700 max-w-2xl">
-            A simple directory of every page on ads for Good.
+            A simple directory of every page on Ads for Good.
           </p>
         </header>
 
@@ -25,6 +25,11 @@ export default function SitemapPage() {
           <div className="rounded-3xl border border-orange-100 bg-orange-50/60 p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-neutral-900">For People</h2>
             <ul className="mt-4 space-y-2 text-sm">
+              <li>
+                <Link href="/for-people" className="text-orange-500 hover:underline">
+                  For People (Overview)
+                </Link>
+              </li>
               <li>
                 <Link href="/for-people/education" className="text-orange-500 hover:underline">
                   Education
@@ -51,11 +56,16 @@ export default function SitemapPage() {
             <h2 className="text-lg font-semibold text-neutral-900">For Businesses</h2>
             <ul className="mt-4 space-y-2 text-sm">
               <li>
+                <Link href="/for-businesses" className="text-orange-500 hover:underline">
+                  For Businesses (Overview)
+                </Link>
+              </li>
+              <li>
                 <Link
                   href="/for-businesses/marketing-advice"
                   className="text-orange-500 hover:underline"
                 >
-                  Ask Us Anything
+                  Marketing Advice On Demand
                 </Link>
               </li>
               <li>
@@ -68,10 +78,9 @@ export default function SitemapPage() {
                   href="/for-businesses/marketing-guidebook"
                   className="text-orange-500 hover:underline"
                 >
-                  Marketing Guidebook
+                  DIY Marketing Guidebook
                 </Link>
               </li>
-
               <li>
                 <Link
                   href="/for-businesses/digital-health-check"
@@ -81,12 +90,46 @@ export default function SitemapPage() {
                 </Link>
               </li>
 
+              {/* New execution pages */}
               <li>
                 <Link
-                  href="/for-businesses/direct-mail"
+                  href="/for-businesses/website-builds-updates"
                   className="text-orange-500 hover:underline"
                 >
+                  Website Builds &amp; Updates
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/for-businesses/digital-profile-management"
+                  className="text-orange-500 hover:underline"
+                >
+                  Digital Profile Management
+                </Link>
+              </li>
+              <li>
+                <Link href="/for-businesses/seo-services" className="text-orange-500 hover:underline">
+                  SEO Services
+                </Link>
+              </li>
+              <li>
+                <Link href="/for-businesses/digital-ads" className="text-orange-500 hover:underline">
+                  Digital Ads
+                </Link>
+              </li>
+
+              <li>
+                <Link href="/for-businesses/direct-mail" className="text-orange-500 hover:underline">
                   Local Direct Mail
+                </Link>
+              </li>
+
+              <li>
+                <Link
+                  href="/for-businesses/marketing-team"
+                  className="text-orange-500 hover:underline"
+                >
+                  Your New Marketing Team
                 </Link>
               </li>
             </ul>
@@ -109,6 +152,11 @@ export default function SitemapPage() {
             <h2 className="text-lg font-semibold text-neutral-900">Company</h2>
             <ul className="mt-4 space-y-2 text-sm">
               <li>
+                <Link href="/" className="text-orange-500 hover:underline">
+                  Home
+                </Link>
+              </li>
+              <li>
                 <Link href="/about" className="text-orange-500 hover:underline">
                   About
                 </Link>
@@ -116,6 +164,11 @@ export default function SitemapPage() {
               <li>
                 <Link href="/contact" className="text-orange-500 hover:underline">
                   Contact
+                </Link>
+              </li>
+              <li>
+                <Link href="/sitemap" className="text-orange-500 hover:underline">
+                  Sitemap
                 </Link>
               </li>
             </ul>

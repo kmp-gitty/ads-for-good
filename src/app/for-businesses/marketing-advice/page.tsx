@@ -277,12 +277,10 @@ export const metadata = {
             </div>
           </section>
   
-          {/* Other services */}
-          <section className="mt-14 sm:mt-16">
+         {/* Other services */}
+         <section className="mt-14 sm:mt-16">
             <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
-              <h2 className="text-2xl font-semibold text-neutral-900">
-                Looking for other services?
-              </h2>
+              <h2 className="text-2xl font-semibold text-neutral-900">Looking for other services?</h2>
   
               <p className="mt-3 text-sm sm:text-base text-neutral-800">
                 Look no further — just click one of the options below.
@@ -290,32 +288,26 @@ export const metadata = {
   
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-3">
                 <a
-                  href="https://www.ads4good.com/for-businesses/consulting"
+                  href="https://www.ads4good.com/for-businesses#ideas-guidance"
                   className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                 >
-                  Consulting &amp; Operational Guidance
+                  For Ideas & Guidance
                 </a>
   
                 <a
-                  href="https://www.ads4good.com/for-businesses/marketing-guidebook"
+                  href="https://www.ads4good.com/for-businesses#ops-executionk"
                   className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                 >
-                  DIY Marketing Guidebook
+                  For Operation & Execution
                 </a>
   
                 <a
-                  href="https://www.ads4good.com/for-businesses//digital-health-check"
+                  href="https://www.ads4good.com/for-businesses/marketing-team"
                   className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                 >
-                  In-Depth Digital Health Check
+                  Be My Marketing Team
                 </a>
   
-                <a
-                  href="https://www.ads4good.com/for-businesses/direct-mail"
-                  className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-                >
-                  Direct Mail Campaigns
-                </a>
               </div>
             </div>
           </section>

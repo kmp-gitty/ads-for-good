@@ -328,32 +328,26 @@ export const metadata = {
   
               <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-3">
                 <a
-                  href="https://www.ads4good.com/for-businesses/consulting"
+                  href="https://www.ads4good.com/for-businesses#ideas-guidance"
                   className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                 >
-                  Consulting &amp; Operational Guidance
+                  For Ideas & Guidance
                 </a>
   
                 <a
-                  href="https://www.ads4good.com/for-businesses/marketing-guidebook"
+                  href="https://www.ads4good.com/for-businesses#ops-executionk"
                   className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                 >
-                  DIY Marketing Guidebook
+                  For Operation & Execution
                 </a>
   
                 <a
-                  href="https://www.ads4good.com/for-businesses/digital-health-check"
+                  href="https://www.ads4good.com/for-businesses/marketing-team"
                   className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                 >
-                  In-Depth Digital Health Check
+                  Be My Marketing Team
                 </a>
   
-                <a
-                  href="https://www.ads4good.com/for-businesses/direct-mail"
-                  className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-                >
-                  Direct Mail Campaigns
-                </a>
               </div>
             </div>
           </section>
