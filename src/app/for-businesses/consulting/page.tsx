@@ -1,4 +1,5 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
+import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
     title: "Marketing Consulting - Business Consulting | Ads for Good",
@@ -333,6 +334,13 @@ export const metadata = {
             </div>
           </section>
         </div>
+
+        <StickyCTA
+  targetId="primary-cta"
+  label="Buy Consulting Hours"
+  defaultServices={["Consulting"]}
+  sourceLabel="Consulting Page — Sticky CTA"
+/>
       </main>
     );
   }
