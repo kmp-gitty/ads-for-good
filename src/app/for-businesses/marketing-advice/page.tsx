@@ -1,4 +1,5 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
+import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
     title: "Ask a Marketing Expert – Business Advice On Demand | Ads for Good",
@@ -85,12 +86,14 @@ export const metadata = {
   </p>
 
   {/* CTA pinned to bottom */}
+  <section id="primary-cta" className="mt-8">
   <InquiryLauncher
     label="Set Up Marketing Advice"
     defaultServices={["Marketing Advice On Demand"]}
     sourceLabel="Marketing Advice Page — Right Card CTA"
     className="mt-auto inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
   />
+  </section>
 </div>
           </section>
   
@@ -291,6 +294,13 @@ export const metadata = {
             </div>
           </section>
         </div>
+
+        <StickyCTA
+  targetId="primary-cta"
+  label="Set Up Marketing Advice"
+  defaultServices={["Marketing Advice On Demand"]}
+  sourceLabel="Marketing Advice On Demand Page — Sticky CTA"
+/>
       </main>
     );
   }

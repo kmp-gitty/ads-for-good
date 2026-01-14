@@ -1,4 +1,5 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
+import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
   title: "Outsourced Marketing Team for Small Businesses | Ads for Good",
@@ -54,12 +55,14 @@ export default function MarketingTeamPage() {
               $1,500 a month gets you full force and knowledge of a marketing team - without needing to spend endless time and money.
             </p>
             <div className="mt-6 flex justify-center">
+<div id="primary-cta">
   <InquiryLauncher
     label="Contact Us to Be Your Marketing Team"
     defaultServices={["Be My Marketing Team"]}
     sourceLabel="Marketing Team Page — Primary CTA"
     className="w-full text-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
   />
+  </div>
 </div>
 
           </div>
@@ -305,6 +308,13 @@ export default function MarketingTeamPage() {
             </div>
           </section>
       </div>
+
+      <StickyCTA
+  targetId="primary-cta"
+  label="Contact Us to Be Your Marketing Team"
+  defaultServices={["Be My Marketing Team"]}
+  sourceLabel="Be My Marketing Team Page — Sticky CTA"
+/>
     </main>
   );
 }

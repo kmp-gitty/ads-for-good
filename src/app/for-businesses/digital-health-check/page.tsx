@@ -1,4 +1,5 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
+import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
     title: "Digital Health Check for Digital Properties | Ads for Good",
@@ -28,12 +29,14 @@ export const metadata = {
   </p>
 
   {/* CTA */}
+  <section id="primary-cta" className="mt-8">
   <InquiryLauncher
     label="Purchase Digital Health Check"
     defaultServices={["Digital Health Check"]}
     sourceLabel="Digital Health Check Page — Hero CTA"
-    className="mt-8 inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+    className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
   />
+  </section>
 </div>
 
   
@@ -341,6 +344,13 @@ export const metadata = {
             </div>
           </section>
         </div>
+
+        <StickyCTA
+  targetId="primary-cta"
+  label="Purchase Digital Health Check"
+  defaultServices={["Digital Health Check"]}
+  sourceLabel="Digital Health Check Page — Sticky CTA"
+/>
       </main>
     );
   }  

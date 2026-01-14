@@ -1,5 +1,6 @@
 import ProfileOutlineCompact from "./ProfileOutlineCompact";
 import InquiryLauncher from "@/components/InquiryLauncher";
+import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
   title: "Digital Profile Management for Small Businesses | Ads for Good",
@@ -28,12 +29,14 @@ export default function DigitalProfileManagementPage() {
   </p>
 
   {/* CTA */}
+  <section id="primary-cta" className="mt-8">
   <InquiryLauncher
     label="Set Up Digital Profile Management"
     defaultServices={["Digital Profile Management"]}
     sourceLabel="Digital Profile Management — Hero CTA"
-    className="mt-8 inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+    className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
   />
+  </section>
 </div>
 
 
@@ -275,6 +278,13 @@ export default function DigitalProfileManagementPage() {
             </div>
           </section>
       </div>
+
+      <StickyCTA
+  targetId="primary-cta"
+  label="Set Up Digital Profile Management"
+  defaultServices={["Digital Profile Management"]}
+  sourceLabel="Digital Profile Management Page — Sticky CTA"
+/>
     </main>
   );
 }

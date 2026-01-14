@@ -1,4 +1,5 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
+import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
     title: "Digital Advertising Services - Search, Social & Paid Media | Ads for Good",
@@ -86,12 +87,14 @@ export const metadata = {
   </p>
 
   {/* CTA */}
+  <section id="primary-cta" className="mt-6">
   <InquiryLauncher
     label="Let’s Talk Ads Management"
     defaultServices={["Digital Ads"]}
     sourceLabel="Digital Ads — Pricing Card CTA"
-    className="mt-6 inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+    className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
   />
+  </section>
 </div>
 
           </section>
@@ -329,6 +332,13 @@ export const metadata = {
             </div>
           </section>
         </div>
+
+        <StickyCTA
+          targetId="primary-cta"
+          label="Let's Talk Ads Management"
+          defaultServices={["Digital Ads"]}
+          sourceLabel="Digital Ads Page — Sticky CTA"
+        />
       </main>
     );
   }

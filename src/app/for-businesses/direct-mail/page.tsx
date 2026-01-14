@@ -1,4 +1,5 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
+import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
     title: "Direct Mail Marketing | Ads for Good",
@@ -237,12 +238,14 @@ export const metadata = {
 {/* Full-width Direct Mail CTA */}
 <section className="mx-auto w-full max-w-6xl px-4 py-10">
   <div className="rounded-3xl border border-orange-200 bg-orange-50 px-6 py-8 sm:px-10 sm:py-10 flex justify-center">
+  <div id="primary-cta">
     <InquiryLauncher
-      label="Get Started On Your Local Ads Newsletter or Custom Direct Mail Campaign"
+      label="Get Started On Your Direct Mail Campaign"
       defaultServices={["Local Direct Mail"]}
       sourceLabel="Direct Mail — Full Width CTA"
       className="w-full max-w-3xl text-center rounded-full bg-orange-500 px-8 py-4 text-base sm:text-lg font-semibold text-white hover:bg-orange-600"
     />
+    </div>
   </div>
 </section>
 
@@ -543,6 +546,13 @@ export const metadata = {
             </div>
           </section>
         </div>
+
+        <StickyCTA
+  targetId="primary-cta"
+  label="Get Started On Your Direct Mail Campaign"
+  defaultServices={["Local Direct Mail"]}
+  sourceLabel="Local Direct Mail Page — Sticky CTA"
+/>
       </main>
     );
   }
