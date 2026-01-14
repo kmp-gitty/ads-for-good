@@ -28,12 +28,14 @@ export const metadata = {
   </p>
 
   {/* CTA */}
+  <section id="primary-cta" className="mt-8">
   <InquiryLauncher
     label="Buy Consulting Hours"
     defaultServices={["Consulting"]}
     sourceLabel="Consulting Page — Hero CTA"
-    className="mt-8 inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+    className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
   />
+  </section>
 </div>
 
   

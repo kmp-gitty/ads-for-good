@@ -8,7 +8,7 @@ type Props = {
   onClose: () => void;
   defaultServices?: string[];
   serviceOptions?: string[];
-  sourceLabel?: string; // optional: which button/page opened it
+  sourceLabel?: string;
 };
 
 export default function InquiryModal({
@@ -38,13 +38,12 @@ export default function InquiryModal({
   );
 
   const [firstLast, setFirstLast] = useState("");
-  const [email, setEmail] = useState(""); // ✅ NEW
+  const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [companyWebsite, setCompanyWebsite] = useState("");
   const [details, setDetails] = useState("");
   const [services, setServices] = useState<string[]>(defaultServices);
 
-  // ✅ new
   const [marketingConsent, setMarketingConsent] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -53,16 +52,15 @@ export default function InquiryModal({
   // Re-initialize each time it opens
   useEffect(() => {
     if (!open) return;
-    setServices(defaultServices);
 
-    // reset submit UX each open
+    setServices(defaultServices);
     setMarketingConsent(true);
     setSubmitting(false);
     setSubmitted(false);
     setErrorMsg(null);
 
-    // optional: keep values or reset; I’ll reset email so you don’t accidentally reuse
-    setEmail(""); // ✅ NEW
+    // reset email so you don’t reuse by accident
+    setEmail("");
   }, [open, defaultServices]);
 
   // Close on ESC
@@ -109,29 +107,26 @@ export default function InquiryModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           firstLast,
-          email, // ✅ NEW: required for auto-reply
+          email,
           companyName,
           companyWebsite,
           services,
           details,
           sourceLabel,
-          pageUrl, // ✅ capture page
-          marketingConsent, // ✅ consent
+          pageUrl,
+          marketingConsent,
         }),
       });
 
       const data = await res.json().catch(() => ({}));
-
-      if (!res.ok || !data?.ok) {
+      if (!res.ok || !data?.ok)
         throw new Error(data?.error || "Submission failed.");
-      }
 
-      // ✅ show thank-you UI
       setSubmitted(true);
 
-      // (optional) clear inputs after submit
+      // clear inputs after submit
       setFirstLast("");
-      setEmail(""); // ✅ NEW
+      setEmail("");
       setCompanyName("");
       setCompanyWebsite("");
       setDetails("");
@@ -145,7 +140,7 @@ export default function InquiryModal({
 
   return (
     <div className="fixed inset-0 z-[9999]">
-      {/* Backdrop (behind panel). Button allows click-to-close. */}
+      {/* Backdrop (click to close) */}
       <button
         type="button"
         onClick={onClose}
@@ -153,12 +148,14 @@ export default function InquiryModal({
         className="absolute inset-0 bg-black/40"
       />
 
-      {/* Viewport scroller (keeps modal centered + allows small screens) */}
-      <div className="absolute inset-0 overflow-y-auto p-4 sm:p-8">
-        <div className="mx-auto w-full max-w-3xl">
-          {/* Panel (above backdrop) */}
-          <div className="relative z-10 rounded-3xl border border-orange-200 bg-white shadow-xl overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between gap-4 p-5 sm:p-6 border-b border-orange-100">
+      {/* Centered viewport */}
+      <div className="absolute inset-0 overflow-y-auto p-3 sm:p-6 sm:flex sm:items-center sm:justify-center">
+        {/* Scale down slightly on shorter viewports (helps avoid scroll) */}
+        <div className="w-full max-w-6xl origin-center sm:[@media(max-height:740px)]:scale-[0.95] sm:[@media(max-height:680px)]:scale-[0.92]">
+          {/* Panel */}
+          <div className="relative z-10 w-full rounded-3xl border border-orange-200 bg-white shadow-xl max-h-[92vh] sm:max-h-none overflow-hidden">
+            {/* Header */}
+            <div className="sticky top-0 z-20 flex items-start justify-between gap-4 border-b border-orange-100 p-4 sm:p-5 bg-white">
               <div className="min-w-0">
                 <h3 className="text-lg sm:text-xl font-semibold text-neutral-900">
                   Contact / Get Started
@@ -171,13 +168,15 @@ export default function InquiryModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="shrink-0 rounded-full border border-orange-200 bg-white px-3 py-1.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
+                className="shrink-0 rounded-full border border-orange-200 bg-white px-3 py-1 text-sm font-semibold text-orange-600 hover:bg-orange-100"
+                aria-label="Close"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-4 sm:p-5">
+            {/* Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto max-h-[calc(92vh-140px)] sm:overflow-visible sm:max-h-none">
               {submitted ? (
                 <div className="rounded-2xl border border-orange-100 bg-orange-50/60 p-6">
                   <h4 className="text-lg font-semibold text-neutral-900">
@@ -197,14 +196,15 @@ export default function InquiryModal({
                   </button>
                 </div>
               ) : (
-                <form onSubmit={onSubmit} className="space-y-3">
+                <form onSubmit={onSubmit} className="space-y-2">
                   {errorMsg && (
                     <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                       {errorMsg}
                     </div>
                   )}
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  {/* Row 1: Name + Email */}
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <label className="block">
                       <span className="text-xs font-semibold text-neutral-700">
                         First & Last Name
@@ -213,12 +213,11 @@ export default function InquiryModal({
                         value={firstLast}
                         onChange={(e) => setFirstLast(e.target.value)}
                         required
-                        className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                        className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-1 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
                         placeholder="Jane Doe"
                       />
                     </label>
 
-                    {/* ✅ NEW: Email */}
                     <label className="block">
                       <span className="text-xs font-semibold text-neutral-700">
                         Email
@@ -228,12 +227,15 @@ export default function InquiryModal({
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                        className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-1 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
                         placeholder="you@company.com"
                       />
                     </label>
+                  </div>
 
-                    <label className="block sm:col-span-2">
+                  {/* Row 2: Company Name + Website (side-by-side) */}
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="block">
                       <span className="text-xs font-semibold text-neutral-700">
                         Company Name
                       </span>
@@ -241,37 +243,39 @@ export default function InquiryModal({
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
                         required
-                        className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                        className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-1 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
                         placeholder="Acme Co."
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="text-xs font-semibold text-neutral-700">
+                        Company Website
+                      </span>
+                      <input
+                        value={companyWebsite}
+                        onChange={(e) => setCompanyWebsite(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-1 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                        placeholder="https://example.com"
                       />
                     </label>
                   </div>
 
-                  <label className="block">
-                    <span className="text-xs font-semibold text-neutral-700">
-                      Company Website
-                    </span>
-                    <input
-                      value={companyWebsite}
-                      onChange={(e) => setCompanyWebsite(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                      placeholder="https://example.com"
-                    />
-                  </label>
-
-                  <fieldset className="rounded-2xl border border-orange-100 bg-orange-50/60 p-4">
+                  {/* Services */}
+                  <fieldset className="rounded-2xl border border-orange-100 bg-orange-50/60 p-2.5">
                     <legend className="px-1 text-xs font-semibold text-neutral-700">
                       Interested Service(s)
                     </legend>
 
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {/* IMPORTANT: force 2 columns only (no lg:grid-cols-3) */}
+                    <div className="mt-2 grid gap-2 grid-cols-1 sm:grid-cols-2">
                       {options.map((opt) => {
                         const checked = services.includes(opt);
                         return (
                           <label
                             key={opt}
                             className={[
-                              "flex items-start gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer",
+                              "flex items-start gap-2 rounded-xl border px-3 py-1 text-sm cursor-pointer",
                               checked
                                 ? "border-orange-300 bg-white"
                                 : "border-orange-100 bg-white/70 hover:bg-white",
@@ -283,39 +287,45 @@ export default function InquiryModal({
                               onChange={() => toggleService(opt)}
                               className="mt-1"
                             />
-                            <span className="text-neutral-800">{opt}</span>
+                            <span className="text-neutral-800 leading-snug">
+                              {opt}
+                            </span>
                           </label>
                         );
                       })}
                     </div>
                   </fieldset>
 
-                  <label className="block">
-                    <span className="text-xs font-semibold text-neutral-700">
-                      Other Details
-                    </span>
-                    <textarea
-                      value={details}
-                      onChange={(e) => setDetails(e.target.value)}
-                      rows={3}
-                      className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
-                      placeholder="Anything helpful: goals, timeline, budget range, links, etc."
-                    />
-                  </label>
+                  {/* Details + Consent */}
+                  <div className="grid gap-2 sm:grid-cols-2 sm:items-start">
+                    <label className="block">
+                      <span className="text-xs font-semibold text-neutral-700">
+                        Other Details
+                      </span>
+                      <textarea
+                        value={details}
+                        onChange={(e) => setDetails(e.target.value)}
+                        rows={2}
+                        className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-1 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
+                        placeholder="Anything helpful: goals, timeline, budget range, links, etc."
+                      />
+                    </label>
 
-                  {/* ✅ marketing consent */}
-                  <label className="flex items-start gap-2 text-sm text-neutral-700">
-                    <input
-                      type="checkbox"
-                      checked={marketingConsent}
-                      onChange={(e) => setMarketingConsent(e.target.checked)}
-                      className="mt-1"
-                    />
-                    <span>I agree to receive marketing emails.</span>
-                  </label>
+                    <label className="mt-5 flex items-start gap-2 text-sm text-neutral-700 sm:mt-6">
+                      <input
+                        type="checkbox"
+                        checked={marketingConsent}
+                        onChange={(e) => setMarketingConsent(e.target.checked)}
+                        className="mt-1"
+                      />
+                      <span className="leading-snug">
+                        I agree to receive marketing emails.
+                      </span>
+                    </label>
+                  </div>
 
-                  {/* Sticky submit bar */}
-                  <div className="sticky bottom-0 -mx-4 sm:-mx-5 mt-2 px-4 sm:px-5 py-3 bg-white border-t border-orange-100 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
+                  {/* Actions */}
+                  <div className="sticky bottom-0 z-20 mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end border-t border-orange-100 bg-white pt-3 pb-3">
                     <button
                       type="button"
                       onClick={onClose}
@@ -336,19 +346,14 @@ export default function InquiryModal({
                 </form>
               )}
             </div>
-
-            {/* (optional) tiny debug footer */}
-            {!submitted && (
-              <div className="px-4 sm:px-5 pb-4 text-[11px] text-neutral-400">
-                Page: {pageUrl}
-              </div>
-            )}
           </div>
         </div>
       </div>
     </div>
   );
 }
+
+
 
 
 
