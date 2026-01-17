@@ -2,8 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function NavBar() {
+  const pathname = usePathname();
+
+  // Hide global NavBar on client portal pages
+  if (pathname?.startsWith("/for-clients")) {
+    return null;
+  }
+  
   const [servicesOpen, setServicesOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 

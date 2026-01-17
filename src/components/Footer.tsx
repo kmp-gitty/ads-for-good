@@ -1,7 +1,17 @@
+"use client";
+
 import Link from "next/link";
 import InquiryLauncher from "@/components/InquiryLauncher";
+import { usePathname } from "next/navigation";
 
 export function Footer() {
+  const pathname = usePathname();
+
+  // Hide footer on client portal pages
+  if (pathname.startsWith("/for-clients")) {
+    return null;
+  }
+  
   return (
     <footer className="w-full bg-orange-50 py-4">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6">
