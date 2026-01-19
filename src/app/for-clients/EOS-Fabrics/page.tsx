@@ -83,7 +83,7 @@ export default function SummaryPage() {
     {/* RIGHT CARD — white fill, orange outline */}
     <div className="rounded-lg border border-orange-300 bg-white p-4">
       <div className="text-sm font-semibold text-neutral-900">
-        EOS Fabrics' Tasks
+        EOS Fabrics Tasks
       </div>
 
       <div className="mt-2 text-sm text-neutral-800 space-y-1">

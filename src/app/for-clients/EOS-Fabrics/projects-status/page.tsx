@@ -73,6 +73,61 @@ export default function ProjectsStatusPage() {
           </li>
         </ul>
       </section>
+
+      <section className="rounded-lg border border-neutral-200 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-neutral-900">
+              Analysis & Planning
+            </h2>
+            <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
+          </div>
+
+          {/* Status chip */}
+          <StatusChip status={status} label="To Begin After Access & Data Pulls" />
+        </div>
+
+        <ul className="mt-4 text-sm text-neutral-700 space-y-1">
+          <li>
+            • Data analysis & planning to be done for all elements above, after Access & Data Pulls
+          </li>      
+        </ul>
+      </section>
+
+
+      <section className="rounded-lg border border-neutral-200 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-neutral-900">
+              Projects On Deck
+            </h2>
+            <p className="mt-1 text-sm text-neutral-700">Post-Analysis</p>
+          </div>
+
+          {/* Status chip */}
+          <StatusChip status="red" label="To Begin After Analysis & Planning" />
+        </div>
+
+        <ul className="mt-4 text-sm text-neutral-700 space-y-1">
+          <li>
+            • Email marketing segmentation implementation
+          </li>
+          <li>• Reddit Ads test</li>
+          <li>
+            • SEO Ranking Increase activity & implementation
+          </li>
+          <li>
+            • Sked Social hand-off & active management
+          </li>
+          <li>
+            • Digital Profile Updates recommendations & implementation
+          </li>
+          <li>
+            • Website UX / UI updates
+          </li>
+        </ul>
+      </section>
+
     </div>
   );
 }

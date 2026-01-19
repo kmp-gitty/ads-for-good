@@ -22,7 +22,13 @@ export default function EOSFabricsLayout({
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto w-full max-w-6xl px-4 py-6">
-        <ClientPortalHeader />
+      <ClientPortalHeader
+          portalTitle="EOS Fabrics' Client Portal"
+          clientName="EOS Fabrics"
+          brandName="ads for Good"
+          brandLogoSrc="/images/ads4Good_Logo_500x500.png"
+          clientLogoSrc="/images/EOS_Client_Photo.avif"
+        />
         <ClientPortalTabs />
         <section className="mt-6">{children}</section>
       </div>
