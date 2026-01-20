@@ -310,39 +310,81 @@ export const metadata = {
           </section>
   
           {/* Other services */}
-          <section className="mt-14 sm:mt-16">
-            <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
-              <h2 className="text-2xl font-semibold text-neutral-900">Looking for other services?</h2>
-  
-              <p className="mt-3 text-sm sm:text-base text-neutral-800">
-                Look no further — just click one of the options below.
-              </p>
-  
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-x-4 sm:gap-y-3">
-                <a
-                  href="https://www.ads4good.com/for-businesses#ideas-guidance"
-                  className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-                >
-                  For Ideas & Guidance
-                </a>
-  
-                <a
-                  href="https://www.ads4good.com/for-businesses#ops-execution"
-                  className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-                >
-                  For Operation & Execution
-                </a>
-  
-                <a
-                  href="https://www.ads4good.com/for-businesses/marketing-team"
-                  className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-                >
-                  Be My Marketing Team
-                </a>
-  
-              </div>
-            </div>
-          </section>
+<section className="mt-14 sm:mt-16">
+  <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
+    <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+      
+      {/* LEFT COLUMN */}
+      <div>
+        <h2 className="text-2xl font-semibold text-neutral-900">
+          Looking for other services?
+        </h2>
+
+        <p className="mt-3 text-sm sm:text-base text-neutral-800">
+          Look no further — just click one of our other options.
+        </p>
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <a
+            href="https://www.ads4good.com/for-businesses#ideas-guidance"
+            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
+          >
+            For Ideas & Guidance
+          </a>
+
+          <a
+            href="https://www.ads4good.com/for-businesses#ops-execution"
+            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
+          >
+            For Operation & Execution
+          </a>
+
+          <a
+            href="https://www.ads4good.com/for-businesses/marketing-team"
+            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
+          >
+            Be My Marketing Team
+          </a>
+        </div>
+      </div>
+
+      {/* RIGHT COLUMN */}
+      <div>
+        <h3 className="mt-4 md:mt-4 text-lg font-semibold text-neutral-900">
+          Need more than just a check?
+        </h3>
+
+        <p className="mt-2 text-sm text-neutral-700">
+          Some operational services:
+        </p>
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <a
+            href="https://www.ads4good.com/for-businesses/consulting"
+            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
+          >
+            For Consulting Hours
+          </a>
+
+          <a
+            href="https://www.ads4good.com/for-businesses/website-builds-updates"
+            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
+          >
+            For Website Builds & Updates
+          </a>
+
+          <a
+            href="https://www.ads4good.com/for-businesses/seo-services"
+            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
+          >
+            For SEO Services
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
         </div>
 
         <StickyCTA
