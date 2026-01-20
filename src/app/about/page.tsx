@@ -23,7 +23,7 @@ export default function AboutPage() {
             -How these companies operate is a mystery to anyone that isn't in the industry. <br />
             -How there's such a focus on profit, the advertising world would step over a person to pickup a nickel. <br />
             <br />
-            So, we quit our corporate jobs and started our own thing. Advertising is what we know, and we want to use it for as much good as possble.
+            So, we quit our corporate jobs and started our own thing. Advertising is what we know, and we want to use it for as much good as possible.
           </p>
         </section>
   
