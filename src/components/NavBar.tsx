@@ -66,6 +66,9 @@ export function NavBar() {
                         for People
                       </Link>
                     </p>
+                    <p className="mt-3 text-xs font-semibold text-neutral-800">
+    For Ideas &amp; Guidance
+  </p>
 
                     <ul className="mt-2 space-y-1 text-sm">
                       <li>
@@ -77,7 +80,11 @@ export function NavBar() {
                           Education
                         </Link>
                       </li>
-
+                      </ul>  
+                      <p className="mt-3 text-xs font-semibold text-neutral-800">   
+                        For Operation &amp; Execution
+                      </p>
+  <ul className="mt-2 space-y-1 text-sm">
                       <li>
                         <Link
                           href="/for-people/privacy-protection"
@@ -87,7 +94,11 @@ export function NavBar() {
                           Privacy Protection
                         </Link>
                       </li>
-
+                      </ul>
+                      <p className="mt-3 text-xs font-semibold text-neutral-800">   
+                        For Fun & Utility
+                      </p>
+                      <ul className="mt-2 space-y-1 text-sm">
                       <li>
                         <Link
                           href="/for-people/ad-network"
