@@ -76,6 +76,7 @@ export default function SummaryPage() {
 
       <div className="mt-2 text-sm text-neutral-900 space-y-1">
         <p>• Complete analysis & planning by 1/31/26</p>
+        <p>• Send data & confidentiality agreement for handling of EOS Fabrics' data & sensitive information</p>
       </div>
     </div>
 
