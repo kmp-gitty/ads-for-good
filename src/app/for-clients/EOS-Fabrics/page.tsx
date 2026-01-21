@@ -30,7 +30,7 @@ export default function SummaryPage() {
           <li>• $500 monthly management fee</li>
               </ul>
               <div className="mt-1 text-xs text-neutral-600">
-                Payment to be sent
+                Invoice sent 1/21/26
               </div>
             </div>
   
@@ -75,8 +75,7 @@ export default function SummaryPage() {
       </div>
 
       <div className="mt-2 text-sm text-neutral-900 space-y-1">
-        <p>• Collaborate on access & data pulls</p>
-        <p>• Send invoice for accepted scope</p>
+        <p>• Complete analysis & planning by 1/31/26</p>
       </div>
     </div>
 
@@ -90,6 +89,43 @@ export default function SummaryPage() {
         <p>• Provide access & data pulls (will work together)</p>
         <p>• Confirm 2 month engagement proposal</p>
         <p>• Pay invoice after afG sends</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+{/* Completed to dos section */}
+<section className="rounded-lg border border-neutral-200 p-5">
+  <h2 className="text-base font-semibold text-neutral-900">
+    Completed To Dos
+  </h2>
+  <p className="mt-2 text-sm text-neutral-700">
+    Task record-keeping for both parties
+  </p>
+
+  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+    {/* LEFT CARD — orange fill, black outline */}
+    <div className="rounded-lg border border-neutral-900 bg-orange-50 p-4">
+      <div className="text-sm font-semibold text-neutral-900">
+        ads for Good Tasks
+      </div>
+
+      <div className="mt-2 text-sm text-neutral-900 space-y-1">
+        <p>• Sent invoice for accepted scope: 1/21/26</p>
+        <p>• Collaborated on access & data pulls: 1/21/26</p>
+      </div>
+    </div>
+
+    {/* RIGHT CARD — white fill, orange outline */}
+    <div className="rounded-lg border border-orange-300 bg-white p-4">
+      <div className="text-sm font-semibold text-neutral-900">
+        EOS Fabrics Tasks
+      </div>
+
+      <div className="mt-2 text-sm text-neutral-800 space-y-1">
+        <p>• Confirmed 2 month engagement proposal: 1/19/26</p>
+        <p>• Provided access & data pulls: 1/21/26</p>
       </div>
     </div>
   </div>

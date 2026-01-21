@@ -178,7 +178,7 @@ export default function ServicesPaymentsPage() {
       <div className="inline-flex items-center gap-2 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm font-medium text-neutral-900">
         <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
         <span>
-          Received: <span className="font-semibold">--</span>
+          Payment Received: <span className="font-semibold">--</span>
         </span>
       </div>
 
@@ -186,7 +186,7 @@ export default function ServicesPaymentsPage() {
       <div className="inline-flex items-center gap-2 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm font-medium text-neutral-900">
         <span className="h-2 w-2 rounded-full bg-yellow-500" aria-hidden="true" />
         <span>
-          Sent: <span className="font-semibold">To Be Sent</span>
+          Payment Sent: <span className="font-semibold">1/21/26</span>
         </span>
       </div>
 
@@ -194,7 +194,7 @@ export default function ServicesPaymentsPage() {
       <div className="inline-flex items-center gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-neutral-900">
         <span className="h-2 w-2 rounded-full bg-red-500" aria-hidden="true" />
         <span>
-          Late: <span className="font-semibold">No</span>
+          Payment Late: <span className="font-semibold">No</span>
         </span>
       </div>
     </div>
