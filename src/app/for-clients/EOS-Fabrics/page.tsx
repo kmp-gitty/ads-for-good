@@ -38,10 +38,10 @@ export default function SummaryPage() {
             <div className="rounded-md border border-neutral-200 p-3">
               <div className="text-sm text-neutral-700">Active Projects</div>
               <div className="mt-1 text-sm font-medium text-neutral-900">
-                Access & data pulls for analysis & planning
+                afG to perform analysis & planning phase
               </div>
               <div className="mt-1 text-xs text-neutral-600">
-                Starting week of 1/19/26
+                Starting week of 1/21/26
               </div>
             </div>
   
@@ -49,7 +49,7 @@ export default function SummaryPage() {
             <div className="rounded-md border border-neutral-200 p-3">
               <div className="text-sm text-neutral-700">Next Steps</div>
               <div className="mt-1 text-sm font-medium text-neutral-900">
-                EOS Fabrics & afG to work together on access & data pulls
+                afG to reach out for feedback & plan approval once planning complete
               </div>
               <div className="mt-1 text-xs text-neutral-600">
                 Katoa to dive into data and create plan afterwards
@@ -86,9 +86,7 @@ export default function SummaryPage() {
       </div>
 
       <div className="mt-2 text-sm text-neutral-800 space-y-1">
-        <p>• Provide access & data pulls (will work together)</p>
-        <p>• Confirm 2 month engagement proposal</p>
-        <p>• Pay invoice after afG sends</p>
+        <p>• Ask any questions, anytime</p>
       </div>
     </div>
   </div>
