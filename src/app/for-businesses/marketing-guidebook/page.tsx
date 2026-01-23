@@ -1,6 +1,8 @@
 import GuidebookOutlineCompact from "./GuidebookOutlineCompact";
 import InquiryLauncher from "@/components/InquiryLauncher";
 import StickyCTA from "@/components/StickyCTA";
+import AutobooksCheckoutModal from "@/components/AutobooksCheckoutModal";
+import GuidebookCheckoutCTA from "@/components/GuidebookCheckoutCTA";
 
 export const metadata = {
   title: "Small Business Marketing Guide - DIY Strategy & Playbooks | Ads for Good",
@@ -9,6 +11,7 @@ export const metadata = {
 };
 
 export default function MarketingGuidebookPage() {
+
   return (
     <main className="bg-white text-neutral-900 flex flex-col items-center px-4 pt-16 pb-24">
       {/* HERO SECTION */}
@@ -35,12 +38,10 @@ export default function MarketingGuidebookPage() {
 
 {/* CTA pill */}
 <section id="primary-cta" className="mt-8">
-<InquiryLauncher
-  label="Buy the Guidebook"
-  defaultServices={["DIY Marketing Guidebook"]}
-  sourceLabel="Marketing Guidebook — Hero CTA"
-  className="mt-6 inline-flex items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
-/>
+  <GuidebookCheckoutCTA
+    label="Buy the Guidebook"
+    className="mt-6 inline-flex items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+  />
 </section>
 
         </div>
@@ -342,8 +343,7 @@ export default function MarketingGuidebookPage() {
       <StickyCTA
   targetId="primary-cta"
   label="Buy the Guidebook"
-  defaultServices={["DIY Marketing Guidebook"]}
-  sourceLabel="DIY Marketing Guidebook Page — Sticky CTA"
+  variant="checkout-direct"
 />
     </main>
   );

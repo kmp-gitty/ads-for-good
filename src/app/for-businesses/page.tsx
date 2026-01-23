@@ -1,5 +1,6 @@
 import Link from "next/link";
 import InquiryLauncher from "@/components/InquiryLauncher";
+import GuidebookCheckoutCTA from "@/components/GuidebookCheckoutCTA";
 
 export const metadata = {
   title: "Business Services | Ads for Good",
@@ -294,12 +295,10 @@ export default function ForBusinessesPage() {
                 </div>
 
                 <div className="min-w-0 flex flex-col gap-2">
-                  <InquiryLauncher
-                    buttonLabel={`${ideasGuidance.horizontalFeature.primaryCtaLabel} →`}
-                    defaultServices={[ideasGuidance.horizontalFeature.title]}
-                    sourceLabel="For Businesses — Guidebook Primary CTA"
-                    className="inline-flex w-full items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
-                  />
+                <GuidebookCheckoutCTA
+  label={`${ideasGuidance.horizontalFeature.primaryCtaLabel} →`}
+  className="inline-flex w-full items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
+/>
 
                   <Link
                     href={ideasGuidance.horizontalFeature.learnHref}
