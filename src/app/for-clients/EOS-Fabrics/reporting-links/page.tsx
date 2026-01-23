@@ -18,6 +18,19 @@ export default function ReportingLinksPage() {
             </a>
           </li>
           </ul>
+          <ul className="mt-4 text-sm text-neutral-700 space-y-1">
+          <li>
+            • Data & Confidentiality agreement can be{" "}
+            <a
+            href="https://drive.google.com/file/d/11Q2tYvOSC5rolgJKL71o2nrIwgFvFVaE/view?usp=drive_link"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-orange-600 undelrine hover:text-orange-700"
+            >
+            accessed here.
+            </a>
+          </li>
+          </ul>
         </section>
   
         <section className="rounded-lg border border-neutral-200 p-5">

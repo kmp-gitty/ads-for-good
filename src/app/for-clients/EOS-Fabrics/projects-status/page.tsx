@@ -1,3 +1,5 @@
+import GoogleDocEmbed from "@/components/GoogleDocEmbed";
+
 type Status = "green" | "yellow" | "red";
 
 function StatusChip({ status, label }: { status: Status; label: string }) {
@@ -25,10 +27,39 @@ export default function ProjectsStatusPage() {
   const statusLabel = "To Begin • Week of 1/19/26";
 
   return (
+    
     <div className="space-y-6">
+
+ {/* ✅ Client Notepad Line Break */}
+ <div className="pt-4">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-semibold text-neutral-900 whitespace-nowrap">
+            Notepad
+          </h2>
+
+          {/* Dark orange line across remaining width */}
+          <div className="h-[3px] w-full rounded-full bg-teal-700" />
+        </div>
+
+        <p className="mt-2 text-sm text-neutral-600">
+          Editable Google Doc - add notes, ideas, and anything else here.
+        </p>
+      </div>
+
+      {/* ✅ Client Notepad embed below */}
+      <section className="mt-6">
+  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+  <GoogleDocEmbed
+  src="https://docs.google.com/document/d/1s7omaDkACHuleAu7J17VOBKhMEhEpt_4WzMR6SfcFXs/edit?usp=sharing"
+  height={650}
+/>
+  </div>
+</section>
+
       {/* ✅ NEW: Heading under tabs */}
       <div className="pt-1">
         <h1 className="text-2xl font-semibold text-neutral-900">Current Projects</h1>
+        <div className="h-[3px] w-full rounded-full bg-green-700" />
         <p className="mt-1 text-sm text-neutral-600">
           Active & upcoming projects.
         </p>
@@ -82,7 +113,7 @@ export default function ProjectsStatusPage() {
         </ul>
       </section>
 
-      {/* ✅ NEW: Section break + Completed Projects */}
+      {/* ✅ Completed Projects Line Break */}
       <div className="pt-4">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-semibold text-neutral-900 whitespace-nowrap">
