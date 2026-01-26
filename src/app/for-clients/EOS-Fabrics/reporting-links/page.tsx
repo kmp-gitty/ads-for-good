@@ -31,6 +31,19 @@ export default function ReportingLinksPage() {
             </a>
           </li>
           </ul>
+          <ul className="mt-4 text-sm text-neutral-700 space-y-1">
+          <li>
+            • Reddit Ads Test data & recommendations can be{" "}
+            <a
+            href="https://docs.google.com/spreadsheets/d/1P5jADFLCRUcnIEbhmdfrj2CTJUeSPDaeRgrkL2rJbX0/edit?usp=sharing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-orange-600 undelrine hover:text-orange-700"
+            >
+            accessed here.
+            </a>
+          </li>
+          </ul>
         </section>
   
         <section className="rounded-lg border border-neutral-200 p-5">
