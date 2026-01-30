@@ -75,8 +75,10 @@ export default function SummaryPage() {
       </div>
 
       <div className="mt-2 text-sm text-neutral-900 space-y-1">
-        <p>• Complete analysis & planning by 1/31/26</p>
-        <p>• Send data & confidentiality agreement for handling of EOS Fabrics' data & sensitive information</p>
+        <p>• Website: look at GA issues</p>
+        <p>• SEO: Action plan after approval & measurement setup</p>
+        <p>• Reddit: Tracking, Creative, & Setup (once approved)</p>
+        <p>• Email: Answer questions, Shopify messaging steps, Segment creation in Mailchimp</p>
       </div>
     </div>
 
@@ -87,7 +89,9 @@ export default function SummaryPage() {
       </div>
 
       <div className="mt-2 text-sm text-neutral-800 space-y-1">
-        <p>• Ask any questions, anytime</p>
+        <p>• SEO: Approval & provide ideal terms</p>
+        <p>• Reddit: Approval, Targeting feedback, & Ad creative insight</p>
+        <p>• Email: Approval or feedback of segments</p>
       </div>
     </div>
   </div>
@@ -107,19 +111,21 @@ export default function SummaryPage() {
     {/* LEFT CARD — orange fill, black outline */}
     <div className="rounded-lg border border-neutral-900 bg-orange-50 p-4">
       <div className="text-sm font-semibold text-neutral-900">
-        ads for Good Tasks
+        ads for Good Completions
       </div>
 
       <div className="mt-2 text-sm text-neutral-900 space-y-1">
         <p>• Sent invoice for accepted scope: 1/21/26</p>
         <p>• Collaborated on access & data pulls: 1/21/26</p>
+        <p>• Completed analysis & planning 1/29/26</p>
+        <p>• Sent data & confidentiality agreement</p>
       </div>
     </div>
 
     {/* RIGHT CARD — white fill, orange outline */}
     <div className="rounded-lg border border-orange-300 bg-white p-4">
       <div className="text-sm font-semibold text-neutral-900">
-        EOS Fabrics Tasks
+        EOS Fabrics Completions
       </div>
 
       <div className="mt-2 text-sm text-neutral-800 space-y-1">

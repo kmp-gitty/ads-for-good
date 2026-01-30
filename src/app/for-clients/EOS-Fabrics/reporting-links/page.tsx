@@ -31,6 +31,7 @@ export default function ReportingLinksPage() {
             </a>
           </li>
           </ul>
+
           <ul className="mt-4 text-sm text-neutral-700 space-y-1">
           <li>
             • Reddit Ads Test data & recommendations can be{" "}
@@ -43,6 +44,48 @@ export default function ReportingLinksPage() {
             accessed here.
             </a>
           </li>
+          <ul className="mt-4 text-sm text-neutral-700 space-y-1">
+          <li>
+            • Website journey data & recommendations can be{" "}
+            <a
+            href="https://docs.google.com/spreadsheets/d/1NPGTd1x7BoVl4NazpbAZP5TKHHQHIQ-tQSDoLjYFFsU/edit?usp=sharing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-orange-600 undelrine hover:text-orange-700"
+            >
+            accessed here.
+            </a>
+          </li>
+          </ul>
+
+          <ul className="mt-4 text-sm text-neutral-700 space-y-1">
+          <li>
+            • SEO data & recommendations can be{" "}
+            <a
+            href="https://docs.google.com/spreadsheets/d/14jq19qDUZONLe3FZc7tGsMLPh12yPltOWEns9v9J2Ko/edit?usp=sharing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-orange-600 undelrine hover:text-orange-700"
+            >
+            accessed here.
+            </a>
+          </li>
+          </ul>
+
+          <ul className="mt-4 text-sm text-neutral-700 space-y-1">
+          <li>
+            • Email Marketing data & recommendations can be{" "}
+            <a
+            href="https://docs.google.com/spreadsheets/d/1vHMl8da8cyvbbnUurKyBIjZx2HBoLSgE1kAnH3-X2Bc/edit?usp=sharing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-orange-600 undelrine hover:text-orange-700"
+            >
+            accessed here.
+            </a>
+          </li>
+          </ul>
+
           </ul>
         </section>
   

@@ -72,21 +72,17 @@ export default function ProjectsStatusPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-neutral-900">
-              Analysis &amp; Planning
+              Website Plan
             </h2>
             <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
           </div>
 
-          <StatusChip status="green" label="To Begin After 1/21/26" />
+          <StatusChip status="green" label="Completion ETA: 2/06/26" />
         </div>
 
         <ul className="mt-4 space-y-1 text-sm text-neutral-700">
           <li>
-            • Data analysis &amp; planning to be done for all elements above, after
-            Access &amp; Data Pulls
-          </li>
-          <li>
-            • Completion date: before 1/31/26
+            • Katoa to look into Google Analytics issues for proper assessment
           </li>
         </ul>
       </section>
@@ -95,21 +91,130 @@ export default function ProjectsStatusPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-base font-semibold text-neutral-900">
-              Projects On Deck
+              SEO Plan
             </h2>
-            <p className="mt-1 text-sm text-neutral-700">Post-Analysis</p>
+            <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
           </div>
 
-          <StatusChip status="red" label="To Begin After Analysis & Planning" />
+          <StatusChip status="yellow" label="Inputs from EOS Needed" />
+        </div>
+
+        <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-neutral-700">
+  <li>
+    EOS Fabrics' To Dos:
+
+    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+      <li>Approve via email, the 3 proposed approaches: Increase local ranking, Create outreach plan for authority & Improve already written tutorial pieces</li>
+      <li>Provide 10-20 terms / keywords / fabrics that answer the question: If someone searched a term or fabric name in Google, which ones would you care most for EOS Fabrics to show at the top?</li>
+    </ul>
+  </li>
+
+  <li>
+    afG's To Dos:
+
+    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+      <li>Turnaround an action plan for each of the 3 approaches above once approval & terms are provided</li>
+      <li>Set up measurement for organic ranking performance</li>
+    </ul>
+  </li>
+</ul>
+      </section>
+
+      <section className="rounded-lg border border-neutral-200 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-neutral-900">
+              Reddit Plan
+            </h2>
+            <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
+          </div>
+
+          <StatusChip status="yellow" label="Inputs from EOS Needed" />
+        </div>
+
+        <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-neutral-700">
+  <li>
+    EOS Fabrics' To Dos:
+
+    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+      <li>Approve via email, you'd like to move forward with a Reddit Ads test</li>
+      <li>Provide feedback on reddit threads to target ("Targeting" tab of doc) - if there are any you do not want to show in, let me know</li>
+      <li>For ad creative: Do you have any "How to" step graphics or Sale images you'd like to use? (I can help create them, but want to check first)</li>
+    </ul>
+  </li>
+
+  <li>
+    afG's To Dos:
+
+    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+      <li>Organize needs to set up and confirm tracking works</li>
+      <li>Finalize creative once feedback above is provided</li>
+      <li>Set up and launch campaign (after all approvals and measurement tests are done)</li>
+    </ul>
+  </li>
+</ul>
+      </section>
+
+      <section className="rounded-lg border border-neutral-200 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-neutral-900">
+              Email Plan
+            </h2>
+            <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
+          </div>
+
+          <StatusChip status="yellow" label="Inputs from EOS Needed" />
+        </div>
+
+        <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-neutral-700">
+  <li>
+    EOS Fabrics' To Dos:
+
+    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+      <li>Provide feedback or approval on segment ideas to be created:</li>
+      <li>Highly engaged / High value purchasers, Low engaged / Low value purchasers, Never / Lapsed purchasers</li>
+    </ul>
+  </li>
+
+  <li>
+    afG's To Dos:
+
+    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+      <li>Get answers into the questions you asked today:</li>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+      <li>Who is unsubscribing? How long are people subscribed for?</li>
+      <li>Confirm subscriber count dropped during transition (Nov 2024)?</li>
+      <li>Does Shopify messaging matter by subscriber list size?</li>
+      <li>Any sales insight for sends by day on sales?      </li>
+      <li>How have never purchased, but still subscribed, interacted with emails?      </li>
+      </ul>
+      <li>Organize steps & needs to test a Shopify messaging send in lieu of Mailchimp</li>
+      <li>Create the audience segments in Mailchimp, to export, once approved</li>
+    </ul>
+  </li>
+</ul>
+      </section>
+
+
+      <section className="rounded-lg border border-neutral-200 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-neutral-900">
+              Projects On Deck
+            </h2>
+            <p className="mt-1 text-sm text-neutral-700">Post-Beginning The Above</p>
+          </div>
+
+          <StatusChip status="yellow" label="To Fit Into Schedule" />
         </div>
 
         <ul className="mt-4 space-y-1 text-sm text-neutral-700">
-          <li>• Email marketing segmentation implementation</li>
-          <li>• Reddit Ads test</li>
-          <li>• SEO Ranking Increase activity &amp; implementation</li>
           <li>• Sked Social hand-off &amp; active management</li>
           <li>• Digital Profile Updates recommendations &amp; implementation</li>
-          <li>• Website UX / UI updates</li>
+          <li>• Frunes: Rewards/referrals app structure or less costly workaround option?</li>
+          <li>• Bloggle app - how best to use?</li>
+          <li>• How to fix "banana bunch pricing" problem - Google, Shop App, etc?</li>
         </ul>
       </section>
 
@@ -131,6 +236,29 @@ export default function ProjectsStatusPage() {
 
       {/* ✅ COMPLETED PROJECTS (drop finished rectangles below) */}
       <div className="space-y-6">
+      <section className="rounded-lg border border-neutral-200 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-neutral-900">
+              Analysis &amp; Planning
+            </h2>
+            <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
+          </div>
+
+          <StatusChip status="green" label="Completed 1/29/26" />
+        </div>
+
+        <ul className="mt-4 space-y-1 text-sm text-neutral-700">
+          <li>
+            • Data analysis &amp; planning to be done for all elements above, after
+            Access &amp; Data Pulls
+          </li>
+          <li>
+            • Completed 1/29/26
+          </li>
+        </ul>
+      </section>
+        
         <section className="rounded-lg border border-neutral-200 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
