@@ -48,6 +48,83 @@ const SATELLITE_PAGES: Record<string, SatellitePage> = {
         ),
         url: "https://steps2miles.com",
       },
+
+      splitbillsfairly: {
+        title: "Split Bills Fairly",
+        description: (
+          <div className="space-y-4">
+            <p>
+              <span className="font-semibold">What:</span>{" "}
+              Split Bills Failry is a free calculator that divides any kind of group bill by 2 methods: even split or itemized split (different people paid for different things). This micro-site
+              is perfect for a group restaurant bill, friends traveling expenses, roomate shared spend, and more.
+            </p>
+      
+            <p>
+              <span className="font-semibold">Why:</span>{" "}
+              We want to combine: for-good mission, web & marketing profession, and short attention
+              spans. We research and build satellite websites that fulfill every day needs
+              while keeping our creative and technical skills flowing.
+            </p>
+      
+            <p>
+              <span className="font-semibold">for Good:</span>{" "}
+              We pledge 20% of revenue from this site (and all others in our network)
+              to community and non-profit organizations.{" "}
+              <a
+                href="https://www.ads4good.com/for-good"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-orange-500 underline underline-offset-4 hover:text-orange-600"
+              >
+                Read more about the for Good stuff we do here.
+              </a>
+            </p>
+      
+            <p>
+              We also have a genuine passion for food & friends, so we think building
+              something useful to our daily lives is pretty cool.
+            </p>
+          </div>
+        ),
+        url: "https://splitbillsfairly.com",
+      },
+
+      calculateovertimepay: {
+        title: "Overtime Pay Calculator",
+        description: (
+          <div className="space-y-4">
+            <p>
+              <span className="font-semibold">What:</span>{" "}
+              Our overtime calculator is free and easy to use. Calculate: hourly rates, expected overtime pay, normal pay, and total pay. You have the option to calculate in $USD, £GBP, €EUR, $CAD, $AUD, or ￥YEN. Also find in-depth info of the US Fair Labor Standards Act (FLSA), & summary of other country OT laws.
+            </p>
+      
+            <p>
+              <span className="font-semibold">Why:</span>{" "}
+              We want our company to be: good, useful, and fun. We find and fulfill every day needs
+              while keeping our creative and technical skills flowing by creating new websites for them.
+            </p>
+      
+            <p>
+              <span className="font-semibold">for Good:</span>{" "}
+              We give 20% of revenue from this site (and all others)
+              to community and non-profit organizations.{" "}
+              <a
+                href="https://www.ads4good.com/for-good"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-orange-500 underline underline-offset-4 hover:text-orange-600"
+              >
+                Read more about "for Good" here.
+              </a>
+            </p>
+      
+            <p>
+              We also have been in hourly retail jobs, decided if taking the overtime is worth it - making something useful for this felt right.
+            </p>
+          </div>
+        ),
+        url: "https://calculateovertimepay.com",
+      },
 //Copy above and paste below for new satellite sites      
 };
 

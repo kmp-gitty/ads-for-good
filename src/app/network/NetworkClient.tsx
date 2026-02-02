@@ -27,7 +27,27 @@ const satellites: Satellite[] = [
       "An easy to use calculator for estimating how far you've gone based on how many steps you've taken.",
     slug: "steps2miles",
     image: "/images/Steps2Miles_Logo.png"
-  }
+  },
+  {
+    id: 2,
+    name: "Group Bill Splitter",
+    category: "Money & Tools",
+    tagline: "Easily split any group bill or expense.",
+    description:
+      "An intuitive calculator for splitting a dinner bill, travel expenses, or any other shared cost.",
+    slug: "splitbillsfairly",
+    image: "/images/Splitbillsfairly.logo.png"
+  },
+  {
+    id: 3,
+    name: "Overtime Pay Calculator",
+    category: "Money & Tools",
+    tagline: "Estimate your expected overtime pay.",
+    description:
+      "A straightforward calculator for calculating your overtime pay - also use it to calculate your hourly rates and see your total pay.",
+    slug: "calculateovertimepay",
+    image: "/images/Overtimepaycalculator_logo.png"
+  },
   // Add more as you create satellites...
 ];
 
@@ -130,7 +150,7 @@ export default function NetworkClient() {
                     </Link>
 
                     <a
-                        href="https://steps2miles.com#calculator"
+                        href={`https://${site.slug}.com`}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-2 text-sm font-medium text-black hover:underline"
@@ -222,7 +242,7 @@ export default function NetworkClient() {
         onClick={() => handleCategoryClick("Fitness & Health")}
         className="text-neutral-900 hover:text-orange-500 hover:underline"
       >
-        Fitness &amp; health utilities
+        Fitness &amp; Health utilities
       </button>
     </li>
     <li>
@@ -231,7 +251,7 @@ export default function NetworkClient() {
         onClick={() => handleCategoryClick("Mind & Psychology")}
         className="text-neutral-900 hover:text-orange-500 hover:underline"
       >
-        Mind &amp; psychology check-ins
+        Mind &amp; Psychology check-ins
       </button>
     </li>
     <li>
@@ -240,7 +260,7 @@ export default function NetworkClient() {
         onClick={() => handleCategoryClick("Money & Tools")}
         className="text-neutral-900 hover:text-orange-500 hover:underline"
       >
-        Money &amp; practical calculators
+        Money &amp; Practical calculators
       </button>
     </li>
   </ul>
