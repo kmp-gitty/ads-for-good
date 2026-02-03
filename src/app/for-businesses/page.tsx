@@ -1,6 +1,7 @@
 import Link from "next/link";
 import InquiryLauncher from "@/components/InquiryLauncher";
 import GuidebookCheckoutCTA from "@/components/GuidebookCheckoutCTA";
+import TrackedLink from "@/components/TrackedLink";
 
 export const metadata = {
   title: "Business Services | Ads for Good",
@@ -299,13 +300,14 @@ export default function ForBusinessesPage() {
   label={`${ideasGuidance.horizontalFeature.primaryCtaLabel} →`}
   className="inline-flex w-full items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
 />
-
-                  <Link
-                    href={ideasGuidance.horizontalFeature.learnHref}
-                    className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
-                  >
-                    {ideasGuidance.horizontalFeature.learnLabel}
-                  </Link>
+                  <TrackedLink
+  href={ideasGuidance.horizontalFeature.learnHref}
+  service={ideasGuidance.horizontalFeature.title}
+  location="For Businesses — Guidebook Pill"
+  className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
+>
+  {ideasGuidance.horizontalFeature.learnLabel}
+</TrackedLink>
                 </div>
 
                 <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4">
@@ -354,12 +356,16 @@ export default function ForBusinessesPage() {
                     className="inline-flex w-full sm:w-auto items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
                   />
 
-                  <Link
-                    href={c.learnHref}
-                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
-                  >
-                    {c.learnLabel}
-                  </Link>
+
+                  <TrackedLink
+  href={c.learnHref}
+  service={c.title}
+  location="For Businesses — Ideas & Guidance Card"
+  className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
+>
+  {c.learnLabel}
+</TrackedLink>
+
                 </div>
               </div>
 
@@ -428,12 +434,16 @@ export default function ForBusinessesPage() {
         </div>
 
         {/* ✅ Re-enable clicks ONLY for this link */}
-        <Link
-          href={x.href}
-          className="mt-auto pt-5 text-xs text-neutral-700 hover:underline w-fit pointer-events-auto"
-        >
-          Click to learn more →
-        </Link>
+        
+                  <TrackedLink
+  href={x.href}
+  service={x.title}
+  location="For Businesses — Ops & Execution Card"
+  className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
+>
+  Click to learn more →
+</TrackedLink>
+
       </div>
     </div>
   ))}
@@ -473,12 +483,16 @@ export default function ForBusinessesPage() {
                   className="inline-flex w-full sm:w-auto items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
                 />
 
-                <Link
-                  href={team.leftPill.learnMoreHref}
-                  className="inline-flex w-full sm:w-auto items-center justify-center rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-semibold text-orange-600 hover:bg-orange-100"
-                >
-                  {team.leftPill.learnMoreLabel}
-                </Link>
+
+                  <TrackedLink
+  href={team.leftPill.learnMoreHref}
+  service={team.leftPill.title}
+  location="For Businesses — Be My Marketing Team"
+  className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
+>
+  {team.leftPill.learnMoreLabel}
+</TrackedLink>
+
               </div>
 
               <div className="mt-8">

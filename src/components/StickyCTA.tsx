@@ -3,6 +3,17 @@
 import { useEffect, useState } from "react";
 import InquiryLauncher from "@/components/InquiryLauncher";
 
+const trackServiceClick = (action: "inquiry" | "checkout", service?: string) => {
+  if (typeof window !== "undefined" && typeof window.gtag === "function") {
+    window.gtag("event", "service_click", {
+      service_name: service ?? "unknown",
+      action_type: action, // inquiry | checkout
+      location: "sticky_cta",
+      source: "sticky_cta",
+    });
+  }
+};
+
 type StickyCTAProps = {
   targetId: string;
   label: string;
@@ -42,6 +53,7 @@ export default function StickyCTA({
   if (!visible) return null;
 
   const openCheckout = () => {
+    trackServiceClick("checkout", defaultServices?.[0]);
     window.open(CHECKOUT_URL, "_blank", "noopener,noreferrer");
   };
 
@@ -64,12 +76,18 @@ export default function StickyCTA({
             {label}
           </button>
         ) : (
+          <div
+          onClick={() =>
+            trackServiceClick("inquiry", defaultServices?.[0])
+          }
+        > 
           <InquiryLauncher
             label={label}
             defaultServices={defaultServices}
             sourceLabel={sourceLabel}
             className="rounded-full bg-orange-500 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-600"
           />
+          </div>
         )}
       </div>
     </div>

@@ -39,11 +39,25 @@ export default function InquiryLauncher({
     return [];
   }, [defaultServices, service]);
 
+  const trackServiceClick = () => {
+    if (typeof window !== "undefined" && typeof window.gtag === "function") {
+      window.gtag("event", "service_click", {
+        service_name: resolvedServices[0] ?? "unknown",
+        action_type: "inquiry",
+        location: "service_page_cta",
+        source: sourceLabel ?? "unknown",
+      });
+    }
+  };
+
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          trackServiceClick();
+          setOpen(true);
+        }}
         className={className}
         aria-label={resolvedLabel}
       >

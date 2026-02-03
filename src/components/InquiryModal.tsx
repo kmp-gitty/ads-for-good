@@ -1,7 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+
+declare global {
+  interface Window {
+    gtag?: (...args: any[]) => void;
+  }
+}
 
 type Props = {
   open: boolean;
@@ -48,20 +54,35 @@ export default function InquiryModal({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [hasStarted, setHasStarted] = useState(false);
+  const startedRef = useRef(false);
+
 
   // Re-initialize each time it opens
   useEffect(() => {
     if (!open) return;
+
+ // GA: form opened
+ if (typeof window !== "undefined" && typeof window.gtag === "function") {
+  window.gtag("event", "form_open", {
+    form_name: "inquiry_modal",
+    form_type: "service", // or "general" if you consider this your general contact form
+    form_location: sourceLabel ?? "unknown",
+    prefill_services: defaultServices.join("|") || "none",
+  });
+}
 
     setServices(defaultServices);
     setMarketingConsent(true);
     setSubmitting(false);
     setSubmitted(false);
     setErrorMsg(null);
+    setHasStarted(false);
+    startedRef.current = false;
 
     // reset email so you don’t reuse by accident
     setEmail("");
-  }, [open, defaultServices]);
+  }, [open, defaultServices, sourceLabel]);
 
   // Close on ESC
   useEffect(() => {
@@ -96,6 +117,23 @@ export default function InquiryModal({
     );
   };
 
+  const trackFormStart = () => {
+    if (startedRef.current) return;
+  
+    startedRef.current = true;
+    setHasStarted(true);
+  
+    if (typeof window !== "undefined" && typeof window.gtag === "function") {
+      window.gtag("event", "form_start", {
+        form_name: "inquiry_modal",
+        form_type: "service",
+        form_location: sourceLabel ?? "unknown",
+        prefill_services: defaultServices.join("|") || "none",
+      });
+    }
+  };
+  
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
@@ -123,6 +161,17 @@ export default function InquiryModal({
         throw new Error(data?.error || "Submission failed.");
 
       setSubmitted(true);
+      
+      // GA: form submitted successfully
+      if (typeof window !== "undefined" && typeof window.gtag === "function") {
+        window.gtag("event", "form_submit", {
+          form_name: "inquiry_modal",
+          form_type: "service",
+          form_location: sourceLabel ?? "unknown",
+          prefill_services: services.join("|") || "none",
+        });
+      }
+      
 
       // clear inputs after submit
       setFirstLast("");
@@ -211,6 +260,7 @@ export default function InquiryModal({
                       </span>
                       <input
                         value={firstLast}
+                        onFocus={trackFormStart}
                         onChange={(e) => setFirstLast(e.target.value)}
                         required
                         className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-1 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
@@ -225,6 +275,7 @@ export default function InquiryModal({
                       <input
                         type="email"
                         value={email}
+                        onFocus={trackFormStart}
                         onChange={(e) => setEmail(e.target.value)}
                         required
                         className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-1 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
@@ -241,6 +292,7 @@ export default function InquiryModal({
                       </span>
                       <input
                         value={companyName}
+                        onFocus={trackFormStart}
                         onChange={(e) => setCompanyName(e.target.value)}
                         required
                         className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-1 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
@@ -254,6 +306,7 @@ export default function InquiryModal({
                       </span>
                       <input
                         value={companyWebsite}
+                        onFocus={trackFormStart}
                         onChange={(e) => setCompanyWebsite(e.target.value)}
                         className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-1 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
                         placeholder="https://example.com"
@@ -284,7 +337,9 @@ export default function InquiryModal({
                             <input
                               type="checkbox"
                               checked={checked}
-                              onChange={() => toggleService(opt)}
+                              onChange={() => {
+                                trackFormStart();
+                                toggleService(opt)}}
                               className="mt-1"
                             />
                             <span className="text-neutral-800 leading-snug">
@@ -304,6 +359,7 @@ export default function InquiryModal({
                       </span>
                       <textarea
                         value={details}
+                        onFocus={trackFormStart}
                         onChange={(e) => setDetails(e.target.value)}
                         rows={2}
                         className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-1 text-sm text-neutral-900 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-200"
@@ -315,7 +371,9 @@ export default function InquiryModal({
                       <input
                         type="checkbox"
                         checked={marketingConsent}
-                        onChange={(e) => setMarketingConsent(e.target.checked)}
+                        onChange={(e) => {
+                          trackFormStart();
+                          setMarketingConsent(e.target.checked)}}
                         className="mt-1"
                       />
                       <span className="leading-snug">
