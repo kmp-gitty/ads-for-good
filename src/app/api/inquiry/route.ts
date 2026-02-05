@@ -169,19 +169,38 @@ export async function POST(req: Request) {
 
     console.log("[inquiry] about to insert into supabase");
 
-    // Insert into Supabase
-    const { data, error } = await supabase
-      .from("website_inquiries")
-      .insert([insertRow])
-      .select()
-      .single();
+let data: any = null;
 
-    if (error) {
-      return NextResponse.json(
-        { ok: false, error: error.message },
-        { status: 500 }
-      );
-    }
+try {
+  const result = await supabase
+    .from("website_inquiries")
+    .insert([insertRow])
+    .select()
+    .single();
+
+  console.log("[inquiry] supabase result", {
+    hasData: Boolean(result.data),
+    error: result.error
+      ? { message: result.error.message, code: (result.error as any).code }
+      : null,
+  });
+
+  if (result.error) {
+    return NextResponse.json(
+      { ok: false, error: `Supabase error: ${result.error.message}` },
+      { status: 500 }
+    );
+  }
+
+  data = result.data;
+} catch (e: any) {
+  console.error("[inquiry] supabase threw", e?.message || e);
+  return NextResponse.json(
+    { ok: false, error: `Supabase threw: ${e?.message || "unknown"}` },
+    { status: 500 }
+  );
+}
+
 
     const firstName =
       typeof firstLast === "string" ? firstLast.trim().split(/\s+/)[0] : undefined;
