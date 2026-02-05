@@ -167,6 +167,8 @@ export async function POST(req: Request) {
       email: replyToEmail,
     };
 
+    console.log("[inquiry] about to insert into supabase");
+
     // Insert into Supabase
     const { data, error } = await supabase
       .from("website_inquiries")
@@ -195,6 +197,8 @@ export async function POST(req: Request) {
         services: servicesArray,
         details: data.details ?? details ?? undefined,
       });
+
+      console.log("[inquiry] about to send email via resend");
 
       await resend.emails.send({
         to: replyToEmail,
