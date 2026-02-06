@@ -15,14 +15,14 @@ function unauthorized(realm: string) {
 }
 
 function getCreds(slug: string) {
-  const map: Record<string, { user?: string; pass?: string }> = {
-    "EOS-Fabrics": {
-      user: process.env.CLIENT_EOS_FABRICS_USER,
-      pass: process.env.CLIENT_EOS_FABRICS_PASS,
-    },
+  const key = slug.toUpperCase().replace(/-/g, "_");
+
+  return {
+    user: process.env[`CLIENT_${key}_USER`],
+    pass: process.env[`CLIENT_${key}_PASS`],
   };
-  return map[slug];
 }
+
 
 export function middleware(req: NextRequest) {
   const parts = req.nextUrl.pathname.split("/").filter(Boolean);

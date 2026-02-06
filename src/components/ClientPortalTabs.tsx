@@ -4,37 +4,47 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const tabs = [
-  { label: "Summary Tab", href: "/for-clients/EOS-Fabrics" },
+  { label: "Summary Tab", path: "" },
   {
     label: "Services & Payments",
-    href: "/for-clients/EOS-Fabrics/services-payments",
+    path: "/services-payments"
   },
   {
     label: "Projects & Status",
-    href: "/for-clients/EOS-Fabrics/projects-status",
+    path: "/projects-status"
   },
   {
     label: "Reporting & Links",
-    href: "/for-clients/EOS-Fabrics/reporting-links",
+    path: "/reporting-links"
   },
 ];
 
 export default function ClientPortalTabs() {
   const pathname = usePathname();
 
+  const segments = pathname.split("/").filter(Boolean);
+
+  const clientSlug = segments[1];
+
+  if (!clientSlug) return null;
+
+  const basePath = `/for-clients/${clientSlug}`;
+
   return (
     <nav className="mt-4">
       <div className="flex flex-wrap gap-2">
-        {tabs.map((tab) => {
+      {tabs.map((tab) => {
+          const href = `${basePath}${tab.path}`;
+
           const isActive =
-            tab.href === "/for-clients/EOS-Fabrics"
-              ? pathname === tab.href
-              : pathname.startsWith(tab.href);
+            tab.path === ""
+              ? pathname === basePath
+              : pathname.startsWith(href);
 
           return (
             <Link
-              key={tab.href}
-              href={tab.href}
+              key={tab.label}
+              href={href}
               className={[
                 "rounded-md px-3 py-2 text-sm font-medium border transition",
                 isActive
