@@ -88,8 +88,6 @@ export default function SummaryPage() {
 
       <div className="mt-2 text-sm text-neutral-800 space-y-1">
         <p>• Answer this question: if you could snap your fingers and Tigerbyte Digital would instantly show at the top of results when someone searched ________ , what words or searches would fill the blank?</p>
-        <p>• Sign SOW & Data Agreements</p>
-        <p>• Pay initial Analysis & Planning invoice</p>
       </div>
     </div>
   </div>
@@ -124,7 +122,8 @@ export default function SummaryPage() {
       </div>
 
       <div className="mt-2 text-sm text-neutral-800 space-y-1">
-        <p>• Nothing completed yet (nothing started either)</p>
+      <p>• Sign SOW & Data Agreements</p>
+      <p>• Pay initial Analysis & Planning invoice</p>
       </div>
     </div>
   </div>

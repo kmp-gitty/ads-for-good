@@ -172,7 +172,7 @@ export default function ServicesPaymentsPage() {
       <div className="inline-flex items-center gap-2 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm font-medium text-neutral-900">
         <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
         <span>
-          Payment Requested: <span className="font-semibold">Analysis Fee Sent</span>
+          Payment Received: <span className="font-semibold">Analysis Fee Paid</span>
         </span>
       </div>
 
@@ -204,7 +204,7 @@ export default function ServicesPaymentsPage() {
         <div className="text-sm font-semibold text-neutral-900">
           Analysis & Planning
         </div>
-        <p className="mt-1 text-sm text-neutral-800">$250 One-Time | PENDING</p>
+        <p className="mt-1 text-sm text-neutral-800">$250 One-Time | PAID</p>
       </div>
 
       <div className="rounded-2xl border border-orange-200 bg-white p-4">
