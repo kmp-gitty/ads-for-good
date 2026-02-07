@@ -56,7 +56,7 @@ export const metadata = {
                 <h2 className="text-sm font-semibold text-neutral-900">Let&apos;s Make You More Findable.</h2>
   
                 <p className="mt-3 text-xs sm:text-sm text-neutral-800 leading-relaxed">
-                  $250 for initial analysis and planning then $50 a month for monitoring.
+                  $250 for initial analysis and planning then $50 a month for local seo monitoring. National SEO efforts are priced based on need.
                   <br />
                   <br />
                   To get it right, we need to spend the time learning where you are, researching where you can go, and setting up tracking to make sure we get there.
@@ -266,11 +266,11 @@ export const metadata = {
                   a: "We require an intial 2 month engagement because SEO is a slower moving process - this gives us enough time to plan, do, and analyze. It's not like paid ads where a flip of a switch and a couple weeks can give us an idea of where we're heading.",
                 },
                 { q: "What happens after the initial 2 month period?", 
-                  a: "Hopefully your rankings are growing, you're satisfied, and we continue month to month monitoring at $50 a month. But, if not, we stop.",
+                  a: "Hopefully your rankings are growing, you're satisfied, and we continue month to month monitoring. But, if not, we stop.",
                 },
                 {
                     q: "How does the initial payment work?",
-                    a: "$250 for initial analysis & planning then $50 a month. Your initial 2 month period will cost you $300, then $50 month to month after that if you choose.",
+                    a: "The $250 analysis and planning fee begins the process, then we start your monthly service fee the next calendar month after our planning phase.",
                   },
                 {
                   q: "What if I want help with ads instead?",
