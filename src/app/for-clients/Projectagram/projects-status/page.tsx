@@ -1,5 +1,11 @@
 
 import { phase1Sections } from "./phase1Sections";
+import { phase2Sections } from "./phase2Sections";
+
+const allSections = [...phase1Sections, ...phase2Sections];
+
+const currentSections = allSections.filter((s) => !s.completed);
+const completedSections = allSections.filter((s) => s.completed);
 
 type Status = "green" | "yellow" | "red";
 
@@ -60,7 +66,7 @@ export default function ProjectsStatusPage() {
       </div>
 
       {/* CURRENT PROJECTS (Phase 1) */}
-      {phase1Sections.map((section) => (
+      {currentSections.map((section) => (
         <section key={section.title} className="rounded-lg border border-neutral-200 p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -125,6 +131,40 @@ export default function ProjectsStatusPage() {
           When something is finished, we'll keep a record below.
         </p>
       </div>
+{/* COMPLETED PROJECTS (Collapsible) */}
+{completedSections.map((section) => (
+  <details
+    key={section.title}
+    className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50"
+  >
+    <summary className="flex cursor-pointer list-none items-start justify-between gap-3 p-5">
+      <div>
+        <h3 className="text-base font-semibold text-neutral-900">
+          {section.title}
+        </h3>
+        {/* Optional: show subtitle even when collapsed; remove if you want title-only */}
+        {section.subtitle ? (
+          <p className="mt-1 text-sm text-neutral-700">{section.subtitle}</p>
+        ) : null}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <StatusChip status={section.status} label={section.statusLabel} />
+
+        {/* caret */}
+        <span className="select-none text-neutral-400">
+          ▼
+        </span>
+      </div>
+    </summary>
+
+    <div className="border-t border-neutral-200 p-5">
+      <Bullets items={section.bullets} />
+    </div>
+  </details>
+))}
+
+
     </div>
   );
 }
