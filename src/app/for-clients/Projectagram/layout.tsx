@@ -4,7 +4,7 @@ import ClientPortalTabs from "@/components/ClientPortalTabs";
 import ClientNotepadLauncher from "@/components/ClientNotepadLauncher";
 
 export const metadata: Metadata = {
-  title: "Tigerbyte Digital Client Portal | Ads for Good",
+  title: "Projectagram Client Portal | Ads for Good",
   robots: {
     index: false,
     follow: false,
@@ -22,17 +22,17 @@ export default function ProjectagramLayout({
 }) {
 
   const NOTEPAD_URL =
-  "https://docs.google.com/document/d/10AZChXtrbVydznyUxrIS7acfYw7rByCSLkMwRc0QdUs/edit?usp=sharing";
+  "https://docs.google.com/document/d/1eBaFIRbk0SA1FS8EpvG1_wnX_VTfD8Pr93w2J1CaV4g/edit?usp=sharing";
 
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto w-full max-w-6xl px-4 py-6">
       <ClientPortalHeader
-          portalTitle="Tigerbyte Digital's Client Portal"
-          clientName="Tigerbyte Digital"
+          portalTitle="Projectagram's Client Portal"
+          clientName="Projectagram"
           brandName="ads for Good"
           brandLogoSrc="/images/ads4Good_Logo_500x500.png"
-          clientLogoSrc="/images/TigerbyteDigitalLogo.avif"
+          clientLogoSrc="/images/ProjectagramLogo.jpg"
         />
         <div className="mt-4 flex flex-wrap items-center gap-2">
   <ClientPortalTabs />

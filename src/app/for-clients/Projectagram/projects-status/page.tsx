@@ -1,4 +1,5 @@
-import GoogleDocEmbed from "@/components/GoogleDocEmbed";
+
+import { phase1Sections } from "./phase1Sections";
 
 type Status = "green" | "yellow" | "red";
 
@@ -22,60 +23,81 @@ function StatusChip({ status, label }: { status: Status; label: string }) {
   );
 }
 
-export default function ProjectsStatusPage() {
-  const status: Status = "yellow";
-  const statusLabel = "To Begin • Week of 1/19/26";
-
+function Bullets({
+  items,
+}: {
+  items: { level: 0 | 1 | 2; text: string }[];
+}) {
   return (
-    
-    <div className="space-y-6">
+    <ul className="mt-4 space-y-1 text-sm text-neutral-700">
+      {items.map((b, idx) => (
+        <li
+          key={`${idx}-${b.text}`}
+          className={
+            b.level === 0
+              ? ""
+              : b.level === 1
+              ? "pl-6"
+              : "pl-10"
+          }
+        >
+          • {b.text}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
-      {/* ✅ NEW: Heading under tabs */}
+
+export default function ProjectsStatusPage() {
+  return (
+    <div className="space-y-6">
+      {/* Heading under tabs */}
       <div className="pt-1">
         <h1 className="text-2xl font-semibold text-neutral-900">Current Projects</h1>
         <div className="h-[3px] w-full rounded-full bg-green-700" />
-        <p className="mt-1 text-sm text-neutral-600">
-          Active & upcoming projects.
-        </p>
+        <p className="mt-1 text-sm text-neutral-600">Active projects.</p>
       </div>
 
-      {/* ✅ CURRENT PROJECTS RECTANGLES */}
-      
+      {/* CURRENT PROJECTS (Phase 1) */}
+      {phase1Sections.map((section) => (
+        <section key={section.title} className="rounded-lg border border-neutral-200 p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-neutral-900">{section.title}</h2>
+              {section.subtitle ? (
+                <p className="mt-1 text-sm text-neutral-700">{section.subtitle}</p>
+              ) : null}
+            </div>
 
-      <section className="rounded-lg border border-neutral-200 p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-neutral-900">
-              SEO Analysis & Planning
-            </h2>
-            <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
+            <StatusChip status={section.status} label={section.statusLabel} />
           </div>
 
-          <StatusChip status="green" label="Commencement: Week of 2/09/26" />
+          <Bullets items={section.bullets} />
+        </section>
+      ))}
+
+{/* ✅ Upcoming Projects Line Break */}
+<div className="pt-4">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-semibold text-neutral-900 whitespace-nowrap">
+            Upcoming Projects
+          </h2>
+
+          {/* Dark orange line across remaining width */}
+          <div className="h-[3px] w-full rounded-full bg-orange-700" />
         </div>
 
-        <ul className="mt-4 space-y-1 text-sm text-neutral-700">
-          <li>
-            • Katoa to look connect Tigerbyte Digital site to Google Search Console / get access
-          </li>
-          <li>
-            • Katoa to look begin SEO research & analysis using SE Ranking
-          </li>
-        </ul>
-      </section>
-
-
-
-      <section className="rounded-lg border border-neutral-200 p-5">
+        <p className="mt-2 text-sm text-neutral-600">
+          Projects on deck will go below.
+        </p>
+        <section className="mt-4 rounded-lg border border-neutral-200 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold text-neutral-900">
-              Projects On Deck
-            </h2>
-            <p className="mt-1 text-sm text-neutral-700">Post-Completing The Above</p>
+            <p className="mt-1 text-sm text-neutral-700">Post-Analysis & Planning Phase</p>
           </div>
 
-          <StatusChip status="yellow" label="Analysis & Planning Needed" />
+          <StatusChip status="yellow" label="Start TBD - week of 2/23" />
         </div>
 
         <ul className="mt-4 space-y-1 text-sm text-neutral-700">
@@ -86,6 +108,7 @@ export default function ProjectsStatusPage() {
           <li>• Ongoing measurement cadence</li>
         </ul>
       </section>
+      </div>
 
       {/* ✅ Completed Projects Line Break */}
       <div className="pt-4">
@@ -102,65 +125,6 @@ export default function ProjectsStatusPage() {
           When something is finished, we'll keep a record below.
         </p>
       </div>
-
-      {/* ✅ COMPLETED PROJECTS (Unhide when ready to use) 
-      <div className="space-y-6">
-      <section className="rounded-lg border border-neutral-200 p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-neutral-900">
-              Analysis &amp; Planning
-            </h2>
-            <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
-          </div>
-
-          <StatusChip status="green" label="Completed 1/29/26" />
-        </div>
-
-        <ul className="mt-4 space-y-1 text-sm text-neutral-700">
-          <li>
-            • Data analysis &amp; planning to be done for all elements above, after
-            Access &amp; Data Pulls
-          </li>
-          <li>
-            • Completed 1/29/26
-          </li>
-        </ul>
-      </section>
-        
-        <section className="rounded-lg border border-neutral-200 p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-neutral-900">
-              Access &amp; Data Pulls
-            </h2>
-            <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
-          </div>
-
-          <StatusChip status="green" label="Completed 1/21/26" />
-        </div>
-
-        <ul className="mt-4 space-y-1 text-sm text-neutral-700">
-          <li>
-            • Google Analytics: "Analyst" (may also be called "Read & Analyze"
-            depending on your version of GA) access to my email
-          </li>
-          <li>• Mailchimp: "Viewer" access</li>
-          <li>
-            • Google Ads: "Read-Only" access (we may not be doing this, but this
-            data may help inform other things we do)
-          </li>
-          <li>
-            • Reddit: "Analyst" access added to your team roles (if run anything
-            before)
-          </li>
-          <li>
-            • SEO: any documentation, reporting, or plans from previous agency
-          </li>
-        </ul>
-      </section>
-      </div>
-      */}
     </div>
   );
 }
