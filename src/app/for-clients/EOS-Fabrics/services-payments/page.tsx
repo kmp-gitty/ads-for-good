@@ -178,7 +178,7 @@ export default function ServicesPaymentsPage() {
       <div className="inline-flex items-center gap-2 rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm font-medium text-neutral-900">
         <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
         <span>
-          Payment Received: <span className="font-semibold">Analysis Fee Paid</span>
+          Payment Received: <span className="font-semibold">Service Fee Paid</span>
         </span>
       </div>
 
@@ -186,7 +186,7 @@ export default function ServicesPaymentsPage() {
       <div className="inline-flex items-center gap-2 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm font-medium text-neutral-900">
         <span className="h-2 w-2 rounded-full bg-yellow-500" aria-hidden="true" />
         <span>
-          Payment Sent: <span className="font-semibold">Next Invoice Feb 1 due Feb 15</span>
+          Payment Sent: <span className="font-semibold">Next Invoice Mar 1 due Mar 15</span>
         </span>
       </div>
 
@@ -217,7 +217,8 @@ export default function ServicesPaymentsPage() {
         <div className="text-sm font-semibold text-neutral-900">
           Operational Management & Digital Profiles
         </div>
-        <p className="mt-1 text-sm text-neutral-800">$500 Monthly | Next Invoice 2/01 due 2/15</p>
+        <p className="mt-1 text-sm text-neutral-800">$500 Monthly | Next Invoice 3/01 due 3/15</p>
+        <p className="mt-1 text-sm text-neutral-800">Feb Fee: PAID</p>
       </div>
 
       <div className="rounded-2xl border border-orange-200 bg-white p-4">

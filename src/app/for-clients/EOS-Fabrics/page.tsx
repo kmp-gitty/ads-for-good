@@ -1,3 +1,5 @@
+import GoogleDocEmbed from "@/components/GoogleDocEmbed";
+
 export default function SummaryPage() {
     return (
       <div className="space-y-6">
@@ -30,7 +32,7 @@ export default function SummaryPage() {
           <li>• $500 monthly management fee</li>
               </ul>
               <div className="mt-1 text-xs text-neutral-600">
-                Invoice sent 1/21/26
+                No payments outstanding
               </div>
             </div>
   
@@ -38,10 +40,10 @@ export default function SummaryPage() {
             <div className="rounded-md border border-neutral-200 p-3">
               <div className="text-sm text-neutral-700">Active Projects</div>
               <div className="mt-1 text-sm font-medium text-neutral-900">
-                afG to perform analysis & planning phase
+                Reddit Ads launched, Email plan in-motion, GA reconnected, and SEO plan being worked on
               </div>
               <div className="mt-1 text-xs text-neutral-600">
-                Starting week of 1/21/26
+                Ongoing & In-Progress
               </div>
             </div>
   
@@ -49,92 +51,44 @@ export default function SummaryPage() {
             <div className="rounded-md border border-neutral-200 p-3">
               <div className="text-sm text-neutral-700">Next Steps</div>
               <div className="mt-1 text-sm font-medium text-neutral-900">
-                afG to reach out for feedback & plan approval once planning complete
+                afG to reach out for feedback & plan approval on action items
               </div>
               <div className="mt-1 text-xs text-neutral-600">
-                Katoa to dive into data and create plan afterwards
+                Reddit: Monitoring <br/>
+                Email: Possible New Contacts <br/>
+                SEO: Commence Plan <br/>
+                Site: Monitor Data <br/>
               </div>
             </div>
           </div>
         </section>
 
-{/* Next steps section */}
-        <section className="rounded-lg border border-neutral-200 p-5">
-  <h2 className="text-base font-semibold text-neutral-900">
-    Current To Dos
-  </h2>
-  <p className="mt-2 text-sm text-neutral-700">
-    Key tasks for both parties
-  </p>
+ {/* ✅ Client Notepad Line Break */}
+ <div className="pt-4">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-semibold text-neutral-900 whitespace-nowrap">
+            Notepad
+          </h2>
 
-  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-    {/* LEFT CARD — orange fill, black outline */}
-    <div className="rounded-lg border border-neutral-900 bg-orange-50 p-4">
-      <div className="text-sm font-semibold text-neutral-900">
-        ads for Good Tasks
+          {/* Dark orange line across remaining width */}
+          <div className="h-[3px] w-full rounded-full bg-teal-700" />
+        </div>
+
+        <p className="mt-2 text-sm text-neutral-600">
+          Editable Google Doc - add notes, ideas, and anything else here.
+        </p>
       </div>
 
-      <div className="mt-2 text-sm text-neutral-900 space-y-1">
-        <p>• Website: look at GA issues</p>
-        <p>• SEO: Action plan after approval & measurement setup</p>
-        <p>• Reddit: Tracking, Creative, & Setup (once approved)</p>
-        <p>• Email: Answer questions, Shopify messaging steps, Segment creation in Mailchimp</p>
-      </div>
-    </div>
-
-    {/* RIGHT CARD — white fill, orange outline */}
-    <div className="rounded-lg border border-orange-300 bg-white p-4">
-      <div className="text-sm font-semibold text-neutral-900">
-        EOS Fabrics Tasks
-      </div>
-
-      <div className="mt-2 text-sm text-neutral-800 space-y-1">
-        <p>• SEO: Approval & provide ideal terms</p>
-        <p>• Reddit: Approval, Targeting feedback, & Ad creative insight</p>
-        <p>• Email: Approval or feedback of segments</p>
-      </div>
-    </div>
+      {/* ✅ Client Notepad embed below */}
+      <section className="mt-6">
+  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+  <GoogleDocEmbed
+  src="https://docs.google.com/document/d/1s7omaDkACHuleAu7J17VOBKhMEhEpt_4WzMR6SfcFXs/edit?usp=sharing"
+  height={650}
+/>
   </div>
 </section>
 
-
-{/* Completed to dos section */}
-<section className="rounded-lg border border-neutral-200 p-5">
-  <h2 className="text-base font-semibold text-neutral-900">
-    Completed To Dos
-  </h2>
-  <p className="mt-2 text-sm text-neutral-700">
-    Task record-keeping for both parties
-  </p>
-
-  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-    {/* LEFT CARD — orange fill, black outline */}
-    <div className="rounded-lg border border-neutral-900 bg-orange-50 p-4">
-      <div className="text-sm font-semibold text-neutral-900">
-        ads for Good Completions
-      </div>
-
-      <div className="mt-2 text-sm text-neutral-900 space-y-1">
-        <p>• Sent invoice for accepted scope: 1/21/26</p>
-        <p>• Collaborated on access & data pulls: 1/21/26</p>
-        <p>• Completed analysis & planning 1/29/26</p>
-        <p>• Sent data & confidentiality agreement</p>
-      </div>
-    </div>
-
-    {/* RIGHT CARD — white fill, orange outline */}
-    <div className="rounded-lg border border-orange-300 bg-white p-4">
-      <div className="text-sm font-semibold text-neutral-900">
-        EOS Fabrics Completions
-      </div>
-
-      <div className="mt-2 text-sm text-neutral-800 space-y-1">
-        <p>• Confirmed 2 month engagement proposal: 1/19/26</p>
-        <p>• Provided access & data pulls: 1/21/26</p>
-      </div>
-    </div>
-  </div>
-</section>
 
 
       </div>

@@ -30,32 +30,6 @@ export default function ProjectsStatusPage() {
     
     <div className="space-y-6">
 
- {/* ✅ Client Notepad Line Break */}
- <div className="pt-4">
-        <div className="flex items-center gap-4">
-          <h2 className="text-xl font-semibold text-neutral-900 whitespace-nowrap">
-            Notepad
-          </h2>
-
-          {/* Dark orange line across remaining width */}
-          <div className="h-[3px] w-full rounded-full bg-teal-700" />
-        </div>
-
-        <p className="mt-2 text-sm text-neutral-600">
-          Editable Google Doc - add notes, ideas, and anything else here.
-        </p>
-      </div>
-
-      {/* ✅ Client Notepad embed below */}
-      <section className="mt-6">
-  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-  <GoogleDocEmbed
-  src="https://docs.google.com/document/d/1s7omaDkACHuleAu7J17VOBKhMEhEpt_4WzMR6SfcFXs/edit?usp=sharing"
-  height={650}
-/>
-  </div>
-</section>
-
       {/* ✅ NEW: Heading under tabs */}
       <div className="pt-1">
         <h1 className="text-2xl font-semibold text-neutral-900">Current Projects</h1>
@@ -77,12 +51,12 @@ export default function ProjectsStatusPage() {
             <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
           </div>
 
-          <StatusChip status="green" label="Completion ETA: 2/06/26" />
+          <StatusChip status="yellow" label="Data Re-Assessment Needed" />
         </div>
 
         <ul className="mt-4 space-y-1 text-sm text-neutral-700">
           <li>
-            • Katoa to look into Google Analytics issues for proper assessment
+            • Google Analytics reconnected in Shopify - will continue to monitor
           </li>
         </ul>
       </section>
@@ -96,25 +70,28 @@ export default function ProjectsStatusPage() {
             <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
           </div>
 
-          <StatusChip status="yellow" label="Inputs from EOS Needed" />
+          <StatusChip status="green" label="In Progress" />
         </div>
 
         <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-neutral-700">
-  <li>
-    EOS Fabrics' To Dos:
-
-    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
-      <li>Approve via email, the 3 proposed approaches: Increase local ranking, Create outreach plan for authority & Improve already written tutorial pieces</li>
-      <li>Provide 10-20 terms / keywords / fabrics that answer the question: If someone searched a term or fabric name in Google, which ones would you care most for EOS Fabrics to show at the top?</li>
-    </ul>
-  </li>
 
   <li>
     afG's To Dos:
 
     <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
-      <li>Turnaround an action plan for each of the 3 approaches above once approval & terms are provided</li>
-      <li>Set up measurement for organic ranking performance</li>
+      <li>Assess & improve Google Business Profile & local links / mentions - Local Ranking</li>
+      <li>Update best practice technical items on EOS Fabrics site - National & Local Ranking</li>
+      <li>Improve Deadstock page for ranking on that term - National Ranking</li>
+      <li>Improve both Sewing Tutorials & Care Guides + Expert Tips pages for ranking - National Ranking</li>
+      <li>Curate partner outreach list & emails for backlinks - National & Local Ranking</li>
+    </ul>
+  </li>
+  <li>
+    Completed Steps:
+
+    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+      <li>Keywords provided by EOS Fabrics to research</li>
+      <li>SEO measurement setup in Google Search Console & SE Ranking</li>
     </ul>
   </li>
 </ul>
@@ -129,27 +106,25 @@ export default function ProjectsStatusPage() {
             <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
           </div>
 
-          <StatusChip status="yellow" label="Inputs from EOS Needed" />
+          <StatusChip status="green" label="Campaign Live" />
         </div>
 
         <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-neutral-700">
-  <li>
-    EOS Fabrics' To Dos:
-
-    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
-      <li>Approve via email, you'd like to move forward with a Reddit Ads test</li>
-      <li>Provide feedback on reddit threads to target ("Targeting" tab of doc) - if there are any you do not want to show in, let me know</li>
-      <li>For ad creative: Do you have any "How to" step graphics or Sale images you'd like to use? (I can help create them, but want to check first)</li>
-    </ul>
-  </li>
 
   <li>
     afG's To Dos:
 
     <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
-      <li>Organize needs to set up and confirm tracking works</li>
-      <li>Finalize creative once feedback above is provided</li>
-      <li>Set up and launch campaign (after all approvals and measurement tests are done)</li>
+      <li>Measure & optimize as campaign progresses</li>
+      <li>Update creative 1-2 weeks into flight</li>
+    </ul>
+  </li>
+  <li>
+    Completed Steps:
+
+    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+      <li>EOS Fabrics provided all necessary approvals, access, and creative</li>
+      <li>Ads launched 2/10! Tracking and optimizations up next</li>
     </ul>
   </li>
 </ul>
@@ -164,7 +139,7 @@ export default function ProjectsStatusPage() {
             <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
           </div>
 
-          <StatusChip status="yellow" label="Inputs from EOS Needed" />
+          <StatusChip status="green" label="In Progress" />
         </div>
 
         <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-neutral-700">
@@ -190,7 +165,16 @@ export default function ProjectsStatusPage() {
       <li>How have never purchased, but still subscribed, interacted with emails?      </li>
       </ul>
       <li>Organize steps & needs to test a Shopify messaging send in lieu of Mailchimp</li>
-      <li>Create the audience segments in Mailchimp, to export, once approved</li>
+      <li>Update & send "resubscribe" emails to EOS Fabrics "non-subscribe" contacts</li>
+    </ul>
+  </li>
+  <li>
+    Completed Steps:
+
+    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">
+      <li>EOS Fabrics provided all necessary access & feedback</li>
+      <li>All historical data pulled & stored</li>
+      <li>New segments created & pulled</li>
     </ul>
   </li>
 </ul>
