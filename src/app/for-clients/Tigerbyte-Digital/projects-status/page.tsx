@@ -51,15 +51,27 @@ export default function ProjectsStatusPage() {
             <p className="mt-1 text-sm text-neutral-700">Steps / Needs:</p>
           </div>
 
-          <StatusChip status="green" label="Commencement: Week of 2/09/26" />
+          <StatusChip status="yellow" label="Waiting for Feedback" />
         </div>
 
         <ul className="mt-4 space-y-1 text-sm text-neutral-700">
           <li>
+          <span className="line-through">
             • Katoa to look connect Tigerbyte Digital site to Google Search Console / get access
+            </span>
+            <ul className="mt-1 list-disc pl-5 space-y-1">
+            <li>GSC connected and report updated on Reporting tab</li>
+            <li>Take the rest of February to set our baseline before improving SEO items</li>
+            </ul>
           </li>
           <li>
+          <span className="line-through">
             • Katoa to look begin SEO research & analysis using SE Ranking
+            </span>
+            <ul className="mt-1 list-disc pl-5 space-y-1">
+            <li>Information looked into and direction plan sent over to Thomas on 2/12/26</li>
+            <li>Once feedback is provided, spcific SEO action plan to be created</li>
+            </ul>
           </li>
         </ul>
       </section>
@@ -75,7 +87,7 @@ export default function ProjectsStatusPage() {
             <p className="mt-1 text-sm text-neutral-700">Post-Completing The Above</p>
           </div>
 
-          <StatusChip status="yellow" label="Analysis & Planning Needed" />
+          <StatusChip status="yellow" label="Waiting for Feedback" />
         </div>
 
         <ul className="mt-4 space-y-1 text-sm text-neutral-700">
