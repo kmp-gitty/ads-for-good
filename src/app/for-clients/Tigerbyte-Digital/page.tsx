@@ -1,3 +1,5 @@
+import GoogleDocEmbed from "@/components/GoogleDocEmbed";
+
 export default function SummaryPage() {
     return (
       <div className="space-y-6">
@@ -39,10 +41,10 @@ export default function SummaryPage() {
             <div className="rounded-md border border-neutral-200 p-3">
               <div className="text-sm text-neutral-700">Active Projects</div>
               <div className="mt-1 text-sm font-medium text-neutral-900">
-                afG to perform analysis & planning phase for SEO
+                Action planning for specific SEO efforts underway
               </div>
               <div className="mt-1 text-xs text-neutral-600">
-                Starting week of 2/09/26
+                Thomas approved analysis & planning direction on 2/12/26
               </div>
             </div>
   
@@ -50,82 +52,38 @@ export default function SummaryPage() {
             <div className="rounded-md border border-neutral-200 p-3">
               <div className="text-sm text-neutral-700">Next Steps</div>
               <div className="mt-1 text-sm font-medium text-neutral-900">
-                afG & Tigerbyte to have kick-off meeting Monday 2/09
+                afG & Tigerbyte to have review meeting after action plan created
               </div>
               <div className="mt-1 text-xs text-neutral-600">
-                Katoa to dive into data and analyze afterwards
+                Timing TBD: goal to have scheduled by 2/20 for week of 2/23
               </div>
             </div>
           </div>
         </section>
 
-{/* Next steps section */}
-        <section className="rounded-lg border border-neutral-200 p-5">
-  <h2 className="text-base font-semibold text-neutral-900">
-    Current To Dos
-  </h2>
-  <p className="mt-2 text-sm text-neutral-700">
-    Key tasks for both parties
-  </p>
+{/* ✅ Client Notepad Line Break */}
+ <div className="pt-4">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-semibold text-neutral-900 whitespace-nowrap">
+            Notepad
+          </h2>
 
-  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-    {/* LEFT CARD — orange fill, black outline */}
-    <div className="rounded-lg border border-neutral-900 bg-orange-50 p-4">
-      <div className="text-sm font-semibold text-neutral-900">
-        ads for Good Tasks
+          {/* Dark orange line across remaining width */}
+          <div className="h-[3px] w-full rounded-full bg-teal-700" />
+        </div>
+
+        <p className="mt-2 text-sm text-neutral-600">
+          Editable Google Doc - add notes, ideas, and anything else here.
+        </p>
       </div>
 
-      <div className="mt-2 text-sm text-neutral-900 space-y-1">
-        <p>• Analysis & planning phase after kick-off meeting</p>
-      </div>
-    </div>
-
-    {/* RIGHT CARD — white fill, orange outline */}
-    <div className="rounded-lg border border-orange-300 bg-white p-4">
-      <div className="text-sm font-semibold text-neutral-900">
-        Tigerbyte Digital Tasks
-      </div>
-
-      <div className="mt-2 text-sm text-neutral-800 space-y-1">
-        <p>• Answer this question: if you could snap your fingers and Tigerbyte Digital would instantly show at the top of results when someone searched ________ , what words or searches would fill the blank?</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-
-{/* Completed to dos section */}
-<section className="rounded-lg border border-neutral-200 p-5">
-  <h2 className="text-base font-semibold text-neutral-900">
-    Completed To Dos
-  </h2>
-  <p className="mt-2 text-sm text-neutral-700">
-    Task record-keeping for both parties
-  </p>
-
-  <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-    {/* LEFT CARD — orange fill, black outline */}
-    <div className="rounded-lg border border-neutral-900 bg-orange-50 p-4">
-      <div className="text-sm font-semibold text-neutral-900">
-        ads for Good Completions
-      </div>
-
-      <div className="mt-2 text-sm text-neutral-900 space-y-1">
-        <p>• Nothing completed yet (nothing started either)</p>
-      </div>
-    </div>
-
-    {/* RIGHT CARD — white fill, orange outline */}
-    <div className="rounded-lg border border-orange-300 bg-white p-4">
-      <div className="text-sm font-semibold text-neutral-900">
-        Tigerbyte Digital Completions
-      </div>
-
-      <div className="mt-2 text-sm text-neutral-800 space-y-1">
-      <p>• Sign SOW & Data Agreements</p>
-      <p>• Pay initial Analysis & Planning invoice</p>
-      </div>
-    </div>
+      {/* ✅ Client Notepad embed below */}
+      <section className="mt-6">
+  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+  <GoogleDocEmbed
+  src="https://docs.google.com/document/d/10AZChXtrbVydznyUxrIS7acfYw7rByCSLkMwRc0QdUs/edit?usp=sharing"
+  height={650}
+/>
   </div>
 </section>
 

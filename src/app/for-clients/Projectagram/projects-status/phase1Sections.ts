@@ -13,7 +13,7 @@ export const phase1Sections: PortalSection[] = [
   {
     title: "Digital Health Check Analysis & Planning",
     subtitle: "Steps / Needs:",
-    completed: false,
+    completed: true,
     status: "green",
     statusLabel: "To commence after kick-off call",
     bullets: [

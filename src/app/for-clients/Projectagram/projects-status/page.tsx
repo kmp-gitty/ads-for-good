@@ -1,8 +1,9 @@
 
 import { phase1Sections } from "./phase1Sections";
 import { phase2Sections } from "./phase2Sections";
+import { phase3Sections } from "./phase3Sections";
 
-const allSections = [...phase1Sections, ...phase2Sections];
+const allSections = [...phase1Sections, ...phase2Sections, ...phase3Sections];
 
 const currentSections = allSections.filter((s) => !s.completed);
 const completedSections = allSections.filter((s) => s.completed);
