@@ -4,6 +4,8 @@ import { Lexend } from "next/font/google";
 import Script from "next/script";
 import { NavBar } from "@/components/NavBar";
 import { Footer } from "@/components/Footer";
+import ConsentBanner from "@/components/ConsentBanner";
+
 
 const lexend = Lexend({
   subsets: ["latin"],
@@ -46,6 +48,7 @@ export default function RootLayout({
         <NavBar />
         {children}
         <Footer />
+        <ConsentBanner />
       </body>
     </html>
   );

@@ -58,6 +58,20 @@ export function Footer() {
           >
             Sitemap
           </Link>
+
+          <Link
+            href="/privacy"
+            className="hover:underline hover:text-orange-500 transition"
+          >
+            Privacy Policy
+          </Link>
+
+          <Link
+            href="/terms-disclaimer"
+            className="hover:underline hover:text-orange-500 transition"
+          >
+            Terms & Disclaimer
+          </Link>
         </div>
 
        {/* Right: Contact Button */}

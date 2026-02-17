@@ -14,6 +14,8 @@ export function NavBar() {
   
   const [servicesOpen, setServicesOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [aboutDesktopOpen, setAboutDesktopOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 flex justify-center px-4 pt-4 bg-orange-50 relative">
@@ -29,9 +31,41 @@ export function NavBar() {
         {/* CENTER — NAV MENU (DESKTOP ONLY) */}
         <nav className="hidden md:flex items-center gap-6 text-sm text-neutral-700">
           {/* ABOUT */}
-          <Link href="/about" className="hover:text-neutral-900">
-            About
-          </Link>
+          {/* ABOUT + DROPDOWN (DESKTOP) */}
+<div
+  className="relative"
+  onMouseEnter={() => setAboutDesktopOpen(true)}
+  onMouseLeave={() => setAboutDesktopOpen(false)}
+>
+  <Link href="/about" className="flex items-center gap-1 hover:text-neutral-900">
+    About
+    <span className="text-[10px]">▾</span>
+  </Link>
+
+  {/* DROPDOWN PANEL */}
+  <div
+    className={`absolute left-1/2 top-full -translate-x-1/2 transition ${
+      aboutDesktopOpen
+        ? "opacity-100 pointer-events-auto translate-y-0"
+        : "opacity-0 pointer-events-none -translate-y-1"
+    }`}
+  >
+    <div className="mt-2 w-[240px] rounded-2xl border border-orange-100 bg-white px-3 py-3 shadow-lg">
+      <div className="flex flex-col gap-2 text-sm text-neutral-800">
+        <Link href="/privacy" className="rounded-lg px-2 py-2 hover:bg-orange-50 hover:text-orange-500">
+          Privacy
+        </Link>
+        <Link
+          href="/terms-disclaimer"
+          className="rounded-lg px-2 py-2 hover:bg-orange-50 hover:text-orange-500"
+        >
+          Terms &amp; Disclaimer
+        </Link>
+      </div>
+    </div>
+  </div>
+</div>
+
 
           {/* SERVICES + DROPDOWN */}
           <div
@@ -262,7 +296,10 @@ export function NavBar() {
           {/* Mobile: menu button */}
           <button
             className="md:hidden text-sm font-medium text-neutral-900 hover:text-neutral-900 rounded-full px-4 py-1.5 border border-orange-200 hover:bg-orange-50"
-            onClick={() => setMobileOpen((v) => !v)}
+            onClick={() => {
+              setMobileOpen((v) => !v);
+              setAboutOpen(false);
+            }}
             aria-label="Open menu"
           >
             Menu
@@ -275,9 +312,59 @@ export function NavBar() {
         <div className="absolute top-full left-0 right-0 mt-3 px-4 md:hidden">
           <div className="mx-auto w-full max-w-6xl rounded-2xl border border-orange-100 bg-white p-4 shadow-lg">
             <div className="flex flex-col gap-3 text-sm text-neutral-800">
-              <Link href="/about" onClick={() => setMobileOpen(false)} className="hover:text-orange-500">
-                About
-              </Link>
+              {/* ABOUT (mobile dropdown) */}
+{/* ABOUT (mobile dropdown with linkable label) */}
+<div>
+  <div className="flex items-center justify-between">
+    {/* Left side = real link */}
+    <Link
+      href="/about"
+      onClick={() => setMobileOpen(false)}
+      className="hover:text-orange-500"
+    >
+      About
+    </Link>
+
+    {/* Right side = dropdown toggle */}
+    <button
+      type="button"
+      onClick={() => setAboutOpen((v) => !v)}
+      className="ml-2 text-[10px] hover:text-orange-500"
+      aria-expanded={aboutOpen}
+      aria-controls="mobile-about-menu"
+    >
+      {aboutOpen ? "▴" : "▾"}
+    </button>
+  </div>
+
+  {aboutOpen && (
+    <div id="mobile-about-menu" className="mt-2 flex flex-col gap-2 pl-3">
+      <Link
+        href="/privacy"
+        onClick={() => {
+          setMobileOpen(false);
+          setAboutOpen(false);
+        }}
+        className="hover:text-orange-500"
+      >
+        Privacy
+      </Link>
+
+      <Link
+        href="/terms-disclaimer"
+        onClick={() => {
+          setMobileOpen(false);
+          setAboutOpen(false);
+        }}
+        className="hover:text-orange-500"
+      >
+        Terms &amp; Disclaimer
+      </Link>
+    </div>
+  )}
+</div>
+
+
 
               <div className="pt-2 border-t border-orange-100" />
 
