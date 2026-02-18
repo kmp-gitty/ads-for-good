@@ -163,6 +163,24 @@ function getOrCreateAnonIdentity() {
     var anon = "anon_" + uuid;
   
     try { localStorage.setItem("up_anon_identity", anon); } catch (_) {}
+
+    // right after you set up_anon_identity in localStorage
+try {
+    fetch(IDENTIFY_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_key: CLIENT_KEY,
+        previous_identity_key: null,
+        identity_key: anonId, // <-- whatever variable holds the new anon_... value
+        traits: null,
+        ...pagePayloadBase(),
+      }),
+      keepalive: true,
+      credentials: "include",
+    }).catch(function () {});
+  } catch (_) {}
+  
     return anon;
   }
   
@@ -184,17 +202,16 @@ function getOrCreateAnonIdentity() {
 try { prev = localStorage.getItem("up_identity_key"); } catch (_) {}
 
 if (prev === identity_key) return; // don't re-send same identity
-
-try { localStorage.setItem("up_identity_key", identity_key); } catch (_) {}
-
-setIdentityKey(identity_key);
-      // best-effort call to identify endpoint (if present)
       try {
         fetch(IDENTIFY_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             client_key: CLIENT_KEY,
+      
+            previous_identity_key: prev,
+
+      
             identity_key: identity_key,
             traits: traits && typeof traits === "object" ? traits : null,
             ...pagePayloadBase(),
@@ -203,7 +220,7 @@ setIdentityKey(identity_key);
           credentials: "include",
         }).catch(function () {});
       } catch (_) {}
-  
+      setIdentityKey(identity_key);
       // also log an identify event through the pixel collector (optional but useful)
       track("identify", { traits: traits || null });
     }

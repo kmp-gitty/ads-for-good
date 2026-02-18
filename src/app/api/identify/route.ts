@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
 
   const client_key = safeString(payload?.client_key);
   const identity_key = safeString(payload?.identity_key); // IMPORTANT: hashed already
+  const previous_identity_key = safeString(payload?.previous_identity_key);
+
   const traits =
     payload?.traits && typeof payload.traits === "object" ? payload.traits : null;
 
@@ -61,6 +63,22 @@ export async function POST(req: NextRequest) {
   // Upsert identity link (insert or bump last_linked_at)
   const now = new Date().toISOString();
 
+  // If the browser told us a previous identity, record an alias mapping (best-effort)
+if (previous_identity_key && previous_identity_key !== identity_key) {
+    await supabase.from("identity_aliases").insert({
+      client_key,
+      from_identity_key: previous_identity_key,
+      to_identity_key: identity_key,
+      method: "client_previous_identity",
+      metadata: {
+        page_url: payload?.page_url || null,
+        page_path: payload?.page_path || null,
+        referrer: payload?.referrer || req.headers.get("referer") || null,
+      },
+    });
+  }
+  
+
   await supabase
   .from("journeys")
   .update({
@@ -93,23 +111,35 @@ export async function POST(req: NextRequest) {
   }
 
   // ✅ Backfill: any journey linked to this identity_key should carry last_identity_key
-const { data: linked } = await supabase
-.from("identity_links")
-.select("journey_id")
-.eq("client_key", client_key)
-.eq("identity_key", identity_key);
+// ✅ Backfill: any journey linked to this identity_key should carry last_identity_key
+
+const { data: linked, error: linkedError } = await supabase
+  .from("identity_links")
+  .select("journey_id")
+  .eq("client_key", client_key)
+  .eq("identity_key", identity_key);
+
+if (linkedError) {
+  console.error("identity backfill lookup error:", linkedError);
+}
 
 if (linked && linked.length) {
-const journeyIds = linked.map((r: any) => r.journey_id);
+  const journeyIds = linked.map((r: any) => r.journey_id);
 
-await supabase
-  .from("journeys")
-  .update({
-    last_identity_key: identity_key,
-    last_seen: now,
-  })
-  .in("id", journeyIds);
+  const { error: updateError } = await supabase
+    .from("journeys")
+    .update({
+      last_identity_key: identity_key,
+      last_seen: now,
+    })
+    .in("id", journeyIds)
+    .eq("client_key", client_key);
+
+  if (updateError) {
+    console.error("journey backfill update error:", updateError);
+  }
 }
+
 
   // Also record an identify event (handy for auditing)
   await supabase.from("pixel_events").insert({
