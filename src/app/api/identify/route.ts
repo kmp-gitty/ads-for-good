@@ -64,20 +64,47 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString();
 
   // If the browser told us a previous identity, record an alias mapping (best-effort)
-if (previous_identity_key && previous_identity_key !== identity_key) {
+  if (previous_identity_key && previous_identity_key !== identity_key) {
     await supabase.from("identity_aliases").insert({
       client_key,
       from_identity_key: previous_identity_key,
       to_identity_key: identity_key,
       method: "client_previous_identity",
+      confidence: 100,
+      is_deterministic: true,
+      reason: "explicit_identify_call",
       metadata: {
         page_url: payload?.page_url || null,
         page_path: payload?.page_path || null,
         referrer: payload?.referrer || req.headers.get("referer") || null,
       },
     });
-  }
-  
+
+// Step 3 — Canonical resolution update
+
+// Always make the NEW identity its own canonical if missing
+await supabase
+  .from("identity_canon")
+  .upsert({
+    client_key,
+    identity_key,
+    canonical_identity_key: identity_key,
+    updated_at: now,
+  }, { onConflict: "client_key,identity_key" });
+
+// If there was a previous identity, point it to the new canonical
+if (previous_identity_key) {
+  await supabase
+    .from("identity_canon")
+    .upsert({
+      client_key,
+      identity_key: previous_identity_key,
+      canonical_identity_key: identity_key,
+      updated_at: now,
+    }, { onConflict: "client_key,identity_key" });
+}
+
+  }  
 
   await supabase
   .from("journeys")
