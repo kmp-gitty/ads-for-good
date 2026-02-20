@@ -101,16 +101,14 @@ export default function ProjectsStatusPage() {
         <section className="mt-4 rounded-lg border border-neutral-200 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="mt-1 text-sm text-neutral-700">Post-Analysis & Planning Phase</p>
+            <p className="mt-1 text-sm text-neutral-700">Action Phase</p>
           </div>
 
           <StatusChip status="yellow" label="In Progress" />
         </div>
 
         <ul className="mt-4 space-y-1 text-sm text-neutral-700">
-          <li>• 12 month SEO plan shell creation</li>
-          <li>• Content drafting & creation</li>
-          <li>• Website updates & new content postings</li>
+          <li>• Taking action on all approved SEO action items above</li>
         </ul>
       </section>
       </div>
