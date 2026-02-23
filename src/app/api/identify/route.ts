@@ -70,8 +70,8 @@ export async function POST(req: NextRequest) {
       from_identity_key: previous_identity_key,
       to_identity_key: identity_key,
       method: "client_previous_identity",
-      confidence: 100,
-      is_deterministic: true,
+      confidence: 85,
+      is_deterministic: false,
       reason: "explicit_identify_call",
       metadata: {
         page_url: payload?.page_url || null,
