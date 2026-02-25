@@ -25,6 +25,14 @@ export async function POST(req: NextRequest) {
   const identity_key = safeString(payload?.identity_key); // IMPORTANT: hashed already
   const previous_identity_key = safeString(payload?.previous_identity_key);
 
+// If previous_identity_key isn't provided, fall back to anon cookie (set by /api/pixel)
+const anonCookieName = `up_anon_${client_key}`;
+const anonFromCookie = req.cookies.get(anonCookieName)?.value || null;
+
+const effective_previous_identity_key =
+  previous_identity_key ||
+  (anonFromCookie && /^[0-9a-fA-F-]{36}$/.test(anonFromCookie) ? anonFromCookie : null);
+
   const traits =
     payload?.traits && typeof payload.traits === "object" ? payload.traits : null;
 
@@ -64,10 +72,10 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString();
 
   // If the browser told us a previous identity, record an alias mapping (best-effort)
-  if (previous_identity_key && previous_identity_key !== identity_key) {
+  if (effective_previous_identity_key && effective_previous_identity_key !== identity_key) {
     await supabase.from("identity_aliases").insert({
       client_key,
-      from_identity_key: previous_identity_key,
+      from_identity_key: effective_previous_identity_key,
       to_identity_key: identity_key,
       method: "client_previous_identity",
       confidence: 85,
@@ -93,16 +101,19 @@ await supabase
   }, { onConflict: "client_key,identity_key" });
 
 // If there was a previous identity, point it to the new canonical
-if (previous_identity_key) {
-  await supabase
-    .from("identity_canon")
-    .upsert({
-      client_key,
-      identity_key: previous_identity_key,
-      canonical_identity_key: identity_key,
-      updated_at: now,
-    }, { onConflict: "client_key,identity_key" });
-}
+if (effective_previous_identity_key) {
+    await supabase
+      .from("identity_canon")
+      .upsert(
+        {
+          client_key,
+          identity_key: effective_previous_identity_key,
+          canonical_identity_key: identity_key,
+          updated_at: now,
+        },
+        { onConflict: "client_key,identity_key" }
+      );
+  }
 
   }  
 
@@ -194,6 +205,19 @@ if (linked && linked.length) {
     path: "/",
     maxAge: 60 * 60 * 24 * 180,
   });
+
+  const anonCookieValue =
+  (anonFromCookie && /^[0-9a-fA-F-]{36}$/.test(anonFromCookie))
+    ? anonFromCookie
+    : randomUUID();
+
+res.cookies.set(anonCookieName, anonCookieValue, {
+  httpOnly: false,
+  secure: !isLocal,
+  sameSite: "lax",
+  path: "/",
+  maxAge: 60 * 60 * 24 * 365,
+});
 
   return res;
 }

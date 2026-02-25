@@ -2,12 +2,12 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-function sha256(input: string): string {
-    return crypto.createHash("sha256").update(input).digest("hex");
-  }
-
 function hmacSha256Hex(secret: string, body: string): string {
   return crypto.createHmac("sha256", secret).update(body).digest("hex");
+}
+
+function sha256(input: string): string {
+  return crypto.createHash("sha256").update(input).digest("hex");
 }
 
 function getClientSecret(clientKey: string): string | null {
@@ -21,6 +21,10 @@ function getClientSecret(clientKey: string): string | null {
   }
 }
 
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 function hasIdentity(p: any): boolean {
   return Boolean(
     p.email || p.email_hash || p.customer_id || p.client_identity_key || p.anonymous_id
@@ -28,11 +32,7 @@ function hasIdentity(p: any): boolean {
 }
 
 function hasDedupeId(p: any): boolean {
-  return Boolean(p.event_id || p.order_id || p.payment_id);
-}
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
+  return Boolean(p.event_id || p.lead_id || p.appointment_id || p.form_id);
 }
 
 export async function POST(req: NextRequest) {
@@ -67,17 +67,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Contract validation
-  if (!hasDedupeId(payload)) {
-    return NextResponse.json({ error: "missing_dedupe_id" }, { status: 400 });
-  }
-  if (typeof payload.value !== "number" || !isFinite(payload.value)) {
-    return NextResponse.json({ error: "invalid_value" }, { status: 400 });
-  }
-  if (!payload.currency) {
-    return NextResponse.json({ error: "missing_currency" }, { status: 400 });
+  if (!payload.event_name) {
+    return NextResponse.json({ error: "missing_event_name" }, { status: 400 });
   }
   if (!payload.source_platform) {
     return NextResponse.json({ error: "missing_source_platform" }, { status: 400 });
+  }
+  if (!hasDedupeId(payload)) {
+    return NextResponse.json({ error: "missing_dedupe_id" }, { status: 400 });
   }
   if (!hasIdentity(payload)) {
     return NextResponse.json({ error: "missing_identity" }, { status: 400 });
@@ -90,24 +87,21 @@ export async function POST(req: NextRequest) {
     { auth: { persistSession: false } }
   );
 
+  // Email hashing (no raw email storage)
   const email = payload.email ? normalizeEmail(payload.email) : null;
-const emailHash = email ? sha256(email) : null;
+  const emailHash: string | null = payload.email_hash
+    ? String(payload.email_hash).trim()
+    : email
+      ? sha256(email)
+      : null;
 
-const rootIdentityKey: string =
-  (payload.client_identity_key || "").trim() ||
-  (payload.anonymous_id || "").trim() ||
-  (payload.customer_id || "").trim() ||
-  (payload.email_hash || "").trim() ||
-  (email ? `email_sha256:${emailHash}` : "");
+  // Deterministic alias if we have BOTH anon/browser identity and email hash
+  const fromKey =
+    (payload.client_identity_key || "").trim() || (payload.anonymous_id || "").trim();
 
-  const lookupKey = emailHash ? `email_sha256:${emailHash}` : rootIdentityKey;
-
-// If we have BOTH an anon/browser identity and an email, create deterministic alias edge
-if (email) {
+  if (emailHash && fromKey) {
     const emailKey = `email_sha256:${emailHash}`;
-    const fromKey = (payload.client_identity_key || "").trim() || (payload.anonymous_id || "").trim();
-  
-    if (fromKey && fromKey !== emailKey) {
+    if (fromKey !== emailKey) {
       await supabase
         .from("identity_aliases")
         .upsert(
@@ -125,36 +119,41 @@ if (email) {
     }
   }
 
+  // Canonical identity resolution
+  const rootIdentityKey: string =
+    (payload.client_identity_key || "").trim() ||
+    (payload.anonymous_id || "").trim() ||
+    (payload.customer_id || "").trim() ||
+    (emailHash ? `email_sha256:${emailHash}` : "");
 
-// Ask the DB for canonical identity (falls back to lookupKey if none)
-const { data: canon } = await supabase
-  .from("identity_canonical")
-  .select("canonical_identity_key")
-  .eq("client_key", clientKey)
-  .eq("root_identity_key", lookupKey)
-  .maybeSingle();
+  const lookupKey = emailHash ? `email_sha256:${emailHash}` : rootIdentityKey;
 
-const resolvedIdentityKey = canon?.canonical_identity_key ?? lookupKey;
+  const { data: canon } = await supabase
+    .from("identity_canonical")
+    .select("canonical_identity_key")
+    .eq("client_key", clientKey)
+    .eq("root_identity_key", lookupKey)
+    .maybeSingle();
 
-const identityConfidence = email ? 100 : 70;
-const identityReason = email ? "explicit_identify_call" : "client_previous_identity";
+  const resolvedIdentityKey = canon?.canonical_identity_key ?? lookupKey;
+
+  const identityConfidence = emailHash ? 100 : 70;
+  const identityReason = emailHash ? "explicit_identify_call" : "client_previous_identity";
 
   const eventTs = payload.event_ts ? new Date(payload.event_ts) : new Date();
 
-  const purchaseRow = {
+  const row = {
     client_key: clientKey,
-    event_name: "purchase",
+    event_name: String(payload.event_name),
     event_ts: eventTs.toISOString(),
-    source_platform: payload.source_platform,
+    source_platform: String(payload.source_platform),
 
-    order_id: payload.order_id ?? null,
-    payment_id: payload.payment_id ?? null,
     event_id: payload.event_id ?? null,
+    lead_id: payload.lead_id ?? null,
+    appointment_id: payload.appointment_id ?? null,
+    form_id: payload.form_id ?? null,
 
-    value: payload.value,
-    currency: payload.currency,
-
-    email_hash: payload.email_hash ?? null,
+    email_hash: emailHash ?? null,
     customer_id: payload.customer_id ?? null,
     client_identity_key: payload.client_identity_key ?? null,
     anonymous_id: payload.anonymous_id ?? null,
@@ -163,27 +162,25 @@ const identityReason = email ? "explicit_identify_call" : "client_previous_ident
     identity_confidence: identityConfidence,
     identity_reason: identityReason,
 
-    coupon: payload.coupon ?? null,
-    shipping: payload.shipping ?? null,
-    tax: payload.tax ?? null,
+    page_url: payload.page_url ?? null,
+    referrer: payload.referrer ?? null,
 
     utm_source: payload.utm_source ?? null,
     utm_medium: payload.utm_medium ?? null,
     utm_campaign: payload.utm_campaign ?? null,
     utm_term: payload.utm_term ?? null,
     utm_content: payload.utm_content ?? null,
-
     click_id: payload.click_id ?? null,
-    page_url: payload.page_url ?? null,
-    referrer: payload.referrer ?? null,
+
+    value: payload.value ?? null,
+    currency: payload.currency ?? null,
 
     raw: payload.raw ?? null,
   };
 
-  // Insert (DB enforces dedupe via unique index)
   const { data: inserted, error: insErr } = await supabase
-    .from("purchase_events")
-    .insert(purchaseRow)
+    .from("conversion_events")
+    .insert(row)
     .select("id")
     .maybeSingle();
 
@@ -199,7 +196,7 @@ const identityReason = email ? "explicit_identify_call" : "client_previous_ident
   }
 
   return NextResponse.json(
-    { status: "ok", purchase_event_id: inserted?.id ?? null, deduped: false },
+    { status: "ok", conversion_event_id: inserted?.id ?? null, deduped: false },
     { status: 200 }
   );
 }

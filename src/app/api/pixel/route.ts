@@ -66,8 +66,21 @@ export async function POST(req: NextRequest) {
 
   const client_key = String(payload?.client_key || "").trim();
   const event_name = String(payload?.event_name || "").trim();
+  
+  if (!client_key)
+    return NextResponse.json({ error: "Missing client_key" }, { status: 400 });
+  if (!event_name)
+    return NextResponse.json({ error: "Missing event_name" }, { status: 400 });
+  
+  // 0) Stable anon identity cookie (first-party)
+  const anonCookieName = `up_anon_${client_key}`;
+  const existingAnon = req.cookies.get(anonCookieName)?.value || null;
+  const anon_id =
+    existingAnon && /^[0-9a-fA-F-]{36}$/.test(existingAnon) ? existingAnon : randomUUID();
+  
+  // If caller didn't provide identity_key, fall back to anon_id
   const identity_key =
-  payload?.identity_key ? String(payload.identity_key).trim() : null;
+    payload?.identity_key ? String(payload.identity_key).trim() : anon_id;
 
 
   if (!client_key) return NextResponse.json({ error: "Missing client_key" }, { status: 400 });
@@ -219,6 +232,14 @@ res.cookies.set(cookieName, journey_id, {
   path: "/",
   maxAge: 60 * 60 * 24 * 180,
 });
+
+res.cookies.set(anonCookieName, anon_id, {
+    httpOnly: false,
+    secure: !isLocal,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  });
 
   // Also avoid indexing this endpoint
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
