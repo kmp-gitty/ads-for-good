@@ -39,3 +39,19 @@ body {
     transform: none !important;
   }
 }
+
+/* Articles marquee (avoid styled-jsx hydration mismatch) */
+.tb-marquee {
+  animation: tb-scroll 60s linear infinite;
+}
+.tb-marquee:hover {
+  animation-play-state: paused;
+}
+@keyframes tb-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
