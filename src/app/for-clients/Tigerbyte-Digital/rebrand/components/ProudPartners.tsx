@@ -5,10 +5,10 @@ const logos = [
   { src: "/Webby_Logo.avif", alt: "Partner 2" },
   { src: "/bullish.avif", alt: "Partner 3" },
   { src: "/careerbliss.avif", alt: "Partner 4" },
-  { src: "/peekyou.avif", alt: "Partner 5" },
+  { src: "/PeekYou.avif", alt: "Partner 5" },
   { src: "/WaveScout.jpg", alt: "Partner 6" },
   { src: "/StyleBlueprint.jpg", alt: "Partner 7" },
-  { src: "/positivity.jpg", alt: "Partner 8" },
+  { src: "/Positivity.jpg", alt: "Partner 8" },
   { src: "/aperture.jpg", alt: "Partner 9" },
 ];
 
