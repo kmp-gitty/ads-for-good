@@ -41,21 +41,6 @@ function cleanNulls<T extends Record<string, any>>(obj: T) {
   return out as T;
 }
 
-/**
- * POST /api/pixel
- * Body example:
- * {
- *   "client_key": "adsforgood",          // REQUIRED (tenant)
- *   "vertical": "PUBLISHER_NEWS",        // optional
- *   "event_name": "page_view",           // REQUIRED
- *   "page_url": "https://.../faux-news?utm_source=reddit...",
- *   "page_path": "/faux-news",
- *   "referrer": "https://google.com",
- *   "props": { "placement": "hero", "story_id": "hero-1" },
- *   "utm": { ...optional override... },
- *   "partner_ids": { ...optional override... }
- * }
- */
 export async function POST(req: NextRequest) {
   let payload: any = null;
   try {
@@ -66,38 +51,35 @@ export async function POST(req: NextRequest) {
 
   const client_key = String(payload?.client_key || "").trim();
   const event_name = String(payload?.event_name || "").trim();
-  
+
   if (!client_key)
     return NextResponse.json({ error: "Missing client_key" }, { status: 400 });
   if (!event_name)
     return NextResponse.json({ error: "Missing event_name" }, { status: 400 });
-  
+
   // 0) Stable anon identity cookie (first-party)
   const anonCookieName = `up_anon_${client_key}`;
   const existingAnon = req.cookies.get(anonCookieName)?.value || null;
   const anon_id =
     existingAnon && /^[0-9a-fA-F-]{36}$/.test(existingAnon) ? existingAnon : randomUUID();
-  
+
   // If caller didn't provide identity_key, fall back to anon_id
   const identity_key =
     payload?.identity_key ? String(payload.identity_key).trim() : anon_id;
-
-
-  if (!client_key) return NextResponse.json({ error: "Missing client_key" }, { status: 400 });
-  if (!event_name) return NextResponse.json({ error: "Missing event_name" }, { status: 400 });
 
   const vertical = payload?.vertical ? String(payload.vertical).trim() : null;
 
   const page_url = payload?.page_url ? String(payload.page_url) : null;
   const page_path = payload?.page_path ? String(payload.page_path) : null;
-  const referrer = payload?.referrer ? String(payload.referrer) : (req.headers.get("referer") || null);
+  const referrer = payload?.referrer
+    ? String(payload.referrer)
+    : req.headers.get("referer") || null;
 
   // 1) Journey cookie (first-party)
   const cookieName = `up_journey_${client_key}`;
   const existing = req.cookies.get(cookieName)?.value || null;
-
-  // If existing cookie isn't a valid UUID, reissue.
-  const journey_id = existing && /^[0-9a-fA-F-]{36}$/.test(existing) ? existing : randomUUID();
+  const journey_id =
+    existing && /^[0-9a-fA-F-]{36}$/.test(existing) ? existing : randomUUID();
 
   // 2) Source snapshot from page_url (if present)
   const derived = page_url ? getUtmFromUrl(page_url) : { utm: null, partner_ids: null };
@@ -112,6 +94,103 @@ export async function POST(req: NextRequest) {
     ...(payload?.partner_ids || {}),
   });
 
+  // ---------------------------------------------------------------------------
+  // 2.5) Consent gate (align to site state)
+  // Incoming signals from client
+  const consent_status = String(payload?.consent_status || "unknown"); // opt_in | opt_out | unknown
+  const consent_mode = String(payload?.consent_mode || "opt_in");      // opt_in | opt_out (site behavior)
+
+  // DB signal (authoritative if opt_out)
+  let db_consent: "opt_in" | "opt_out" | "unknown" = "unknown";
+  let db_consent_mode: "opt_in" | "opt_out" | null = null;
+  let db_consent_ts: string | null = null; // ✅ declare OUTSIDE try so it's in scope below
+
+  try {
+    const { data: j } = await supabase
+      .from("journeys")
+      .select("consent_status, consent_mode, consent_ts")
+      .eq("id", journey_id)
+      .maybeSingle();
+
+    const v = (j as any)?.consent_status;
+    if (v === "opt_in" || v === "opt_out" || v === "unknown") {
+      db_consent = v;
+    }
+
+    const cm = (j as any)?.consent_mode;
+    if (cm === "opt_in" || cm === "opt_out") {
+      db_consent_mode = cm;
+    }
+
+    const cts = (j as any)?.consent_ts;
+    if (cts) db_consent_ts = cts;
+  } catch {
+    db_consent = "unknown";
+    db_consent_mode = null;
+    db_consent_ts = null;
+  }
+
+  // Decide effective consent:
+  // - DB opt_out always wins
+  // - otherwise, explicit client opt_in/opt_out wins
+  // - otherwise unknown
+  let effective_consent = db_consent;
+  if (effective_consent !== "opt_out") {
+    if (consent_status === "opt_in" || consent_status === "opt_out") {
+      effective_consent = consent_status as any;
+    }
+  }
+
+  // Determine site tracking mode (align to stored site state if not provided)
+  const effective_mode =
+    consent_mode === "opt_in" || consent_mode === "opt_out"
+      ? (consent_mode as any)
+      : (db_consent_mode ?? "opt_in");
+
+  // Align-to-site-state gate:
+  // - opt_in => track
+  // - opt_out => do not track
+  // - unknown => follow effective_mode
+  const should_track =
+    effective_consent === "opt_in" ||
+    (effective_consent === "unknown" && effective_mode === "opt_out"); // site tracks until opt-out
+
+    const payload_consent_ts =
+    payload?.consent_ts ? String(payload.consent_ts) : null;
+  
+  const effective_consent_ts =
+    payload_consent_ts ??
+    db_consent_ts ??
+    (effective_consent === "unknown" ? null : new Date().toISOString());
+
+  if (!should_track) {
+    const res = new NextResponse(null, { status: 204 });
+
+    const isLocal =
+      req.nextUrl.hostname === "localhost" || req.nextUrl.hostname === "127.0.0.1";
+
+    // still set cookies so the user can later opt-in and we can continue that same journey
+    res.cookies.set(cookieName, journey_id, {
+      httpOnly: false,
+      secure: !isLocal,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 180,
+    });
+
+    res.cookies.set(anonCookieName, anon_id, {
+      httpOnly: false,
+      secure: !isLocal,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return res;
+  }
+  // ---------------------------------------------------------------------------
+
   // 3) Privacy-safe request context (no raw IP stored)
   const ua = req.headers.get("user-agent") || null;
   const country = req.headers.get("x-vercel-ip-country") || null;
@@ -119,13 +198,11 @@ export async function POST(req: NextRequest) {
   const city = req.headers.get("x-vercel-ip-city") || null;
 
   // 4) Upsert journey summary
-  // We update last_seen each time; first_seen/first_touch only set on insert.
-  const first_touch = Object.keys(utm).length || Object.keys(partner_ids).length || referrer
-    ? { ...utm, ...partner_ids, referrer }
-    : null;
+  const first_touch =
+    Object.keys(utm).length || Object.keys(partner_ids).length || referrer
+      ? { ...utm, ...partner_ids, referrer }
+      : null;
 
-  // Insert if missing; then update last_seen + last_touch
-  // (Two-step keeps it simple and avoids edge-case upsert constraints.)
   const { data: existingJourney } = await supabase
     .from("journeys")
     .select("id")
@@ -159,18 +236,17 @@ export async function POST(req: NextRequest) {
 
   if (identity_key) {
     const now = new Date().toISOString();
-  
-    // Try to insert the mapping
+
     const ins = await supabase.from("identity_links").insert({
       client_key,
       identity_key,
       journey_id,
       first_linked_at: now,
       last_linked_at: now,
-      traits: payload?.traits && typeof payload.traits === "object" ? payload.traits : null,
+      traits:
+        payload?.traits && typeof payload.traits === "object" ? payload.traits : null,
     });
-  
-    // If it already exists (unique constraint), just bump last_linked_at
+
     if (ins.error) {
       await supabase
         .from("identity_links")
@@ -186,7 +262,7 @@ export async function POST(req: NextRequest) {
         .eq("journey_id", journey_id);
     }
   }
-  
+
   // 5) Insert event row
   const { error: eventErr } = await supabase.from("pixel_events").insert({
     ts: new Date().toISOString(),
@@ -200,40 +276,42 @@ export async function POST(req: NextRequest) {
     utm: Object.keys(utm).length ? utm : null,
     partner_ids: Object.keys(partner_ids).length ? partner_ids : null,
     props: payload?.props ?? null,
+
+    consent_status: effective_consent,
+    consent_mode: effective_mode,
+    consent_ts: effective_consent_ts,
   });
 
   if (eventErr) {
-    // Don’t break the caller (pixel calls should be resilient)
     console.error("pixel_events insert error:", eventErr);
   }
 
-  // If the event includes identity_key, keep journey's canonical identity updated
-if (identity_key) {
-await supabase
-  .from("journeys")
-  .update({
-    last_identity_key: identity_key,
-    last_seen: new Date().toISOString(),
-  })
-  .eq("id", journey_id);
-}
+  // Keep journey's canonical identity updated
+  if (identity_key) {
+    await supabase
+      .from("journeys")
+      .update({
+        last_identity_key: identity_key,
+        last_seen: new Date().toISOString(),
+      })
+      .eq("id", journey_id);
+  }
 
-
-  // 6) Return 204 with Set-Cookie to persist journey_id
+  // 6) Return 204 + Set-Cookie
   const res = new NextResponse(null, { status: 204 });
 
   const isLocal =
-  req.nextUrl.hostname === "localhost" || req.nextUrl.hostname === "127.0.0.1";
+    req.nextUrl.hostname === "localhost" || req.nextUrl.hostname === "127.0.0.1";
 
-res.cookies.set(cookieName, journey_id, {
-  httpOnly: false,
-  secure: !isLocal, // ✅ allow cookie on localhost
-  sameSite: "lax",
-  path: "/",
-  maxAge: 60 * 60 * 24 * 180,
-});
+  res.cookies.set(cookieName, journey_id, {
+    httpOnly: false,
+    secure: !isLocal,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 180,
+  });
 
-res.cookies.set(anonCookieName, anon_id, {
+  res.cookies.set(anonCookieName, anon_id, {
     httpOnly: false,
     secure: !isLocal,
     sameSite: "lax",
@@ -241,8 +319,6 @@ res.cookies.set(anonCookieName, anon_id, {
     maxAge: 60 * 60 * 24 * 365,
   });
 
-  // Also avoid indexing this endpoint
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
-
   return res;
 }
