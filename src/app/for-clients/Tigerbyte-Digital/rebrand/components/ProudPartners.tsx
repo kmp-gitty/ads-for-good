@@ -20,7 +20,10 @@ export default function ProudPartners() {
           <h2 className="text-4xl font-black tracking-tight text-black">
             Proud Partners With:
           </h2>
-          <div className="mx-auto mt-6 h-1 w-14 bg-black" />
+          <div
+  className="mx-auto mt-6 h-1 w-14"
+  style={{ backgroundColor: "var(--tb-blue)" }}
+/>
         </div>
 
         <div className="mt-14 grid grid-cols-2 gap-x-10 gap-y-12 md:grid-cols-3">

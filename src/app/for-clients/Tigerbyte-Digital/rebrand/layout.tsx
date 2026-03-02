@@ -5,7 +5,7 @@ export default function RebrandLayout({
     children: React.ReactNode;
   }) {
     return (
-      <div className="min-h-screen bg-white text-neutral-900">
+      <div className="tb-theme">
         {children}
       </div>
     );

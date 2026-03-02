@@ -41,7 +41,10 @@ export default function Header() {
   useOutsideClick(wrapRef, () => setOpen(null));
 
   return (
-    <header className="sticky top-0 z-50 bg-[#D9A56B]">
+    <header
+  className="sticky top-0 z-50"
+  style={{ backgroundColor: "var(--tb-orange)" }}
+>
       <div
         ref={wrapRef}
         className="mx-auto max-w-[1200px] px-6 py-4 flex items-center justify-between"
@@ -49,17 +52,24 @@ export default function Header() {
         {/* Left: Logo */}
         <div className="flex items-center gap-3">
           <div className="h-8 w-8 rounded-full bg-black" />
-          <span className="font-semibold text-black">Tigerbyte Digital</span>
+          <span style={{ color: "var(--tb-dark)" }} className="font-semibold">Tigerbyte Digital</span>
         </div>
 
         {/* Center: Nav */}
-        <nav className="hidden md:flex items-center gap-6 bg-white px-6 py-2 rounded-xl shadow-sm relative">
+        <nav
+  className="hidden md:flex items-center gap-6 px-6 py-2 rounded-xl shadow-sm relative"
+  style={{
+    backgroundColor: "var(--tb-light)",
+    border: "1px solid var(--tb-blue)",
+  }}
+>
           {/* Publisher Services */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setOpen(open === "publisher" ? null : "publisher")}
-              className="text-sm font-medium text-black hover:opacity-80"
+              className="text-sm font-medium hover:opacity-80"
+              style={{ color: "var(--tb-dark)" }}
               aria-haspopup="menu"
               aria-expanded={open === "publisher"}
             >
@@ -89,7 +99,14 @@ export default function Header() {
                           <Link
                             href="#"
                             onClick={() => setOpen(null)}
-                            className="block rounded-lg px-3 py-2 text-sm text-neutral-900 hover:bg-neutral-100"
+                            className="block rounded-lg px-3 py-2 text-sm transition"
+style={{ color: "var(--tb-dark)" }}
+onMouseEnter={(e) =>
+  (e.currentTarget.style.backgroundColor = "var(--tb-blue)")
+}
+onMouseLeave={(e) =>
+  (e.currentTarget.style.backgroundColor = "transparent")
+}
                           >
                             {label}
                           </Link>
@@ -114,7 +131,14 @@ export default function Header() {
                           <Link
                             href="#"
                             onClick={() => setOpen(null)}
-                            className="block rounded-lg px-3 py-2 text-sm text-neutral-900 hover:bg-neutral-100"
+                            className="block rounded-lg px-3 py-2 text-sm transition"
+style={{ color: "var(--tb-dark)" }}
+onMouseEnter={(e) =>
+  (e.currentTarget.style.backgroundColor = "var(--tb-blue)")
+}
+onMouseLeave={(e) =>
+  (e.currentTarget.style.backgroundColor = "transparent")
+}
                           >
                             {label}
                           </Link>
@@ -132,7 +156,8 @@ export default function Header() {
             <button
               type="button"
               onClick={() => setOpen(open === "resources" ? null : "resources")}
-              className="text-sm font-medium text-black hover:opacity-80"
+              className="text-sm font-medium hover:opacity-80"
+              style={{ color: "var(--tb-dark)" }}
               aria-haspopup="menu"
               aria-expanded={open === "resources"}
             >
@@ -150,7 +175,14 @@ export default function Header() {
                       <Link
                         href="#"
                         onClick={() => setOpen(null)}
-                        className="block rounded-lg px-3 py-2 text-sm text-neutral-900 hover:bg-neutral-100"
+                        className="block rounded-lg px-3 py-2 text-sm transition"
+style={{ color: "var(--tb-dark)" }}
+onMouseEnter={(e) =>
+  (e.currentTarget.style.backgroundColor = "var(--tb-blue)")
+}
+onMouseLeave={(e) =>
+  (e.currentTarget.style.backgroundColor = "transparent")
+}
                       >
                         {label}
                       </Link>
@@ -166,7 +198,8 @@ export default function Header() {
             <button
               type="button"
               onClick={() => setOpen(open === "about" ? null : "about")}
-              className="text-sm font-medium text-black hover:opacity-80"
+              className="text-sm font-medium hover:opacity-80"
+              style={{ color: "var(--tb-dark)" }}
               aria-haspopup="menu"
               aria-expanded={open === "about"}
             >
@@ -189,7 +222,14 @@ export default function Header() {
                       <Link
                         href="#"
                         onClick={() => setOpen(null)}
-                        className="block rounded-lg px-3 py-2 text-sm text-neutral-900 hover:bg-neutral-100"
+                        className="block rounded-lg px-3 py-2 text-sm transition"
+style={{ color: "var(--tb-dark)" }}
+onMouseEnter={(e) =>
+  (e.currentTarget.style.backgroundColor = "var(--tb-blue)")
+}
+onMouseLeave={(e) =>
+  (e.currentTarget.style.backgroundColor = "transparent")
+}
                       >
                         {label}
                       </Link>
@@ -201,19 +241,24 @@ export default function Header() {
           </div>
 
           {/* Testimonials (no dropdown) */}
-          <Link href="#" className="text-sm font-medium text-black hover:opacity-80">
+          <Link href="#" style={{ color: "var(--tb-dark)" }} className="text-sm font-medium hover:opacity-80">
             Testimonials
           </Link>
         </nav>
 
         {/* Right: CTA */}
         <div>
-          <Link
-            href="#"
-            className="inline-flex items-center rounded-full border border-black bg-purple-300 px-5 py-2 text-sm font-medium text-black hover:opacity-90 transition"
-          >
-            Free Monetization Advice ✨
-          </Link>
+        <Link
+  href="#"
+  className="inline-flex items-center rounded-full px-5 py-2 text-sm font-medium transition hover:brightness-95"
+  style={{
+    backgroundColor: "var(--tb-orange)",
+    color: "var(--tb-light)",
+    border: "2px solid var(--tb-dark)",
+  }}
+>
+  Free Monetization Advice ✨
+</Link>
         </div>
       </div>
     </header>

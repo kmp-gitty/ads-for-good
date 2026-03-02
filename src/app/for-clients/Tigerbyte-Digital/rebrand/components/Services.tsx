@@ -30,7 +30,7 @@ const services = [
 
 export default function Services() {
   return (
-    <section className="bg-[#F6F3EF]">
+    <section className="" style={{ backgroundColor: "var(--tb-light)" }}>
       <div className="mx-auto max-w-[1200px] px-6 py-20">
 
         {/* Heading */}

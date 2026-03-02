@@ -55,3 +55,14 @@ body {
     transform: translateX(-50%);
   }
 }
+
+/* =========================
+   TIGERBYTE THEME (scoped)
+   ========================= */
+
+   .tb-theme {
+    --tb-orange: #FF9C43;
+    --tb-light: #F9F9F9;
+    --tb-dark: #3F3E3E;
+    --tb-blue: #BCDCFF;
+  }
