@@ -35,6 +35,7 @@ function track(event: string, props: Record<string, any> = {}) {
         page_path: window.location.pathname,
         referrer: document.referrer,
         props,
+        consent_mode: "opt_out",
       }),
     }).catch(() => {});
 
@@ -95,13 +96,6 @@ export default function FauxNewsHomePage() {
         category: "FINANCE",
         title:
           "A billionaire predicted an ‘army’ of builders would spread AI — now it’s happening",
-        readMins: 2,
-      },
-      {
-        id: "strip-4",
-        category: "TECH",
-        title:
-          "A platform is cracking down on deepfake-style copyright misuse — what it means",
         readMins: 2,
       },
     ],
