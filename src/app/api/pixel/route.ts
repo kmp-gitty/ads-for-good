@@ -41,6 +41,22 @@ function cleanNulls<T extends Record<string, any>>(obj: T) {
   return out as T;
 }
 
+function isDeterministicIdentityKey(k: string | null | undefined) {
+    if (!k) return false;
+  
+    // allowlist the namespaces you want to support
+    const allowedPrefixes = [
+      "email_sha256:",
+      "phone_sha256:",
+      "customer_id:",
+      "shopify_customer_id:",
+      "crm_contact_id:",
+      "pos_customer_id:",
+    ];
+  
+    return allowedPrefixes.some((p) => k.startsWith(p));
+  }
+
 export async function POST(req: NextRequest) {
   let payload: any = null;
   try {
@@ -263,6 +279,64 @@ export async function POST(req: NextRequest) {
     }
   }
 
+// ------------------------------------------------------
+// Offline identity seed matching (only after deterministic ID + opt-in)
+// ------------------------------------------------------
+function isDeterministicIdentityKey(k: string | null | undefined) {
+    if (!k) return false;
+    const allowedPrefixes = [
+      "email_sha256:",
+      "phone_sha256:",
+      "customer_id:",
+      "shopify_customer_id:",
+      "crm_contact_id:",
+      "crm_id:",
+      "loyalty_id:",
+      "pos_customer_id:",
+      "external_id:",
+    ];
+    return allowedPrefixes.some((p) => k.startsWith(p));
+  }
+  
+  if (isDeterministicIdentityKey(identity_key) && effective_consent === "opt_in") {
+    try {
+      const { data: seeds } = await supabase
+        .from("offline_identity_seeds")
+        .select("source_type, source_id, seed_ts, metadata, identity_type, is_hashed")
+        .eq("client_key", client_key)
+        .eq("identity_key", identity_key)
+        .limit(25);
+  
+      if (seeds && seeds.length) {
+        const rows = seeds.map((s: any) => {
+          const kind = s?.metadata?.kind || "outside"; // outside | inside | conversion (stored in metadata)
+          return {
+            client_key,
+            identity_key,
+            milestone_name: s.source_type || `offline_${kind}_seed_match`,
+            milestone_ts: s.seed_ts || new Date().toISOString(),
+            value: null,
+            currency: null,
+            source_type: s.source_type,
+            source_id: s.source_id,
+            metadata: s.metadata || null,
+            identity_type: s.identity_type || null,
+            is_hashed: typeof s.is_hashed === "boolean" ? s.is_hashed : null,
+          };
+        });
+  
+        const { error } = await supabase.from("offline_milestones").insert(rows);
+  
+        // duplicates are OK (idempotent)
+        if (error && !String(error.code || "").includes("23505")) {
+          console.error("offline milestone insert error:", error);
+        }
+      }
+    } catch (err) {
+      console.error("offline seed match error:", err);
+    }
+  }
+  
   // 5) Insert event row
   const { error: eventErr } = await supabase.from("pixel_events").insert({
     ts: new Date().toISOString(),
