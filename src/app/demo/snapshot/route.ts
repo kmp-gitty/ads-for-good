@@ -7,6 +7,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+function channelFromUtm(utm: any) {
+  const src = utm?.utm_source ? String(utm.utm_source) : "(direct)";
+  const med = utm?.utm_medium ? String(utm.utm_medium) : null;
+  const camp = utm?.utm_campaign ? String(utm.utm_campaign) : null;
+  return { utm_source: src, utm_medium: med, utm_campaign: camp };
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const client_key = searchParams.get("client_key")?.trim();
@@ -15,27 +22,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing client_key" }, { status: 400 });
   }
 
-  // Read cookies (what /demo uses for “Session” + event scoping)
+  // Cookies (session scope)
   const journeyCookieName = `up_journey_${client_key}`;
   const anonCookieName = `up_anon_${client_key}`;
   const journey_id = req.cookies.get(journeyCookieName)?.value || null;
   const anon_id = req.cookies.get(anonCookieName)?.value || null;
 
-  // 1) Dashboard JSON (used by /demo/dashboard)
+  // Dashboard JSON (best-effort)
+  let dashboard_json: any = null;
+  let dashboard_error: string | null = null;
+
   const { data: dash, error: dashErr } = await supabase
     .rpc("dashboard_snapshot_for_client", { p_client_key: client_key })
     .maybeSingle();
 
-    let dashboard_error: string | null = null;
+  if (dashErr) dashboard_error = dashErr.message;
+  dashboard_json = (dash as any)?.dashboard_json ?? null;
 
-    if (dashErr) {
-      // Don’t break /demo just because the dashboard aggregate query timed out.
-      dashboard_error = dashErr.message;
-    }
-
-  const dashboard_json = (dash as any)?.dashboard_json ?? null;
-
-  // 2) Session info (used by /demo “Live Debug”)
+  // Session info (best-effort)
   let session: any = {
     journey_id,
     anon_id,
@@ -63,49 +67,50 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 3) Latest events (used by /demo “Latest Events” list)
-  // Prefer resolved view if you have it; fall back to pixel_events.
-  let latest_events: any[] = [];
-// Latest events for this journey (raw pixel_events is the most reliable)
-let events: any[] = [];
+  // Latest events for this journey (most reliable: raw pixel_events)
+  let events: any[] = [];
 
-if (journey_id) {
-  const { data: rows, error: evErr } = await supabase
-    .from("pixel_events")
-    .select("ts, event_name, utm, consent_status, consent_mode")
-    .eq("client_key", client_key)
-    .eq("journey_id", journey_id)
-    .order("ts", { ascending: false })
-    .limit(25);
+  if (journey_id) {
+    const { data: rows, error: evErr } = await supabase
+      .from("pixel_events")
+      .select("ts, event_name, page_path, page_url, referrer, utm, consent_status, consent_mode")
+      .eq("client_key", client_key)
+      .eq("journey_id", journey_id)
+      .order("ts", { ascending: false })
+      .limit(25);
 
-  if (evErr) {
-    console.error("snapshot events query error:", evErr);
+    if (evErr) {
+      console.error("snapshot events query error:", evErr);
+    }
+
+    events =
+      (rows || []).map((r: any) => {
+        const { utm_source, utm_medium, utm_campaign } = channelFromUtm(r.utm);
+        return {
+          ts: r.ts,
+          event_name: r.event_name,
+          page_path: r.page_path ?? null,
+          page_url: r.page_url ?? null,
+          referrer: r.referrer ?? null,
+          utm: r.utm ?? null,
+          utm_source,
+          utm_medium,
+          utm_campaign,
+          consent_status: r.consent_status ?? null,
+          consent_mode: r.consent_mode ?? null,
+        };
+      }) ?? [];
   }
 
-  events =
-    (rows || []).map((r: any) => ({
-      ts: r.ts,
-      event_name: r.event_name,
-      utm: r.utm,
-      consent_status: r.consent_status,
-      consent_mode: r.consent_mode,
-    })) ?? [];
-}
-
-return NextResponse.json({
+  return NextResponse.json({
     ok: true,
     client_key,
+    server_time: new Date().toISOString(),
     journey_id,
     anon_id,
-
-    // keep dashboard stuff if you want it available
+    session,
     dashboard_json,
     dashboard_error,
-
-    // match what /demo/page.tsx reads:
-    journey: session,
-    events, // ✅ this is the array you actually built
-
-    server_time: new Date().toISOString(),
+    events,
   });
 }

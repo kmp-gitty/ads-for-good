@@ -3,14 +3,45 @@
 import { useEffect, useState } from "react";
 
 type Snapshot = {
-  ok: boolean;
-  client_key: string;
-  journey_id: string | null;
-  anon_id: string | null;
-  journey: any | null;
-  events: any[];
-  server_time: string;
-};
+    ok: boolean;
+    client_key: string;
+    journey_id: string | null;
+    anon_id: string | null;
+    session?: any;
+    events: Array<{
+      ts: string;
+      event_name: string;
+      page_path?: string | null;
+      utm_source?: string | null;
+      utm_medium?: string | null;
+      consent_status?: string | null;
+      consent_mode?: string | null;
+    }>;
+    server_time: string;
+    dashboard_json?: any;
+    dashboard_error?: string | null;
+  };
+
+  function buildReplay(events: Snapshot["events"]) {
+    // events arrive DESC from server; we want ASC for a readable replay
+    const asc = [...(events || [])].reverse();
+  
+    // Build compact tokens like "google", "reddit", "(direct)" + boundary events
+    const tokens: string[] = [];
+    for (const e of asc) {
+      const ch = e.utm_source || "(direct)";
+      const isBoundary =
+        e.event_name === "purchase" || e.event_name === "lead" || e.event_name === "identify";
+  
+      // show boundary events explicitly; otherwise just channel
+      const t = isBoundary ? `${ch}:${e.event_name}` : ch;
+  
+      // de-dupe consecutive repeats
+      if (tokens[tokens.length - 1] !== t) tokens.push(t);
+    }
+  
+    return tokens.slice(-20).join(" → "); // keep it short for UI
+  }
 
 export default function DemoPage() {
   const [data, setData] = useState<Snapshot | null>(null);
@@ -95,34 +126,54 @@ export default function DemoPage() {
 
                   <div>
                     <div className="font-semibold">Consent</div>
-                    <div>status: {data.journey?.consent_status ?? "opted-in"}</div>
-                    <div>mode: {data.journey?.consent_mode ?? "opt-out"}</div>
+                    <div>status: {data.session?.consent_status ?? "opted-in"}</div>
+                    <div>mode: {data.session?.consent_mode ?? "opt-out"}</div>
                     <div>demo_loaded_at: {loadedAt}</div>
                   </div>
 
                   <div>
-                    <div className="font-semibold">Latest Events</div>
-                    <div className="space-y-2 mt-2">
-                      {data.events?.map((e, i) => (
-                        <div
-                          key={i}
-                          className="rounded border border-neutral-200 p-2 text-xs"
-                        >
-                          <div>{e.ts}</div>
-                          <div className="font-semibold">
-                            {e.event_name}
-                          </div>
-                          <div>
-                            utm_source: {e.utm?.utm_source ?? "direct"}
-                          </div>
-                          <div>
-                            consent: {e.consent_status ?? "null"} /{" "}
-                            {e.consent_mode ?? "null"}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+  <div className="font-semibold">Journey Replay</div>
+  <div className="mt-2 rounded border border-neutral-200 bg-white p-2 text-xs text-neutral-800">
+    {data.events?.length ? buildReplay(data.events) : "—"}
+  </div>
+
+  <div className="mt-4 font-semibold">Latest Events</div>
+  <div className="space-y-2 mt-2">
+    {(data.events || []).map((e, i) => {
+      const channel = e.utm_source || "(direct)";
+      const medium = e.utm_medium || "—";
+      const path = e.page_path || "—";
+
+      return (
+        <div
+          key={i}
+          className="rounded border border-neutral-200 p-2 text-xs text-neutral-800"
+        >
+          <div className="text-neutral-500">{e.ts}</div>
+
+          <div className="mt-1 font-semibold text-neutral-900">{e.event_name}</div>
+
+          <div className="mt-1 text-neutral-800">
+            <span className="font-semibold">channel:</span> {channel}{" "}
+            <span className="text-neutral-500">/</span>{" "}
+            <span className="font-semibold">medium:</span> {medium}
+          </div>
+
+          <div className="mt-1 text-neutral-800">
+            <span className="font-semibold">path:</span> {path}
+          </div>
+
+          <div className="mt-1 text-neutral-700">
+            consent: {e.consent_status ?? "null"} / {e.consent_mode ?? "null"}
+          </div>
+        </div>
+      );
+    })}
+    {(data.events || []).length === 0 ? (
+      <div className="text-xs text-neutral-500">No events yet.</div>
+    ) : null}
+  </div>
+</div>
                 </div>
               )}
             </div>
