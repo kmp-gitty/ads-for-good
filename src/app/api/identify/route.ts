@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
+import { chapterSchemas } from "@/app/lib/chapter-db";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -46,15 +47,16 @@ const effective_previous_identity_key =
     existing && /^[0-9a-fA-F-]{36}$/.test(existing) ? existing : randomUUID();
 
   // Ensure journey exists (best effort)
-  const { data: existingJourney } = await supabase
-    .from("journeys")
-    .select("id")
-    .eq("id", journey_id)
-    .maybeSingle();
+  const { data: existingJourney } = await chapterSchemas
+  .journey(supabase)
+  .from("journeys")
+  .select("id")
+  .eq("id", journey_id)
+  .maybeSingle();
 
   if (!existingJourney) {
     // Create a minimal journey row so the FK link works
-    await supabase.from("journeys").insert({
+    await chapterSchemas.journey(supabase).from("journeys").insert({
       id: journey_id,
       client_key,
       first_seen: new Date().toISOString(),
@@ -73,7 +75,7 @@ const effective_previous_identity_key =
 
   // If the browser told us a previous identity, record an alias mapping (best-effort)
   if (effective_previous_identity_key && effective_previous_identity_key !== identity_key) {
-    await supabase.from("identity_aliases").insert({
+    await chapterSchemas.identity(supabase).from("identity_aliases").insert({
       client_key,
       from_identity_key: effective_previous_identity_key,
       to_identity_key: identity_key,
@@ -91,7 +93,8 @@ const effective_previous_identity_key =
 // Step 3 — Canonical resolution update
 
 // Always make the NEW identity its own canonical if missing
-await supabase
+await chapterSchemas
+  .identity(supabase)
   .from("identity_canon")
   .upsert({
     client_key,
@@ -102,31 +105,39 @@ await supabase
 
 // If there was a previous identity, point it to the new canonical
 if (effective_previous_identity_key) {
-    await supabase
-      .from("identity_canon")
-      .upsert(
-        {
-          client_key,
-          identity_key: effective_previous_identity_key,
-          canonical_identity_key: identity_key,
-          updated_at: now,
-        },
-        { onConflict: "client_key,identity_key" }
-      );
+    // identity_canon upsert (previous identity)
+await chapterSchemas
+.identity(supabase)
+.from("identity_canon")
+.upsert(
+  {
+    client_key,
+    identity_key: effective_previous_identity_key,
+    canonical_identity_key: identity_key,
+    updated_at: now,
+  },
+  { onConflict: "client_key,identity_key" }
+);
   }
 
   }  
 
-  await supabase
-  .from("journeys")
-  .update({
-    last_seen: now,
-    last_identity_key: identity_key,
-  })
-  .eq("id", journey_id);
+  // journeys update
+await chapterSchemas
+.journey(supabase)
+.from("journeys")
+.update({
+  last_seen: now,
+  last_identity_key: identity_key,
+})
+.eq("id", journey_id);
 
   // Try insert first; if unique violation, update last_linked_at/traits.
-  const ins = await supabase.from("identity_links").insert({
+  // identity_links insert
+const ins = await chapterSchemas
+.identity(supabase)
+.from("identity_links")
+.insert({
     client_key,
     identity_key,
     journey_id,
@@ -137,21 +148,25 @@ if (effective_previous_identity_key) {
 
   if (ins.error) {
     // Likely unique conflict; update
-    await supabase
-      .from("identity_links")
-      .update({
-        last_linked_at: now,
-        traits: traits ?? undefined,
-      })
-      .eq("client_key", client_key)
-      .eq("identity_key", identity_key)
-      .eq("journey_id", journey_id);
+    // identity_links update
+await chapterSchemas
+.identity(supabase)
+.from("identity_links")
+.update({
+  last_linked_at: now,
+  traits: traits ?? undefined,
+})
+.eq("client_key", client_key)
+.eq("identity_key", identity_key)
+.eq("journey_id", journey_id);
   }
 
   // ✅ Backfill: any journey linked to this identity_key should carry last_identity_key
 // ✅ Backfill: any journey linked to this identity_key should carry last_identity_key
 
-const { data: linked, error: linkedError } = await supabase
+// identity_links backfill lookup
+const { data: linked, error: linkedError } = await chapterSchemas
+  .identity(supabase)
   .from("identity_links")
   .select("journey_id")
   .eq("client_key", client_key)
@@ -164,14 +179,16 @@ if (linkedError) {
 if (linked && linked.length) {
   const journeyIds = linked.map((r: any) => r.journey_id);
 
-  const { error: updateError } = await supabase
-    .from("journeys")
-    .update({
-      last_identity_key: identity_key,
-      last_seen: now,
-    })
-    .in("id", journeyIds)
-    .eq("client_key", client_key);
+  // journeys backfill update
+const { error: updateError } = await chapterSchemas
+.journey(supabase)
+.from("journeys")
+.update({
+  last_identity_key: identity_key,
+  last_seen: now,
+})
+.in("id", journeyIds)
+.eq("client_key", client_key);
 
   if (updateError) {
     console.error("journey backfill update error:", updateError);
@@ -180,7 +197,7 @@ if (linked && linked.length) {
 
 
   // Also record an identify event (handy for auditing)
-  await supabase.from("pixel_events").insert({
+  await chapterSchemas.ingest(supabase).from("pixel_events").insert({
     ts: now,
     client_key,
     journey_id,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
+import { chapterSchemas } from "@/app/lib/chapter-db";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -122,11 +123,12 @@ export async function POST(req: NextRequest) {
   let db_consent_ts: string | null = null; // ✅ declare OUTSIDE try so it's in scope below
 
   try {
-    const { data: j } = await supabase
-      .from("journeys")
-      .select("consent_status, consent_mode, consent_ts")
-      .eq("id", journey_id)
-      .maybeSingle();
+    const { data: j } = await chapterSchemas
+  .journey(supabase)
+  .from("journeys")
+  .select("consent_status, consent_mode, consent_ts")
+  .eq("id", journey_id)
+  .maybeSingle();
 
     const v = (j as any)?.consent_status;
     if (v === "opt_in" || v === "opt_out" || v === "unknown") {
@@ -219,14 +221,15 @@ export async function POST(req: NextRequest) {
       ? { ...utm, ...partner_ids, referrer }
       : null;
 
-  const { data: existingJourney } = await supabase
-    .from("journeys")
-    .select("id")
-    .eq("id", journey_id)
-    .maybeSingle();
+      const { data: existingJourney } = await chapterSchemas
+      .journey(supabase)
+      .from("journeys")
+      .select("id")
+      .eq("id", journey_id)
+      .maybeSingle();
 
   if (!existingJourney) {
-    await supabase.from("journeys").insert({
+    await chapterSchemas.journey(supabase).from("journeys").insert({
       id: journey_id,
       client_key,
       vertical,
@@ -240,9 +243,10 @@ export async function POST(req: NextRequest) {
       city,
     });
   } else {
-    await supabase
-      .from("journeys")
-      .update({
+    await chapterSchemas
+  .journey(supabase)
+  .from("journeys")
+  .update({
         last_seen: new Date().toISOString(),
         last_touch: first_touch,
         vertical: vertical ?? undefined,
@@ -253,7 +257,10 @@ export async function POST(req: NextRequest) {
   if (identity_key) {
     const now = new Date().toISOString();
 
-    const ins = await supabase.from("identity_links").insert({
+    const ins = await chapterSchemas
+  .identity(supabase)
+  .from("identity_links")
+  .insert({
       client_key,
       identity_key,
       journey_id,
@@ -264,7 +271,8 @@ export async function POST(req: NextRequest) {
     });
 
     if (ins.error) {
-      await supabase
+        await chapterSchemas
+        .identity(supabase)
         .from("identity_links")
         .update({
           last_linked_at: now,
@@ -300,7 +308,8 @@ function isDeterministicIdentityKey(k: string | null | undefined) {
   
   if (isDeterministicIdentityKey(identity_key) && effective_consent === "opt_in") {
     try {
-      const { data: seeds } = await supabase
+        const { data: seeds } = await chapterSchemas
+        .ingest(supabase)
         .from("offline_identity_seeds")
         .select("source_type, source_id, seed_ts, metadata, identity_type, is_hashed")
         .eq("client_key", client_key)
@@ -325,7 +334,10 @@ function isDeterministicIdentityKey(k: string | null | undefined) {
           };
         });
   
-        const { error } = await supabase.from("offline_milestones").insert(rows);
+        const { error } = await chapterSchemas
+  .ingest(supabase)
+  .from("offline_milestones")
+  .insert(rows);
   
         // duplicates are OK (idempotent)
         if (error && !String(error.code || "").includes("23505")) {
@@ -338,7 +350,10 @@ function isDeterministicIdentityKey(k: string | null | undefined) {
   }
   
   // 5) Insert event row
-  const { error: eventErr } = await supabase.from("pixel_events").insert({
+  const { error: eventErr } = await chapterSchemas
+  .ingest(supabase)
+  .from("pixel_events")
+  .insert({
     ts: new Date().toISOString(),
     client_key,
     journey_id,
@@ -362,9 +377,10 @@ function isDeterministicIdentityKey(k: string | null | undefined) {
 
   // Keep journey's canonical identity updated
   if (identity_key) {
-    await supabase
-      .from("journeys")
-      .update({
+    await chapterSchemas
+  .journey(supabase)
+  .from("journeys")
+  .update({
         last_identity_key: identity_key,
         last_seen: new Date().toISOString(),
       })

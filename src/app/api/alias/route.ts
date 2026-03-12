@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { chapterSchemas } from "@/app/lib/chapter-db";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -31,7 +32,10 @@ export async function POST(req: NextRequest) {
 
   const now = new Date().toISOString();
 
-  const ins = await supabase.from("identity_aliases").insert({
+  const ins = await chapterSchemas
+  .identity(supabase)
+  .from("identity_aliases")
+  .insert({
     ts: now,
     client_key,
     from_identity_key,

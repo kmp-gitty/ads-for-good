@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
+import { chapterSchemas } from "@/app/lib/chapter-db";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -76,7 +77,10 @@ export async function POST(req: NextRequest) {
     payload?.metadata && typeof payload.metadata === "object" ? payload.metadata : null;
 
   // 1) Insert consent event (audit log)
-  const { error: insErr } = await supabase.from("consent_events").insert({
+  const { error: insErr } = await chapterSchemas
+  .ingest(supabase)
+  .from("consent_events")
+  .insert({
     client_key,
     journey_id,
     identity_key,
@@ -97,16 +101,17 @@ export async function POST(req: NextRequest) {
   }
 
   // 2) Update journey snapshot (best effort)
-  const { data: existingJ } = await supabase
-    .from("journeys")
-    .select("id, ever_opted_in")
-    .eq("id", journey_id)
-    .maybeSingle();
+  const { data: existingJ } = await chapterSchemas
+  .journey(supabase)
+  .from("journeys")
+  .select("id, ever_opted_in")
+  .eq("id", journey_id)
+  .maybeSingle();
 
   const nowIso = new Date().toISOString();
 
   if (!existingJ) {
-    await supabase.from("journeys").insert({
+    await chapterSchemas.journey(supabase).from("journeys").insert({
       id: journey_id,
       client_key,
       first_seen: nowIso,
@@ -122,9 +127,10 @@ export async function POST(req: NextRequest) {
       last_identity_key: identity_key,
     });
   } else {
-    await supabase
-      .from("journeys")
-      .update({
+    await chapterSchemas
+  .journey(supabase)
+  .from("journeys")
+  .update({
         consent_status,
         consent_mode,
         consent_ts,

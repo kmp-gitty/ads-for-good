@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
   if (!isMilestone) {
     const seed_ts = safeString(payload?.seed_ts) || new Date().toISOString();
 
-    const { error } = await supabase.from("offline_identity_seeds").insert({
+    const { error } = await supabase.from("chapter_ingest.offline_identity_seeds").insert({
       client_key,
       source_type,
       source_id,
@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
     payload?.value === null || payload?.value === undefined ? null : Number(payload.value);
   const currency = safeString(payload?.currency);
 
-  const { error } = await supabase.from("offline_milestones").insert({
+  const { error } = await supabase.from("chapter_ingest.offline_milestones").insert({
     client_key,
     identity_key,
     milestone_name,

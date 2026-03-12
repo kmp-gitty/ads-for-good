@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import { coreSchemas } from "@/app/lib/chapter-db";
 
 function sha256(input) {
   return crypto.createHash("sha256").update(input).digest("hex");
@@ -14,13 +15,14 @@ export async function GET(req, ctx) {
   );
 
   // 1) Lookup campaign by slug
-  const { data: campaign, error } = await supabase
-    .from("campaigns")
-    .select(
-      "id, client_id, click_slug, destination_type, destination_url, call_number, status"
-    )
-    .eq("click_slug", click_slug)
-    .maybeSingle();
+  const { data: campaign, error } = await coreSchemas
+  .tracking(supabase)
+  .from("campaigns")
+  .select(
+    "id, client_id, click_slug, destination_type, destination_url, call_number, status"
+  )
+  .eq("click_slug", click_slug)
+  .maybeSingle();
 
   if (error || !campaign) return new Response("Not found", { status: 404 });
   if (campaign.status !== "active")
@@ -65,7 +67,10 @@ export async function GET(req, ctx) {
   const city = req.headers.get("x-vercel-ip-city") || null;
 
   // 5) Log event (don’t break redirect if logging fails)
-  const { error: insertError } = await supabase.from("events").insert({
+  const { error: insertError } = await coreSchemas
+  .tracking(supabase)
+  .from("events")
+  .insert({
     ts: new Date().toISOString(),
     client_id: campaign.client_id,
     campaign_id: campaign.id,

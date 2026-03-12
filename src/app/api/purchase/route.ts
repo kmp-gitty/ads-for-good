@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { chapterSchemas } from "@/app/lib/chapter-db";
 
 function sha256(input: string): string {
     return crypto.createHash("sha256").update(input).digest("hex");
@@ -108,7 +109,8 @@ if (email) {
     const fromKey = (payload.client_identity_key || "").trim() || (payload.anonymous_id || "").trim();
   
     if (fromKey && fromKey !== emailKey) {
-      await supabase
+        await chapterSchemas
+        .identity(supabase)
         .from("identity_aliases")
         .upsert(
           {
@@ -127,8 +129,9 @@ if (email) {
 
 
 // Ask the DB for canonical identity (falls back to lookupKey if none)
-const { data: canon } = await supabase
-  .from("identity_canonical")
+const { data: canon } = await chapterSchemas
+  .identity(supabase)
+  .from("identity_canon")
   .select("canonical_identity_key")
   .eq("client_key", clientKey)
   .eq("root_identity_key", lookupKey)
@@ -181,11 +184,12 @@ const identityReason = email ? "explicit_identify_call" : "client_previous_ident
   };
 
   // Insert (DB enforces dedupe via unique index)
-  const { data: inserted, error: insErr } = await supabase
-    .from("purchase_events")
-    .insert(purchaseRow)
-    .select("id")
-    .maybeSingle();
+  const { data: inserted, error: insErr } = await chapterSchemas
+  .ingest(supabase)
+  .from("purchase_events")
+  .insert(purchaseRow)
+  .select("id")
+  .maybeSingle();
 
   if (insErr) {
     const isDup = (insErr as any).code === "23505";

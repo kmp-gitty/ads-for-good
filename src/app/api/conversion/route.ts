@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { chapterSchemas } from "@/app/lib/chapter-db";
 
 function hmacSha256Hex(secret: string, body: string): string {
   return crypto.createHmac("sha256", secret).update(body).digest("hex");
@@ -102,7 +103,8 @@ export async function POST(req: NextRequest) {
   if (emailHash && fromKey) {
     const emailKey = `email_sha256:${emailHash}`;
     if (fromKey !== emailKey) {
-      await supabase
+        await chapterSchemas
+        .identity(supabase)
         .from("identity_aliases")
         .upsert(
           {
@@ -128,8 +130,9 @@ export async function POST(req: NextRequest) {
 
   const lookupKey = emailHash ? `email_sha256:${emailHash}` : rootIdentityKey;
 
-  const { data: canon } = await supabase
-    .from("identity_canonical")
+  const { data: canon } = await chapterSchemas
+  .identity(supabase)
+  .from("identity_canon")
     .select("canonical_identity_key")
     .eq("client_key", clientKey)
     .eq("root_identity_key", lookupKey)
@@ -178,11 +181,12 @@ export async function POST(req: NextRequest) {
     raw: payload.raw ?? null,
   };
 
-  const { data: inserted, error: insErr } = await supabase
-    .from("conversion_events")
-    .insert(row)
-    .select("id")
-    .maybeSingle();
+  const { data: inserted, error: insErr } = await chapterSchemas
+  .ingest(supabase)
+  .from("conversion_events")
+  .insert(row)
+  .select("id")
+  .maybeSingle();
 
   if (insErr) {
     const isDup = (insErr as any).code === "23505";

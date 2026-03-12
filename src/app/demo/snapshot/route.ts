@@ -1,6 +1,7 @@
 // /src/app/demo/snapshot/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { chapterSchemas } from "@/app/lib/chapter-db";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -50,11 +51,12 @@ export async function GET(req: NextRequest) {
   };
 
   if (journey_id) {
-    const { data: j } = await supabase
-      .from("journeys")
-      .select("consent_status, consent_mode, consent_ts, last_identity_key")
-      .eq("id", journey_id)
-      .maybeSingle();
+    const { data: j } = await chapterSchemas
+  .journey(supabase)
+  .from("journeys")
+  .select("consent_status, consent_mode, consent_ts, last_identity_key")
+  .eq("id", journey_id)
+  .maybeSingle();
 
     if (j) {
       session = {
@@ -71,13 +73,13 @@ export async function GET(req: NextRequest) {
   let events: any[] = [];
 
   if (journey_id) {
-    const { data: rows, error: evErr } = await supabase
-      .from("pixel_events")
+    const { data: rows, error: evErr } = await chapterSchemas
+    .ingest(supabase)
+    .from("pixel_events")
       .select("ts, event_name, page_path, page_url, referrer, utm, consent_status, consent_mode")
       .eq("client_key", client_key)
       .eq("journey_id", journey_id)
-      .order("ts", { ascending: false })
-      .limit(25);
+      .order("ts", { ascending: false });
 
     if (evErr) {
       console.error("snapshot events query error:", evErr);
