@@ -74,15 +74,23 @@ export async function POST(req: NextRequest) {
   if (!event_name)
     return NextResponse.json({ error: "Missing event_name" }, { status: 400 });
 
-  // 0) Stable anon identity cookie (first-party)
-  const anonCookieName = `up_anon_${client_key}`;
-  const existingAnon = req.cookies.get(anonCookieName)?.value || null;
-  const anon_id =
-    existingAnon && /^[0-9a-fA-F-]{36}$/.test(existingAnon) ? existingAnon : randomUUID();
+  // 0) Stable anon identity / incoming identity support
+const anonCookieName = `up_anon_${client_key}`;
+const existingAnon = req.cookies.get(anonCookieName)?.value || null;
 
-  // If caller didn't provide identity_key, fall back to anon_id
-  const identity_key =
-    payload?.identity_key ? String(payload.identity_key).trim() : anon_id;
+const incomingIdentityKey =
+  payload?.identity_key && String(payload.identity_key).trim()
+    ? String(payload.identity_key).trim()
+    : null;
+
+const anon_id =
+  existingAnon && /^[0-9a-fA-F-]{36}$/.test(existingAnon)
+    ? existingAnon
+    : randomUUID();
+
+// Prefer incoming identity_key when provided.
+// Otherwise fall back to anon cookie identity.
+const identity_key = incomingIdentityKey || anon_id;
 
   const vertical = payload?.vertical ? String(payload.vertical).trim() : null;
 
@@ -92,11 +100,18 @@ export async function POST(req: NextRequest) {
     ? String(payload.referrer)
     : req.headers.get("referer") || null;
 
-  // 1) Journey cookie (first-party)
-  const cookieName = `up_journey_${client_key}`;
-  const existing = req.cookies.get(cookieName)?.value || null;
-  const journey_id =
-    existing && /^[0-9a-fA-F-]{36}$/.test(existing) ? existing : randomUUID();
+  // 1) Journey support: prefer incoming journey_id, then cookie, then generate
+const cookieName = `up_journey_${client_key}`;
+const existing = req.cookies.get(cookieName)?.value || null;
+
+const incomingJourneyId =
+  payload?.journey_id && /^[0-9a-fA-F-]{36}$/.test(String(payload.journey_id).trim())
+    ? String(payload.journey_id).trim()
+    : null;
+
+const journey_id =
+  incomingJourneyId ||
+  (existing && /^[0-9a-fA-F-]{36}$/.test(existing) ? existing : randomUUID());
 
   // 2) Source snapshot from page_url (if present)
   const derived = page_url ? getUtmFromUrl(page_url) : { utm: null, partner_ids: null };

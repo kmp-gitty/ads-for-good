@@ -25,12 +25,59 @@ export async function GET(_req: NextRequest) {
     return attr || "/api/chapter/collect";
   }
 
+    function getBufferKey(clientKey) {
+    return "chapter_event_buffer_" + clientKey;
+  }
+
+  function readBuffer(clientKey) {
+    try {
+      var raw = localStorage.getItem(getBufferKey(clientKey));
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function writeBuffer(clientKey, events) {
+    try {
+      localStorage.setItem(getBufferKey(clientKey), JSON.stringify(events || []));
+    } catch (e) {}
+  }
+
+  function pushToBuffer(clientKey, body) {
+    try {
+      var events = readBuffer(clientKey);
+      events.push(body);
+      writeBuffer(clientKey, events);
+    } catch (e) {}
+  }
+
+  function removeFromBuffer(clientKey, matchId) {
+    try {
+      var events = readBuffer(clientKey);
+      var next = [];
+      for (var i = 0; i < events.length; i++) {
+        if (!events[i] || events[i]._buffer_id !== matchId) {
+          next.push(events[i]);
+        }
+      }
+      writeBuffer(clientKey, next);
+    } catch (e) {}
+  }
+
   var clientKey = getClientKey();
   var collectUrl = getCollectUrl();
 
-  function send(eventName, props) { if (!clientKey) return;
+    function send(eventName, props) {
+    if (!clientKey) return;
+
     try {
       var body = {
+        _buffer_id: (window.crypto && window.crypto.randomUUID)
+          ? window.crypto.randomUUID()
+          : String(Date.now()) + "_" + String(Math.random()).slice(2),
         client_key: clientKey,
         event_name: eventName,
         page_url: window.location.href,
@@ -40,13 +87,48 @@ export async function GET(_req: NextRequest) {
         consent_mode: "opt_out"
       };
 
+      pushToBuffer(clientKey, body);
+
       fetch(collectUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         keepalive: true,
         body: JSON.stringify(body)
-      }).catch(function () {});
+      })
+        .then(function (res) {
+          if (res && (res.ok || res.status === 204)) {
+            removeFromBuffer(clientKey, body._buffer_id);
+          }
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+
+    function replayBufferedEvents() {
+    try {
+      if (!clientKey) return;
+
+      var events = readBuffer(clientKey);
+      if (!events || !events.length) return;
+
+      for (var i = 0; i < events.length; i++) {
+        (function (bufferedBody) {
+          fetch(collectUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            keepalive: true,
+            body: JSON.stringify(bufferedBody)
+          })
+            .then(function (res) {
+              if (res && (res.ok || res.status === 204)) {
+                removeFromBuffer(clientKey, bufferedBody._buffer_id);
+              }
+            })
+            .catch(function () {});
+        })(events[i]);
+      }
     } catch (e) {}
   }
 
@@ -85,7 +167,9 @@ export async function GET(_req: NextRequest) {
     }
   };
 
-  window.ChapterPixel = api;
+    window.ChapterPixel = api;
+
+  replayBufferedEvents();
 
   for (var i = 0; i < queue.length; i++) {
     api.push(queue[i]);

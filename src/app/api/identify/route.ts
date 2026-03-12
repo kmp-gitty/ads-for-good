@@ -40,11 +40,18 @@ const effective_previous_identity_key =
   if (!client_key) return NextResponse.json({ error: "Missing client_key" }, { status: 400 });
   if (!identity_key) return NextResponse.json({ error: "Missing identity_key" }, { status: 400 });
 
-  // Get or issue journey cookie (same pattern as /api/pixel)
-  const cookieName = `up_journey_${client_key}`;
-  const existing = req.cookies.get(cookieName)?.value || null;
-  const journey_id =
-    existing && /^[0-9a-fA-F-]{36}$/.test(existing) ? existing : randomUUID();
+ // Get or issue journey ID: prefer incoming payload, then cookie, then generate
+const cookieName = `up_journey_${client_key}`;
+const existing = req.cookies.get(cookieName)?.value || null;
+
+const incomingJourneyId =
+  payload?.journey_id && /^[0-9a-fA-F-]{36}$/.test(String(payload.journey_id).trim())
+    ? String(payload.journey_id).trim()
+    : null;
+
+const journey_id =
+  incomingJourneyId ||
+  (existing && /^[0-9a-fA-F-]{36}$/.test(existing) ? existing : randomUUID());
 
   // Ensure journey exists (best effort)
   const { data: existingJourney } = await chapterSchemas
