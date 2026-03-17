@@ -40,6 +40,22 @@ export default function RootLayout({
             gtag('config', 'G-3N64Z7ZSQK');
           `}
         </Script>
+
+         {/* Unified Pixel v1 (first-party, site-wide) */}
+         <Script
+          src="/up.js"
+          strategy="afterInteractive"
+          data-client-key="adsforgood_local"
+          data-vertical="AFG_SITE"
+          // optional overrides:
+          // data-endpoint="/api/pixel"
+          // data-identify-endpoint="/api/identify"
+          // data-scroll="25,50,75,90"
+          // data-click="true"
+          // data-forms="true"
+          // data-spa="true"
+        />
+        
       </head>
 
       <body
