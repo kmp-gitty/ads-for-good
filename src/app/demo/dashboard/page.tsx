@@ -1,5 +1,6 @@
-// /src/app/demo/dashboard/page.tsx
-import React from "react";
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
 
 type TouchRow = {
   channel: string;
@@ -23,11 +24,8 @@ type DashboardJSON = {
     avg_touchpoints: number | null;
     avg_unique_channels: number | null;
   };
-
-  // ✅ NEW: snapshot returns these
   first_touch?: TouchRow[];
   last_touch?: TouchRow[];
-
   linear_attribution?: Array<{
     channel: string;
     contributing_chapters: number;
@@ -64,6 +62,10 @@ type DashboardJSON = {
     total_value: number;
     currency: string | null;
   }>;
+};
+
+type SnapshotResponse = {
+  dashboard_json?: DashboardJSON;
 };
 
 function fmtCurrency(amount: number | null | undefined, currency?: string | null) {
@@ -128,69 +130,88 @@ function SectionTitle({ title, right }: { title: string; right?: React.ReactNode
   );
 }
 
-export default async function DemoDashboardPage({
-  searchParams,
-}: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const sp = (await searchParams) || {};
-  const clientKeyRaw = sp.client_key;
-  const client_key =
-    (Array.isArray(clientKeyRaw) ? clientKeyRaw[0] : clientKeyRaw) || "adsforgood_local";
+export default function DemoDashboardPage() {
+  const [data, setData] = useState<DashboardJSON | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loadedAt, setLoadedAt] = useState<string | null>(null);
 
-  const baseUrl =
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`) ||
-    "http://localhost:3000";
+  const client_key = useMemo(() => {
+    if (typeof window === "undefined") return "adsforgood_prod";
+    const sp = new URLSearchParams(window.location.search);
+    return sp.get("client_key") || "adsforgood_prod";
+  }, []);
 
-  const res = await fetch(
-    `/api/demo/snapshot?client_key=${encodeURIComponent(client_key)}`,
-    { cache: "no-store" }
-  );
+  useEffect(() => {
+    let cancelled = false;
 
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
+    async function load() {
+      try {
+        setError(null);
+
+        const res = await fetch(
+            `https://ads4good.com/api/demo/snapshot?client_key=${encodeURIComponent(client_key)}`,
+            { cache: "no-store" }
+          );
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(`status: ${res.status} ${res.statusText}\n\n${txt}`);
+        }
+
+        const payload = (await res.json()) as SnapshotResponse;
+
+        if (!cancelled) {
+          setData(payload.dashboard_json || null);
+          setLoadedAt(new Date().toISOString());
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err?.message || "Unknown error");
+          setData(null);
+          setLoadedAt(new Date().toISOString());
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client_key]);
+
+  if (error) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-10">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
           <div className="text-sm font-extrabold text-red-800">Dashboard fetch failed</div>
-          <div className="mt-2 text-xs text-red-800">
-            status: {res.status} {res.statusText}
-          </div>
-          {txt ? (
-            <pre className="mt-3 overflow-auto rounded-xl border border-red-200 bg-white p-3 text-xs text-red-900">
-              {txt}
-            </pre>
+          <pre className="mt-3 overflow-auto rounded-xl border border-red-200 bg-white p-3 text-xs text-red-900 whitespace-pre-wrap">
+            {error}
+          </pre>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-10">
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5">
+          <div className="text-sm font-extrabold text-neutral-900">Loading dashboard…</div>
+          {loadedAt ? (
+            <div className="mt-2 text-xs text-neutral-500">Last attempt: {loadedAt}</div>
           ) : null}
         </div>
       </div>
     );
   }
 
-  const payload = (await res.json()) as { dashboard_json?: DashboardJSON };
-  const d = payload.dashboard_json;
-
-  if (!d) {
-    return (
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <div className="rounded-2xl border border-neutral-200 bg-white p-5">
-          <div className="text-sm font-extrabold text-neutral-900">No dashboard_json returned</div>
-          <div className="mt-2 text-xs text-neutral-600">
-            Check that <code className="rounded bg-neutral-100 px-1">dashboard_snapshot_v1</code>{" "}
-            returns a row for client_key:{" "}
-            <code className="rounded bg-neutral-100 px-1">{client_key}</code>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  const d = data;
   const currency = d.kpi_tiles?.currency || "USD";
 
   return (
     <div className="min-h-screen bg-neutral-50">
       <div className="mx-auto max-w-6xl px-4 py-8">
-        {/* Header */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="text-xs font-semibold tracking-wide text-neutral-500">
@@ -202,6 +223,9 @@ export default async function DemoDashboardPage({
             <div className="mt-1 text-xs text-neutral-500">
               client_key: <span className="font-semibold text-neutral-700">{client_key}</span>
             </div>
+            {loadedAt ? (
+              <div className="mt-1 text-xs text-neutral-400">Loaded: {loadedAt}</div>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2">
@@ -212,7 +236,7 @@ export default async function DemoDashboardPage({
               Refresh
             </a>
             <a
-              href={`/demo/snapshot?client_key=${encodeURIComponent(client_key)}`}
+              href={`/api/demo/snapshot?client_key=${encodeURIComponent(client_key)}`}
               className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-100"
             >
               View JSON
@@ -220,7 +244,6 @@ export default async function DemoDashboardPage({
           </div>
         </div>
 
-        {/* KPI Tiles */}
         <div className="mt-6">
           <SectionTitle title="Marketing KPIs" />
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -238,7 +261,6 @@ export default async function DemoDashboardPage({
           </div>
         </div>
 
-        {/* Journey Tiles */}
         <div className="mt-8">
           <SectionTitle title="Journeys & Chapters" />
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -246,7 +268,6 @@ export default async function DemoDashboardPage({
             <Card title="Anon Journeys" value={fmtNumber(d.journey_tiles.anon_journeys)} />
             <Card title="ID’d Journeys" value={fmtNumber(d.journey_tiles.idd_journeys)} />
             <Card title="Chapter Count" value={fmtNumber(d.journey_tiles.chapter_count)} />
-
             <Card
               title="Avg Chapter Length"
               value={fmtDuration(d.journey_tiles.avg_chapter_seconds)}
@@ -256,13 +277,18 @@ export default async function DemoDashboardPage({
                   : undefined
               }
             />
-            <Card title="Avg Touchpoints / Chapter" value={fmtNumber(d.journey_tiles.avg_touchpoints, 2)} />
-            <Card title="Avg Unique Channels / Chapter" value={fmtNumber(d.journey_tiles.avg_unique_channels, 2)} />
+            <Card
+              title="Avg Touchpoints / Chapter"
+              value={fmtNumber(d.journey_tiles.avg_touchpoints, 2)}
+            />
+            <Card
+              title="Avg Unique Channels / Chapter"
+              value={fmtNumber(d.journey_tiles.avg_unique_channels, 2)}
+            />
             <div className="hidden lg:block" />
           </div>
         </div>
 
-        {/* Top Channels (First/Last Touch) */}
         <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
             <SectionTitle title="Top 5 Chapter Start Channels (First Touch)" />
@@ -327,7 +353,6 @@ export default async function DemoDashboardPage({
           </div>
         </div>
 
-        {/* Linear attribution */}
         <div className="mt-8 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <SectionTitle title="Channel Table (Linear Attribution)" />
           <div className="mt-3 overflow-auto">
@@ -352,9 +377,15 @@ export default async function DemoDashboardPage({
                       {fmtCurrency(r.attributed_revenue, currency)}
                     </td>
                     <td className="py-2 text-right">{fmtPct(r.attributed_pct_of_all)}</td>
-                    <td className="py-2 text-right">{fmtCurrency(r.channel_chapter_revenue, currency)}</td>
-                    <td className="py-2 text-right">{fmtPct(r.attributed_pct_of_channel_chapters)}</td>
-                    <td className="py-2 text-right">{fmtNumber(r.avg_other_channels_per_chapter, 2)}</td>
+                    <td className="py-2 text-right">
+                      {fmtCurrency(r.channel_chapter_revenue, currency)}
+                    </td>
+                    <td className="py-2 text-right">
+                      {fmtPct(r.attributed_pct_of_channel_chapters)}
+                    </td>
+                    <td className="py-2 text-right">
+                      {fmtNumber(r.avg_other_channels_per_chapter, 2)}
+                    </td>
                   </tr>
                 ))}
                 {(d.linear_attribution || []).length === 0 ? (
@@ -369,7 +400,6 @@ export default async function DemoDashboardPage({
           </div>
         </div>
 
-        {/* Correlation/Lift */}
         <div className="mt-8 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <SectionTitle title="Correlation / Lift (V1)" right="Directional only — watch sample sizes" />
           <div className="mt-3 overflow-auto">
@@ -396,10 +426,14 @@ export default async function DemoDashboardPage({
                       {r.avg_revenue_with == null ? "—" : fmtCurrency(r.avg_revenue_with, currency)}
                     </td>
                     <td className="py-2 text-right">
-                      {r.avg_revenue_without == null ? "—" : fmtCurrency(r.avg_revenue_without, currency)}
+                      {r.avg_revenue_without == null
+                        ? "—"
+                        : fmtCurrency(r.avg_revenue_without, currency)}
                     </td>
                     <td className="py-2 text-right">{fmtPct(r.lift_pct_vs_without)}</td>
-                    <td className="py-2 text-right">{r.z_score == null ? "—" : fmtNumber(r.z_score, 4)}</td>
+                    <td className="py-2 text-right">
+                      {r.z_score == null ? "—" : fmtNumber(r.z_score, 4)}
+                    </td>
                     <td className="py-2 pr-1 text-right">
                       <span className="inline-flex rounded-full border border-neutral-300 bg-neutral-50 px-2 py-1 text-xs font-semibold text-neutral-700">
                         {r.confidence_flag || "—"}
@@ -419,7 +453,6 @@ export default async function DemoDashboardPage({
           </div>
         </div>
 
-        {/* Top paths */}
         <div className="mt-8 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <SectionTitle title="Top 5 Chapter Routes (Start → Finish)" />
           <div className="mt-3 overflow-auto">
@@ -436,8 +469,13 @@ export default async function DemoDashboardPage({
               </thead>
               <tbody>
                 {(d.top5_chapter_paths || []).map((r, i) => (
-                  <tr key={`${r.boundary_event_name}-${i}`} className="border-t border-neutral-200 align-top">
-                    <td className="py-2 pr-3 font-semibold text-neutral-900">{r.boundary_event_name}</td>
+                  <tr
+                    key={`${r.boundary_event_name}-${i}`}
+                    className="border-t border-neutral-200 align-top"
+                  >
+                    <td className="py-2 pr-3 font-semibold text-neutral-900">
+                      {r.boundary_event_name}
+                    </td>
                     <td className="py-2 pr-3 text-neutral-800">
                       <div className="max-w-[900px] whitespace-pre-wrap break-words">{r.path}</div>
                     </td>

@@ -48,7 +48,7 @@ export default function DemoPage() {
   const [error, setError] = useState<string | null>(null);
   const [loadedAt] = useState(() => new Date().toISOString());
 
-  const clientKey = "adsforgood_local";
+  const clientKey = "adsforgood_prod";
 
   useEffect(() => {
     let timer: any;
