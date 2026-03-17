@@ -92,19 +92,23 @@ export async function POST(req: NextRequest) {
   );
 
   const email = payload.email ? normalizeEmail(payload.email) : null;
-const emailHash = email ? sha256(email) : null;
+  const emailHash =
+    payload.email_hash
+      ? String(payload.email_hash).trim()
+      : email
+        ? sha256(email)
+        : null;
 
 const rootIdentityKey: string =
   (payload.client_identity_key || "").trim() ||
   (payload.anonymous_id || "").trim() ||
   (payload.customer_id || "").trim() ||
-  (payload.email_hash || "").trim() ||
-  (email ? `email_sha256:${emailHash}` : "");
+  (emailHash ? `email_sha256:${emailHash}` : "");
 
   const lookupKey = emailHash ? `email_sha256:${emailHash}` : rootIdentityKey;
 
 // If we have BOTH an anon/browser identity and an email, create deterministic alias edge
-if (email) {
+if (emailHash) {
     const emailKey = `email_sha256:${emailHash}`;
     const fromKey = (payload.client_identity_key || "").trim() || (payload.anonymous_id || "").trim();
   
@@ -134,7 +138,7 @@ const { data: canon } = await chapterSchemas
   .from("identity_canon")
   .select("canonical_identity_key")
   .eq("client_key", clientKey)
-  .eq("root_identity_key", lookupKey)
+  .eq("identity_key", lookupKey)
   .maybeSingle();
 
 const resolvedIdentityKey = canon?.canonical_identity_key ?? lookupKey;
@@ -157,7 +161,7 @@ const identityReason = email ? "explicit_identify_call" : "client_previous_ident
     value: payload.value,
     currency: payload.currency,
 
-    email_hash: payload.email_hash ?? null,
+    email_hash: emailHash ?? null,
     customer_id: payload.customer_id ?? null,
     client_identity_key: payload.client_identity_key ?? null,
     anonymous_id: payload.anonymous_id ?? null,

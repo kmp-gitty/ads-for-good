@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
   .from("identity_canon")
     .select("canonical_identity_key")
     .eq("client_key", clientKey)
-    .eq("root_identity_key", lookupKey)
+    .eq("identity_key", lookupKey)
     .maybeSingle();
 
   const resolvedIdentityKey = canon?.canonical_identity_key ?? lookupKey;
