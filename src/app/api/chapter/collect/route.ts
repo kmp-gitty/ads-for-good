@@ -53,5 +53,27 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify(body),
   });
 
-  return pixelPost(forwarded);
+  const res = await pixelPost(forwarded);
+
+const newHeaders = new Headers(res.headers);
+newHeaders.set("Access-Control-Allow-Origin", "*");
+newHeaders.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+newHeaders.set("Access-Control-Allow-Headers", "Content-Type");
+
+return new NextResponse(res.body, {
+  status: res.status,
+  headers: newHeaders,
+});
+
 }
+
+export async function OPTIONS() {
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+  }
