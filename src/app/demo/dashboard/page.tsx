@@ -144,7 +144,7 @@ export default async function DemoDashboardPage({
     "http://localhost:3000";
 
   const res = await fetch(
-    `${baseUrl}/demo/snapshot?client_key=${encodeURIComponent(client_key)}`,
+    `/api/demo/snapshot?client_key=${encodeURIComponent(client_key)}`,
     { cache: "no-store" }
   );
 
