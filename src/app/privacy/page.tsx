@@ -45,7 +45,7 @@ export const metadata = {
               <span className="font-semibold">Cookies and similar technologies:</span>{" "}
               We may use cookies/local storage and similar technologies to remember
               preferences and support measurement. You can usually control cookies
-              through your browser settings.
+              through your browser settings. These technologies may include first-party scripts, pixels, or APIs that collect event-level interaction data for measurement purposes.
             </p>
           </div>
         </section>
@@ -78,8 +78,11 @@ export const metadata = {
             <p>
               We may also use first-party identifiers on a client’s site when a
               user voluntarily provides them (for example, logging in or making a
-              purchase). In those cases, identifiers should be hashed before
+              purchase). In those cases,  bidentifiers are hashed or otherwise pseudonymized before
               storage and used for measurement, attribution, and fraud prevention.
+            </p>
+            <p>
+            We may operate measurement technology on behalf of our clients. When implemented on a client’s website, this technology may collect interaction data (such as page views, clicks, and conversions) and may associate this activity with identifiers provided by the client (for example, a hashed email or customer ID). This data is used solely for measurement, attribution, and improving marketing effectiveness, and is processed in accordance with applicable agreements and privacy laws.
             </p>
           </div>
         </section>
@@ -106,6 +109,9 @@ export const metadata = {
             <p>
               We may disclose information if required by law, to protect rights
               and safety, or to investigate fraud/security issues.
+            </p>
+            <p>
+            In certain cases, we act as a service provider or processor on behalf of our clients. In those situations, we process information under the direction of the client and in accordance with their privacy policies and applicable data protection laws.
             </p>
           </div>
         </section>
