@@ -148,10 +148,15 @@ export default function DemoDashboardPage() {
       try {
         setError(null);
 
-        const res = await fetch(
-            `https://ads4good.com/api/demo/snapshot?client_key=${encodeURIComponent(client_key)}`,
-            { cache: "no-store" }
-          );
+        const baseUrl =
+  process.env.NEXT_PUBLIC_BASE_URL ||
+  (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`) ||
+  "http://localhost:3000";
+
+const res = await fetch(
+  `${baseUrl}/api/demo/snapshot?client_key=${encodeURIComponent(client_key)}`,
+  { cache: "no-store" }
+);
 
         if (!res.ok) {
           const txt = await res.text().catch(() => "");
