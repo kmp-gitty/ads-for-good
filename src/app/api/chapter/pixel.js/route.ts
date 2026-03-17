@@ -180,6 +180,102 @@ export async function GET(_req: NextRequest) {
     page_type: "site_page"
   });
 
+  var scrollMarks = { 25: false, 50: false, 75: false, 90: false };
+
+  function getScrollPercent() {
+    var doc = document.documentElement;
+    var body = document.body;
+    var scrollTop = window.pageYOffset || doc.scrollTop || body.scrollTop || 0;
+    var scrollHeight = Math.max(
+      body.scrollHeight, doc.scrollHeight,
+      body.offsetHeight, doc.offsetHeight,
+      body.clientHeight, doc.clientHeight
+    );
+    var winHeight = window.innerHeight || doc.clientHeight || 0;
+
+    var trackable = scrollHeight - winHeight;
+    if (trackable <= 0) return 100;
+
+    return Math.round((scrollTop / trackable) * 100);
+  }
+
+  function handleScrollDepth() {
+    var pct = getScrollPercent();
+    [25, 50, 75, 90].forEach(function (mark) {
+      if (!scrollMarks[mark] && pct >= mark) {
+        scrollMarks[mark] = true;
+        api.track("scroll_depth", { percent: mark });
+      }
+    });
+  }
+
+  window.addEventListener("scroll", handleScrollDepth, { passive: true });
+
+var hoverTimer = null;
+var hoverTarget = null;
+
+function getClickableLabel(el) {
+  if (!el) return null;
+
+  return (
+    el.innerText?.trim()?.slice(0, 100) ||
+    el.getAttribute("aria-label") ||
+    el.getAttribute("data-label") ||
+    el.id ||
+    el.className ||
+    el.tagName
+  );
+}
+
+document.addEventListener("mouseover", function (e) {
+  var el = e.target.closest("a, button");
+
+  if (!el) return;
+
+  hoverTarget = el;
+
+  hoverTimer = setTimeout(function () {
+    if (hoverTarget === el) {
+      api.track("hover_intent", {
+        label: getClickableLabel(el),
+        tag: el.tagName
+      });
+    }
+  }, 500); // threshold
+});
+
+document.addEventListener("mouseout", function (e) {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
+  hoverTarget = null;
+});
+
+var timeMarks = { 10: false, 30: false, 60: false };
+var activeSeconds = 0;
+
+setInterval(function () {
+  if (document.visibilityState !== "visible") return;
+
+  activeSeconds += 1;
+
+  if (activeSeconds >= 10 && !timeMarks[10]) {
+    timeMarks[10] = true;
+    api.track("time_on_page", { seconds: 10 });
+  }
+
+  if (activeSeconds >= 30 && !timeMarks[30]) {
+    timeMarks[30] = true;
+    api.track("time_on_page", { seconds: 30 });
+  }
+
+  if (activeSeconds >= 60 && !timeMarks[60]) {
+    timeMarks[60] = true;
+    api.track("time_on_page", { seconds: 60 });
+  }
+}, 1000);
+
   document.addEventListener("visibilitychange", function () {
     api.track("visibility_change", {
       state: document.visibilityState
