@@ -114,6 +114,13 @@ const journey_id =
   // Upsert identity link (insert or bump last_linked_at)
   const now = new Date().toISOString();
 
+  console.log("identify route canon inputs:", {
+    client_key,
+    identity_key,
+    effective_previous_identity_key,
+    now,
+  });
+
   // If the browser told us a previous identity, record an alias mapping (best-effort)
   if (effective_previous_identity_key && effective_previous_identity_key !== identity_key) {
     await chapterSchemas.identity(supabase).from("identity_aliases").insert({
@@ -134,31 +141,42 @@ const journey_id =
 // Step 3 — Canonical resolution update
 
 // Always make the NEW identity its own canonical if missing
-await chapterSchemas
+const { error: canonSelfError } = await chapterSchemas
   .identity(supabase)
   .from("identity_canon")
-  .upsert({
-    client_key,
-    identity_key,
-    canonical_identity_key: identity_key,
-    updated_at: now,
-  }, { onConflict: "client_key,identity_key" });
+  .upsert(
+    {
+      client_key,
+      identity_key,
+      canonical_identity_key: identity_key,
+      updated_at: now,
+    },
+    { onConflict: "client_key,identity_key" }
+  );
+
+if (canonSelfError) {
+  console.error("identity_canon self upsert error:", canonSelfError);
+}
 
 // If there was a previous identity, point it to the new canonical
 if (effective_previous_identity_key) {
     // identity_canon upsert (previous identity)
-await chapterSchemas
-.identity(supabase)
-.from("identity_canon")
-.upsert(
-  {
-    client_key,
-    identity_key: effective_previous_identity_key,
-    canonical_identity_key: identity_key,
-    updated_at: now,
-  },
-  { onConflict: "client_key,identity_key" }
-);
+    const { error: canonPrevError } = await chapterSchemas
+    .identity(supabase)
+    .from("identity_canon")
+    .upsert(
+      {
+        client_key,
+        identity_key: effective_previous_identity_key,
+        canonical_identity_key: identity_key,
+        updated_at: now,
+      },
+      { onConflict: "client_key,identity_key" }
+    );
+  
+  if (canonPrevError) {
+    console.error("identity_canon previous upsert error:", canonPrevError);
+  }
   }
 
   }  
