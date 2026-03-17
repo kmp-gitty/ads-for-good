@@ -3,6 +3,33 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { chapterSchemas } from "@/app/lib/chapter-db";
 
+const ALLOWED_ORIGIN = "https://eosfabrics.com";
+
+function withCors(res: NextResponse) {
+  const headers = new Headers(res.headers);
+  headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+  headers.set("Access-Control-Allow-Credentials", "true");
+  headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  headers.set("Access-Control-Allow-Headers", "Content-Type");
+
+  return new NextResponse(res.body, {
+    status: res.status,
+    headers,
+  });
+}
+
+export async function OPTIONS() {
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
+    });
+  }
+
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -19,7 +46,9 @@ export async function POST(req: NextRequest) {
   try {
     payload = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return withCors(
+        NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+      );
   }
 
   const client_key = safeString(payload?.client_key);
@@ -37,8 +66,13 @@ const effective_previous_identity_key =
   const traits =
     payload?.traits && typeof payload.traits === "object" ? payload.traits : null;
 
-  if (!client_key) return NextResponse.json({ error: "Missing client_key" }, { status: 400 });
-  if (!identity_key) return NextResponse.json({ error: "Missing identity_key" }, { status: 400 });
+  if (!client_key) return withCors(
+    NextResponse.json({ error: "Missing client_key" }, { status: 400 })
+  );
+
+  if (!identity_key) return withCors(
+  NextResponse.json({ error: "Missing identity_key" }, { status: 400 })
+);
 
  // Get or issue journey ID: prefer incoming payload, then cookie, then generate
 const cookieName = `up_journey_${client_key}`;
@@ -243,5 +277,5 @@ res.cookies.set(anonCookieName, anonCookieValue, {
   maxAge: 60 * 60 * 24 * 365,
 });
 
-  return res;
+return withCors(res);
 }

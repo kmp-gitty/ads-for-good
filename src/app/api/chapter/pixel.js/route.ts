@@ -25,6 +25,12 @@ export async function GET(_req: NextRequest) {
     return attr || "/api/chapter/collect";
   }
 
+   function getIdentifyUrl() {
+    var s = getCurrentScript();
+    var attr = s && s.getAttribute("data-identify-url");
+    return attr || "/api/identify";
+  }
+
     function getBufferKey(clientKey) {
     return "chapter_event_buffer_" + clientKey;
   }
@@ -69,6 +75,7 @@ export async function GET(_req: NextRequest) {
 
   var clientKey = getClientKey();
   var collectUrl = getCollectUrl();
+  var identifyUrl = getIdentifyUrl();
 
     function send(eventName, props) {
     if (!clientKey) return;
@@ -139,7 +146,7 @@ export async function GET(_req: NextRequest) {
     },
     identify: function (props) {
       try {
-        fetch("/api/identify", {
+        fetch(identifyUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
