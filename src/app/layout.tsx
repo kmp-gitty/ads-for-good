@@ -5,6 +5,7 @@ import Script from "next/script";
 import { NavBar } from "@/components/NavBar";
 import { Footer } from "@/components/Footer";
 import ConsentBanner from "@/components/ConsentBanner";
+import ChapterLoader from "@/components/ChapterLoader";
 
 
 const lexend = Lexend({
@@ -50,6 +51,7 @@ export default function RootLayout({
         {children}
         <Footer />
         <ConsentBanner />
+        <ChapterLoader />
       </body>
     </html>
   );

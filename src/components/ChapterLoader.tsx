@@ -8,7 +8,7 @@ export default function ChapterLoader() {
   useEffect(() => {
     try {
       const consent = localStorage.getItem(CONSENT_KEY);
-
+      
       if (consent === "declined") return;
 
       const existing = document.querySelector('script[data-chapter-loader="true"]');
