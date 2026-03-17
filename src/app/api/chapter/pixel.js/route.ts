@@ -92,7 +92,6 @@ export async function GET(_req: NextRequest) {
       fetch(collectUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         keepalive: true,
         body: JSON.stringify(body)
       })
@@ -117,7 +116,6 @@ export async function GET(_req: NextRequest) {
           fetch(collectUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            credentials: "include",
             keepalive: true,
             body: JSON.stringify(bufferedBody)
           })
@@ -142,7 +140,6 @@ export async function GET(_req: NextRequest) {
         fetch("/api/identify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
           keepalive: true,
           body: JSON.stringify({
             client_key: clientKey,
