@@ -27,13 +27,12 @@ export async function POST(req: NextRequest) {
   const shopDomain = (req.headers.get("x-shopify-shop-domain") || "").trim();
   const topic = (req.headers.get("x-shopify-topic") || "").trim();
 
-  const shopifyClientSecret = process.env.SHOPIFY_API_SECRET;
-  if (!shopifyClientSecret) {
+  const shopifySecret = process.env.SHOPIFY_API_SECRET;
+  if (!shopifySecret) {
     return NextResponse.json({ error: "missing_shopify_secret" }, { status: 500 });
   }
 
-  const valid = verifyShopifyWebhook(rawBody, shopifyHmac, shopifyClientSecret);
-  if (!valid) {
+  if (!verifyShopifyWebhook(rawBody, shopifyHmac, shopifySecret)) {
     return NextResponse.json({ error: "invalid_shopify_hmac" }, { status: 401 });
   }
 
@@ -44,16 +43,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  // EOS-specific for now
+  // Only treat paid orders as purchases
+  const financialStatus = String(order?.financial_status || "").toLowerCase();
+  if (financialStatus !== "paid") {
+    return NextResponse.json(
+      {
+        status: "ignored",
+        reason: "order_not_paid",
+        financial_status: financialStatus || null,
+      },
+      { status: 200 }
+    );
+  }
+
   const clientKey = "eos_fabrics";
-  const afgSecretJson = process.env.AFG_CLIENT_SECRETS_JSON;
-  if (!afgSecretJson) {
+
+  const afgSecretsJson = process.env.AFG_CLIENT_SECRETS_JSON;
+  if (!afgSecretsJson) {
     return NextResponse.json({ error: "missing_afg_client_secrets" }, { status: 500 });
   }
 
   let afgSecret: string | null = null;
   try {
-    const parsed = JSON.parse(afgSecretJson) as Record<string, string>;
+    const parsed = JSON.parse(afgSecretsJson) as Record<string, string>;
     afgSecret = parsed[clientKey] ?? null;
   } catch {
     return NextResponse.json({ error: "invalid_afg_client_secrets_json" }, { status: 500 });
@@ -70,44 +82,47 @@ export async function POST(req: NextRequest) {
         ? normalizeEmail(order.customer.email)
         : null;
 
-  const currency =
-    order?.currency ||
-    order?.presentment_currency ||
-    null;
+  const currency = order?.currency || order?.presentment_currency || null;
 
   const totalPrice =
     order?.total_price != null && !Number.isNaN(Number(order.total_price))
       ? Number(order.total_price)
       : null;
 
+  const shipping =
+    order?.total_shipping_price_set?.shop_money?.amount != null
+      ? Number(order.total_shipping_price_set.shop_money.amount)
+      : order?.total_shipping_price_set?.presentment_money?.amount != null
+        ? Number(order.total_shipping_price_set.presentment_money.amount)
+        : null;
+
+  const tax =
+    order?.total_tax != null && !Number.isNaN(Number(order.total_tax))
+      ? Number(order.total_tax)
+      : null;
+
+  const coupon =
+    Array.isArray(order?.discount_codes) && order.discount_codes.length
+      ? order.discount_codes.map((d: any) => d.code).filter(Boolean).join(",")
+      : null;
+
   const purchasePayload = {
     client_key: clientKey,
-    event_name: "purchase",
     source_platform: "shopify",
-    event_id: order?.id ? `shopify_orders_paid_${String(order.id)}` : null,
+    event_id: order?.id ? `shopify_orders_create_paid_${String(order.id)}` : null,
     order_id: order?.id ? String(order.id) : null,
-    payment_id: order?.payment_gateway_names?.length
-      ? String(order.payment_gateway_names.join(","))
-      : null,
-    customer_id: order?.customer?.id ? `shopify_customer_${String(order.customer.id)}` : null,
-    email: email,
+    payment_id:
+      Array.isArray(order?.payment_gateway_names) && order.payment_gateway_names.length
+        ? order.payment_gateway_names.join(",")
+        : null,
+    customer_id: order?.customer?.id ? `shopify_customer_id:${String(order.customer.id)}` : null,
+    email,
     value: totalPrice,
-    currency: currency,
+    currency,
     event_ts: order?.processed_at || order?.updated_at || order?.created_at || new Date().toISOString(),
-    coupon:
-      Array.isArray(order?.discount_codes) && order.discount_codes.length
-        ? order.discount_codes.map((d: any) => d.code).filter(Boolean).join(",")
-        : null,
-    shipping:
-      order?.total_shipping_price_set?.shop_money?.amount != null
-        ? Number(order.total_shipping_price_set.shop_money.amount)
-        : order?.total_shipping_price_set?.presentment_money?.amount != null
-          ? Number(order.total_shipping_price_set.presentment_money.amount)
-          : null,
-    tax:
-      order?.total_tax != null && !Number.isNaN(Number(order.total_tax))
-        ? Number(order.total_tax)
-        : null,
+    coupon,
+    shipping,
+    tax,
     raw: {
       shop_domain: shopDomain,
       topic,
