@@ -124,7 +124,7 @@ if (emailHash) {
             to_identity_key: emailKey,
             confidence: 100,
             is_deterministic: true,
-            reason: "explicit_identify_call",
+            reason: "purchase_identify_call",
           },
           { onConflict: "client_key,from_identity_key,to_identity_key" }
         );
@@ -144,7 +144,7 @@ const { data: canon } = await chapterSchemas
 const resolvedIdentityKey = canon?.canonical_identity_key ?? lookupKey;
 
 const identityConfidence = email ? 100 : 70;
-const identityReason = email ? "explicit_identify_call" : "client_previous_identity";
+const identityReason = email ? "purchase_identify_call" : "client_previous_identity";
 
   const eventTs = payload.event_ts ? new Date(payload.event_ts) : new Date();
 
@@ -205,6 +205,31 @@ const identityReason = email ? "explicit_identify_call" : "client_previous_ident
       { status: 500 }
     );
   }
+
+    // Write identify audit event after successful purchase insert
+    if (resolvedIdentityKey) {
+        try {
+          await chapterSchemas
+            .ingest(supabase)
+            .from("pixel_events")
+            .insert({
+              ts: eventTs.toISOString(),
+              client_key: clientKey,
+              journey_id: null,
+              identity_key: resolvedIdentityKey,
+              event_name: "identify",
+              props: {
+                source: "purchase",
+                confidence: identityConfidence,
+                identity_reason: identityReason,
+                order_id: payload.order_id ?? null,
+                source_platform: payload.source_platform ?? null,
+              },
+            });
+        } catch (err) {
+          console.error("identify audit insert failed", err);
+        }
+      }
 
   return NextResponse.json(
     { status: "ok", purchase_event_id: inserted?.id ?? null, deduped: false },
