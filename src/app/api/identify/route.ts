@@ -277,7 +277,7 @@ const { error: updateError } = await chapterSchemas
   res.cookies.set(cookieName, journey_id, {
     httpOnly: false,
     secure: !isLocal,
-    sameSite: "lax",
+    sameSite: isLocal ? "lax" : "none",
     path: "/",
     maxAge: 60 * 60 * 24 * 180,
   });
@@ -290,7 +290,7 @@ const { error: updateError } = await chapterSchemas
 res.cookies.set(anonCookieName, anonCookieValue, {
   httpOnly: false,
   secure: !isLocal,
-  sameSite: "lax",
+  sameSite: isLocal ? "lax" : "none",
   path: "/",
   maxAge: 60 * 60 * 24 * 365,
 });

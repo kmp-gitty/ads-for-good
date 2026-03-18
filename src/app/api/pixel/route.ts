@@ -206,7 +206,7 @@ const journey_id =
     res.cookies.set(cookieName, journey_id, {
       httpOnly: false,
       secure: !isLocal,
-      sameSite: "lax",
+      sameSite: isLocal ? "lax" : "none",
       path: "/",
       maxAge: 60 * 60 * 24 * 180,
     });
@@ -214,7 +214,7 @@ const journey_id =
     res.cookies.set(anonCookieName, anon_id, {
       httpOnly: false,
       secure: !isLocal,
-      sameSite: "lax",
+      sameSite: isLocal ? "lax" : "none",
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
     });
@@ -411,7 +411,7 @@ function isDeterministicIdentityKey(k: string | null | undefined) {
   res.cookies.set(cookieName, journey_id, {
     httpOnly: false,
     secure: !isLocal,
-    sameSite: "lax",
+    sameSite: isLocal ? "lax" : "none",
     path: "/",
     maxAge: 60 * 60 * 24 * 180,
   });
@@ -419,7 +419,7 @@ function isDeterministicIdentityKey(k: string | null | undefined) {
   res.cookies.set(anonCookieName, anon_id, {
     httpOnly: false,
     secure: !isLocal,
-    sameSite: "lax",
+    sameSite: isLocal ? "lax" : "none",
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
   });
