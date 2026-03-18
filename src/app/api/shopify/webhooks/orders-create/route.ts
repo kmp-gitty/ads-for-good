@@ -23,19 +23,29 @@ function normalizeEmail(email: string): string {
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
+  console.log("SHOPIFY WEBHOOK HIT");
+
   const shopifyHmac = (req.headers.get("x-shopify-hmac-sha256") || "").trim();
   const shopDomain = (req.headers.get("x-shopify-shop-domain") || "").trim();
   const topic = (req.headers.get("x-shopify-topic") || "").trim();
+
+  console.log("shopify webhook headers", {
+    hasHmac: !!shopifyHmac,
+    shopDomain,
+    topic,
+  });
 
   const shopifySecret = process.env.SHOPIFY_API_SECRET;
   if (!shopifySecret) {
     return NextResponse.json({ error: "missing_shopify_secret" }, { status: 500 });
   }
 
+  console.log("has SHOPIFY_API_SECRET:", !!shopifySecret);
   if (!verifyShopifyWebhook(rawBody, shopifyHmac, shopifySecret)) {
     return NextResponse.json({ error: "invalid_shopify_hmac" }, { status: 401 });
   }
-
+  console.log("shopify webhook hmac verified");
+  
   let order: any;
   try {
     order = JSON.parse(rawBody);
@@ -59,17 +69,22 @@ export async function POST(req: NextRequest) {
   const clientKey = "eos_fabrics";
 
   const afgSecretsJson = process.env.AFG_CLIENT_SECRETS_JSON;
+
+  console.log("has AFG_CLIENT_SECRETS_JSON:", !!afgSecretsJson);
+  
   if (!afgSecretsJson) {
     return NextResponse.json({ error: "missing_afg_client_secrets" }, { status: 500 });
   }
 
   let afgSecret: string | null = null;
-  try {
-    const parsed = JSON.parse(afgSecretsJson) as Record<string, string>;
-    afgSecret = parsed[clientKey] ?? null;
-  } catch {
-    return NextResponse.json({ error: "invalid_afg_client_secrets_json" }, { status: 500 });
-  }
+try {
+  const parsed = JSON.parse(afgSecretsJson) as Record<string, string>;
+  console.log("parsed AFG secrets JSON successfully");
+  afgSecret = parsed[clientKey] ?? null;
+  console.log("has EOS client secret:", !!afgSecret);
+} catch {
+  return NextResponse.json({ error: "invalid_afg_client_secrets_json" }, { status: 500 });
+}
 
   if (!afgSecret) {
     return NextResponse.json({ error: "missing_afg_secret_for_client" }, { status: 500 });
