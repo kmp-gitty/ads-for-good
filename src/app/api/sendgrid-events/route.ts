@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
         email: e.email,
         event_type: e.event,
         url: e.url || null,
+        category: e.category?.[0] || null,
         event_ts: e.timestamp
           ? new Date(e.timestamp * 1000).toISOString()
           : new Date().toISOString(),
