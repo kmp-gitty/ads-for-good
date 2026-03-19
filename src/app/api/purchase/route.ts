@@ -36,6 +36,11 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function normalizeCartToken(token: unknown): string | null {
+    if (!token) return null;
+    return String(token).trim().split("?")[0] || null;
+  }
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
@@ -99,6 +104,8 @@ export async function POST(req: NextRequest) {
         ? sha256(email)
         : null;
 
+const eventTs = payload.event_ts ? new Date(payload.event_ts) : new Date();      
+
 const rootIdentityKey: string =
   (payload.client_identity_key || "").trim() ||
   (payload.anonymous_id || "").trim() ||
@@ -106,6 +113,7 @@ const rootIdentityKey: string =
   (emailHash ? `email_sha256:${emailHash}` : "");
 
   const lookupKey = emailHash ? `email_sha256:${emailHash}` : rootIdentityKey;
+  const purchaseCartToken = normalizeCartToken(payload?.raw?.order?.cart_token);
 
 // If we have BOTH an anon/browser identity and an email, create deterministic alias edge
 if (emailHash) {
@@ -131,6 +139,51 @@ if (emailHash) {
     }
   }
 
+  // If we have email identity + purchase cart token, try to stitch prior browser identity
+// by matching cart_token on view_cart / add_to_cart events.
+if (emailHash && purchaseCartToken) {
+    const emailKey = `email_sha256:${emailHash}`;
+  
+    const { data: cartMatches, error: cartMatchErr } = await chapterSchemas
+      .ingest(supabase)
+      .from("pixel_events")
+      .select("identity_key,event_name,ts,props")
+      .eq("client_key", clientKey)
+      .in("event_name", ["view_cart", "add_to_cart"])
+      .not("identity_key", "is", null)
+      .lte("ts", eventTs.toISOString())
+      .order("ts", { ascending: false })
+      .limit(25);
+  
+    if (cartMatchErr) {
+      console.error("cart token match lookup failed", cartMatchErr);
+    } else if (cartMatches?.length) {
+      const normalizedMatch = cartMatches.find((row: any) => {
+        const rowCartToken = normalizeCartToken(row?.props?.cart_token);
+        return rowCartToken === purchaseCartToken;
+      });
+  
+      const fromKey = normalizedMatch?.identity_key?.trim();
+  
+      if (fromKey && fromKey !== emailKey) {
+        await chapterSchemas
+          .identity(supabase)
+          .from("identity_aliases")
+          .upsert(
+            {
+              client_key: clientKey,
+              ts: new Date().toISOString(),
+              from_identity_key: fromKey,
+              to_identity_key: emailKey,
+              confidence: 100,
+              is_deterministic: true,
+              reason: "purchase_cart_token_bridge",
+            },
+            { onConflict: "client_key,from_identity_key,to_identity_key" }
+          );
+      }
+    }
+  }
 
 // Ask the DB for canonical identity (falls back to lookupKey if none)
 const { data: canon } = await chapterSchemas
@@ -145,8 +198,6 @@ const resolvedIdentityKey = canon?.canonical_identity_key ?? lookupKey;
 
 const identityConfidence = email ? 100 : 70;
 const identityReason = email ? "purchase_identify_call" : "client_previous_identity";
-
-  const eventTs = payload.event_ts ? new Date(payload.event_ts) : new Date();
 
   const purchaseRow = {
     client_key: clientKey,
