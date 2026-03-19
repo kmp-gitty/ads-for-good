@@ -114,6 +114,7 @@ const rootIdentityKey: string =
 
   const lookupKey = emailHash ? `email_sha256:${emailHash}` : rootIdentityKey;
   const purchaseCartToken = normalizeCartToken(payload?.raw?.order?.cart_token);
+  let bridgedFromIdentityKey: string | null = null;
 
 // If we have BOTH an anon/browser identity and an email, create deterministic alias edge
 if (emailHash) {
@@ -153,7 +154,7 @@ if (emailHash && purchaseCartToken) {
       .not("identity_key", "is", null)
       .lte("ts", eventTs.toISOString())
       .order("ts", { ascending: false })
-      .limit(25);
+      .limit(250);
   
     if (cartMatchErr) {
       console.error("cart token match lookup failed", cartMatchErr);
@@ -165,6 +166,10 @@ if (emailHash && purchaseCartToken) {
   
       const fromKey = normalizedMatch?.identity_key?.trim();
   
+      if (fromKey) {
+        bridgedFromIdentityKey = fromKey;
+      }
+
       if (fromKey && fromKey !== emailKey) {
         await chapterSchemas
           .identity(supabase)
@@ -186,12 +191,14 @@ if (emailHash && purchaseCartToken) {
   }
 
 // Ask the DB for canonical identity (falls back to lookupKey if none)
+const canonLookupKey = bridgedFromIdentityKey || lookupKey;
+
 const { data: canon } = await chapterSchemas
   .identity(supabase)
   .from("identity_canon")
   .select("canonical_identity_key")
   .eq("client_key", clientKey)
-  .eq("identity_key", lookupKey)
+  .eq("identity_key", canonLookupKey)
   .maybeSingle();
 
 const resolvedIdentityKey = canon?.canonical_identity_key ?? lookupKey;
