@@ -19,6 +19,7 @@ export type TouchRow = {
       avg_chapter_seconds: number | null;
       avg_touchpoints: number | null;
       avg_unique_channels: number | null;
+      recent_events_count?: number | null;
     };
     first_touch?: TouchRow[];
     last_touch?: TouchRow[];
@@ -57,6 +58,14 @@ export type TouchRow = {
       avg_time_to_boundary: string;
       total_value: number;
       currency: string | null;
+    }>;
+    top_event_names?: Array<{
+      event_name: string;
+      count: number;
+    }>;
+    top_page_paths?: Array<{
+      page_path: string;
+      count: number;
     }>;
   };
   

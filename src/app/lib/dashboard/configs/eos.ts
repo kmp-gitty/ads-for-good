@@ -11,7 +11,6 @@ export const eosDashboardConfig: DashboardConfig = {
     tiles: [
       { key: "revenue", label: "Revenue", type: "currency", source: "kpi_tiles", valueKey: "revenue" },
       { key: "purchases", label: "Purchases", type: "number", source: "kpi_tiles", valueKey: "purchases" },
-      { key: "leads", label: "Leads", type: "number", source: "kpi_tiles", valueKey: "leads" },
       { key: "aov", label: "AOV", type: "currency", source: "kpi_tiles", valueKey: "aov" },
     ],
   },
@@ -22,6 +21,7 @@ export const eosDashboardConfig: DashboardConfig = {
       { key: "anon_journeys", label: "Anon Journeys", type: "number", source: "journey_tiles", valueKey: "anon_journeys" },
       { key: "idd_journeys", label: "Known-Identity Journeys", type: "number", source: "journey_tiles", valueKey: "idd_journeys" },
       { key: "chapter_count", label: "Conversion Chapters", type: "number", source: "journey_tiles", valueKey: "chapter_count" },
+      { key: "recent_events_count", label: "Recent Events (7d)", type: "number", source: "journey_tiles", valueKey: "recent_events_count" },
       { key: "avg_chapter_seconds", label: "Avg Chapter Length", type: "duration", source: "journey_tiles", valueKey: "avg_chapter_seconds" },
       { key: "avg_touchpoints", label: "Avg Touchpoints / Chapter", type: "number", source: "journey_tiles", valueKey: "avg_touchpoints", digits: 2 },
       { key: "avg_unique_channels", label: "Avg Unique Channels / Chapter", type: "number", source: "journey_tiles", valueKey: "avg_unique_channels", digits: 2 },
@@ -36,7 +36,7 @@ export const eosDashboardConfig: DashboardConfig = {
   },
   showFirstTouch: true,
   showLastTouch: true,
-  showLinearAttribution: true,
-  showCorrelation: true,
-  showTopPaths: true,
+  showLinearAttribution: false,
+  showCorrelation: false,
+  showTopPaths: false,
 };

@@ -39,10 +39,10 @@ export default function DashboardShell({
           (process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`) ||
           "http://localhost:3000";
 
-        const res = await fetch(
-          `${baseUrl}/demo/snapshot?client_key=${encodeURIComponent(client_key)}`,
-          { cache: "no-store" }
-        );
+          const res = await fetch(
+            `${baseUrl}/demo/snapshot?client_key=${encodeURIComponent(client_key)}&lite=true`,
+            { cache: "no-store" }
+          );
 
         if (!res.ok) {
           const txt = await res.text().catch(() => "");

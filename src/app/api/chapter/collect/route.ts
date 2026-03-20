@@ -7,6 +7,46 @@ function safeClientKey(v: unknown): string | null {
   return s.length ? s : null;
 }
 
+function isBot(payload: any, req: NextRequest): boolean {
+  const ua = req.headers.get("user-agent") || "";
+
+  // 1. Known bot user agents
+  if (/bot|crawl|spider|headless|curl|wget/i.test(ua)) return true;
+
+  // 2. Missing browser basics
+  const hasUA = !!ua;
+  const hasLang = !!req.headers.get("accept-language");
+
+  if (!hasUA || !hasLang) return true;
+
+  // 3. Suspicious event patterns
+  if (!payload?.event_name) return true;
+
+  // 4. No page context (bots often skip this)
+  if (!payload?.page_url && !payload?.page_path) return true;
+
+  return false;
+}
+
+const ipHits = new Map<string, number[]>();
+
+function isRateLimited(req: NextRequest): boolean {
+  const forwarded = req.headers.get("x-forwarded-for") || "";
+  const ip = forwarded.split(",")[0]?.trim() || "unknown";
+
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const maxHits = 60;
+
+  const existing = ipHits.get(ip) || [];
+  const recent = existing.filter((t) => now - t < windowMs);
+
+  recent.push(now);
+  ipHits.set(ip, recent);
+
+  return recent.length > maxHits;
+}
+
 function getIp(req: NextRequest): string {
     return (
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -44,7 +84,7 @@ function getIp(req: NextRequest): string {
   
   export async function POST(req: NextRequest) {
     let body: any = null;
-  
+
     try {
       body = await req.json();
     } catch {
@@ -52,12 +92,29 @@ function getIp(req: NextRequest): string {
         NextResponse.json({ error: "invalid_json" }, { status: 400 })
       );
     }
+
+    if (isBot(body, req)) {
+      return NextResponse.json({ ok: true, ignored: "bot" });
+    }
+
+    const isInternal =
+    body?.email?.includes("@ads4good.com") ||
+    body?.utm?.utm_source === "internal" ||
+    body?.props?.is_internal === true;
+
+  if (isInternal) {
+    return NextResponse.json({ ok: true, ignored: "internal" });
+  }
   
     const client_key = safeClientKey(body?.client_key);
     if (!client_key) {
       return withCors(
         NextResponse.json({ error: "missing_client_key" }, { status: 400 })
       );
+    }
+
+    if (isRateLimited(req)) {
+      return NextResponse.json({ ok: true, ignored: "rate_limited" });
     }
   
     const ip = getIp(req);
@@ -87,4 +144,5 @@ function getIp(req: NextRequest): string {
   
     const res = await pixelPost(forwarded);
     return withCors(res);
+    
   }
