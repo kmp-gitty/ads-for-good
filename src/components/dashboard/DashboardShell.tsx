@@ -129,7 +129,7 @@ export default function DashboardShell({
               Refresh
             </a>
             <a
-              href={`/api/demo/snapshot?client_key=${encodeURIComponent(client_key)}`}
+              href={`/demo/snapshot?client_key=${encodeURIComponent(client_key)}&lite=true`}
               className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-semibold text-neutral-800 hover:bg-neutral-100"
             >
               View JSON
