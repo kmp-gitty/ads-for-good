@@ -109,46 +109,46 @@ export async function GET(req: NextRequest) {
 
         ingestApi
           .from("pixel_events")
+          .select("id", { count: "exact", head: true })
+          .eq("client_key", client_key)
+          .gte("ts", since)
           .not("page_path", "ilike", "/account%")
           .not("page_path", "ilike", "/challenge%")
           .not("page_path", "ilike", "/register%")
-          .not("page_path", "ilike", "/login%")
-          .select("id", { count: "exact", head: true })
-          .eq("client_key", client_key)
-          .gte("ts", since),
+          .not("page_path", "ilike", "/login%"),
 
         ingestApi
           .from("pixel_events")
+          .select("event_name")
+          .eq("client_key", client_key)
+          .gte("ts", since)
           .not("page_path", "ilike", "/account%")
           .not("page_path", "ilike", "/challenge%")
           .not("page_path", "ilike", "/register%")
           .not("page_path", "ilike", "/login%")
-          .select("event_name")
-          .eq("client_key", client_key)
-          .gte("ts", since)
           .limit(5000),
 
         ingestApi
           .from("pixel_events")
-          .not("page_path", "ilike", "/account%")
-          .not("page_path", "ilike", "/challenge%")
-          .not("page_path", "ilike", "/register%")
-          .not("page_path", "ilike", "/login%")
           .select("page_path")
           .eq("client_key", client_key)
           .gte("ts", since)
           .not("page_path", "is", null)
-          .limit(5000),
-
-        ingestApi
-          .from("pixel_events")
           .not("page_path", "ilike", "/account%")
           .not("page_path", "ilike", "/challenge%")
           .not("page_path", "ilike", "/register%")
           .not("page_path", "ilike", "/login%")
+          .limit(5000),
+
+        ingestApi
+          .from("pixel_events")
           .select("utm")
           .eq("client_key", client_key)
           .gte("ts", since)
+          .not("page_path", "ilike", "/account%")
+          .not("page_path", "ilike", "/challenge%")
+          .not("page_path", "ilike", "/register%")
+          .not("page_path", "ilike", "/login%")
           .limit(5000),
       ]);
 
