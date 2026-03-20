@@ -1,16 +1,21 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Lexend } from "next/font/google";
 import Script from "next/script";
 import { NavBar } from "@/components/NavBar";
 import { Footer } from "@/components/Footer";
 import ConsentBanner from "@/components/ConsentBanner";
 import ChapterLoader from "@/components/ChapterLoader";
+import { Geist, Geist_Mono } from "next/font/google";
 
 
-const lexend = Lexend({
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
-  variable: "--font-lexend",
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
@@ -45,7 +50,7 @@ export default function RootLayout({
       </head>
 
       <body
-        className={`${lexend.variable} font-lexend bg-white text-neutral-900`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <NavBar />
         {children}
