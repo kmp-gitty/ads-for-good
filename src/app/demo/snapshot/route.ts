@@ -248,13 +248,17 @@ export async function GET(req: NextRequest) {
 
   if (journey_id) {
     const { data: rows, error: evErr } = await chapterSchemas
-      .ingest(supabase)
-      .from("pixel_events")
-      .select("ts, event_name, page_path, page_url, referrer, utm, consent_status, consent_mode")
-      .eq("client_key", client_key)
-      .eq("journey_id", journey_id)
-      .order("ts", { ascending: false })
-      .limit(50);
+  .ingest(supabase)
+  .from("pixel_events")
+  .select("ts, event_name, page_path, page_url, referrer, utm, consent_status, consent_mode")
+  .eq("client_key", client_key)
+  .eq("journey_id", journey_id)
+  .not("page_path", "ilike", "/account%")
+  .not("page_path", "ilike", "/challenge%")
+  .not("page_path", "ilike", "/register%")
+  .not("page_path", "ilike", "/login%")
+  .order("ts", { ascending: false })
+  .limit(50);
 
     if (evErr) {
       console.error("snapshot events query error:", evErr);
