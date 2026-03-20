@@ -40,7 +40,7 @@ export default function DashboardShell({
           "http://localhost:3000";
 
           const res = await fetch(
-            `${baseUrl}/demo/snapshot?client_key=${encodeURIComponent(client_key)}&lite=true`,
+            `/demo/snapshot?client_key=${encodeURIComponent(client_key)}&lite=true`,
             { cache: "no-store" }
           );
 
@@ -61,6 +61,7 @@ export default function DashboardShell({
           setData(null);
           setLoadedAt(new Date().toISOString());
         }
+        console.error("dashboard fetch error", err);
       }
     }
 
