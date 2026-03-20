@@ -408,21 +408,21 @@ function isDeterministicIdentityKey(k: string | null | undefined) {
   const isLocal =
     req.nextUrl.hostname === "localhost" || req.nextUrl.hostname === "127.0.0.1";
 
-  res.cookies.set(cookieName, journey_id, {
-    httpOnly: false,
-    secure: !isLocal,
-    sameSite: isLocal ? "lax" : "none",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 180,
-  });
-
-  res.cookies.set(anonCookieName, anon_id, {
-    httpOnly: false,
-    secure: !isLocal,
-    sameSite: isLocal ? "lax" : "none",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  });
+    res.cookies.set(cookieName, journey_id, {
+      httpOnly: false,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+    
+    res.cookies.set(anonCookieName, anon_id, {
+      httpOnly: false,
+      secure: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    });
 
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
   return res;

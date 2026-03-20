@@ -58,16 +58,11 @@ function getIp(req: NextRequest): string {
   const ALLOWED_ORIGIN = "https://eosfabrics.com";
 
   function withCors(res: NextResponse) {
-    const headers = new Headers(res.headers);
-    headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
-    headers.set("Access-Control-Allow-Credentials", "true");
-    headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-    headers.set("Access-Control-Allow-Headers", "Content-Type");
-  
-    return new NextResponse(res.body, {
-      status: res.status,
-      headers,
-    });
+    res.headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+    res.headers.set("Access-Control-Allow-Credentials", "true");
+    res.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.headers.set("Access-Control-Allow-Headers", "Content-Type");
+    return res;
   }
   
   export async function OPTIONS() {
