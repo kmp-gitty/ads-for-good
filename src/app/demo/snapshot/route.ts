@@ -81,31 +81,19 @@ export async function GET(req: NextRequest) {
       const journeyApi = chapterSchemas.journey(supabase);
       const ingestApi = chapterSchemas.ingest(supabase);
 
+      const { data: journeyRows, error: journeyRowsErr } = await journeyApi
+      .from("journeys_filtered_v2")
+      .select("last_identity_key")
+      .eq("client_key", client_key)
+      .gte("first_seen", since)
+      .limit(100000);
+
       const [
-        journeysTotalRes,
-        anonJourneysRes,
-        iddJourneysRes,
         recentEventsRes,
         topEventsRes,
         topPagesRes,
         topPixelRowsRes,
       ] = await Promise.all([
-        journeyApi
-          .from("journeys_filtered_v2")
-          .select("id", { count: "exact", head: true })
-          .eq("client_key", client_key),
-
-        journeyApi
-          .from("journeys_filtered_v2")
-          .select("id", { count: "exact", head: true })
-          .eq("client_key", client_key)
-          .is("last_identity_key", null),
-
-        journeyApi
-          .from("journeys_filtered_v2")
-          .select("id", { count: "exact", head: true })
-          .eq("client_key", client_key)
-          .not("last_identity_key", "is", null),
 
         ingestApi
           .from("pixel_events")
@@ -153,9 +141,7 @@ export async function GET(req: NextRequest) {
       ]);
 
       const liteErrors = [
-        journeysTotalRes.error,
-        anonJourneysRes.error,
-        iddJourneysRes.error,
+        journeyRowsErr,
         recentEventsRes.error,
         topEventsRes.error,
         topPagesRes.error,
@@ -200,9 +186,9 @@ export async function GET(req: NextRequest) {
         ...dashboard_json,
         journey_tiles: {
           ...dashboard_json.journey_tiles,
-          journey_count: journeysTotalRes.count ?? 0,
-          anon_journeys: anonJourneysRes.count ?? 0,
-          idd_journeys: iddJourneysRes.count ?? 0,
+          journey_count: journeyRows?.length ?? 0,
+          anon_journeys: (journeyRows || []).filter((r: any) => !r.last_identity_key).length,
+          idd_journeys: (journeyRows || []).filter((r: any) => !!r.last_identity_key).length,
           recent_events_count: recentEventsRes.count ?? 0,
         },
         first_touch: topSources,
