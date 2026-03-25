@@ -1,5 +1,4 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
-import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
     title: "SEO Services for Small Businesses | Ads for Good",
@@ -19,6 +18,12 @@ export const metadata = {
     Small Business SEO Services: Organic & Local Search
   </h1>
 
+  <div className="mt-3 flex gap-2 text-xs font-medium">
+  <span className="bg-orange-100 text-orange-600 px-3 py-1 rounded-full">
+    Service Type: Marketing Project
+  </span>
+</div>
+
   <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
     There’s roughly 8.5 billion searches that happen on Google every day — not including other search engines
     like Bing or DuckDuckGo.
@@ -31,7 +36,7 @@ export const metadata = {
   {/* CTA */}
   <section id="primary-cta" className="mt-8">
   <InquiryLauncher
-    label="Make My Business More Visible"
+    label="Talk To Us About On-Demand Marketing Plans"
     defaultServices={["SEO Services"]}
     sourceLabel="SEO Services — Hero CTA"
     className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
@@ -56,7 +61,7 @@ export const metadata = {
                 <h2 className="text-sm font-semibold text-neutral-900">Let&apos;s Make You More Findable.</h2>
   
                 <p className="mt-3 text-xs sm:text-sm text-neutral-800 leading-relaxed">
-                  $250 for initial analysis and planning then $50 a month for local seo monitoring. National SEO efforts are priced based on need.
+                  We can help you rank more locally or nationally.
                   <br />
                   <br />
                   To get it right, we need to spend the time learning where you are, researching where you can go, and setting up tracking to make sure we get there.
@@ -311,33 +316,19 @@ export const metadata = {
       {/* LEFT COLUMN */}
       <div>
         <h2 className="text-2xl font-semibold text-neutral-900">
-          Looking for other services?
+          Looking for more marketing help?
         </h2>
 
         <p className="mt-3 text-sm sm:text-base text-neutral-800">
-          Look no further — just click one of our other options.
+          Find our on-demand marketing team plans here:
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">
           <a
-            href="https://www.ads4good.com/for-businesses#ideas-guidance"
+            href="https://www.ads4good.com/for-businesses"
             className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
           >
-            For Ideas & Guidance
-          </a>
-
-          <a
-            href="https://www.ads4good.com/for-businesses#ops-execution"
-            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-          >
-            For Operation & Execution
-          </a>
-
-          <a
-            href="https://www.ads4good.com/for-businesses/marketing-team"
-            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-          >
-            Be My Marketing Team
+            View All Plans
           </a>
         </div>
       </div>
@@ -381,12 +372,6 @@ export const metadata = {
 </section>
         </div>
 
-        <StickyCTA
-  targetId="primary-cta"
-  label="Make My Business More Visible"
-  defaultServices={["SEO Services"]}
-  sourceLabel="SEO Services Page — Sticky CTA"
-/>
       </main>
     );
   }

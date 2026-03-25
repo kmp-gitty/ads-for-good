@@ -1,5 +1,4 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
-import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
     title: "Website Builds - Website Updates | Ads for Good",
@@ -19,6 +18,12 @@ export const metadata = {
     Website Services: New, Existing, and Upkeep
   </h1>
 
+  <div className="mt-3 flex gap-2 text-xs font-medium">
+  <span className="bg-orange-100 text-orange-600 px-3 py-1 rounded-full">
+    Service Types: Marketing Project, Add-On, or Standalone
+  </span>
+</div>
+
   <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
     If you're looking to get a new website built. Looking to make changes to your existing website.
     Or, just want someone to monitor and be on standby for general site maintenance.
@@ -33,7 +38,7 @@ export const metadata = {
   {/* CTA */}
   <section id="primary-cta" className="mt-8">
   <InquiryLauncher
-    label="Contact Us About This Service"
+    label="Talk To Us About On-Demand Marketing Plans"
     defaultServices={["Website Builds & Updates"]}
     sourceLabel="Website Builds & Updates — Hero CTA"
     className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
@@ -58,13 +63,13 @@ export const metadata = {
                 <h2 className="text-sm font-semibold text-neutral-900">Our 3 website services:</h2>
   
                 <p className="mt-3 text-xs sm:text-sm text-neutral-800 leading-relaxed">
-                  NEW BUILDS: Have us create a custom website for your business, hobby, church-group, whatever. We custom code, host your site, and can create anything you want. We do everything, so you have complete flexibility.
+                  NEW BUILDS - Standalone Service: Have us create a custom website for your business, hobby, church-group, whatever. We custom code, host your site, and can create anything you want. We do everything, so you have complete flexibility.
                   <br />
                   <br />
-                  UPDATES: Does your site need a face lift? Want to add sections or services? Work with us to make updates, rebrand your web pages, and even build your own forms.
+                  UPDATES - Marketing Project or Standalone: Does your site need a face lift? Want to add sections or services? Work with us to make updates, rebrand your web pages, and even build your own forms.
                   <br />
                   <br />
-                  MAINTENANCE: Is your site in a good place, but just want someone available for monitoring and general updates? We do that too.
+                  MAINTENANCE - Add-On: Is your site in a good place, but just want someone available for monitoring and general updates? We do that too.
                 </p>
               </div>
             </div>
@@ -85,7 +90,7 @@ export const metadata = {
   
             <div className="mt-10 grid gap-6 md:grid-cols-3">
               <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
-                <h3 className="text-sm font-semibold text-neutral-900">New Builds: $1,000 one-time</h3>
+                <h3 className="text-sm font-semibold text-neutral-900">New Builds:</h3>
                 <p className="mt-2 text-xs text-neutral-700">
                   Straightfoward - we build what you want & need.
                 </p>
@@ -106,7 +111,7 @@ export const metadata = {
               </div>
   
               <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
-                <h3 className="text-sm font-semibold text-neutral-900">Updates: $500 one-time</h3>
+                <h3 className="text-sm font-semibold text-neutral-900">Updates:</h3>
                 <p className="mt-2 text-xs text-neutral-700">
                   Make the changes to your site you've been meaning to do.
                 </p>
@@ -127,7 +132,7 @@ export const metadata = {
               </div>
   
               <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
-                <h3 className="text-sm font-semibold text-neutral-900">Maintenance: $100/mo</h3>
+                <h3 className="text-sm font-semibold text-neutral-900">Maintenance:</h3>
                 <p className="mt-2 text-xs text-neutral-700">
                  Looking for a better webmaster & on-call udpates?
                 </p>
@@ -184,7 +189,7 @@ export const metadata = {
   
             <div className="mt-6 grid gap-6 md:grid-cols-3 items-start">
               <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
-                <h3 className="text-sm font-semibold text-neutral-900">New Builds: $1,000 one-time</h3>
+                <h3 className="text-sm font-semibold text-neutral-900">New Builds:</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>Initial meeting to learn your vision</li>
                   <li>Website outlining</li>
@@ -195,7 +200,7 @@ export const metadata = {
               </div>
   
               <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
-                <h3 className="text-sm font-semibold text-neutral-900">Updates: $500 one-time</h3>
+                <h3 className="text-sm font-semibold text-neutral-900">Updates:</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>Initial meeting to learn desired updates</li>
                   <li>Technical access to your current site</li>
@@ -206,7 +211,7 @@ export const metadata = {
               </div>
   
               <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
-                <h3 className="text-sm font-semibold text-neutral-900">Maintenance: $100/mo</h3>
+                <h3 className="text-sm font-semibold text-neutral-900">Maintenance:</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>Technical access to your current site</li>
                   <li>Visit, performance, and action tracking setup</li>
@@ -314,33 +319,19 @@ export const metadata = {
       {/* LEFT COLUMN */}
       <div>
         <h2 className="text-2xl font-semibold text-neutral-900">
-          Looking for other services?
+          Looking for more marketing help?
         </h2>
 
         <p className="mt-3 text-sm sm:text-base text-neutral-800">
-          Look no further — just click one of our other options.
+          Find our on-demand marketing team plans here:
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">
           <a
-            href="https://www.ads4good.com/for-businesses#ideas-guidance"
+            href="https://www.ads4good.com/for-businesses"
             className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
           >
-            For Ideas & Guidance
-          </a>
-
-          <a
-            href="https://www.ads4good.com/for-businesses#ops-execution"
-            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-          >
-            For Operation & Execution
-          </a>
-
-          <a
-            href="https://www.ads4good.com/for-businesses/marketing-team"
-            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-          >
-            Be My Marketing Team
+            View All Plans
           </a>
         </div>
       </div>
@@ -384,12 +375,6 @@ export const metadata = {
 </section>
         </div>
 
-        <StickyCTA
-  targetId="primary-cta"
-  label="Contact Us About This Service"
-  defaultServices={["Website Builds & Updates"]}
-  sourceLabel="Website Builds & Updates Page — Sticky CTA"
-/>
       </main>
     );
   }

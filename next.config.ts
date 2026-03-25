@@ -20,6 +20,11 @@ const nextConfig: NextConfig = {
         destination: "/for-businesses/direct-mail",
         permanent: true,
       },
+      {
+        source: '/for-businesses/marketing-team',
+        destination: '/for-businesses',
+        permanent: true,
+      },
     ];
   },
 };

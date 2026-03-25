@@ -22,6 +22,12 @@ export default function MarketingGuidebookPage() {
             A marketing guidebook you can actually use.
           </h1>
 
+          <div className="mt-3 flex gap-2 text-xs font-medium">
+  <span className="bg-orange-100 text-orange-600 px-3 py-1 rounded-full">
+    Service Type: Standalone
+  </span>
+</div>
+
           <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
   Some people like to DIY. Sometimes you just want a clear, step-by-step playbook
   you can follow on your own time — without digging through a hundred blogs and
@@ -269,33 +275,19 @@ export default function MarketingGuidebookPage() {
       {/* LEFT COLUMN */}
       <div>
         <h2 className="text-2xl font-semibold text-neutral-900">
-          Looking for other services?
+          Looking for more marketing help?
         </h2>
 
         <p className="mt-3 text-sm sm:text-base text-neutral-800">
-          Look no further — just click one of our other options.
+          Find our on-demand marketing team plans here:
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">
           <a
-            href="https://www.ads4good.com/for-businesses#ideas-guidance"
+            href="https://www.ads4good.com/for-businesses"
             className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
           >
-            For Ideas & Guidance
-          </a>
-
-          <a
-            href="https://www.ads4good.com/for-businesses#ops-execution"
-            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-          >
-            For Operation & Execution
-          </a>
-
-          <a
-            href="https://www.ads4good.com/for-businesses/marketing-team"
-            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-          >
-            Be My Marketing Team
+            View All Plans
           </a>
         </div>
       </div>

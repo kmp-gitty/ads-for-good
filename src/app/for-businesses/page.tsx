@@ -10,531 +10,215 @@ export const metadata = {
 };
 
 export default function ForBusinessesPage() {
-  // ===========
-  // Edit these
-  // ===========
-  const hero = {
-    h1: "Business Services for Growth: Guidance, Execution, & Full Support",
-    description:
-      "Pick what you need: talk through ideas first, get execution help, or plug us in as your marketing team. Clear scope, fair pricing, and work that’s actually useful.",
-  };
-
-  // ==================
-  // Data (edit freely)
-  // ==================
-  const ideasGuidance = {
-    id: "ideas-guidance",
-    title: "For Ideas & Guidance",
-    subtitle:
-      "Start here if you want clarity before commitment. Have conversations and make plans before making changes. Talk through strategy, pressure-test plans, and get a clear path before moving.",
-    horizontalFeature: {
-      title: "DIY Marketing Guidebook",
-      sub: "Self-paced playbook to understand marketing, make better decisions, and avoid common pitfalls.",
-      price: "$25",
-      priceNote: "One-time",
-      primaryCtaLabel: "Purchase",
-      primaryHref: "/for-businesses/marketing-guidebook",
-      learnLabel: "Learn",
-      learnHref: "/for-businesses/marketing-guidebook",
-      rightDetailsTitle: "What's inside:",
-      rightDetails: ["16 pages", "Free & Paid Tools Insight", "Data, Thoughts, Instructions"],
-    },
-    verticalCards: [
-      {
-        title: "Marketing Advice On Demand",
-        sub: "Ask us anything, expert advice over email — whenever you need it.",
-        price: "$100",
-        priceLabel: "Monthly cost",
-        body:
-          "Perfect when you need guidance, a second opinion, or a clear explanation. Unlimited answers without a long engagement.",
-        primaryCtaLabel: "Set Up",
-        primaryHref: "/for-businesses/marketing-advice",
-        learnLabel: "Learn",
-        learnHref: "/for-businesses/marketing-advice",
-        bulletsTitle: "Includes",
-        bullets: ["Unlimited email access", "Priority recommendations", "Data and justifications"],
-      },
-      {
-        title: "Digital Health Check",
-        sub: "Human-reviewed audit of your website and digital profiles.",
-        price: "$500",
-        priceLabel: "One-time",
-        body:
-          "We find what exists, what’s broken, and what to improve or add — with clear, prioritized steps.",
-        primaryCtaLabel: "Purchase",
-        primaryHref: "/for-businesses/digital-health-check",
-        learnLabel: "Learn",
-        learnHref: "/for-businesses/digital-health-check",
-        bulletsTitle: "You get",
-        bullets: ["Tangible document with findings", "Fixes included in cost", "Tailored best practices"],
-      },
-      {
-        title: "Consulting",
-        sub: "You’re purchasing hours of time. Talk through anything unknown and get direction.",
-        price: "$500",
-        priceLabel: "8 meeting hours",
-        body:
-          "We talk through strategy, challenges, and options — and get you to a confident plan.",
-        primaryCtaLabel: "Buy",
-        primaryHref: "/for-businesses/consulting",
-        learnLabel: "Learn",
-        learnHref: "/for-businesses/consulting",
-        bulletsTitle: "Good for",
-        bullets: ["Learning what you don't know", "Fixing a stuck plan", "Picking channels/tools"],
-      },
-    ],
-  };
-
-  const opsExecution = {
-    id: "ops-execution",
-    title: "For Operation & Execution",
-    subtitle:
-      "Start here if you already know what you need and want an expert to take over for you.",
-    cards: [
-      {
-        title: "Website Builds & Updates",
-        href: "/for-businesses/website-builds-updates",
-        pricingLabel: "Options:",
-        pricing: [
-          { label: "New Site Build", value: "$1,000" },
-          { label: "Old Site Update", value: "$500" },
-          { label: "Site Maintenance", value: "$100/mo" },
-        ],
-      },
-      {
-        title: "Digital Profile Management",
-        href: "/for-businesses/digital-profile-management",
-        pricingLabel: "Month to month",
-        pricing: [{ label: "All profiles", value: "$200/mo" }],
-      },
-      {
-        title: "SEO Services",
-        href: "/for-businesses/seo-services",
-        pricingLabel: "2 Month minimum",
-        pricing: [
-          { label: "Initial analysis & planning", value: "$250" },
-          { label: "SEO monitoring", value: "$50/mo" },
-        ],
-      },
-      {
-        title: "Digital Ads",
-        href: "/for-businesses/digital-ads",
-        pricingLabel: "2 Month minimum",
-        pricing: [
-          { label: "Initial analysis & planning", value: "$250" },
-          { label: "Ads management", value: "$100/mo/channel" },
-        ],
-      },
-      {
-        title: "Local Direct Mail",
-        href: "/for-businesses/direct-mail",
-        pricingLabel: "Multiple campaign types available",
-        pricing: [{ label: "Starting at", value: "$750" }],
-      },
-      {
-        title: "Be My Marketing Team",
-        href: "#be-my-marketing-team",
-        pricingLabel: "Month to month",
-        pricing: [{ label: "Full support", value: "$1,500/mo" }],
-      },
-    ],
-  };
-
-  const team = {
-    id: "be-my-marketing-team",
-    title: "Be My Marketing Team",
-    subtitle:
-      "You know your business better than anyone — leave the marketing headache to people who do this every day. If you want consistent help across multiple areas, this is the simplest way to work together.",
-    leftPill: {
-      title: "Be My Marketing Team",
-      sub: "Ongoing support for ideas + execution.",
-      price: "$1,500",
-      priceLabel: "Monthly cost",
-      ctaLabel: "Contact Us",
-      href: "mailto:katoa@ads4good.com?subject=Be%20My%20Marketing%20Team",
-      learnMoreLabel: "Learn More",
-      learnMoreHref: "/for-businesses/marketing-team",
-      bulletsTitle: "What to expect:",
-      bullets: [
-        "Proactive communication and education",
-        "Clear deliverables and checkpoints",
-        "No fluff reports — real actions",
-      ],
-    },
-    rightDetails: {
-      title: "How it works",
-      paragraphs: [
-        "We don't “take over” — we own the marketing process to grow business together.",
-        "Start with a conversation, define the problems, set a plan, and execute steadily.",
-        "If you don’t need ongoing help, we’ll point you to the right smaller service instead.",
-      ],
-      points: [
-        "Marketing Guidebook & Digital Health Check",
-        "Website Updates, SEO + Ads Analysis, Digital Profile Management",
-        "SEO Monitoring & Ads Management",
-        "Unlimited Email Access & Meeting Availability",
-      ],
-    },
-  };
-
   return (
-    <main className="bg-orange-50 text-neutral-900 overflow-x-hidden">
+    <main className="bg-orange-50 text-neutral-900">
+
       {/* HERO */}
-      <section className="mx-auto w-full max-w-6xl px-4 pt-12 sm:pt-16 pb-10">
-        <div className="grid gap-10 md:grid-cols-2 md:items-start">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-tight text-orange-500">
-              {hero.h1}
-            </h1>
-            <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-              {hero.description}
-            </p>
-
-            {/* Mobile-friendly pill nav */}
-            <div className="mt-8 grid gap-3 sm:flex sm:flex-wrap">
-              <a
-                href={`#${ideasGuidance.id}`}
-                className="w-full sm:w-auto text-center rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 hover:underline"
-              >
-                For Ideas &amp; Guidance
-              </a>
-              <a
-                href={`#${opsExecution.id}`}
-                className="w-full sm:w-auto text-center rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 hover:underline"
-              >
-                For Operation &amp; Execution
-              </a>
-              <a
-                href={`#${team.id}`}
-                className="w-full sm:w-auto text-center rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 hover:underline"
-              >
-                Be My Marketing Team
-              </a>
-            </div>
-          </div>
-
-          {/* Right: minimal animated keyword cloud (keep yours as-is) */}
-          <div className="min-w-0">
-            <div className="relative h-[260px] sm:h-[360px] w-full overflow-hidden rounded-2xl">
-              <div className="absolute -top-10 -left-10 h-40 w-40 rounded-full bg-orange-100/60 blur-3xl" />
-              <div className="absolute -bottom-12 -right-12 h-44 w-44 rounded-full bg-orange-100/50 blur-3xl" />
-              <div className="absolute top-10 right-12 h-32 w-32 rounded-full bg-orange-100/40 blur-3xl" />
-
-              <div className="absolute inset-0">
-                {[
-                  { t: "marketing consulting", s: "text-lg sm:text-xl font-semibold", x: "left-[8%]", y: "top-[12%]" },
-                  { t: "digital health check", s: "text-base sm:text-lg font-semibold", x: "left-[46%]", y: "top-[16%]" },
-                  { t: "direct mail marketing", s: "text-base sm:text-lg font-semibold", x: "left-[14%]", y: "top-[38%]" },
-                  { t: "local direct mail", s: "text-sm sm:text-base font-medium", x: "left-[60%]", y: "top-[40%]" },
-                  { t: "marketing advice", s: "text-sm sm:text-base font-medium", x: "left-[72%]", y: "top-[10%]" },
-                  { t: "get more customers", s: "text-sm sm:text-base font-medium", x: "left-[70%]", y: "top-[34%]" },
-
-                  { t: "DIY marketing guidebook", s: "text-sm sm:text-base", x: "left-[10%]", y: "top-[58%]" },
-                  { t: "website updates", s: "text-xs sm:text-sm", x: "left-[52%]", y: "top-[58%]" },
-                  { t: "profile management", s: "text-xs sm:text-sm", x: "left-[70%]", y: "top-[52%]" },
-                  { t: "SEO services", s: "text-xs sm:text-sm", x: "left-[20%]", y: "top-[74%]" },
-                  { t: "digital ads", s: "text-xs sm:text-sm", x: "left-[42%]", y: "top-[78%]" },
-
-                  { t: "get more leads", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[52%]", y: "top-[88%]" },
-                  { t: "pressure-test a plan", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[6%]", y: "top-[28%]" },
-                  { t: "what should we do next?", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[58%]", y: "top-[26%]" },
-                  { t: "fix what’s broken", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[32%]", y: "top-[48%]" },
-                  { t: "improve conversions", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[34%]", y: "top-[66%]" },
-                  { t: "track ROI simply", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[10%]", y: "top-[86%]" },
-                  { t: "build trust locally", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[72%]", y: "top-[74%]" },
-                  { t: "get more business", s: "hidden sm:inline text-xs sm:text-sm", x: "left-[78%]", y: "top-[84%]" },
-                ].map((w, i) => (
-                  <span
-                    key={w.t}
-                    className={["kw-float absolute select-none whitespace-nowrap", "text-neutral-800", w.s, w.x, w.y].join(" ")}
-                    style={{
-                      animation: `kwDance ${9000 + (i % 7) * 360}ms ease-in-out ${(i % 9) * 160}ms infinite`,
-                    }}
-                  >
-                    {w.t}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* IDEAS & GUIDANCE */}
-      <section
-        id={ideasGuidance.id}
-        className="mx-auto w-full max-w-6xl px-4 pt-10 pb-14 scroll-mt-28"
-      >
-        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-          <div className="min-w-0">
-            <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-              {ideasGuidance.title}
-            </h2>
-            <p className="mt-3 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-md">
-              {ideasGuidance.subtitle}
-            </p>
-          </div>
-
-          {/* Guidebook pill */}
-          <div className="min-w-0">
-            <div className="rounded-3xl border border-orange-200 bg-white shadow-sm overflow-hidden">
-              <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[1.5fr_0.55fr_0.75fr_1.1fr] lg:items-center">
-                <div className="min-w-0">
-                  <h3 className="text-lg sm:text-xl font-semibold text-neutral-900">
-                    {ideasGuidance.horizontalFeature.title}
-                  </h3>
-                  <p className="mt-1 text-sm text-neutral-700">
-                    {ideasGuidance.horizontalFeature.sub}
-                  </p>
-                </div>
-
-                <div className="min-w-0">
-                  <p className="text-[11px] text-neutral-600">{ideasGuidance.horizontalFeature.priceNote}</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-neutral-900 leading-none">
-                    {ideasGuidance.horizontalFeature.price}
-                  </p>
-                </div>
-
-                <div className="min-w-0 flex flex-col gap-2">
-                <GuidebookCheckoutCTA
-  label={`${ideasGuidance.horizontalFeature.primaryCtaLabel} →`}
-  className="inline-flex w-full items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
-/>
-                  <TrackedLink
-  href={ideasGuidance.horizontalFeature.learnHref}
-  service={ideasGuidance.horizontalFeature.title}
-  location="For Businesses — Guidebook Pill"
-  className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
->
-  {ideasGuidance.horizontalFeature.learnLabel}
-</TrackedLink>
-                </div>
-
-                <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4">
-                  <p className="text-sm font-semibold text-neutral-900">
-                    {ideasGuidance.horizontalFeature.rightDetailsTitle}
-                  </p>
-                  <ul className="mt-2 space-y-2 text-sm text-neutral-800">
-                    {ideasGuidance.horizontalFeature.rightDetails.map((d) => (
-                      <li key={d} className="flex items-start gap-2">
-                        <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-neutral-500" />
-                        {d}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 3 vertical pills */}
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {ideasGuidance.verticalCards.map((c) => (
-            <div
-              key={c.title}
-              className="rounded-3xl border border-orange-200 bg-white shadow-sm overflow-hidden flex flex-col"
-            >
-              <div className="p-6 sm:p-7 flex-1 flex flex-col">
-                <h3 className="text-xl font-semibold text-neutral-900">{c.title}</h3>
-                <p className="mt-2 text-sm text-neutral-700">{c.sub}</p>
-
-                <div className="mt-5 min-h-[64px]">
-                  <p className="text-xs text-neutral-600">{c.priceLabel}</p>
-                  <p className="text-3xl font-bold text-neutral-900 leading-none">{c.price}</p>
-                </div>
-
-                <p className="mt-4 text-sm text-neutral-800 leading-relaxed">
-                  {c.body}
-                </p>
-
-                <div className="mt-auto pt-6 grid gap-3 sm:flex sm:flex-wrap">
-                  <InquiryLauncher
-                    buttonLabel={`${c.primaryCtaLabel} →`}
-                    defaultServices={[c.title]}
-                    sourceLabel={`For Businesses — ${c.title} Primary CTA`}
-                    className="inline-flex w-full sm:w-auto items-center justify-center rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-600"
-                  />
-
-
-                  <TrackedLink
-  href={c.learnHref}
-  service={c.title}
-  location="For Businesses — Ideas & Guidance Card"
-  className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
->
-  {c.learnLabel}
-</TrackedLink>
-
-                </div>
-              </div>
-
-              <div className="border-t border-orange-100 bg-orange-50/70 p-6 sm:p-7">
-                <p className="text-sm font-semibold text-neutral-900">{c.bulletsTitle}</p>
-                <ul className="mt-3 space-y-2 text-sm text-neutral-800">
-                  {c.bullets.map((b) => (
-                    <li key={b} className="flex items-start gap-2">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-neutral-500" />
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* OPS & EXECUTION */}
-      <section id={opsExecution.id} className="w-full bg-orange-100 scroll-mt-28">
-        <div className="mx-auto w-full max-w-6xl px-4 py-14">
-          <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-            {opsExecution.title}
-          </h2>
-          <p className="mt-3 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-4xl">
-            {opsExecution.subtitle}
-          </p>
-
-          <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-  {opsExecution.cards.map((x) => (
-    <div
-      key={x.title}
-      className="group relative overflow-hidden rounded-3xl border border-orange-200 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm transition hover:shadow-md hover:border-orange-300 flex flex-col"
-    >
-      {/* ✅ Overlay button fills card and receives clicks */}
-      <InquiryLauncher
-        label="" // keep blank if you don't want visible text
-        defaultServices={[x.title]}
-        sourceLabel={`For Businesses — Ops Card: ${x.title}`}
-        className="absolute inset-0 z-10 rounded-3xl cursor-pointer"
-      />
-
-      {/* ✅ Content does NOT intercept clicks */}
-      <div className="relative z-20 flex flex-col flex-1 pointer-events-none">
-        <p className="text-sm font-semibold text-neutral-900 group-hover:text-orange-600">
-          {x.title}
+      <section className="mx-auto max-w-6xl px-4 pt-16 pb-12">
+        <h1 className="text-4xl md:text-5xl font-bold text-orange-500">
+          Flexible, on-demand marketing support—without hiring a full team.
+        </h1>
+        <p className="mt-6 text-lg text-neutral-800 max-w-2xl">
+          Our plans includes a set number of active marketing projects. You can swap, pause, or change them anytime.
         </p>
+      </section>
 
-        <div className="mt-4 flex-1">
-          <p className="text-xs font-medium text-orange-500">{x.pricingLabel}</p>
+      {/* PLANS */}
+      <section className="mx-auto max-w-6xl px-4 pb-16">
+        <h2 className="text-2xl font-semibold mb-8">Our On-Demand Marketing Plans:</h2>
 
-          <div className="mt-3 space-y-2">
-            {x.pricing.map((p) => (
-              <div
-                key={`${x.title}-${p.label}`}
-                className="flex items-baseline justify-between gap-3"
-              >
-                <span className="text-xs text-neutral-700 pr-2">{p.label}</span>
-                <span className="text-sm font-semibold text-neutral-900 whitespace-nowrap">
-                  {p.value}
-                </span>
-              </div>
-            ))}
+        <div className="grid md:grid-cols-3 gap-6">
+
+          {/* SUPPORT */}
+          <div id="support" className="bg-white rounded-3xl p-6 border border-orange-200">
+            <h3 className="text-xl font-semibold">Support</h3>
+            <p className="mt-2 text-sm text-neutral-600">Someone handling marketing tasks when needed</p>
+
+            <p className="mt-4 text-3xl font-bold">$600</p>
+            <p className="text-sm text-neutral-600">/month</p>
+
+            <ul className="mt-6 space-y-2 text-sm">
+              <li>2 active marketing projects</li>
+              <li>Standard attention</li>
+              <li>Biweekly to monthly milestones</li>
+              <li>1 monthly meeting</li>
+              <li>Unlimited email marketing advice</li>
+            </ul>
           </div>
+
+          {/* PARTNER */}
+          <div id="partner" className="bg-white rounded-3xl p-6 border border-orange-200">
+            <h3 className="text-xl font-semibold">Partner</h3>
+            <p className="mt-2 text-sm text-neutral-600">Reliable, part-time marketing support</p>
+
+            <p className="mt-4 text-3xl font-bold">$1,200</p>
+            <p className="text-sm text-neutral-600">/month</p>
+
+            <ul className="mt-6 space-y-2 text-sm">
+              <li>4 active marketing projects</li>
+              <li>Accelerated attention</li>
+              <li>Weekly to biweekly milestones</li>
+              <li>2 monthly meetings</li>
+              <li>Unlimited email marketing advice</li>
+            </ul>
+          </div>
+
+          {/* TEAM */}
+          <div id="team" className="bg-white rounded-3xl p-6 border border-orange-200">
+            <h3 className="text-xl font-semibold">Team</h3>
+            <p className="mt-2 text-sm text-neutral-600">A marketing team actively driving my business</p>
+
+            <p className="mt-4 text-3xl font-bold">$2,200</p>
+            <p className="text-sm text-neutral-600">/month</p>
+
+            <ul className="mt-6 space-y-2 text-sm">
+              <li>8 active marketing projects</li>
+              <li>Priority attention</li>
+              <li>Few days to weekly milestones</li>
+              <li>4 monthly meetings</li>
+              <li>Unlimited email marketing advice</li>
+            </ul>
+          </div>
+
         </div>
+      </section>
 
-        {/* ✅ Re-enable clicks ONLY for this link */}
-        
-                  <TrackedLink
-  href={x.href}
-  service={x.title}
-  location="For Businesses — Ops & Execution Card"
-  className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
->
-  Click to learn more →
-</TrackedLink>
+      {/* PROJECT TYPES */}
+      <section className="mx-auto max-w-6xl px-4 pb-16">
+  <h2 className="text-2xl font-semibold mb-4">What Is A Marketing Project?</h2>
+  <p className="text-neutral-700 max-w-2xl">
+    Projects can include any of the following areas and can be swapped at any time.
+  </p>
 
+  <div className="mt-6 grid md:grid-cols-3 gap-4 text-sm">
+    {[
+      {
+        label: "Digital Profile Management",
+        href: "/for-businesses/digital-profile-management",
+      },
+      {
+        label: "SEO",
+        href: "/for-businesses/seo-services",
+      },
+      {
+        label: "Paid Ads",
+        href: "/for-businesses/digital-ads",
+      },
+      {
+        label: "Website Updates",
+        href: "/for-businesses/website-builds-updates",
+      },
+      {
+        label: "Email Marketing",
+        href: "/for-businesses/email-marketing",
+      },
+      {
+        label: "Marketing Operations",
+        href: "/for-businesses/marketing-ops",
+      },
+    ].map((item) => (
+      <Link
+        key={item.label}
+        href={item.href}
+        className="bg-white border border-orange-200 rounded-xl p-4 text-center font-semibold flex items-center justify-center hover:bg-orange-100 transition"
+      >
+        {item.label}
+      </Link>
+    ))}
+  </div>
+</section>
+
+<section className="mx-auto max-w-6xl px-4 pb-16">
+  <div className="grid md:grid-cols-2 gap-10">
+
+    {/* ADD-ONS */}
+    <div>
+      <h2 className="text-2xl font-semibold">Add-Ons</h2>
+      <p className="mt-2 text-neutral-700 text-sm max-w-md">
+        Optional enhancements you can layer onto any plan to expand capacity, speed, or capabilities.
+      </p>
+
+      <div className="mt-6 space-y-3 text-sm">
+        <Link href="/for-businesses/digital-health-check" className="block hover:underline">
+          Digital Health Check — $500 (one-time)
+        </Link>
+
+        <div>Extra Marketing Project — $350 (per project)</div>
+
+        <div>Rush Upgrade — $250 (per project)</div>
+
+        <Link href="/for-businesses/local-direct-mail" className="block hover:underline">
+          Direct Mail — varies (custom pricing)
+        </Link>
+
+        <Link href="/for-businesses/website-builds-updates" className="block hover:underline">
+          Site Maintenance — $100 (monthly)
+        </Link>
       </div>
     </div>
-  ))}
-</div>
 
+    {/* STANDALONES */}
+    <div>
+      <h2 className="text-2xl font-semibold">Standalones</h2>
+      <p className="mt-2 text-neutral-700 text-sm max-w-md">
+        One-time or project-based services for businesses not ready for ongoing marketing support.
+      </p>
 
+      <div className="mt-6 space-y-3 text-sm">
+        <Link href="/for-businesses/marketing-guidebook" className="block hover:underline">
+          Marketing Guidebook — $25 (one-time)
+        </Link>
 
-        </div>
-      </section>
+        <Link href="/for-businesses/digital-health-check" className="block hover:underline">
+          Digital Health Check — $500 (one-time)
+        </Link>
 
-      {/* BE MY MARKETING TEAM */}
-      <section
-        id={team.id}
-        className="mx-auto w-full max-w-6xl px-4 pt-14 pb-20 scroll-mt-28"
-      >
-        <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">{team.title}</h2>
-        <p className="mt-3 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-4xl">
-          {team.subtitle}
-        </p>
+        <Link href="/for-businesses/website-builds-updates" className="block hover:underline">
+          Site Build — $1,500 (one-time)
+        </Link>
 
-        <div className="mt-8 rounded-3xl border border-orange-200 bg-white shadow-sm overflow-hidden">
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="p-6 sm:p-7 border-b lg:border-b-0 lg:border-r border-orange-100 bg-orange-50/60">
-              <h3 className="text-xl font-semibold text-neutral-900">{team.leftPill.title}</h3>
-              <p className="mt-2 text-sm text-neutral-700">{team.leftPill.sub}</p>
+        <Link href="/for-businesses/website-builds-updates" className="block hover:underline">
+          Site Update — $1,000 (one-time)
+        </Link>
 
-              <div className="mt-5">
-                <p className="text-xs text-neutral-600">{team.leftPill.priceLabel}</p>
-                <p className="text-3xl font-bold text-neutral-900">{team.leftPill.price}</p>
-              </div>
+        <Link href="/for-businesses/local-direct-mail" className="block hover:underline">
+          Direct Mail — varies (custom pricing)
+        </Link>
+      </div>
+    </div>
 
-              <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
-                <InquiryLauncher
-                  buttonLabel={team.leftPill.ctaLabel}
-                  defaultServices={[team.leftPill.title]}
-                  sourceLabel="For Businesses — Be My Marketing Team CTA"
-                  className="inline-flex w-full sm:w-auto items-center justify-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600"
-                />
+  </div>
+</section>
 
+{/* HOW IT WORKS */}
+<section className="mx-auto max-w-6xl px-4 pb-20">
+  <h2 className="text-2xl font-semibold mb-6">How It Works</h2>
 
-                  <TrackedLink
-  href={team.leftPill.learnMoreHref}
-  service={team.leftPill.title}
-  location="For Businesses — Be My Marketing Team"
-  className="inline-flex w-full items-center justify-center rounded-full border border-orange-200 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 hover:bg-orange-100"
->
-  {team.leftPill.learnMoreLabel}
-</TrackedLink>
+  <div className="bg-white border border-orange-200 rounded-3xl p-8">
+    <ul className="space-y-4 text-neutral-800 text-sm list-disc pl-5">
+      <li>
+        Each plan includes a set number of active marketing projects you can swap, pause, or change at any time.
+      </li>
+      <li>
+        Work progresses through key milestones: strategy, planning, setup, execution, and reporting—depending on the initiative.
+      </li>
+      <li>
+        Timelines vary based on project complexity and responsiveness, but work is continuously happening behind the scenes.
+      </li>
+      <li>
+        Your plan determines how quickly milestones are reached, based on priority and capacity.
+      </li>
+      <li>
+        You’ll also have ongoing access to marketing advice via email, plus scheduled meetings depending on your plan.
+      </li>
+    </ul>
+  </div>
+</section>
 
-              </div>
-
-              <div className="mt-8">
-                <p className="text-sm font-semibold text-neutral-900">{team.leftPill.bulletsTitle}</p>
-                <ul className="mt-3 space-y-2 text-sm text-neutral-800">
-                  {team.leftPill.bullets.map((b) => (
-                    <li key={b} className="flex items-start gap-2">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-neutral-500" />
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-
-            <div className="p-6 sm:p-7 lg:col-span-2">
-              <h4 className="text-lg font-semibold text-neutral-900">{team.rightDetails.title}</h4>
-
-              <div className="mt-4 space-y-4 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-3xl">
-                {team.rightDetails.paragraphs.map((p) => (
-                  <p key={p}>{p}</p>
-                ))}
-              </div>
-
-              <div className="mt-6 rounded-2xl border border-orange-100 bg-orange-50/70 p-5">
-                <p className="text-sm font-semibold text-neutral-900">What's included</p>
-                <ul className="mt-3 space-y-2 text-sm text-neutral-800">
-                  {team.rightDetails.points.map((pt) => (
-                    <li key={pt} className="flex items-start gap-2">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-neutral-500" />
-                      {pt}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
     </main>
   );
 }
+
 
 
 

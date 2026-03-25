@@ -1,5 +1,4 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
-import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
     title: "Digital Advertising Services - Search, Social & Paid Media | Ads for Good",
@@ -17,6 +16,12 @@ export const metadata = {
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-orange-500">
               Digital Advertising Services for Small & Medium Businesses
             </h1>
+
+            <div className="mt-3 flex gap-2 text-xs font-medium">
+  <span className="bg-orange-100 text-orange-600 px-3 py-1 rounded-full">
+    Service Type: Marketing Project
+  </span>
+</div>
   
             <p className="mt-4 sm:mt-5 text-base sm:text-lg text-neutral-700 leading-relaxed max-w-3xl">
               An easy way for small and medium businesses to get professional guidance on their paid ads spend.
@@ -73,14 +78,14 @@ export const metadata = {
            {/* Right card */}
 <div className="rounded-3xl border border-orange-200 bg-orange-50 px-5 sm:px-6 py-6 sm:py-8 flex flex-col">
   <h2 className="text-lg font-semibold text-orange-500">
-    Simple Pricing, Maximum Impact.
+    Simple Plans, Maximum Impact.
   </h2>
 
   <p className="mt-3 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-prose">
-    $250 for initial analysis &amp; planning.
+    Included as an optional marketing project to all plans.
     <br />
     <br />
-    $100/mo/channel after that.
+    Strategy, Planning, Creative, Setup, Execution, & Reporting included.
     <br />
     <br />
     2 month minimum to get started.
@@ -89,7 +94,7 @@ export const metadata = {
   {/* CTA */}
   <section id="primary-cta" className="mt-6">
   <InquiryLauncher
-    label="Let’s Talk Ads Management"
+    label="Talk To Us About On-Demand Marketing Plans"
     defaultServices={["Digital Ads"]}
     sourceLabel="Digital Ads — Pricing Card CTA"
     className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
@@ -305,33 +310,19 @@ export const metadata = {
       {/* LEFT COLUMN */}
       <div>
         <h2 className="text-2xl font-semibold text-neutral-900">
-          Looking for other services?
+          Looking for more marketing help?
         </h2>
 
         <p className="mt-3 text-sm sm:text-base text-neutral-800">
-          Look no further — just click one of our other options.
+          Find our on-demand marketing team plans here:
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">
           <a
-            href="https://www.ads4good.com/for-businesses#ideas-guidance"
+            href="https://www.ads4good.com/for-businesses"
             className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
           >
-            For Ideas & Guidance
-          </a>
-
-          <a
-            href="https://www.ads4good.com/for-businesses#ops-execution"
-            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-          >
-            For Operation & Execution
-          </a>
-
-          <a
-            href="https://www.ads4good.com/for-businesses/marketing-team"
-            className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
-          >
-            Be My Marketing Team
+            View All Plans
           </a>
         </div>
       </div>
@@ -375,12 +366,7 @@ export const metadata = {
 </section>
         </div>
 
-        <StickyCTA
-          targetId="primary-cta"
-          label="Let's Talk Ads Management"
-          defaultServices={["Digital Ads"]}
-          sourceLabel="Digital Ads Page — Sticky CTA"
-        />
+
       </main>
     );
   }

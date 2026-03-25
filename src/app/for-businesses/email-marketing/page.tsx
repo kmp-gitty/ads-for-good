@@ -1,11 +1,10 @@
-import ProfileOutlineCompact from "./ProfileOutlineCompact";
 import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
-  title: "Digital Profile Management for Small Businesses | Ads for Good",
-  description:
-    "Ongoing profile management services. We maintain Google Business, Yelp, Facebook, and other key listings to keep your digital presence accurate, consistent, and responsive.",
-};
+    title: "Email Marketing Services | Ads for Good",
+    description:
+      "Email marketing support for strategy, setup, segmentation, execution, and performance analysis.",
+  };
 
 export default function DigitalProfileManagementPage() {
   return (
@@ -15,7 +14,7 @@ export default function DigitalProfileManagementPage() {
         {/* Left: Hero copy */}
 <div className="flex-1 min-w-0 flex flex-col">
   <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-    Digital Listing Management: Save Time and Gain Reassurance.
+    Email Marketing
   </h1>
 
   <div className="mt-3 flex gap-2 text-xs font-medium">
@@ -25,20 +24,15 @@ export default function DigitalProfileManagementPage() {
 </div>
 
   <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-    Your business gets evaluated before you ever hear from a customer — usually through your
-    online profiles, reviews, photos, categories, and listings.
-    <br />
-    <br />
-    Digital Profile Management keeps your online presence accurate, consistent, and up-to-date
-    across the platforms people actually use, so you show up and look more trustworthy when they find you.
+  Email marketing is one of the most practical ways to stay in touch with your audience, drive repeat business, and build stronger customer relationships over time. Whether you need help planning campaigns, setting up the technical side, improving performance, or organizing your audience into smarter segments, we can plug in where it’s most useful.
   </p>
 
   {/* CTA */}
   <section id="primary-cta" className="mt-8">
   <InquiryLauncher
     label="Talk To Us About On-Demand Marketing Plans"
-    defaultServices={["Digital Profile Management"]}
-    sourceLabel="Digital Profile Management — Hero CTA"
+    defaultServices={["Email Marketing"]}
+    sourceLabel="Email Marketing — Hero CTA"
     className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
   />
   </section>
@@ -58,20 +52,17 @@ export default function DigitalProfileManagementPage() {
             </div>
 
             <h2 className="text-sm font-semibold text-neutral-900">
-              What We Manage:
+              What Email Marketing Support Can Include:
             </h2>
 
             <ul className="mt-3 space-y-1.5 text-xs sm:text-sm text-neutral-800 list-disc list-inside">
-              <li>Information, accuracy, & consistency across platforms</li>
-              <li>Business info (hours, services, categories, contact paths)</li>
-              <li>Photos, descriptions, and trust signals</li>
-              <li>Review monitoring + responses</li>
-              <li>New profile opportunities (if you&apos;re missing key listings)</li>
+              <li>Drip campaign strategy and content planning</li>
+              <li>Campaign setup in tools like Mailchimp, SendGrid, Apollo, or similar platforms</li>
+              <li>Audience segmentation and list organization</li>
+              <li>Basic automation and workflow setup</li>
+              <li>A/B test ideas for subject lines, messaging, or sends</li>
+              <li>Cleanup of email flows that are outdated, inconsistent, or underperforming</li>
             </ul>
-
-            <p className="mt-3 text-xs sm:text-sm text-neutral-800 leading-relaxed">
-              The goal is simple: look legitimate, show up more, and remove customer friction while giving you time back to run your business.
-            </p>
           </div>
         </div>
       </section>
@@ -81,10 +72,10 @@ export default function DigitalProfileManagementPage() {
         <div className="mx-auto w-full max-w-6xl px-4 py-16">
           <div className="max-w-6xl">
             <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-              What does profile management really mean?
+              How We Approach Email Marketing.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed">
-              Your profiles aren&apos;t “set it and forget it", but take effort to manage. It can be hard to track and manage all of your business's listings, especially when best practices and algorithms change constantly across different platforms. We'll do the tedious part, so you can focus on your business.
+            We keep email marketing practical. Sometimes that means helping you map out the right messages and audience flow before anything gets sent. Other times it means jumping into the platform, building the campaign, checking the setup, reviewing results, and improving what happens next.
             </p>
           </div>
 
@@ -92,76 +83,23 @@ export default function DigitalProfileManagementPage() {
             {/* Pill 1 */}
             <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
               <h3 className="text-sm font-semibold text-neutral-900">
-                Information Consistency
+                The goal isn't to send more emails.
               </h3>
               <p className="mt-2 text-xs text-neutral-700">
-                Across platforms, your business information should be uniform, accurate, and correct.
+                That's a waste of your time, money, and reputation.
               </p>
-
-              <ul className="mt-2 space-y-1 text-xs text-neutral-700">
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  General business information and hours
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Clean-up and unification
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Contact path updates and access
-                </li>
-              </ul>
             </div>
 
             {/* Pill 2 */}
             <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
               <h3 className="text-sm font-semibold text-neutral-900">
-                Trust & Completeness
+                The goal is to send better emails.
               </h3>
               <p className="mt-2 text-xs text-neutral-700">
-                Make it easy for customers to trust you — and keep up with profile trends.
+                More intention, more clarity, and more conversion.
               </p>
-
-              <ul className="mt-2 space-y-1 text-xs text-neutral-700">
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Full profiles, updating missing sections
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Best practices and key platform changes
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Eliminating duplicates and incorrect listings
-                </li>
-              </ul>
             </div>
 
-            {/* Pill 3 */}
-            <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
-              <h3 className="text-sm font-semibold text-neutral-900">
-                Review & Community Management
-              </h3>
-              <p className="mt-2 text-xs text-neutral-700">
-                Respond appropriately and in a timely manner to inquiries, comments, and reviews.
-              </p>
-              <ul className="mt-2 space-y-1 text-xs text-neutral-700">
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Review responses and moderation
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Comment responses and moderation
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-neutral-500"></span>
-                  Increase review and follow count
-                </li>
-              </ul>
-            </div>
           </div>
         </div>
       </section>
@@ -173,33 +111,20 @@ export default function DigitalProfileManagementPage() {
           <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
             <h3 className="text-sm font-semibold text-neutral-900">Who this is for</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-              <li>Owners who want profiles handled by someone else</li>
-              <li>Businesses with outdated / inconsistent listings</li>
-              <li>Anyone who wants to show up and look more legitimate online</li>
+              <li>Owners who want email campaigns handled by someone else</li>
+              <li>Businesses with outdated / inconsistent drip campaigns</li>
+              <li>Anyone who wants extra help on a high ROI channel</li>
             </ul>
           </div>
 
           <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
             <h3 className="text-sm font-semibold text-neutral-900">Who this is not for</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-              <li>Businesses who want a one-time audit only</li>
+              <li>Businesses who want a one-time audit</li>
               <li>Teams looking for paid ads strategy</li>
               <li>Anyone wanting a DIY solution</li>
             </ul>
           </div>
-        </section>
-
-        {/* Outline (compact + selectable) */}
-        <section className="mt-12">
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-neutral-900">
-            Profiles & Listings We Maintain
-          </h2>
-
-          <p className="mt-3 text-base sm:text-lg text-neutral-700 leading-relaxed max-w-4xl">
-            Use the selector below to jump through the common listings we manage. Don't see one you use? No worries, this list is just an example. This service includes management for ALL profiles you want to hand-off.
-          </p>
-
-          <ProfileOutlineCompact />
         </section>
 
         {/* FAQ */}
@@ -216,20 +141,20 @@ export default function DigitalProfileManagementPage() {
                 a: "Sign up for service. Tell us which profiles to maintain. Provide access. That's it.",
               },
               {
-                q: "Which platforms do you manage?",
-                a: "Typically: Google, Yelp, Facebook/Instagram, and any other listings you're using.",
+                q: "Which ESP platforms do you manage?",
+                a: "We've used Mailchimp, Shopify Messaging, SendGrid, and even manual gmail MailMerge when we first started. But, we're fast learners to whatever system you use.",
               },
               {
                 q: "Is this recurring or one-time?",
-                a: "This is a recurring, month-to-month service.",
+                a: "This is a recurring, month-to-month service that lives as a marketing project option within each plan level.",
               },
               {
-                q: "Do you respond to reviews for us?",
-                a: "Yes, comments too. We'll have a meeting to learn your voice and check-in on anything necessary.",
+                q: "Do you respond to emails for us?",
+                a: "It depends, but normally no. We're experts in getting the most out of your email channel, you're the expert in your brand voice.",
               },
               {
-                q: "Do you manage existing profiles only?",
-                a: "No, if we find you're not using a profile you should - we'll create it for you.",
+                q: "Do you manage existing email campaigns only?",
+                a: "No, if you want to set up your first campaign - we cand to that too!",
               },
             ].map((item) => (
               <details
@@ -276,7 +201,7 @@ export default function DigitalProfileManagementPage() {
       {/* RIGHT COLUMN */}
       <div>
         <h3 className="mt-4 md:mt-4 text-lg font-semibold text-neutral-900">
-          Need help beyond your profiles?
+          Need help beyond email?
         </h3>
 
         <p className="mt-2 text-sm text-neutral-700">

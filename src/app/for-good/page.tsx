@@ -24,7 +24,7 @@ export default function ForGoodPage() {
               Current State
             </h2>
             <p className="mt-4 text-sm text-neutral-800">
-              Some situations, 50% of ad revenue is given away: to partner local businesses and charity organizations. In others, 10%-20% of revenue from our services are given away to local community organizations.
+              10% - 20% of revenue is given away: to partner local businesses, charity organizations, and community groups.
             </p>
           </div>
   
@@ -47,6 +47,8 @@ export default function ForGoodPage() {
           </h2>
           <p className="mt-3 text-sm text-neutral-800">
             Our company started as an idea to give back to local businesses and local organizations. We tested the idea by partnering with Philadelphia-area businesses, whenever a sandwich shop, grocer, retail or other location completed a purchase - a sticker was given with an ad on it. We called it "Stickers for Schools", some money went to the partner business, some to local schools (shout out Sun Valley High School), and our business kept some. That test showed early interest from businesses and success for advertisers, and transformed into ads for Good.
+            <br /><br />
+            We're just starting out in this current form, but a good amount of current giving is done directly to our local business clients, covering our transaction fees with our processors.
           </p>
         </section>
       </main>
