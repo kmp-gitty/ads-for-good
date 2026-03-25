@@ -173,7 +173,8 @@ let data: any = null;
 
 try {
   const result = await supabase
-    .from("website_ops.website_inquiries")
+    .schema("website_ops")
+    .from("website_inquiries")
     .insert([insertRow])
     .select()
     .single();
