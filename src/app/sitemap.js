@@ -1,5 +1,5 @@
 export default function sitemap() {
-    const baseUrl = "https://ads4good.com";
+    const baseUrl = "https://www.ads4good.com";
     const lastModified = new Date();
   
     return [
@@ -18,8 +18,6 @@ export default function sitemap() {
       { url: `${baseUrl}/for-businesses`, lastModified },
   
       // Ideas & Guidance
-      { url: `${baseUrl}/for-businesses/marketing-advice`, lastModified },
-      { url: `${baseUrl}/for-businesses/consulting`, lastModified },
       { url: `${baseUrl}/for-businesses/marketing-guidebook`, lastModified },
       { url: `${baseUrl}/for-businesses/digital-health-check`, lastModified },
   
@@ -29,9 +27,8 @@ export default function sitemap() {
       { url: `${baseUrl}/for-businesses/seo-services`, lastModified },
       { url: `${baseUrl}/for-businesses/digital-ads`, lastModified },
       { url: `${baseUrl}/for-businesses/direct-mail`, lastModified },
-  
-      // Ongoing / Retainer
-      { url: `${baseUrl}/for-businesses/marketing-team`, lastModified },
+      { url: `${baseUrl}/for-businesses/email-marketing`, lastModified },
+      { url: `${baseUrl}/for-businesses/marketing-ops`, lastModified },
   
       // Contact
       { url: `${baseUrl}/contact`, lastModified },
