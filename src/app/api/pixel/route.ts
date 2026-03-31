@@ -411,7 +411,7 @@ function isDeterministicIdentityKey(k: string | null | undefined) {
     res.cookies.set(cookieName, journey_id, {
       httpOnly: false,
       secure: true,
-      sameSite: "lax",
+      sameSite: "none",
       path: "/",
       maxAge: 60 * 60 * 24 * 30,
     });
@@ -419,7 +419,7 @@ function isDeterministicIdentityKey(k: string | null | undefined) {
     res.cookies.set(anonCookieName, anon_id, {
       httpOnly: false,
       secure: true,
-      sameSite: "lax",
+      sameSite: "none",
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
     });
