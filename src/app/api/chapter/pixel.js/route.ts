@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(_req: NextRequest) {
   const script = `
 (function () {
+console.log("chapter pixel boot start");
+
   var existing = window.ChapterPixel;
 
   if (existing && existing.__chapterLoaded) return;
@@ -100,6 +102,8 @@ export async function GET(_req: NextRequest) {
       writeBuffer(clientKey, next);
     } catch (e) {}
   }
+
+console.log("chapter currentScript", getCurrentScript());
 
   var clientKey = getClientKey();
   var collectUrl = getCollectUrl();
@@ -206,6 +210,8 @@ export async function GET(_req: NextRequest) {
       }
     }
   };
+
+console.log("chapter assigning api", clientKey, collectUrl);
 
     window.ChapterPixel = api;
 
