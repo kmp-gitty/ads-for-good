@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(_req: NextRequest) {
   const script = `
 (function () {
-console.log("chapter pixel boot start");
 
   var existing = window.ChapterPixel;
 
@@ -47,32 +46,6 @@ console.log("chapter pixel boot start");
     return "chapter_event_buffer_" + clientKey;
   }
 
-    function getJourneyCookieName(clientKey) {
-    return "up_journey_" + clientKey;
-  }
-
-  function getAnonCookieName(clientKey) {
-    return "up_anon_" + clientKey;
-  }
-
-  function readCookie(name) {
-  try {
-    var nameEQ = name + "=";
-    var parts = document.cookie.split(";");
-
-    for (var i = 0; i < parts.length; i++) {
-      var c = parts[i].trim();
-      if (c.indexOf(nameEQ) === 0) {
-        return decodeURIComponent(c.substring(nameEQ.length));
-      }
-    }
-
-    return null;
-  } catch (e) {
-    return null;
-  }
-}
-
   function readBuffer(clientKey) {
     try {
       var raw = localStorage.getItem(getBufferKey(clientKey));
@@ -83,6 +56,44 @@ console.log("chapter pixel boot start");
       return [];
     }
   }
+
+function getJourneyStorageKey(clientKey) {
+  return "chapter_journey_" + clientKey;
+}
+
+function getAnonStorageKey(clientKey) {
+  return "chapter_anon_" + clientKey;
+}
+
+function readStorage(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeStorage(key, value) {
+  try {
+    if (value) localStorage.setItem(key, value);
+  } catch (e) {}
+}
+
+function getOrCreateId(storageKey) {
+  try {
+    var existing = readStorage(storageKey);
+    if (existing) return existing;
+
+    var created = (window.crypto && window.crypto.randomUUID)
+      ? window.crypto.randomUUID()
+      : String(Date.now()) + "_" + String(Math.random()).slice(2);
+
+    writeStorage(storageKey, created);
+    return created;
+  } catch (e) {
+    return null;
+  }
+}
 
   function writeBuffer(clientKey, events) {
     try {
@@ -111,8 +122,6 @@ console.log("chapter pixel boot start");
     } catch (e) {}
   }
 
-console.log("chapter currentScript", getCurrentScript());
-
   var clientKey = getClientKey();
   var collectUrl = getCollectUrl();
   var identifyUrl = getIdentifyUrl();
@@ -121,8 +130,8 @@ console.log("chapter currentScript", getCurrentScript());
     if (!clientKey) return;
 
     try {
-            var journeyId = readCookie(getJourneyCookieName(clientKey));
-      var anonId = readCookie(getAnonCookieName(clientKey));
+      var journeyId = getOrCreateId(getJourneyStorageKey(clientKey));
+      var anonId = getOrCreateId(getAnonStorageKey(clientKey));
 
       var body = {
         _buffer_id: (window.crypto && window.crypto.randomUUID)
@@ -218,8 +227,6 @@ console.log("chapter currentScript", getCurrentScript());
       }
     }
   };
-
-console.log("chapter assigning api", clientKey, collectUrl);
 
     window.ChapterPixel = api;
 
