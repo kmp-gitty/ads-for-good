@@ -10,8 +10,18 @@ export async function GET(_req: NextRequest) {
   var queue = Array.isArray(existing) ? existing : [];
 
   function getCurrentScript() {
-    return document.currentScript;
+  if (document.currentScript) return document.currentScript;
+
+  var scripts = document.getElementsByTagName("script");
+  for (var i = scripts.length - 1; i >= 0; i--) {
+    var s = scripts[i];
+    var src = s.getAttribute("src") || "";
+    if (src.indexOf("/api/chapter/pixel.js") !== -1 || src.indexOf("/api/pixel.js") !== -1) {
+      return s;
+    }
   }
+  return null;
+}
 
   function getClientKey() {
   var s = getCurrentScript();
