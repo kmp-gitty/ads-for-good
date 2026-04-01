@@ -89,7 +89,7 @@ function getIp(req: NextRequest): string {
     }
 
     if (isBot(body, req)) {
-      return NextResponse.json({ ok: true, ignored: "bot" });
+      return withCors(NextResponse.json({ ok: true, ignored: "bot" }));
     }
 
     const isInternal =
@@ -98,7 +98,7 @@ function getIp(req: NextRequest): string {
     body?.props?.is_internal === true;
 
   if (isInternal) {
-    return NextResponse.json({ ok: true, ignored: "internal" });
+    return withCors(NextResponse.json({ ok: true, ignored: "internal" }));
   }
   
     const client_key = safeClientKey(body?.client_key);
@@ -109,7 +109,7 @@ function getIp(req: NextRequest): string {
     }
 
     if (isRateLimited(req)) {
-      return NextResponse.json({ ok: true, ignored: "rate_limited" });
+      return withCors(NextResponse.json({ ok: true, ignored: "rate_limited" }));
     }
   
     const ip = getIp(req);

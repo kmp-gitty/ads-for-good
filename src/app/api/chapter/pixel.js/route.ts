@@ -35,6 +35,24 @@ export async function GET(_req: NextRequest) {
     return "chapter_event_buffer_" + clientKey;
   }
 
+    function getJourneyCookieName(clientKey) {
+    return "up_journey_" + clientKey;
+  }
+
+  function getAnonCookieName(clientKey) {
+    return "up_anon_" + clientKey;
+  }
+
+  function readCookie(name) {
+    try {
+      var escaped = name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+      var match = document.cookie.match(new RegExp("(?:^|; )" + escaped + "=([^;]*)"));
+      return match ? decodeURIComponent(match[1]) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function readBuffer(clientKey) {
     try {
       var raw = localStorage.getItem(getBufferKey(clientKey));
@@ -81,12 +99,17 @@ export async function GET(_req: NextRequest) {
     if (!clientKey) return;
 
     try {
+            var journeyId = readCookie(getJourneyCookieName(clientKey));
+      var anonId = readCookie(getAnonCookieName(clientKey));
+
       var body = {
         _buffer_id: (window.crypto && window.crypto.randomUUID)
           ? window.crypto.randomUUID()
           : String(Date.now()) + "_" + String(Math.random()).slice(2),
         client_key: clientKey,
         event_name: eventName,
+        journey_id: journeyId,
+        anonymous_id: anonId,
         page_url: window.location.href,
         page_path: window.location.pathname,
         referrer: document.referrer || null,
