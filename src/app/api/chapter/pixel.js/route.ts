@@ -56,14 +56,22 @@ console.log("chapter pixel boot start");
   }
 
   function readCookie(name) {
-    try {
-      var escaped = name.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-      var match = document.cookie.match(new RegExp("(?:^|; )" + escaped + "=([^;]*)"));
-      return match ? decodeURIComponent(match[1]) : null;
-    } catch (e) {
-      return null;
+  try {
+    var nameEQ = name + "=";
+    var parts = document.cookie.split(";");
+
+    for (var i = 0; i < parts.length; i++) {
+      var c = parts[i].trim();
+      if (c.indexOf(nameEQ) === 0) {
+        return decodeURIComponent(c.substring(nameEQ.length));
+      }
     }
+
+    return null;
+  } catch (e) {
+    return null;
   }
+}
 
   function readBuffer(clientKey) {
     try {
