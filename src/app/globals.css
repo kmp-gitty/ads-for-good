@@ -14,8 +14,18 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #ffffff;
+    --foreground: #171717;
+
+    /* NEW */
+  --surface-light: #FFF7ED;   /* orange-50 */
+  --surface-dark: #1C1917;    /* near black */
+  --surface-muted: #F9F9F9;
+
+  --border-soft: #FED7AA;     /* orange-200 */
+
+  --text-primary: #171717;
+  --text-secondary: #525252;
   }
 }
 
