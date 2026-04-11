@@ -36,7 +36,7 @@ export default function EducationClient() {
   };
 
   return (
-    <main className="bg-white text-neutral-900 px-4 pt-16 pb-24 flex justify-center">
+    <main className="bg-[#f7f4ee] text-neutral-900 px-4 pt-16 pb-24 flex justify-center">
       <div className="w-full max-w-6xl grid gap-10 md:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)]">
         {/* LEFT: Main content (blog tiles) */}
         <section>
@@ -55,7 +55,7 @@ export default function EducationClient() {
             {visiblePosts.map((post) => (
               <article
                 key={post.id}
-                className="flex flex-col rounded-3xl bg-orange-50/40 border border-orange-100 overflow-hidden shadow-sm"
+                className="flex flex-col rounded-3xl bg-orange-50/40 border-2 border-orange-100 overflow-hidden shadow-sm"
               >
                 {/* Top media area (image placeholder) */}
                 <div className="relative bg-neutral-200/60 h-40">
@@ -115,7 +115,7 @@ export default function EducationClient() {
         {/* RIGHT: Sidebar (for future ads / callouts) */}
         <aside className="space-y-6">
           {/* Placeholder blocks you can customize later */}
-          <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 py-4">
+          <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 py-4">
             <h3 className="text-sm font-semibold text-neutral-900">
               New to ads for Good?
             </h3>
@@ -127,7 +127,7 @@ export default function EducationClient() {
 </p>
           </div>
 
-          <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 py-4">
+          <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 py-4">
             <h3 className="text-sm font-semibold text-neutral-900">
               You may be a person, but also own a business?
             </h3>
@@ -139,7 +139,7 @@ export default function EducationClient() {
 </p>
           </div>
 
-          <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 py-4">
+          <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 py-4">
             <h3 className="text-sm font-semibold text-neutral-900">
               Popular Topics
             </h3>
