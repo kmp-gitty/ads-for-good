@@ -69,6 +69,10 @@ export async function POST(req: NextRequest) {
   const client_key = String(payload?.client_key || "").trim();
   const event_name = String(payload?.event_name || "").trim();
 
+  if (payload?.internal_ignore === true) {
+    return NextResponse.json({ ok: true, ignored: true });
+  }
+
   if (!client_key)
     return NextResponse.json({ error: "Missing client_key" }, { status: 400 });
   if (!event_name)

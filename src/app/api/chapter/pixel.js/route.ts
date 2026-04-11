@@ -126,6 +126,32 @@ function getOrCreateId(storageKey) {
   var collectUrl = getCollectUrl();
   var identifyUrl = getIdentifyUrl();
 
+    function shouldIgnoreChapterTracking() {
+    try {
+      var host = window.location.hostname;
+      var isLocal =
+        host === "localhost" ||
+        host === "127.0.0.1";
+
+      var ignoreFlag = localStorage.getItem("chapter_ignore") === "true";
+
+      return isLocal || ignoreFlag;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  if (shouldIgnoreChapterTracking()) {
+  console.log("Chapter: tracking disabled");  
+  window.ChapterPixel = {
+      __chapterLoaded: true,
+      track: function () {},
+      identify: function () {},
+      push: function () {}
+    };
+    return;
+  }
+
     function send(eventName, props) {
     if (!clientKey) return;
 
@@ -139,6 +165,7 @@ function getOrCreateId(storageKey) {
           : String(Date.now()) + "_" + String(Math.random()).slice(2),
         client_key: clientKey,
         event_name: eventName,
+        internal_ignore: shouldIgnoreChapterTracking(),
         journey_id: journeyId,
         anonymous_id: anonId,
         page_url: window.location.href,
