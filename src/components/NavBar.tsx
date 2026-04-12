@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -137,6 +137,28 @@ export function NavBar() {
                         </Link>
                       </li>
                     </ul>
+
+<p className="mt-7 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+  Our Own Technology
+</p>
+
+<Link
+href="/for-businesses/lifecycle-attribution"
+className="mt-3 block text-sm font-semibold text-neutral-900 hover:text-orange-500">
+  Lifecycle Attribution
+</Link>
+
+<ul className="mt-2 space-y-1 text-sm">
+  <li>
+    <Link
+      href="/for-businesses/lifecycle-attribution"
+      className="flex items-center gap-2 hover:text-orange-500"
+    >
+      <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+      Chapter
+    </Link>
+  </li>
+</ul>
                   </div>
 
                   {/* RIGHT — WHAT WE DO */}

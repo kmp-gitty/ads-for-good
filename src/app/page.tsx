@@ -43,7 +43,7 @@ export default function HomePage() {
           href="/about"
           className="inline-flex items-center justify-center rounded-full border border-white/30 px-6 py-3 text-sm font-medium text-white transition hover:bg-white/10"
         >
-          Learn More
+          Learn More About Us
         </Link>
       </div>
 

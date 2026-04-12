@@ -195,7 +195,7 @@ export const metadata = {
   
             <div className="mt-6 grid gap-6 md:grid-cols-3 items-start">
               {/* WHITE backgrounds here */}
-              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+              <div className="rounded-3xl border border-orange-700 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
                 <h3 className="text-sm font-semibold text-neutral-900">What we need from you</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>Send the get started email or complete the form</li>
@@ -206,7 +206,7 @@ export const metadata = {
                 </ul>
               </div>
   
-              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+              <div className="rounded-3xl border border-orange-700 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
                 <h3 className="text-sm font-semibold text-neutral-900">What we&apos;ll do</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>A real human finds & evaluates all digital properties you appear on</li>
@@ -216,7 +216,7 @@ export const metadata = {
                 </ul>
               </div>
   
-              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+              <div className="rounded-3xl border border-orange-700 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
                 <h3 className="text-sm font-semibold text-neutral-900">What happens when we&apos;re done</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>You receive your document (a record of everything we found)</li>
@@ -317,7 +317,7 @@ export const metadata = {
   
           {/* Other services */}
 <section className="mt-14 sm:mt-16">
-  <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
+  <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
     <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
       
       {/* LEFT COLUMN */}

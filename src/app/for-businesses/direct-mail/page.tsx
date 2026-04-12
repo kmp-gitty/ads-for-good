@@ -519,7 +519,7 @@ export const metadata = {
   
           {/* Other services */}
 <section className="mt-14 sm:mt-16">
-  <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
+  <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
     <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
       
       {/* LEFT COLUMN */}

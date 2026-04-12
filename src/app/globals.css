@@ -14,8 +14,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #ffffff;
-    --foreground: #171717;
+    --background: #0a0a0a;
+    --foreground: #ededed;
 
     /* NEW */
   --surface-light: #FFF7ED;   /* orange-50 */
@@ -75,4 +75,21 @@ body {
     --tb-light: #F9F9F9;
     --tb-dark: #3F3E3E;
     --tb-blue: #BCDCFF;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  @keyframes subtleShake {
+    0% { transform: translateX(0); }
+    20% { transform: translateX(-2px) rotate(-0.3deg); }
+    40% { transform: translateX(2px) rotate(0.3deg); }
+    60% { transform: translateX(-1px) rotate(-0.2deg); }
+    80% { transform: translateX(1px) rotate(0.2deg); }
+    100% { transform: translateX(0); }
+  }
+  
+  .plan-shake:hover {
+    animation: subtleShake 0.35s ease-in-out;
   }

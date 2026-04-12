@@ -38,7 +38,8 @@ export default function InquiryModal({
         "SEO Services",
         "Digital Ads",
         "Local Direct Mail",
-        "Be My Marketing Team",
+        "On-Demand Marketing Plans",
+        "Chapter: Lifecycle Attribution",
       ],
     [serviceOptions]
   );

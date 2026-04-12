@@ -13,7 +13,7 @@ export const metadata = {
 export default function MarketingGuidebookPage() {
 
   return (
-    <main className="bg-white text-neutral-900 flex flex-col items-center px-4 pt-16 pb-24">
+    <main className="bg-[#f7f4ee] text-neutral-900 flex flex-col items-center px-4 pt-16 pb-24">
       {/* HERO SECTION */}
       <section className="w-full max-w-6xl flex flex-col gap-10 md:flex-row md:items-start">
         {/* Left: Hero copy */}
@@ -46,7 +46,7 @@ export default function MarketingGuidebookPage() {
 <section id="primary-cta" className="mt-8">
   <GuidebookCheckoutCTA
     label="Buy the Guidebook"
-    className="mt-6 inline-flex items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+    className="mt-6 inline-flex items-center justify-center rounded-full bg-orange-500 px-6 py-4 text-sm sm:text-base shadow-sm hover:shadow-md transition font-semibold text-white hover:bg-orange-600"
   />
 </section>
 
@@ -54,7 +54,7 @@ export default function MarketingGuidebookPage() {
 
         {/* Right: Card / explainer */}
         <div className="flex-1">
-          <div className="rounded-3xl border border-orange-200 bg-white shadow-sm px-6 py-6">
+          <div className="rounded-3xl border border-orange-300 bg-white/90 backdrop-blur shadow-sm px-6 py-6">
             {/* Image */}
             <div className="mb-4 h-40 w-full overflow-hidden rounded-2xl bg-neutral-100">
               <img
@@ -181,7 +181,7 @@ export default function MarketingGuidebookPage() {
       <div className="w-full max-w-6xl">
         {/* Who this is for / not for */}
         <section className="mt-8 sm:mt-10 grid gap-6 md:grid-cols-2">
-          <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+          <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
             <h3 className="text-sm font-semibold text-neutral-900">Who this is for</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
               <li>Business owners doing marketing theselves</li>
@@ -190,7 +190,7 @@ export default function MarketingGuidebookPage() {
             </ul>
           </div>
 
-          <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+          <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
             <h3 className="text-sm font-semibold text-neutral-900">Who this is not for</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
               <li>Businesses looking for a long-term engagement</li>
@@ -269,7 +269,7 @@ export default function MarketingGuidebookPage() {
 
         {/* Other services */}
 <section className="mt-14 sm:mt-16">
-  <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
+  <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
     <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
       
       {/* LEFT COLUMN */}

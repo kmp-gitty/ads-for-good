@@ -8,7 +8,7 @@ export const metadata = {
   
   export default function DigitalAdsPage() {
     return (
-      <main className="bg-white text-neutral-900">
+      <main className="bg-[#f7f4ee] text-neutral-900">
         {/* Page wrapper */}
         <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24">
           {/* Hero / Intro */}
@@ -173,7 +173,7 @@ export const metadata = {
   
           {/* Who this is for / not for */}
           <section className="mt-8 sm:mt-10 grid gap-6 md:grid-cols-2">
-            <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+            <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
               <h3 className="text-sm font-semibold text-neutral-900">Who this is for</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                 <li>Entrepreneurs, founders, lean teams, and teams that just need a little help</li>
@@ -183,7 +183,7 @@ export const metadata = {
               </ul>
             </div>
   
-            <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+            <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
               <h3 className="text-sm font-semibold text-neutral-900">Who this is not for</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                 <li>Businesses looking for a short-term engagement or evaluation services only</li>
@@ -205,7 +205,7 @@ export const metadata = {
             </p>
   
             <div className="mt-6 grid gap-6 md:grid-cols-3 items-start">
-              <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+              <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
                 <h3 className="text-sm font-semibold text-neutral-900">Driven Awareness</h3>
                 <p className="mt-3 text-sm text-neutral-700">
                   Some teams just want more eyeballs and website clicks.
@@ -217,7 +217,7 @@ export const metadata = {
                 </ul>
               </div>
   
-              <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+              <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
                 <h3 className="text-sm font-semibold text-neutral-900">Driven Leads</h3>
                 <p className="mt-3 text-sm text-neutral-700">
                   Some brands want more form submissions for their team.
@@ -229,7 +229,7 @@ export const metadata = {
                 </ul>
               </div>
   
-              <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+              <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
                 <h3 className="text-sm font-semibold text-neutral-900">Driven Sales</h3>
                 <p className="mt-3 text-sm text-neutral-700">
                   Some clients need more sales, and needed them yesterday.
@@ -304,7 +304,7 @@ export const metadata = {
   
           {/* Other services */}
 <section className="mt-14 sm:mt-16">
-  <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
+  <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
     <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
       
       {/* LEFT COLUMN */}

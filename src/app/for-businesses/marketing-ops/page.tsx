@@ -9,7 +9,7 @@ export const metadata = {
   
   export default function LocalMarketingDetailPage() {
     return (
-      <main className="bg-orange-50 text-neutral-900 overflow-x-hidden">
+      <main className="bg-[#f7f4ee] text-neutral-900 overflow-x-hidden">
         {/* HERO (centered) */}
         <div className="mx-auto w-full max-w-6xl px-4 pt-16 pb-16">
           <section className="w-full flex flex-col gap-10 md:flex-row md:items-start">
@@ -107,7 +107,7 @@ export const metadata = {
         <div className="mx-auto w-full max-w-6xl px-4 pb-24">
           {/* Who this is for / not for */}
           <section className="mt-10 grid gap-6 md:grid-cols-2">
-            <div className="rounded-3xl border border-black bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+            <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
               <h3 className="text-sm font-semibold text-neutral-900">Who this is for</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                 <li>Business owners looking for help cleaning up processes</li>
@@ -116,7 +116,7 @@ export const metadata = {
               </ul>
             </div>
   
-            <div className="rounded-3xl border border-black bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+            <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
               <h3 className="text-sm font-semibold text-neutral-900">Who this is not for</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                 <li>Businesses looking for a digital campaign</li>
@@ -170,7 +170,7 @@ export const metadata = {
   
           {/* Other services */}
 <section className="mt-14 sm:mt-16">
-  <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
+  <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
     <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
       
       {/* LEFT COLUMN */}

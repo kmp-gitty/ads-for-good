@@ -206,7 +206,7 @@ export const metadata = {
             </p>
   
             <div className="mt-6 grid gap-6 md:grid-cols-3 items-start">
-              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+              <div className="rounded-3xl border border-orange-700 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
                 <h3 className="text-sm font-semibold text-neutral-900">Where we start</h3>
                 <p className="mt-3 text-sm sm:text-base text-neutral-800 leading-relaxed">
                   Like any other service, we handle sign-up and payment first.
@@ -220,7 +220,7 @@ export const metadata = {
                 </p>
               </div>
   
-              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+              <div className="rounded-3xl border border-orange-700 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
                 <h3 className="text-sm font-semibold text-neutral-900">What we spend time on</h3>
                 <p className="mt-3 text-sm sm:text-base text-neutral-800 leading-relaxed">
                   Talking, planning, doing, evaluating.
@@ -234,7 +234,7 @@ export const metadata = {
                 </p>
               </div>
   
-              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+              <div className="rounded-3xl border border-orange-700 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
                 <h3 className="text-sm font-semibold text-neutral-900">What happens when we&apos;re done</h3>
                 <p className="mt-3 text-sm sm:text-base text-neutral-800 leading-relaxed">
                   Best case: we solve something valuable and it naturally turns into ongoing help.
@@ -304,7 +304,7 @@ export const metadata = {
   
           {/* Other services */}
 <section className="mt-14 sm:mt-16">
-  <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
+  <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
     <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
       
       {/* LEFT COLUMN */}

@@ -188,7 +188,7 @@ export const metadata = {
             </p>
   
             <div className="mt-6 grid gap-6 md:grid-cols-3 items-start">
-              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+              <div className="rounded-3xl border border-orange-700 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
                 <h3 className="text-sm font-semibold text-neutral-900">New Builds:</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>Initial meeting to learn your vision</li>
@@ -199,7 +199,7 @@ export const metadata = {
                 </ul>
               </div>
   
-              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+              <div className="rounded-3xl border border-orange-700 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
                 <h3 className="text-sm font-semibold text-neutral-900">Updates:</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>Initial meeting to learn desired updates</li>
@@ -210,7 +210,7 @@ export const metadata = {
                 </ul>
               </div>
   
-              <div className="rounded-3xl border border-orange-100 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
+              <div className="rounded-3xl border border-orange-700 bg-white px-5 sm:px-6 py-5 sm:py-6 shadow-sm">
                 <h3 className="text-sm font-semibold text-neutral-900">Maintenance:</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>Technical access to your current site</li>
@@ -313,7 +313,7 @@ export const metadata = {
   
           {/* Other services */}
 <section className="mt-14 sm:mt-16">
-  <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
+  <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
     <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
       
       {/* LEFT COLUMN */}

@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import InquiryModal from "@/components/InquiryModal";
+import type { ReactNode } from "react";
 
 type Props = {
   // Old API (still supported)
-  label?: string;
+  label?: ReactNode;
   defaultServices?: string[];
 
   // New API (supported)
@@ -16,10 +17,13 @@ type Props = {
   // Shared
   className?: string;
   sourceLabel?: string;
+
+  ariaLabel?: string;
 };
 
 export default function InquiryLauncher({
   label,
+  ariaLabel,
   defaultServices,
   buttonLabel,
   service,
@@ -53,16 +57,19 @@ export default function InquiryLauncher({
   return (
     <>
       <button
-        type="button"
-        onClick={() => {
-          trackServiceClick();
-          setOpen(true);
-        }}
-        className={className}
-        aria-label={resolvedLabel}
-      >
-        {resolvedLabel}
-      </button>
+  type="button"
+  onClick={() => {
+    trackServiceClick();
+    setOpen(true);
+  }}
+  className={className}
+  aria-label={
+    ariaLabel ??
+    (typeof resolvedLabel === "string" ? resolvedLabel : undefined)
+  }
+>
+  {resolvedLabel}
+</button>
 
       {mounted &&
         createPortal(

@@ -8,7 +8,7 @@ export const metadata = {
   
   export default function AskUsAnythingPage() {
     return (
-      <main className="bg-white text-neutral-900">
+      <main className="bg-[#f7f4ee] text-neutral-900">
         {/* Page wrapper */}
         <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 pt-12 sm:pt-16 pb-20 sm:pb-24">
           {/* Hero / Intro */}
@@ -90,7 +90,7 @@ export const metadata = {
     label="Talk To Us About On-Demand Marketing Plans"
     defaultServices={["Marketing Advice On Demand"]}
     sourceLabel="Marketing Advice Page — Right Card CTA"
-    className="mt-auto inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
+    className="mt-auto inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-4 text-sm sm:text-base shadow-sm hover:shadow-md transition font-semibold text-white hover:bg-orange-600"
   />
   </section>
 </div>
@@ -135,7 +135,7 @@ export const metadata = {
   
           {/* Who this is for / not for */}
           <section className="mt-8 sm:mt-10 grid gap-6 md:grid-cols-2">
-            <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+            <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
               <h3 className="text-sm font-semibold text-neutral-900">Who this is for</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                 <li>Entrepreneurs, founders, lean teams, and teams that just need a little help</li>
@@ -145,7 +145,7 @@ export const metadata = {
               </ul>
             </div>
   
-            <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+            <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
               <h3 className="text-sm font-semibold text-neutral-900">Who this is not for</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                 <li>Businesses looking for a long-term engagement</li>
@@ -167,7 +167,7 @@ export const metadata = {
             </p>
   
             <div className="mt-6 grid gap-6 md:grid-cols-3 items-start">
-              <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+              <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
                 <h3 className="text-sm font-semibold text-neutral-900">Where we’ve worked</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>In-house marketing teams</li>
@@ -180,7 +180,7 @@ export const metadata = {
                 </p>
               </div>
   
-              <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+              <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
                 <h3 className="text-sm font-semibold text-neutral-900">What we’ve done</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>Improved lead and client acquisition</li>
@@ -190,7 +190,7 @@ export const metadata = {
                 </ul>
               </div>
   
-              <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+              <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
                 <h3 className="text-sm font-semibold text-neutral-900">How we apply this to you</h3>
                 <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                   <li>Direct answers + clear next steps</li>
@@ -260,7 +260,7 @@ export const metadata = {
   
           {/* Other services */}
 <section className="mt-14 sm:mt-16">
-  <div className="rounded-3xl border border-orange-100 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
+  <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
     <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
       
       {/* LEFT COLUMN */}
