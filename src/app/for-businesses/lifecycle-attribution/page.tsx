@@ -16,8 +16,8 @@ export default function LifecycleAttributionPage() {
       <section className="w-full bg-[#C85A1B] text-white">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:py-24">
           <div className="max-w-5xl">
-            <p className="text-sm font-medium uppercase tracking-[0.18em] text-white/75">
-              Chapter
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-white/75">
+              Chapter: Measurement Technology We've Built:
             </p>
 
             <h1 className="mt-6 text-4xl font-semibold tracking-tight leading-[1.04] sm:text-5xl lg:text-6xl">
