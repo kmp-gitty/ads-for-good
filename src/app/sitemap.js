@@ -29,6 +29,7 @@ export default function sitemap() {
       { url: `${baseUrl}/for-businesses/direct-mail`, lastModified },
       { url: `${baseUrl}/for-businesses/email-marketing`, lastModified },
       { url: `${baseUrl}/for-businesses/marketing-ops`, lastModified },
+      { url: `${baseUrl}/for-businesses/lifecycle-attribution`, lastModified },
   
       // Contact
       { url: `${baseUrl}/contact`, lastModified },

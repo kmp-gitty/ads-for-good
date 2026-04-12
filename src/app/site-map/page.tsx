@@ -129,7 +129,16 @@ export default function SitemapPage() {
                   href="/for-businesses/marketing-team"
                   className="text-orange-500 hover:underline"
                 >
-                  Your New Marketing Team
+                  On-Demand Marketing Plans
+                </Link>
+              </li>
+
+              <li>
+                <Link
+                  href="/for-businesses/lifecycle-attribution"
+                  className="text-orange-500 hover:underline"
+                >
+                  Chapter: Lifecycle Attribution
                 </Link>
               </li>
             </ul>

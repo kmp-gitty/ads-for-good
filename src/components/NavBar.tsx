@@ -283,6 +283,11 @@ className="mt-3 block text-sm font-semibold text-neutral-900 hover:text-orange-5
             </div>
           </div>
 
+          {/* CHAPTER */}
+          <Link href="/for-businesses/lifecycle-attribution" className="hover:text-neutral-900">
+            for Smarter Marketing
+          </Link>
+
           {/* PEOPLE */}
           <Link href="/for-people" className="hover:text-neutral-900">
             for People
@@ -318,8 +323,8 @@ className="mt-3 block text-sm font-semibold text-neutral-900 hover:text-orange-5
 
       {/* MOBILE MENU */}
       {mobileOpen && (
-        <div className="absolute left-0 right-0 top-full mt-3 px-4 md:hidden">
-          <div className="mx-auto w-full max-w-6xl rounded-2xl border border-orange-100 bg-white p-4 shadow-lg">
+  <div className="fixed inset-x-0 top-[88px] bottom-4 z-[60] px-4 md:hidden">
+          <div className="mx-auto h-full w-full max-w-6xl overflow-y-auto overscroll-contain rounded-2xl border border-orange-100 bg-white p-4 shadow-lg touch-pan-y">
             <div className="flex flex-col gap-3 text-sm text-neutral-800">
               {/* ABOUT */}
               <div>
@@ -507,6 +512,15 @@ className="mt-3 block text-sm font-semibold text-neutral-900 hover:text-orange-5
                 className="pl-8 hover:text-orange-500"
               >
                 Marketing Operations
+              </Link>
+
+              <p className="pl-3 pt-1 text-xs font-semibold text-neutral-800">Our Own Technology</p>
+              <Link
+                href="/for-businesses/lifecycle-attribution"
+                onClick={() => setMobileOpen(false)}
+                className="pl-6 hover:text-orange-500"
+              >
+                Chapter: Lifecycle Attribution
               </Link>
 
               <div className="border-t border-orange-100 pt-2" />
