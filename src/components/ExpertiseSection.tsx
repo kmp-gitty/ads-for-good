@@ -54,7 +54,7 @@ const expertiseItems: ExpertiseItem[] = [
       "Want time back from review, comment, and other replies?",
     sectionTwoTitle: "Social Platforms",
     sectionTwoBody:
-      "Need more social media engagement and planning/",
+      "Need social media post planning, execution help, and engagement volume?",
   },
   {
     title: "Marketing Operations",
