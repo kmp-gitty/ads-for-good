@@ -79,22 +79,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing event_name" }, { status: 400 });
 
   // 0) Stable anon identity / incoming identity support
-const anonCookieName = `up_anon_${client_key}`;
-const existingAnon = req.cookies.get(anonCookieName)?.value || null;
-
-const incomingIdentityKey =
-  payload?.identity_key && String(payload.identity_key).trim()
-    ? String(payload.identity_key).trim()
-    : null;
-
-const anon_id =
-  existingAnon && /^[0-9a-fA-F-]{36}$/.test(existingAnon)
-    ? existingAnon
-    : randomUUID();
-
-// Prefer incoming identity_key when provided.
-// Otherwise fall back to anon cookie identity.
-const identity_key = incomingIdentityKey || anon_id;
+  const anonCookieName = `up_anon_${client_key}`;
+  const existingAnon = req.cookies.get(anonCookieName)?.value || null;
+  
+  const incomingIdentityKey =
+    payload?.identity_key && String(payload.identity_key).trim()
+      ? String(payload.identity_key).trim()
+      : null;
+  
+  const incomingAnonymousId =
+    payload?.anonymous_id && /^[0-9a-fA-F-]{36}$/.test(String(payload.anonymous_id).trim())
+      ? String(payload.anonymous_id).trim()
+      : null;
+  
+  const anon_id =
+    incomingAnonymousId ||
+    (existingAnon && /^[0-9a-fA-F-]{36}$/.test(existingAnon) ? existingAnon : null) ||
+    randomUUID();
+  
+  // Prefer explicit deterministic identity_key when provided.
+  // Otherwise use the anonymous identity from payload/local cookie.
+  const identity_key = incomingIdentityKey || anon_id;
 
   const vertical = payload?.vertical ? String(payload.vertical).trim() : null;
 
