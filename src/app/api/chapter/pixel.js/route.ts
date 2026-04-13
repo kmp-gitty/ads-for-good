@@ -125,6 +125,8 @@ function getOrCreateId(storageKey) {
   var clientKey = getClientKey();
   var collectUrl = getCollectUrl();
   var identifyUrl = getIdentifyUrl();
+  var cachedJourneyId = clientKey ? getOrCreateId(getJourneyStorageKey(clientKey)) : null;
+  var cachedAnonId = clientKey ? getOrCreateId(getAnonStorageKey(clientKey)) : null;
 
     function shouldIgnoreChapterTracking() {
     try {
@@ -156,8 +158,18 @@ function getOrCreateId(storageKey) {
     if (!clientKey) return;
 
     try {
-      var journeyId = getOrCreateId(getJourneyStorageKey(clientKey));
-      var anonId = getOrCreateId(getAnonStorageKey(clientKey));
+      var journeyId = cachedJourneyId;
+var anonId = cachedAnonId;
+
+if (!journeyId) {
+  journeyId = getOrCreateId(getJourneyStorageKey(clientKey));
+  cachedJourneyId = journeyId;
+}
+
+if (!anonId) {
+  anonId = getOrCreateId(getAnonStorageKey(clientKey));
+  cachedAnonId = anonId;
+}
 
       var body = {
         _buffer_id: (window.crypto && window.crypto.randomUUID)
