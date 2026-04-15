@@ -55,7 +55,7 @@ export default function ForBusinessesPage() {
               Someone handling marketing tasks when needed
             </p>
 
-            <p className="mt-6 text-4xl font-semibold">$600</p>
+            <p className="mt-6 text-4xl font-semibold">$750</p>
             <p className="text-sm text-neutral-600">/month</p>
 
             <ul className="mt-6 space-y-3 text-sm text-neutral-800">
@@ -82,7 +82,7 @@ export default function ForBusinessesPage() {
               Reliable, part-time marketing support
             </p>
 
-            <p className="mt-6 text-4xl font-semibold">$1,200</p>
+            <p className="mt-6 text-4xl font-semibold">$1,400</p>
             <p className="text-sm text-neutral-600">/month</p>
 
             <ul className="mt-6 space-y-3 text-sm text-neutral-800">
@@ -104,7 +104,7 @@ export default function ForBusinessesPage() {
               A marketing team actively driving my business
             </p>
 
-            <p className="mt-6 text-4xl font-semibold">$2,200</p>
+            <p className="mt-6 text-4xl font-semibold">$2,400</p>
             <p className="text-sm text-neutral-600">/month</p>
 
             <ul className="mt-6 space-y-3 text-sm text-neutral-800">
