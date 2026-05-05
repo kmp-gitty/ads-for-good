@@ -122,13 +122,14 @@ if (emailHash) {
     const fromKey = (payload.client_identity_key || "").trim() || (payload.anonymous_id || "").trim();
   
     if (fromKey && fromKey !== emailKey) {
+        const aliasTs = new Date().toISOString();
         await chapterSchemas
         .identity(supabase)
         .from("identity_aliases")
         .upsert(
           {
             client_key: clientKey,
-            ts: new Date().toISOString(),
+            ts: aliasTs,
             from_identity_key: fromKey,
             to_identity_key: emailKey,
             confidence: 100,
@@ -137,6 +138,18 @@ if (emailHash) {
           },
           { onConflict: "client_key,from_identity_key,to_identity_key" }
         );
+
+        // Mirror /api/identify: also sync identity_canon. Trigger trg_sync_canon_from_alias
+        // (Fix #20) covers this on the DB side; this is defense-in-depth. Wrapped in try
+        // so a canon write failure never blocks the purchase webhook.
+        try {
+          await chapterSchemas.identity(supabase).from("identity_canon").upsert([
+            { client_key: clientKey, identity_key: emailKey, canonical_identity_key: emailKey, updated_at: aliasTs },
+            { client_key: clientKey, identity_key: fromKey,  canonical_identity_key: emailKey, updated_at: aliasTs },
+          ], { onConflict: "client_key,identity_key" });
+        } catch (canonErr) {
+          console.error("identity_canon upsert (purchase_identify_call) failed; trigger will still sync:", canonErr);
+        }
     }
   }
 
@@ -171,13 +184,14 @@ if (emailHash && purchaseCartToken) {
       }
 
       if (fromKey && fromKey !== emailKey) {
+        const aliasTs = new Date().toISOString();
         await chapterSchemas
           .identity(supabase)
           .from("identity_aliases")
           .upsert(
             {
               client_key: clientKey,
-              ts: new Date().toISOString(),
+              ts: aliasTs,
               from_identity_key: fromKey,
               to_identity_key: emailKey,
               confidence: 100,
@@ -186,6 +200,18 @@ if (emailHash && purchaseCartToken) {
             },
             { onConflict: "client_key,from_identity_key,to_identity_key" }
           );
+
+        // Mirror /api/identify: also sync identity_canon. Trigger trg_sync_canon_from_alias
+        // (Fix #20) covers this on the DB side; this is defense-in-depth. Wrapped in try
+        // so a canon write failure never blocks the purchase webhook.
+        try {
+          await chapterSchemas.identity(supabase).from("identity_canon").upsert([
+            { client_key: clientKey, identity_key: emailKey, canonical_identity_key: emailKey, updated_at: aliasTs },
+            { client_key: clientKey, identity_key: fromKey,  canonical_identity_key: emailKey, updated_at: aliasTs },
+          ], { onConflict: "client_key,identity_key" });
+        } catch (canonErr) {
+          console.error("identity_canon upsert (purchase_cart_token_bridge) failed; trigger will still sync:", canonErr);
+        }
       }
     }
   }
