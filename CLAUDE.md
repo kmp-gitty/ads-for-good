@@ -309,10 +309,11 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - **Write clear definitions for:** first touch, last touch, linear, channel contribution, only touch, middle touch, unknown, chapter, journey/session.
 - **Location:** `/docs/chapter-definitions.md` (create this file)
 
-**Fix #19 — POS / Quick Sale orders rejected by Shopify webhook adapter** *(discovered + diagnosed May 3, 2026; moved here May 4)*
-- **Problem:** `src/app/api/shopify/webhooks/orders-create/route.ts` line 201-203 returns 400 `missing_purchase_identity` when an order has neither `email` nor `customer_id`. POS / Quick Sale orders (in-person walk-ins) typically have neither, so they are silently dropped. Confirmed in production: order #102256 (Apr 9, 2026, $78, source_name=`pos`) was missed — only one of 444 in the live window, but the bug is recurring (every future POS order will miss).
-- **Backfill applied May 3, 2026:** `chapter_ingest.purchase_events` now includes #102256 with synthetic identity `customer_id=shopify_pos_anonymous:7802309804325` and `identity_reason='pos_anonymous_backfill'`. `raw->_backfill_note` flags it as a manual backfill.
-- **Fix:** Update the adapter to branch on `order.source_name`. For `pos`, generate a synthetic `customer_id` like `shopify_pos_anonymous:{order_id}` instead of rejecting. Tag POS orders so reporting/journey-based snapshots can filter them out by default (POS has no online journey → no attribution).
+**Fix #19 — POS / Quick Sale orders rejected by Shopify webhook adapter** *(code-complete May 5, 2026 — pending deploy + real-world verification)*
+- **Problem:** orders-create webhook returned 400 `missing_purchase_identity` when an order had neither email nor customer_id. POS / Quick Sale walk-ins typically have neither, so they were silently dropped. Confirmed by the Apr 9 order #102256 ($78, source_name=`pos`) miss.
+- **Backfill applied May 3, 2026:** order #102256 inserted into `chapter_ingest.purchase_events` with synthetic identity `customer_id=shopify_pos_anonymous:7802309804325`.
+- **Code fix (May 5, 2026):** `src/app/api/shopify/webhooks/orders-create/route.ts` now generalizes the identity-missing branch — for any order with a `source_name` and `id` but no email/customer, synthesizes `customer_id = shopify_{source_name}_anonymous:{order_id}`. Covers POS, mobile_app, draft_order, and future non-web sources. Strict 400 only fires when both source_name and order id are missing (malformed webhook).
+- **To verify after deploy:** wait for next non-web order (or trigger one). Confirm `purchase_events` has a row with `customer_id` matching the `shopify_*_anonymous:` pattern. Reporting/snapshot scripts can filter POS via `raw->'order'->>'source_name'`.
 - **Location:** `src/app/api/shopify/webhooks/orders-create/route.ts`
 
 ---

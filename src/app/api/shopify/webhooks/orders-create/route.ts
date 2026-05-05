@@ -199,7 +199,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (!purchasePayload.email && !purchasePayload.customer_id) {
-      return NextResponse.json({ error: "missing_purchase_identity" }, { status: 400 });
+      // Fix #19: orders without an email or customer_id are common from
+      // non-online-store sources (Shopify POS / Quick Sale walk-ins, mobile app,
+      // draft order conversions). Don't drop them — synthesize a deterministic
+      // anonymous identity from the source_name + order_id so they land in
+      // purchase_events. Reporting can filter by raw->>order->>source_name.
+      const sourceNameRaw = typeof order?.source_name === "string" ? order.source_name : "";
+      const sourceName = sourceNameRaw.trim().toLowerCase().replace(/\s+/g, "_");
+
+      if (sourceName && order?.id != null) {
+        purchasePayload.customer_id = `shopify_${sourceName}_anonymous:${String(order.id)}`;
+      } else {
+        // No identity AND no source_name (or no order id) — malformed webhook.
+        return NextResponse.json({ error: "missing_purchase_identity" }, { status: 400 });
+      }
     }
 
     const normalizedBody = JSON.stringify(purchasePayload);
