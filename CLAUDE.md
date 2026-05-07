@@ -47,7 +47,8 @@ They share one repo, one Vercel deployment. Be careful not to break agency pages
 | `inquiry/` | Agency contact/lead form (NOT Chapter) |
 
 ### Pixel Files
-- **`src/app/api/pixel/route.ts`** — serves the pixel.js script to clients
+- **`src/app/api/chapter/pixel.js/route.ts`** — serves the pixel.js script to clients (returns the JS as a string in the GET handler, `Cache-Control: no-store` so clients always pull the latest)
+- **`src/app/api/pixel/route.ts`** — server-side ingest helper (NOT the script-serving file; CLAUDE.md previously documented this incorrectly)
 - **`src/app/api/chapter/collect/route.ts`** (or similar) — receives events server-side
 
 ---
@@ -137,6 +138,13 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - Reconciliation pass: `export SNAPSHOT_TS_HI=... && node run-snapshot.js` for each snapshot in turn → all rows share the same cutoff.
 - Contract verified end-to-end against a scratch table on April 29, 2026.
 - 5 reporting tables not yet in scope (`eos_filtered_purchase_channels_v1`, `eos_filtered_purchases_v1`, `eos_full_paths_readable_v1`, `eos_top_paths_v1`, `eos_valid_journey_ids_v3`) — extend if/when they're confirmed snapshot-shaped.
+
+### Fix #13 — Pixel hover_intent enrichment (May 7, 2026)
+- **Problem:** `hover_intent` events only captured `tag` + `label`. Couldn't tell which `<a>` was hovered (no `href`), couldn't group by section, couldn't filter by class/id without backfilling from page-level context.
+- **Fix:** Added `getElementProps(el)` in `src/app/api/chapter/pixel.js/route.ts` returning `{ label, tag, href, element_id, element_class, aria_label, page_section }`. `page_section` resolves to the nearest `<section>/<nav>/<header>/<footer>/<main>/<aside>` ancestor's aria-label / id / tagName. Updated the mouseover handler to pass `getElementProps(el)` directly to `api.track("hover_intent", …)`.
+- **Defensive note:** `el.className` returns an `SVGAnimatedString` (not a string) on SVG elements. `closest("a, button")` filters to HTML `<a>`/`<button>` so the value is always a string in practice — but added a `typeof` guard anyway since the JS runs in arbitrary DOM contexts.
+- **Deployment:** Browsers re-fetch `/api/chapter/pixel.js` on every page load (`Cache-Control: no-store`), so the enriched payload starts arriving as soon as the deploy goes live. No client-side migration needed.
+- **CLAUDE.md correction:** previously said `src/app/api/pixel/route.ts` was the script-serving file — that's actually the server ingest helper. Real script-serving file is `src/app/api/chapter/pixel.js/route.ts`. Pixel Files section corrected.
 
 ### Fix #27 — Production monitoring & alerting (mostly) (May 7, 2026)
 - **Done:** parts (b) + (c) from the original spec — application-layer alerting on `chapter_reporting._snapshot_runs`, posted to Google Chat via webhook, scheduled by Vercel Cron.
@@ -295,54 +303,6 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 ---
 
 ### 🟢 Priority 3 — Housekeeping & Documentation
-
-**Fix #13 — Pixel enrichment for element context**
-- **Problem:** `hover_intent` events only capture `tag` and `label`. No `href`, `element_id`, `element_class`, `aria_label`, or `page_section`.
-- **Fix:** Update `getClickableLabel` → `getElementProps` in pixel.js and update the mouseover listener.
-- **Exact code change:**
-  ```javascript
-  // REPLACE the existing getClickableLabel function and mouseover listener with:
-  
-  function getClickableLabel(el) {
-    if (!el) return null;
-    return (
-      el.innerText?.trim()?.slice(0, 100) ||
-      el.getAttribute("aria-label") ||
-      el.getAttribute("data-label") ||
-      el.id ||
-      el.className ||
-      el.tagName
-    );
-  }
-  
-  function getElementProps(el) {
-    if (!el) return {};
-    return {
-      label: getClickableLabel(el),
-      tag: el.tagName,
-      href: el.tagName === "A" ? (el.getAttribute("href") || null) : null,
-      element_id: el.id || null,
-      element_class: el.className || null,
-      aria_label: el.getAttribute("aria-label") || null,
-      page_section: (function() {
-        var parent = el.closest("section, nav, header, footer, main, aside");
-        return parent ? (parent.getAttribute("aria-label") || parent.id || parent.tagName) : null;
-      })()
-    };
-  }
-  
-  document.addEventListener("mouseover", function (e) {
-    var el = e.target.closest("a, button");
-    if (!el) return;
-    hoverTarget = el;
-    hoverTimer = setTimeout(function () {
-      if (hoverTarget === el) {
-        api.track("hover_intent", getElementProps(el));
-      }
-    }, 500);
-  });
-  ```
-- **Location:** `src/app/api/pixel/route.ts` — inside the pixel script string, find and replace the hover_intent section
 
 **Fix #14 — Extract `browser_ip` from raw into proper column on `purchase_events`**
 - **Problem:** IP address is buried in `raw -> order -> browser_ip` and `raw -> order -> client_details -> browser_ip` on Shopify orders. Not queryable without JSON parsing.
