@@ -139,6 +139,22 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - Contract verified end-to-end against a scratch table on April 29, 2026.
 - 5 reporting tables not yet in scope (`eos_filtered_purchase_channels_v1`, `eos_filtered_purchases_v1`, `eos_full_paths_readable_v1`, `eos_top_paths_v1`, `eos_valid_journey_ids_v3`) — extend if/when they're confirmed snapshot-shaped.
 
+### Fix #10 — Cleanup old/experimental views: 32 objects dropped (May 7, 2026)
+- **Tier 1 dropped (9, all `_deprecated` in chapter_analysis):** migration `fix_10_drop_deprecated_and_legacy_views`. `eos_attribution_linear_v1_deprecated`, `eos_bot_scores_24h_v5_deprecated`, `eos_bot_scores_v1_deprecated`, `eos_purchase_attribution_v6_deprecated`, `eos_purchase_channel_presence_v3_deprecated`, `eos_purchase_last_journey_v2_clean_deprecated`, `eos_purchase_paths_v2_deprecated`, `eos_purchase_stitched_events_v2_deprecated`, `unified_events_legacy`.
+- **Tier 2 dropped (6, older numbered variants):** same migration. `chapter_attribution.chapter_channel_paths_v2`, `chapter_channel_paths_v3`, `chapter_session_entry_channels_v2`, `chapter_analysis.attribution_first_touch_v2`, `attribution_last_touch_v2`, `attribution_linear_v2`.
+- **Tier 3 dropped (17 of 25 candidates):** migration `fix_10_tier_3_drop_17_safe_items`, applied in dependency-ordered waves. chapter_analysis: `attribution_last_touch_eos_v1`, `chapter_channel_events_eos_v1`, `chapter_correlation_base`, `chapter_paths`, `eos_journey_summary_v1`, `eos_pixel_events_clean_v1`, `eos_pixel_events_postfix`, `eos_pixel_events_recent`, `eos_postfix_journey_bot_scores_v1`, `eos_postfix_journey_bot_scores_v2`, `journey_bot_scores_v1`, `unified_events_clean_v1`. chapter_attribution: `attribution_first_touch`, `attribution_last_touch`, `chapter_channel_presence`, `purchase_channel_fallbacks_v1`, `purchase_channel_final_v1`. (`eos_pixel_events_recent` had 750k accumulated stale rows; reproducible from `chapter_ingest.pixel_events` if ever needed.)
+- **Audit lesson recorded:** the first Tier 3 audit pass joined `pg_depend` through `pg_stat_all_tables`, which **excludes views**. That under-reported dependencies on every view candidate, making them all appear droppable. Postgres's transactional DROP rolled back the entire migration on first failure (zero state change), and the corrected query joining through `pg_class` directly revealed the real picture. **For future audits: use `pg_class` + `pg_depend` + `pg_rewrite`, never `pg_stat_all_tables` for view dependency checks.**
+- **8 candidates kept as scaffolding for future dashboard work** (NOT dropped):
+  - `public.dashboard_snapshot_v1` — sophisticated per-client JSON aggregator (KPI tiles + journey tiles + linear attribution + correlation lift + top5 paths). Zero current code references but architecturally complete; matches the "Dashboard build" line in Future Work. Treating as deliberate scaffolding for the planned `src/app/chapter/` dashboard. **Don't drop without first deciding whether that dashboard will reuse it or rebuild from scratch.**
+  - 6 candidates blocked by `dashboard_snapshot_v1`: `chapter_attribution.attribution_linear`, `chapter_channel_exploded`, `purchase_chapter_channels`; `chapter_analysis.channel_correlation_v1`, `top_chapter_paths`, `top_chapter_paths_dashboard`. All become droppable if/when `dashboard_snapshot_v1` is dropped.
+  - `chapter_attribution.chapter_channel_events` — genuinely live, root of the active attribution chain (`chapter_summary_v1`, `chapter_channel_compressed`, `chapter_channel_paths` all depend on it transitively). Keep.
+  - `chapter_analysis.eos_pixel_journey_bot_scores_v1` — consumed by `chapter_reporting.eos_valid_journeys_v2`, which is itself unaudited. Worth a separate look — `eos_valid_journeys_v2` may be deferred legacy reporting (per Fix #1 it was one of the 5 reporting tables not yet snapshot-aligned). If `eos_valid_journeys_v2` ends up dead, this can drop too.
+
+### Fix #16 — closed without code change (May 7, 2026, principled decline)
+- **Original spec:** capture truncated IP (e.g., `71.237.147.0`) on `chapter_ingest.pixel_events` to improve bot detection.
+- **Why closed without action:** journey-level `user_agent` (existing on `chapter_journey.journeys`) plus the new purchase-level `user_agent` (Fix #15) already give effective bot-detection coverage at both ends of the funnel. The April UA-based bot-network discovery (3,056 fake-Chrome-142 China journeys) demonstrated UA alone is sufficient for the bot heuristics we actually run. Adding any IP storage — even truncated — increases PII surface area without a proportional gain in detection capability we can't get from UA. Principled decision: don't collect data we don't need.
+- **What this means going forward:** bot-detection rules should target `journey.user_agent` and `purchase_events.user_agent`, not IP-derived signals. If a future bot pattern only manifests in IP space (and somehow can't be inferred from UA + behavior), revisit this.
+
 ### Fix #15 — `user_agent` extracted to proper column on `purchase_events` (May 7, 2026)
 - **Migration applied:** `chapter_ingest.purchase_events` now has a `user_agent text` column (migration `fix_15_add_user_agent_to_purchase_events`).
 - **Backfill:** 664 of 672 historical rows populated from `raw->'order'->'client_details'->>'user_agent'`. Remaining 8 are non-browser orders (POS / Quick Sale / mobile app) that genuinely never had a UA — null is correct for those.
@@ -299,12 +315,12 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ### 🟡 Priority 2 — Attribution Quality
 
-**Fix #18 — Invert canonical_v2 → reporting layer dependency** *(spawned from Fix #17 on May 3, 2026)*
-- **Problem:** `chapter_attribution.chapter_channel_paths_canonical_v2` joins `chapter_reporting.eos_filtered_purchases_v1` and `chapter_reporting.eos_purchase_channel_final_snapshot_v1` — i.e., an attribution-layer view depends on reporting-layer snapshot tables. Backwards from the typical layering (reporting consumes attribution, not the other way around).
-- **Symptom this caused:** Fix #17's data lag — when the reporting snapshots went stale, attribution coverage capped at the stale row count.
-- **Fix:** Lift the dependency upstream — derive the equivalent of filtered_purchases / purchase_channel_final from `chapter_attribution.purchase_chapters_base` directly inside canonical_v2's chain. Reporting snapshots become pure consumers.
-- **Why not Priority 1:** Fix #17's cascade gives us a working pattern (refresh both layers together at one cutoff). Bigger refactor; not blocking analysis right now.
-- **Location:** Supabase — `chapter_attribution.chapter_channel_paths_canonical_v2`
+**Fix #18 — Deferred until Fix #25 (decision recorded May 7, 2026)**
+- **Original framing:** invert canonical_v2's dependency on reporting-layer snapshots (`eos_filtered_purchases_v1`, `eos_purchase_channel_final_snapshot_v1`).
+- **What investigation revealed (May 7):** the four reporting snapshots `canonical_v2` reads from (`eos_purchase_base`, `eos_purchase_touch_summary`, `eos_purchase_fallback`, `eos_purchase_channel_final`) are **caches of attribution-layer computation**, not reporting-layer business logic. Specifically, `eos_purchase_touch_summary_snapshot_v1` caches a query against `chapter_attribution.chapter_summary_v1` that's heavy enough to time out at 60s+ standalone. The "cross-layer dependency" is a caching pattern in the wrong schema — not pure architectural badness.
+- **Why not just invert it now:** removing the cache and reading `chapter_summary_v1` directly from canonical_v2 would push canonical_v2's runtime from ~7 min to plausibly 15-30 min. Real performance regression for marginal architectural cleanup. The "right" fix is **Path B** (relocate the cache from `chapter_reporting` to `chapter_attribution` + facade view) — but that's a 2-3 hr refactor for a smell that isn't blocking anything.
+- **Why deferred:** **Fix #25 (incremental snapshot refresh)** completely redesigns the snapshot architecture — `chapter_summary_v1`, `purchase_chapters_base`, and the four reporting caches all get rethought during that refactor. Doing Fix #18 now risks doing the work twice. The right place to address layering is during Fix #25's design.
+- **Reopen criteria:** if Fix #25 changes scope or gets deferred indefinitely AND Fix #17-style data-lag incidents recur, revisit Fix #18 as an independent project (likely as Path B — relocate caches to attribution layer).
 
 **Fix #9 — Linear attribution decision**
 - **Problem:** Linear is the current canonical model but hasn't been compared to a session-entry linear model.
@@ -314,16 +330,6 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 ---
 
 ### 🟢 Priority 3 — Housekeeping & Documentation
-
-**Fix #16 — Consider truncated IP on pixel events for bot detection** *(scope reduced May 7)*
-- **Problem:** IP is discarded after geo-lookup at pixel ingest. Storing it (even partially) would improve bot detection on `chapter_ingest.pixel_events`.
-- **Fix:** Consider storing last-octet-zeroed IP (e.g., `71.237.147.0`) on `pixel_events` for bot detection utility while remaining GDPR/CCPA compliant. Pixel-events ONLY — Shopify webhook orders already strip raw IP at ingest (see `sanitizeShopifyOrderForRaw`), so the purchase-events side has no work to do here.
-- **Location:** `src/app/api/chapter/collect/route.ts` + Supabase migration
-
-**Fix #10 — Cleanup old/experimental views**
-- **Views to evaluate:** `chapter_session_entry_channels_v1`, `_v2`, `chapter_channel_paths_v2`, `v3`, `canonical_v1`, `canonical_v2`
-- **Action:** Once stable, decide what to keep/rename/archive.
-- **Location:** Supabase — `chapter_analysis` and `chapter_attribution`
 
 **Fix #8 — Historical identity gap documentation**
 - **Note:** Early EOS data had identity persistence gaps. Cookie fixes applied April 1 (identity) and April 14 (journey). Fallback paths are needed for older chapters. Future data should have full coverage.
