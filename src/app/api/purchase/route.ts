@@ -268,6 +268,8 @@ const identityReason = email ? "purchase_identify_call" : "client_previous_ident
     page_url: payload.page_url ?? null,
     referrer: payload.referrer ?? null,
 
+    user_agent: typeof payload.user_agent === "string" ? payload.user_agent : null,
+
     raw: payload.raw ?? null,
   };
 

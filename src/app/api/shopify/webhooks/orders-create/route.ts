@@ -158,6 +158,11 @@ export async function POST(req: NextRequest) {
         ? order.discount_codes.map((d: any) => d.code).filter(Boolean).join(",")
         : null;
 
+    const userAgent =
+      typeof order?.client_details?.user_agent === "string"
+        ? order.client_details.user_agent
+        : null;
+
     const purchasePayload = {
       client_key: clientKey,
       source_platform: "shopify",
@@ -179,6 +184,7 @@ export async function POST(req: NextRequest) {
       coupon,
       shipping,
       tax,
+      user_agent: userAgent,
       raw: {
         shop_domain: shopDomain,
         topic,

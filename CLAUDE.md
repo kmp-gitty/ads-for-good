@@ -139,6 +139,17 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - Contract verified end-to-end against a scratch table on April 29, 2026.
 - 5 reporting tables not yet in scope (`eos_filtered_purchase_channels_v1`, `eos_filtered_purchases_v1`, `eos_full_paths_readable_v1`, `eos_top_paths_v1`, `eos_valid_journey_ids_v3`) — extend if/when they're confirmed snapshot-shaped.
 
+### Fix #15 — `user_agent` extracted to proper column on `purchase_events` (May 7, 2026)
+- **Migration applied:** `chapter_ingest.purchase_events` now has a `user_agent text` column (migration `fix_15_add_user_agent_to_purchase_events`).
+- **Backfill:** 664 of 672 historical rows populated from `raw->'order'->'client_details'->>'user_agent'`. Remaining 8 are non-browser orders (POS / Quick Sale / mobile app) that genuinely never had a UA — null is correct for those.
+- **Code path updated:** `src/app/api/shopify/webhooks/orders-create/route.ts` extracts `order.client_details.user_agent` into the `purchasePayload`; `/api/purchase/route.ts` writes it to the new column. Sanitization function unchanged — UA was never being stripped (only `browser_ip` was, intentionally for GDPR).
+- **Why bother when it's still in `raw`:** queryability. `WHERE user_agent ILIKE '%bot%'` is now an indexed-friendly column scan instead of `WHERE raw->'order'->'client_details'->>'user_agent' ILIKE ...` (slower, no index, ugly).
+
+### Fix #14 — closed without code change (May 7, 2026, superseded)
+- **Original spec:** extract `browser_ip` from `raw->order->browser_ip` / `raw->order->client_details->browser_ip` into a queryable column on `purchase_events`.
+- **Why closed without action:** the orders-create webhook's `sanitizeShopifyOrderForRaw` already strips both IP locations from `raw` BEFORE the row hits `purchase_events`, in compliance with the CLAUDE.md "Do not store raw IP addresses" rule. So there's no `browser_ip` in `raw` for new rows to extract. Old rows would also be subject to the same GDPR rule if extracted.
+- **What replaces it:** Fix #16 (truncated IP on `pixel_events`). The original Fix #14 / #16 split conflated two concerns; Fix #14 was scope-creep onto a path the privacy sanitization had already handled. The bot-detection use case those fixes were chasing now lives entirely in Fix #16's pixel-events truncated-IP plan.
+
 ### Fix #13 — Pixel hover_intent enrichment (May 7, 2026)
 - **Problem:** `hover_intent` events only captured `tag` + `label`. Couldn't tell which `<a>` was hovered (no `href`), couldn't group by section, couldn't filter by class/id without backfilling from page-level context.
 - **Fix:** Added `getElementProps(el)` in `src/app/api/chapter/pixel.js/route.ts` returning `{ label, tag, href, element_id, element_class, aria_label, page_section }`. `page_section` resolves to the nearest `<section>/<nav>/<header>/<footer>/<main>/<aside>` ancestor's aria-label / id / tagName. Updated the mouseover handler to pass `getElementProps(el)` directly to `api.track("hover_intent", …)`.
@@ -304,19 +315,9 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ### 🟢 Priority 3 — Housekeeping & Documentation
 
-**Fix #14 — Extract `browser_ip` from raw into proper column on `purchase_events`**
-- **Problem:** IP address is buried in `raw -> order -> browser_ip` and `raw -> order -> client_details -> browser_ip` on Shopify orders. Not queryable without JSON parsing.
-- **Fix:** Add a migration to extract and store `browser_ip` as a proper column on `chapter_ingest.purchase_events`.
-- **Location:** Supabase migration
-
-**Fix #15 — Extract `client_details.user_agent` from raw on purchase events**
-- **Problem:** Purchase-time user agent is buried in raw Shopify payload, separate from browse session user agent on journeys.
-- **Fix:** Extract and store as a proper column on `chapter_ingest.purchase_events`.
-- **Location:** Supabase migration
-
-**Fix #16 — Consider hashed/truncated IP on pixel events**
-- **Problem:** IP is discarded after geo-lookup at pixel ingest. Storing it (even partially) would improve bot detection.
-- **Fix:** Consider storing last-octet-zeroed IP (e.g., `71.237.147.0`) on `pixel_events` for bot detection utility while remaining GDPR/CCPA compliant.
+**Fix #16 — Consider truncated IP on pixel events for bot detection** *(scope reduced May 7)*
+- **Problem:** IP is discarded after geo-lookup at pixel ingest. Storing it (even partially) would improve bot detection on `chapter_ingest.pixel_events`.
+- **Fix:** Consider storing last-octet-zeroed IP (e.g., `71.237.147.0`) on `pixel_events` for bot detection utility while remaining GDPR/CCPA compliant. Pixel-events ONLY — Shopify webhook orders already strip raw IP at ingest (see `sanitizeShopifyOrderForRaw`), so the purchase-events side has no work to do here.
 - **Location:** `src/app/api/chapter/collect/route.ts` + Supabase migration
 
 **Fix #10 — Cleanup old/experimental views**
