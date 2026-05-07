@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { chapterSchemas } from "@/app/lib/chapter-db";
 import { postToGChat } from "@/app/lib/monitoring/gchat";
 import { unauthorizedIfNotCron } from "@/app/lib/monitoring/auth";
+import type { SnapshotRunRow } from "@/app/lib/monitoring/types";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const runs = data ?? [];
+  const runs = (data ?? []) as SnapshotRunRow[];
   const ok = runs.filter((r) => r.status === "ok");
   const failed = runs.filter((r) => r.status === "failed");
   const running = runs.filter((r) => r.status === "running");

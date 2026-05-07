@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { chapterSchemas } from "@/app/lib/chapter-db";
 import { postToGChat } from "@/app/lib/monitoring/gchat";
 import { unauthorizedIfNotCron } from "@/app/lib/monitoring/auth";
+import type { SnapshotRunRow } from "@/app/lib/monitoring/types";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -30,7 +31,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const stuck = data ?? [];
+  const stuck = (data ?? []) as Pick<
+    SnapshotRunRow,
+    "run_id" | "label" | "target_table" | "started_at" | "snapshot_ts_hi"
+  >[];
   if (stuck.length === 0) {
     return NextResponse.json({ ok: true, stuck_count: 0 });
   }
