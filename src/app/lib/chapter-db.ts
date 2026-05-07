@@ -4,6 +4,7 @@ export const chapterSchemas = {
     journey: (db: any) => db.schema("chapter_journey"),
     model: (db: any) => db.schema("chapter_model"),
     attribution: (db: any) => db.schema("chapter_attribution"),
+    reporting: (db: any) => db.schema("chapter_reporting"),
     config: (db: any) => db.schema("chapter_config"),
   };
   

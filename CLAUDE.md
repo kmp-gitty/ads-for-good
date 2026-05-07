@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: April 29, 2026
+> Last updated: May 7, 2026
 
 ---
 
@@ -107,7 +107,7 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of May 1, 2026)
+## ✅ Completed Fixes (as of May 7, 2026)
 
 ### Schema Cleanup (April 6, 2026 audit — DONE)
 - Journey schema cleaned — removed `journeys_filtered_v1`, `journeys_filtered_v2`
@@ -137,6 +137,35 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - Reconciliation pass: `export SNAPSHOT_TS_HI=... && node run-snapshot.js` for each snapshot in turn → all rows share the same cutoff.
 - Contract verified end-to-end against a scratch table on April 29, 2026.
 - 5 reporting tables not yet in scope (`eos_filtered_purchase_channels_v1`, `eos_filtered_purchases_v1`, `eos_full_paths_readable_v1`, `eos_top_paths_v1`, `eos_valid_journey_ids_v3`) — extend if/when they're confirmed snapshot-shaped.
+
+### Fix #22 + Fix #23 — statement_timeout default + direct connection wired up (May 7, 2026)
+- **Fix #22 (DB-level):** `ALTER ROLE postgres SET statement_timeout = '30min'` applied. New `postgres` role connections inherit a 30-min ceiling; `run-snapshot.js`'s per-session `SET statement_timeout = '60min'` override wins for legitimate long ops (canonical_v1 etc.). Reversible via `ALTER ROLE postgres RESET statement_timeout`.
+- **Fix #23 (env + connection):** `DATABASE_DIRECT_URL` added to `chapter-scripts/.env` pointing at `db.bvvmmhekdgskeilczeuy.supabase.co:5432`. `run-snapshot.js` already prefers it over `DATABASE_URL` with fallback warning (was code-ready before).
+- **IPv4 add-on enabled** (~$4/mo) — required because the project's direct host is IPv6-only by default and Mac/work-network couldn't resolve AAAA records. The IPv4 add-on provisions an A record so the same hostname is reachable from IPv4-only clients. No change to the connection string itself.
+- **Gotcha for the next person:** if your DB password contains `@`, `:`, `/`, `?`, `#`, or `[`/`]`, you MUST URL-encode them in the connection string (e.g., `@` → `%40`). The pooler tolerates malformed URLs; direct connection does not. `test-direct.js` will print `URL host: NOT SET` even when `DATABASE_DIRECT_URL` IS set if the password's unencoded `@`s break URL parsing — misleading; check the actual env var content with `awk` + `cat -ev` if in doubt.
+- **Verified via `test-direct.js`:** `URL host: db.bvvmmhekdgskeilczeuy.supabase.co:5432` + `OK: [ { ping: 1 } ]`. End-to-end smoke test through `run-snapshot.js` deferred until next genuine snapshot run (no value in artificial test; the connection logic is unchanged on the script side).
+
+### Fix #21 cascade complete — direct dominance confirmed real (May 6, 2026 — `SNAPSHOT_TS_HI=2026-05-03T18:00:00Z`)
+- **Hypothesis:** widen `eos_pixel_events_categorized_v1`'s entry-channel classifier to scan ALL events in a chapter for UTM/click_id/referrer signals — recovering "direct" chapters that have non-direct signals buried mid-journey.
+- **Cascade run (6 snapshots, all `status='ok'` at the same cutoff):** canonical_v1 (311) → canonical_v2 (442) → channel_contribution (5) → single_touch_chapters (3) → linear (5) → channel_paths_canonical_summary (1). All paste-ready DO blocks archived at `chapter-scripts/snapshots/2026-05-06-fix-21-cascade.sql`.
+- **Result:** post-fix, **(direct) is in 73% of chapters (323/442) and gets 69.3% of linear revenue ($28,221 of $40,716)** — essentially unchanged from pre-fix. Single-touch (direct) actually went UP (158 vs pre-fix 42) because the new sessionization restructured the underlying chapter set, not because attribution improved.
+- **Conclusion:** EOS's direct dominance is genuine customer behavior (loyal / return / bookmark traffic, no paid spend), NOT a classification gap. Fix #21 closed with the "if not recoverable" outcome it pre-emptively scoped.
+- **Lesson learned (also captured in user memory):** Dashboard SQL Editor "Failed to fetch (api.supabase.com)" is a UI-layer HTTP timeout (~5 min), NOT a query failure. Backend keeps running and commits on its own schedule. Recovery: find holder via `pg_stat_activity` filtered by `application_name = 'supabase/dashboard-query-editor'` AND `state = 'active'` ORDER BY `xact_start` — filtering by `query ILIKE '%table_name%'` MISSES multi-statement DO block holders because `query` shows the last statement (often a `SET`), not the long-running INSERT. Do NOT retry. Terminate piled-up victim queries (those waiting on `Lock`), leave the holder alone.
+- **Snapshot contract bug surfaced:** `_snapshot_runs.elapsed = finished_at - started_at` is always `00:00:00` in a single-tx DO block because both columns resolve to `now()` = transaction-start time. Fix in `run-snapshot.js`: use `clock_timestamp()` for `finished_at`. Not blocking, just misleading telemetry.
+
+### Null/unknown attribution closed (Fix #4 — verified May 5, 2026)
+- **Original problem:** `null`/`unknown` channels in attribution output.
+- **Verified:** Zero chapters have `NULL` or `(unknown)` channel_paths after the Fix #17 cascade. The fallback in canonical_v2's view hardcodes `(direct)` so nothing falls through to `(unknown)` anymore. Fix #17's full cascade silently fixed this.
+- **What's left after closing Fix #4:** the broader question of "(direct) is 70% of attribution" — that's NOT a bug per se. EOS doesn't run paid ads and likely has a loyal direct/bookmark/return-visitor base. **Sub-problem 1 (29% revenue)** is no-session purchases (Fix #20 residual gap). **Sub-problem 2 (49% revenue)** was sessions classified as direct — Fix #21 (closed May 6) tested whether widening the categorizer could recover them; outcome was no material change, confirming EOS's direct dominance is real customer behavior, not misclassification.
+
+### canonical_v1 materialization (Fix #7b — applied May 5, 2026)
+- **Same pattern as Fix #7 (canonical_v2), one layer deeper.** Replaced the slow chained view with a snapshot table + thin facade.
+- **New table:** `chapter_attribution.chapter_channel_paths_canonical_v1_snapshot` (PK on client_key/canonical_identity_key/chapter_id, indexes on boundary_ts and snapshot_ts_hi).
+- **View `chapter_channel_paths_canonical_v1` rewritten as facade** over the snapshot — same column shape, no consumer changes.
+- **First population:** 311 rows, ~52 min compute time (much longer than the ~25 min I'd estimated; the chain is heavier than canonical_v2's was). Aligned to the May 3 cohort: `SNAPSHOT_TS_HI=2026-05-03T18:00:00Z`.
+- **Refreshed via `run-snapshot.js`** with `LABEL=canonical_paths_v1`.
+- **Unblocked the deferred `channel_paths_canonical_summary` snapshot** — was 15-min timeout on May 3, now finishes in **0.75s**.
+- **Why 311 vs canonical_v2's 443:** canonical_v1 only includes chapters with at least one matching session entry; canonical_v2 adds 132 more chapters with fallback-only paths. Consistent with the design.
 
 ### identity_canon staleness fixed (Fix #20 — applied May 4, 2026)
 - **Symptom:** identity_overlap_summary initially showed only 10.4% purchaser↔session overlap. Diagnosed as artifact of `identity_canon` (table cache) being out of sync with `identity_aliases` (source of truth).
@@ -194,7 +223,47 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## 🔧 Open Fix List (Priority Order)
 
+### 🚀 Scale Readiness Roadmap (added May 5, 2026)
+Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22-#23 done May 7; #24-#28 below.
+
 ### 🔴 Priority 1 — Data Integrity Blockers
+
+**Fix #24 — Enable Supabase read replica + route analytics to it** *(scale roadmap — strategic)*
+- **Problem:** Real-time pixel/webhook ingest and heavy analytical reads share the same primary DB. A runaway analytical query degrades ingest performance. As clients scale, this gets worse.
+- **Fix:** Enable Supabase Pro read replica. Route analytical workloads (Looker, snapshot reads, `run-snapshot.js` non-INSERT queries) to replica. Writes (pixel ingest, purchase webhooks, identity_aliases) stay on primary. Primary becomes insulated from analytical load.
+- **Effort:** ~2-4 hours. Supabase setting + connection routing + test.
+- **Cost:** ~$10-25/mo extra depending on instance size.
+- **Why P1:** Single biggest "this can't take us down" lever as client count grows.
+
+**Fix #25 — Incremental snapshot refresh pattern** *(scale roadmap — biggest refactor)*
+- **Problem:** Every snapshot today does `TRUNCATE + INSERT` over the full live window. Refresh time is `O(all data since 2026-04-01)`. With 30 clients × daily refreshes × growing per-client volume, that's untenable. Today's canonical_v1 took 50+ min for one client.
+- **Fix:** Track `last_processed_event_ts` per snapshot table. Each refresh only processes events with `event_ts > last_processed`. Refresh time becomes `O(today's new data)`. For canonical_v1 specifically: track per-(client_key, canonical_identity_key) max processed boundary_ts, INSERT only chapters with newer boundaries.
+- **Effort:** ~2-3 days of refactor work — biggest payoff. Required for daily refreshes at scale.
+- **Why P1:** Without this, 30 clients × full rebuilds = guaranteed exhaustion.
+
+**Fix #26 — Multi-tenant isolation hardening** *(scale roadmap — security + scale)*
+- **Problem:** Currently all queries filter by `client_key` in the WHERE clause, but there's no enforcement at the schema level. If a future query forgets a `client_key` filter, it scans all clients' data. Plus no RLS policies. Plus shared API key for all clients.
+- **Fix:**
+  1. **Indexes:** ensure every query path on chapter_ingest, chapter_identity, chapter_model, chapter_attribution has a leading index on `client_key`.
+  2. **RLS policies:** add Row Level Security on `chapter_ingest.*`, `chapter_identity.*`, etc. — service role bypasses but app-tier connections are confined to their client_key.
+  3. **Per-client API keys:** rotate `AFG_CLIENT_SECRETS_JSON` away from a single dict; make each client's key independently rotatable + revocable.
+  4. **Audit logging:** log every `client_key` resolution attempt, especially failures, for security forensics.
+- **Effort:** ~2-4 days. Security-sensitive — needs careful testing.
+- **Why P1:** Required before signing the dentist or school accounts (compliance/data isolation expectations).
+
+**Fix #27 — Production monitoring & alerting** *(scale roadmap — quick win)*
+- **Problem:** Today's exhaustion event was discovered only when the user noticed query failures. No alerting. No dashboard for snapshot run health.
+- **Fix:** (a) Supabase resource alerts at 70% (CPU, IO budget, connections) → Slack/email. (b) Application alert on `_snapshot_runs` rows stuck in `status='running'` for > 60 min. (c) Daily digest of snapshot health (count refreshed today, any failures, runtime trend per snapshot).
+- **Effort:** ~1 day. Mostly Supabase dashboard config + a small cron job for the digest.
+- **Why P1:** Catches problems before they cascade.
+
+**Fix #28 — Snapshot scheduling + per-client isolation** *(scale roadmap — depends on Fix #25)*
+- **Problem:** Currently snapshots are run manually + on-demand. With many clients, manual coordination doesn't scale. Concurrent refreshes for multiple clients would hit resource exhaustion.
+- **Fix:** `pg_cron` or Vercel scheduled functions. Stagger per-client refreshes (client A 1am UTC, client B 1:30am, etc.) — never all simultaneous. Run during off-peak (UTC night). Fix #25 (incremental refresh) makes each refresh small enough to fit in a stagger window.
+- **Effort:** ~1-2 days. After Fix #25 is done.
+- **Why P2:** Optimization layer on top of Fix #25.
+
+---
 
 **Fix #5 phase 3 — Cleanup (deferred until Looker audit)**
 - **Phases 1 + 2 complete (May 4, 2026):** additive shim across all 11 views; both reporting snapshots (sessionized_universe_summary, identity_overlap_summary) migrated to canonical_identity_key.
@@ -206,23 +275,12 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ### 🟡 Priority 2 — Attribution Quality
 
-**Fix #7b — Materialize `chapter_channel_paths_canonical_v1`** *(promoted-priority from Fix #17 cascade — May 3, 2026)*
-- **Problem:** `canonical_v1` is a chained view. Snapshots reading it take 24+ min.
-- **Now also blocking:** the May 3 Fix #17 cascade hit a Supabase pooler connection drop at ~15 min on `channel_paths_canonical_summary` — that snapshot is currently un-refreshable through `run-snapshot.js` until canonical_v1 is materialized.
-- **Fix:** Same pattern as Fix #7 — create `chapter_channel_paths_canonical_v1_snapshot`, rewrite `canonical_v1` as a facade, refresh via `run-snapshot.js`.
-- **Location:** Supabase — `chapter_attribution`
-
 **Fix #18 — Invert canonical_v2 → reporting layer dependency** *(spawned from Fix #17 on May 3, 2026)*
 - **Problem:** `chapter_attribution.chapter_channel_paths_canonical_v2` joins `chapter_reporting.eos_filtered_purchases_v1` and `chapter_reporting.eos_purchase_channel_final_snapshot_v1` — i.e., an attribution-layer view depends on reporting-layer snapshot tables. Backwards from the typical layering (reporting consumes attribution, not the other way around).
 - **Symptom this caused:** Fix #17's data lag — when the reporting snapshots went stale, attribution coverage capped at the stale row count.
 - **Fix:** Lift the dependency upstream — derive the equivalent of filtered_purchases / purchase_channel_final from `chapter_attribution.purchase_chapters_base` directly inside canonical_v2's chain. Reporting snapshots become pure consumers.
 - **Why not Priority 1:** Fix #17's cascade gives us a working pattern (refresh both layers together at one cutoff). Bigger refactor; not blocking analysis right now.
 - **Location:** Supabase — `chapter_attribution.chapter_channel_paths_canonical_v2`
-
-**Fix #4 — Null / unknown attribution cleanup**
-- **Problem:** `null`/`unknown` channels exist in attribution output.
-- **Fix:** Investigate why these chapters have missing attribution. Classify as direct, unknown, or recovered.
-- **Location:** Supabase — `chapter_attribution`
 
 **Fix #9 — Linear attribution decision**
 - **Problem:** Linear is the current canonical model but hasn't been compared to a session-entry linear model.
@@ -360,6 +418,34 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - Do not touch agency pages (`/about`, `/contact`, `/for-businesses`, etc.)
 - Do not use `sudo npm install` for anything
 - Do not store raw IP addresses (GDPR/CCPA) — use hashed or truncated form only
+
+---
+
+## 💰 Pricing model & unit economics (May 5, 2026 reference)
+
+- **Billing metric:** raw journeys per month (includes bots; matches the count in `chapter_journey.journeys` filtered to `client_key`).
+- **Tier 1 (up to 100K raw journeys/mo):** $399/mo flat.
+- **Overage between 100K and 200K:** $25 per additional 10K journeys (linear).
+- **Tier 2 (at 200K raw journeys/mo):** $799/mo flat.
+- **Above 200K:** **not yet priced.** TBD when first client (likely the 2K-location dentist) approaches that scale. Open considerations: continue $25/10K linearly, switch to volume discount, or move to enterprise custom pricing.
+- **EOS Fabrics today** (~96K raw journeys/mo): sits at the **$399 tier**.
+- **Stack cost per client** (at 5-7 small clients on the warehouse architecture): ~$130-180/mo.
+- **Per-client margin at $399 tier:** ~55-65% gross.
+- **Per-unit cost to Chapter** at this scale: ~$0.003 per journey, ~$0.19 per tracked purchase, ~0.27% of attributed revenue.
+- **Bot caveat:** ~62% of raw journeys at EOS are bot-likely. Clients pay for bot traffic under the current model. Two future levers: (a) bill on `human_likely` + `suspect` only (drops EOS billable journeys to ~36K — would price as $399 with lots of headroom), (b) keep raw + improve bot filtering at ingest so the count is honestly lower. Decide before onboarding scale clients where bot ratio could differ wildly.
+
+---
+
+## 📚 Multi-tier scaling architecture (Year 2+ reference)
+
+- **Pattern:** Supabase (OLTP — real-time writes, identity stitching) → ETL every 15 min (Fivetran/Airbyte) → Warehouse (Snowflake/BigQuery — heavy aggregations, columnar, MPP) → Looker reads warehouse only.
+- **Stays in Supabase:** raw event ingest, identity_aliases + identity_canon (live triggers), customer-support per-record lookups.
+- **Moves to warehouse:** all chapter_attribution + chapter_reporting compute, all Looker queries.
+- **Migration triggers (when to actually do it):** any single client > 100M events/month; OR Looker dashboards still slow even after Fix #25 (incremental refresh); OR Postgres compute add-ons exceed warehouse-stack alternative cost.
+- **Cost at projected Chapter scale (5 ecommerce + dentist + school + B2B startup, ~50-100M events/mo):** $500-1500/mo total. ETL is biggest variable (Fivetran $300-700 vs Airbyte self-hosted ~$30); warehouse compute $100-300; dbt $0-300; Looker $200-400.
+- **Storage scaling is trivial.** Snowflake $25/TB/mo, BigQuery $20/TB (or $10/TB long-term). At 5-year Chapter scale (~200GB raw → ~25GB warehouse-compressed), storage < $1/mo. Postgres storage is 10× more expensive AND forces compute tier upgrades as tables grow — this is why Postgres-only ages worse than the split architecture.
+- **Compute scales sub-linearly** with smart architecture (incremental refresh + materialized aggregates) — Fix #25 is the prep move that makes a future warehouse migration a config change rather than a refactor.
+- **Pruning lever (Year 5+ if needed):** retain raw events 12-18 months, aggregates forever, archive cold history to S3 ($0.023/GB/mo). BigQuery auto-discounts long-term storage; ClickHouse supports per-table TTL.
 
 ---
 
