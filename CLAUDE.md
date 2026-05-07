@@ -138,6 +138,17 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - Contract verified end-to-end against a scratch table on April 29, 2026.
 - 5 reporting tables not yet in scope (`eos_filtered_purchase_channels_v1`, `eos_filtered_purchases_v1`, `eos_full_paths_readable_v1`, `eos_top_paths_v1`, `eos_valid_journey_ids_v3`) — extend if/when they're confirmed snapshot-shaped.
 
+### Fix #27 — Production monitoring & alerting (mostly) (May 7, 2026)
+- **Done:** parts (b) + (c) from the original spec — application-layer alerting on `chapter_reporting._snapshot_runs`, posted to Google Chat via webhook, scheduled by Vercel Cron.
+- **Architecture:** `vercel.json` registers two cron jobs against Next.js API routes, authenticated via `Bearer ${CRON_SECRET}` (Vercel auto-injects when `CRON_SECRET` env is set):
+  - `*/15 * * * *` → `/api/internal/monitoring/stuck-runs` — alerts if any `_snapshot_runs` row has `status='running' AND started_at < now() - interval '60 min'`. Silent when nothing's stuck.
+  - `0 14 * * *` → `/api/internal/monitoring/daily-digest` — posts a 24h health summary every day at 14:00 UTC (7am PT).
+- **Plumbing files added:** `src/app/lib/monitoring/{gchat,auth,types}.ts` (webhook poster, cron auth validator, `SnapshotRunRow` type) and the two route handlers under `src/app/api/internal/monitoring/`. Schema helper for `chapter_reporting` added to `src/app/lib/chapter-db.ts`.
+- **Env vars** in Vercel: `CHAPTER_GCHAT_WEBHOOK_URL` (the Google Chat space webhook) + `CRON_SECRET` (random hex, validates the `Authorization` header). Both must be set for the routes to function.
+- **Schema/grant prerequisites done:** `chapter_reporting` added to PostgREST exposed schemas; `service_role` granted USAGE on schema + SELECT on all tables (with default privileges for future tables).
+- **Deferred (part a):** Per-resource threshold alerts (CPU, IO, connections at 70%). Supabase Pro doesn't ship per-metric UI alerts as a feature. Three options if/when this becomes load-bearing: external monitoring (Better Stack/Datadog), or a self-rolled Vercel Cron (~30-60 min) that polls the Supabase Management API and posts to the same GChat space. Not blocking — the stuck-runs alert covers the most common outage path (orphaned long-running queries holding locks), which is what would have prevented the May 5 incident.
+- **Verified:** both routes returned 200 in production curl tests; daily-digest's first manual fire successfully posted to Google Chat.
+
 ### Fix #22 + Fix #23 — statement_timeout default + direct connection wired up (May 7, 2026)
 - **Fix #22 (DB-level):** `ALTER ROLE postgres SET statement_timeout = '30min'` applied. New `postgres` role connections inherit a 30-min ceiling; `run-snapshot.js`'s per-session `SET statement_timeout = '60min'` override wins for legitimate long ops (canonical_v1 etc.). Reversible via `ALTER ROLE postgres RESET statement_timeout`.
 - **Fix #23 (env + connection):** `DATABASE_DIRECT_URL` added to `chapter-scripts/.env` pointing at `db.bvvmmhekdgskeilczeuy.supabase.co:5432`. `run-snapshot.js` already prefers it over `DATABASE_URL` with fallback warning (was code-ready before).
@@ -224,7 +235,7 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ## 🔧 Open Fix List (Priority Order)
 
 ### 🚀 Scale Readiness Roadmap (added May 5, 2026)
-Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22-#23 done May 7; #24-#28 below.
+Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; #24, #25, #26, #28 below.
 
 ### 🔴 Priority 1 — Data Integrity Blockers
 
@@ -250,12 +261,6 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
   4. **Audit logging:** log every `client_key` resolution attempt, especially failures, for security forensics.
 - **Effort:** ~2-4 days. Security-sensitive — needs careful testing.
 - **Why P1:** Required before signing the dentist or school accounts (compliance/data isolation expectations).
-
-**Fix #27 — Production monitoring & alerting** *(scale roadmap — quick win)*
-- **Problem:** Today's exhaustion event was discovered only when the user noticed query failures. No alerting. No dashboard for snapshot run health.
-- **Fix:** (a) Supabase resource alerts at 70% (CPU, IO budget, connections) → Slack/email. (b) Application alert on `_snapshot_runs` rows stuck in `status='running'` for > 60 min. (c) Daily digest of snapshot health (count refreshed today, any failures, runtime trend per snapshot).
-- **Effort:** ~1 day. Mostly Supabase dashboard config + a small cron job for the digest.
-- **Why P1:** Catches problems before they cascade.
 
 **Fix #28 — Snapshot scheduling + per-client isolation** *(scale roadmap — depends on Fix #25)*
 - **Problem:** Currently snapshots are run manually + on-demand. With many clients, manual coordination doesn't scale. Concurrent refreshes for multiple clients would hit resource exhaustion.
