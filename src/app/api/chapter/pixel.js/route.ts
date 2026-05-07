@@ -327,6 +327,22 @@ function getClickableLabel(el) {
   );
 }
 
+function getElementProps(el) {
+  if (!el) return {};
+  var sectionParent = el.closest("section, nav, header, footer, main, aside");
+  return {
+    label: getClickableLabel(el),
+    tag: el.tagName,
+    href: el.tagName === "A" ? (el.getAttribute("href") || null) : null,
+    element_id: el.id || null,
+    element_class: (typeof el.className === "string" ? el.className : null) || null,
+    aria_label: el.getAttribute("aria-label") || null,
+    page_section: sectionParent
+      ? (sectionParent.getAttribute("aria-label") || sectionParent.id || sectionParent.tagName)
+      : null
+  };
+}
+
 document.addEventListener("mouseover", function (e) {
   var el = e.target.closest("a, button");
 
@@ -336,12 +352,9 @@ document.addEventListener("mouseover", function (e) {
 
   hoverTimer = setTimeout(function () {
     if (hoverTarget === el) {
-      api.track("hover_intent", {
-        label: getClickableLabel(el),
-        tag: el.tagName
-      });
+      api.track("hover_intent", getElementProps(el));
     }
-  }, 500); // threshold
+  }, 500);
 });
 
 document.addEventListener("mouseout", function (e) {
