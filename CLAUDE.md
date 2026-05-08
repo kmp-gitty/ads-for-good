@@ -139,6 +139,20 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - Contract verified end-to-end against a scratch table on April 29, 2026.
 - 5 reporting tables not yet in scope (`eos_filtered_purchase_channels_v1`, `eos_filtered_purchases_v1`, `eos_full_paths_readable_v1`, `eos_top_paths_v1`, `eos_valid_journey_ids_v3`) — extend if/when they're confirmed snapshot-shaped.
 
+### Fix #9 — Linear attribution model: per-session-entry + (unknown) bucket (May 7, 2026)
+- **Decision:** linear attribution is now per-session-entry at the chapter level, with a `(unknown)` bucket for chapters lacking session data. Repeats accumulate proportional credit (a chapter's `direct → direct → email` path = direct 2/3, email 1/3 of revenue). See `memory/project_linear_attribution_definition.md` for the canonical spec.
+- **Loader change:** `chapter_reporting.eos_attribution_linear_v1` is now built from `chapter_attribution.chapter_channel_paths_canonical_v1` (session entries) UNION ALL with a `(unknown)` row per chapter that's in canonical_v2 but missing from canonical_v1 (the 132 fallback chapters with no session data). New loader saved at `chapter-scripts/snapshots/2026-05-07-fix-9-linear-model-d.sql`; cascade SQL `2026-05-06-fix-21-cascade.sql` Block 4 also updated for future cohort runs.
+- **Result at `SNAPSHOT_TS_HI=2026-05-03T18:00:00Z`:** 6 rows in `eos_attribution_linear_v1`, totals reconcile cleanly to the cohort (442 orders, $44,074.74).
+- **Distribution shift vs. previous per-event model:**
+  - **(direct):** 69.3% revenue → **35.1%** (the per-event over-weighting bias is gone — was inflated because deep return-visitor sessions accumulated 30+ direct events each)
+  - **(unknown):** new at 28.3% — these are the 132 chapters with no session data (purchase via email-bridge / cart-token without a browser session in window). Previously hidden inside the "(direct)" bucket; now visibly distinct.
+  - **organic search:** 8.2% → 14.4% (was under-credited because organic-search sessions tend to be shorter)
+  - **email:** ~unchanged (~20%)
+- **What this means for client-facing dashboards:** the "(direct) is 70% of attribution" narrative collapses into a more honest split. When pitching the dentist / school, can credibly say: "EOS Fabrics' attribution is ~35% direct return traffic, ~28% unattributable repeat customers, ~20% email, ~14% organic search."
+- **Open follow-ups (not blocking, deferred):**
+  - When Fix #25 (incremental refresh) lands, the loader's `JOIN ... LEFT JOIN ... WHERE p1.chapter_id IS NULL` pattern for fallback detection should be revisited — incremental might want a different shape.
+  - Distinguish "(unknown)" further: today it's a single bucket. If Looker tile audit reveals demand, could split into "(unknown - email-bridge)" / "(unknown - cart-token-bridge)" / "(unknown - other)" to surface where the no-session purchases came from.
+
 ### Fix #10 — Cleanup old/experimental views: 32 objects dropped (May 7, 2026)
 - **Tier 1 dropped (9, all `_deprecated` in chapter_analysis):** migration `fix_10_drop_deprecated_and_legacy_views`. `eos_attribution_linear_v1_deprecated`, `eos_bot_scores_24h_v5_deprecated`, `eos_bot_scores_v1_deprecated`, `eos_purchase_attribution_v6_deprecated`, `eos_purchase_channel_presence_v3_deprecated`, `eos_purchase_last_journey_v2_clean_deprecated`, `eos_purchase_paths_v2_deprecated`, `eos_purchase_stitched_events_v2_deprecated`, `unified_events_legacy`.
 - **Tier 2 dropped (6, older numbered variants):** same migration. `chapter_attribution.chapter_channel_paths_v2`, `chapter_channel_paths_v3`, `chapter_session_entry_channels_v2`, `chapter_analysis.attribution_first_touch_v2`, `attribution_last_touch_v2`, `attribution_linear_v2`.
@@ -321,11 +335,6 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 - **Why not just invert it now:** removing the cache and reading `chapter_summary_v1` directly from canonical_v2 would push canonical_v2's runtime from ~7 min to plausibly 15-30 min. Real performance regression for marginal architectural cleanup. The "right" fix is **Path B** (relocate the cache from `chapter_reporting` to `chapter_attribution` + facade view) — but that's a 2-3 hr refactor for a smell that isn't blocking anything.
 - **Why deferred:** **Fix #25 (incremental snapshot refresh)** completely redesigns the snapshot architecture — `chapter_summary_v1`, `purchase_chapters_base`, and the four reporting caches all get rethought during that refactor. Doing Fix #18 now risks doing the work twice. The right place to address layering is during Fix #25's design.
 - **Reopen criteria:** if Fix #25 changes scope or gets deferred indefinitely AND Fix #17-style data-lag incidents recur, revisit Fix #18 as an independent project (likely as Path B — relocate caches to attribution layer).
-
-**Fix #9 — Linear attribution decision**
-- **Problem:** Linear is the current canonical model but hasn't been compared to a session-entry linear model.
-- **Fix:** Keep linear for V1. Set up side-by-side test of canonical vs session-entry linear before replacing.
-- **Location:** Supabase — `chapter_attribution`
 
 ---
 
