@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: May 11, 2026
+> Last updated: May 12, 2026
 
 ---
 
@@ -108,17 +108,51 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of May 11, 2026)
+## ✅ Completed Fixes (as of May 12, 2026)
 
-### Fix #25 Phase 0 — Materialize `chapter_model.lifecycle_chapters` (IN PROGRESS, May 8-11, 2026)
-- **Scope pivot (May 8, 2026):** Original Fix #25 design (incremental refresh layered on existing snapshots) failed during validation. Diagnostic on `chapter_attribution.purchase_chapters_base` (the proposed first port) showed: COUNT(*) over full date range times out at 5 min; narrowing to last 7 days doesn't help; filtering by 3 specific canonicals also times out. EXPLAIN cost ~20M. Root cause: `chapter_model.lifecycle_chapters` is a VIEW running a window function over `unified_timeline_v1` (2.77M pixel events for EOS); every consumer recomputes the whole window. Predicates on the view's output don't push down through the WindowAgg.
-- **Phase 0 = make `lifecycle_chapters` a real materialized table** before any incremental work above it. After Phase 0 lands, the original Fix #25 plan resumes (Phase 1 = port `purchase_base`, `canonical_v1`, `canonical_v2` to incremental — now feasible because the source view chain is fast).
-- **Day 1 (May 8):** `chapter_model.lifecycle_chapters_snapshot` DDL applied (22 columns mirroring view + `snapshot_ts_hi`; 5 indexes). PK dropped to allow nullable `source_id`. Loader written at `chapter-scripts/run-lifecycle-chapters-rebuild.js`.
-- **Day 1 attempt FAILED:** Initial population via Node loader ran 36 min then dropped with `CONNECTION_CLOSED`. Root: postgres-js doesn't enable TCP keepalive by default; middlebox (NAT / firewall / sleep) closed the idle TCP connection during the long-running INSERT. Server-side transaction was killed too. Lesson saved to memory `feedback_postgres_js_keepalive.md` — fix is `keep_alive: 60` option OR run server-side DO blocks via SQL Editor.
-- **Day 2 (May 11):** Pivoted to server-side DO block (`chapter-scripts/snapshots/2026-05-08-fix-25-phase0-lifecycle-rebuild.sql`) submitted via Supabase SQL Editor. Editor's UI HTTP times out at 5 min ("Failed to fetch") but the query keeps running server-side. Phase 0 rebuild is currently running.
-- **Day 2 parallel work:** Draft incremental loader at `chapter-scripts/snapshots/2026-05-11-fix-25-phase0-lifecycle-incremental-DRAFT.sql` documenting Class B pattern with **five-source affected-canonical detection**: new pixel events, new purchase events, new conversion events, new offline milestones, new alias edges (both sides of edge + current canonical mapping). Strategy A (use view with `WHERE canonical_identity_key IN (...)`) vs Strategy B (replicate three-branch logic inline at source tables) — undetermined until pushdown can be tested post-rebuild.
-- **Open follow-ups:** Day 3 = rewrite `chapter_model.lifecycle_chapters` view as facade over snapshot (Fix #7-style). Day 4+ = port `purchase_base`, `canonical_v1`, `canonical_v2` to incremental.
-- **Design doc:** `/docs/fix-25-incremental-refresh-design.md` (includes Phase 0 addendum).
+### Fix #26 Part 2 framework — RLS policies + per-client Postgres roles (May 12, 2026)
+- **Scope:** establish the database-level isolation framework. Per-client Postgres roles created (`client_eos_fabrics`, `client_adsforgood_prod`, NOINHERIT/NOLOGIN). RLS enabled with `USING (client_key = current_setting('app.client_key', true))` policies on 10 high-risk tables: all of `chapter_ingest.*` (6 tables), `chapter_identity.identity_aliases`/`identity_canon`/`identity_links`, and `chapter_journey.journeys`. Grants on `chapter_ingest.*` and `chapter_identity.*` to per-client roles: SELECT + INSERT (append-only matches the "raw ingest, never mutated" principle).
+- **service_role still bypasses (BYPASSRLS=true).** RLS is enabled, not FORCED. All current routes use service_role → continue working unchanged. No regression.
+- **What this DOESN'T do:** migrate any route to use the per-client roles. The actual RLS enforcement only kicks in when a route opens a non-service-role connection that has `app.client_key` set. **Route migration is deferred to a future session** — see Open Fix List below.
+- **Why this is still valuable on its own:** schema is in the right shape; future per-client routes will be RLS-restricted automatically. Reporting work between now and the route-migration session is unaffected (Looker still uses service_role).
+- **Files:** `chapter-scripts/snapshots/2026-05-12-fix-26-part2-rls-framework.sql`, verifier `chapter-scripts/verify-rls-framework.js`.
+- **Design doc:** `/docs/fix-26-multi-tenant-isolation-design.md` describes the full migration path (parts 2 + 3 architectural shift).
+
+### Fix #26 Part 4 — Audit logging on auth attempts (May 12, 2026)
+- **New schema `chapter_audit`** for operational/security logs (separate from `chapter_reporting`'s dashboard focus). Table `chapter_audit.api_auth_attempts` with: `endpoint`, `client_key`, `success`, `failure_reason`, `ip_hash` (SHA-256, no raw IP per GDPR), `user_agent_snippet`, `request_id`, `ts`. Three indexes: by-time DESC, by-(client,time), and partial-on-failures.
+- **Helper module:** `src/app/lib/audit/auth.ts` exports `logAuthAttempt()`, `hashIp()`, `getClientIp()`. Errors in logging never block the actual request (caught + `console.error`'d).
+- **Wired into 4 HMAC-protected endpoints:** `/api/purchase`, `/api/conversion`, `/api/shopify/webhooks/orders-create`, `/api/shopify/webhooks/orders-cancelled`. Each logs success + every failure path with the specific `failure_reason` (`missing_client_key` / `unknown_client` / `missing_signature` / `invalid_signature` / `missing_shopify_secret` / `missing_shopify_hmac` / `invalid_shopify_hmac`).
+- **Not wired:** pixel `/api/chapter/collect` — would log one row per pixel event (~50k/day). Pixel uses CORS-only auth (no HMAC), different security model.
+- **Verified post-deploy** with a deliberate `unknown_client` curl test against production; row appeared in `chapter_audit.api_auth_attempts` correctly.
+- **Watch out:** new schemas must be added to PostgREST's "Exposed schemas" list in Supabase Dashboard (Settings → API). Without this, `supabase.schema("chapter_audit")` calls silently fail. `chapter_audit` and `chapter_config` added on May 12.
+
+### Fix #26 Part 3 — Per-client API keys (DB-backed secrets) (May 12, 2026)
+- **Replaced `AFG_CLIENT_SECRETS_JSON` env var** (one dict, single rotation unit) with `chapter_config.client_secrets` table supporting per-client independent rotation/revocation + overlap-window rotation (new + old both active until old is hard-revoked).
+- **Schema:** `(id uuid PK, client_key, secret, key_version, created_at, rotated_at, revoked_at, notes)`. Plaintext secrets for now (HMAC needs plaintext). Restricted to service_role. Revisit with KMS encryption when enterprise compliance demands.
+- **Helper module:** `src/app/lib/auth/client-secrets.ts` with `getActiveSecrets(client_key)` (returns all non-revoked secrets, newest first — auth code tries each) and `getActiveSecretForOutbound(client_key)` (newest active — used by Shopify webhooks to sign their internal call to `/api/purchase`). 5-min in-memory cache.
+- **Backfilled** 2 clients (`eos_fabrics` + `adsforgood_prod`) from the existing env var via `chapter-scripts/backfill-client-secrets.js`.
+- **Migrated 4 endpoints:** all 4 HMAC-protected endpoints now read from the table instead of the env var. The env var is now ignored (but still set in Vercel — will be dropped after ~few days of stable operation).
+- **How rotation works now:** INSERT new row with `key_version=max+1` and fresh secret. Both old and new HMAC signatures continue to be accepted (auth code tries each). When client confirms switch: UPDATE old row to set `revoked_at = now()`. No re-deploy, no shared dict, per-client independent.
+- **Deploy verified May 12** with end-to-end curl test through production.
+
+### Fix #26 Part 1 — Leading client_key indexes (May 12, 2026)
+- **Audit found 6 tables in `chapter_reporting` with NO indexes** (all post-Fix-#10 snapshot caches): `eos_purchase_base_snapshot_v1`, `eos_purchase_touch_summary_snapshot_v1`, `eos_purchase_fallback_snapshot_v1`, `eos_purchase_channel_final_snapshot_v1`, `eos_filtered_purchases_v1`, `eos_filtered_purchase_channels_v1`.
+- For single-client (~450 rows each), seq scans are sub-millisecond — no impact yet. For multi-tenant, every query without an index scans ALL clients' rows.
+- **Applied** single-column `(client_key)` leading indexes via `chapter-scripts/snapshots/2026-05-12-fix-26-part1-client-key-indexes.sql`. Multi-column tuning (e.g., `(client_key, purchase_ts)`) deferred until multi-client query patterns emerge.
+- **All other 13 per-client tables** across `chapter_ingest.*`, `chapter_identity.*`, `chapter_journey.*`, `chapter_model.*`, `chapter_attribution.*` already had leading `client_key` indexes — coverage was good.
+
+### Fix #25 Phase 0 + Phase 1 — Materialize lifecycle_chapters + cascade refresh (May 8-12, 2026, DONE)
+- **Scope pivot (May 8, 2026):** Original Fix #25 design (incremental refresh layered on existing snapshots) failed validation. Diagnostic on `purchase_chapters_base` showed COUNT(*) timing out at 5 min; predicates don't push down through `unified_timeline_v1`'s union or `lifecycle_chapters`'s WindowAgg (~20M cost plan). Root: `lifecycle_chapters` was a VIEW running a window function over 2.77M pixel events on every consumer query.
+- **Phase 0 = materialize `lifecycle_chapters` as a real table.** Then Phase 1 = original incremental work, now feasible because source view chain becomes fast.
+- **Day 1 attempt FAILED (May 8):** Node loader ran 36 min, dropped with `CONNECTION_CLOSED`. Postgres-js doesn't enable TCP keepalive by default — middlebox closed the idle connection. Lesson saved to memory `feedback_postgres_js_keepalive.md` (fix: `keep_alive: 60` option OR server-side DO blocks).
+- **Day 2 attempt FAILED (May 11):** Server-side DO block via Supabase SQL Editor also died at ~30 min. Pattern: ~30-min server-side connection ceiling in Supabase's stack (API gateway / load balancer level). Confirmed predicate pushdown is broken even on `unified_timeline_v1` directly via Strategy A test. Must use Strategy B (replicate three-branch logic inline at source tables).
+- **Chunked rebuilder succeeded (May 12):** `chapter-scripts/run-lifecycle-chapters-chunked.js` bypasses the slow view chain entirely. Per chunk: query raw `pixel_events` / `purchase_events` / `offline_milestones` directly with `identity_key IN (...)` filter (hits `pixel_events_identity_idx`, ~0.2s per chunk), compute `chapter_id` window in JS, INSERT into snapshot in batches of 2000 rows (to stay under wire protocol's 65534-parameter limit). 31 chunks of 50 canonicals each → 315,979 rows in ~16 min wall time.
+- **Documented gap:** snapshot excludes bot canonicals (identities not in `identity_canon`). For EOS that's ~61% of journeys but mostly 1-event bot traffic. Both rebuild and incremental respect this consistently. Will revisit if reporting needs bot data; current attribution work is unaffected.
+- **Day 2 incremental loader (May 12):** `chapter-scripts/run-lifecycle-chapters-incremental.js` uses the same chunked Class B pattern with five-source affected-canonical detection (new pixel/purchase/conversion/offline events + new alias edges). DELETE-affected + re-INSERT per chunk in a transaction (readers never see partial state). INNER JOIN to `identity_canon` to exclude bots (matching rebuilder's coverage). Smoke-tested: found 16 affected canonicals in a 2-hour window, processed in one chunk, +1,118 net rows (47,104 inserted minus 45,986 deleted).
+- **Day 3 facade migration (May 12):** rewrote `chapter_model.lifecycle_chapters` as `SELECT * FROM chapter_model.lifecycle_chapters_snapshot`. **2500× speedup measured** on canonical filter queries (30s+ timeout → 0.2s). Original view DDL backed up in `chapter-scripts/snapshots/2026-05-12-fix-25-phase0-lifecycle-view-original-backup.sql` for rollback if ever needed.
+- **Phase 1 cascade refresh (May 12):** ran all 7 downstream snapshots in dependency order with shared `SNAPSHOT_TS_HI=2026-05-12T18:45:38Z`: `eos_filtered_purchases_v1`, `eos_purchase_base_snapshot_v1`, `eos_purchase_touch_summary_snapshot_v1`, `eos_purchase_fallback_snapshot_v1`, `eos_purchase_channel_final_snapshot_v1`, `canonical_v1_snapshot`, `canonical_v2_snapshot`. All succeeded in minutes (was 50+ min for canonical_v1 alone pre-facade). Row counts grew (311 → 349 canonical_v1; 443 → 450 purchase_base) — the slow view chain had been silently dropping real attribution data which is now captured correctly.
+- **Important post-Phase-1 finding:** 44 raw `purchase_events` (494 raw vs 450 chapters) are still being dropped at the attribution layer — investigation needed (see Open Fix List).
+- **Design doc:** `/docs/fix-25-incremental-refresh-design.md`.
 
 ### Fix #24 — Supabase read replica + analytical isolation (May 8, 2026)
 - **Replica provisioned** in us-west-2 (same region as primary, sub-second lag expected). Cost: ~$16/mo. IPv4 add-on (Fix #23) already covered the replica host automatically.
@@ -308,25 +342,29 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ## 🔧 Open Fix List (Priority Order)
 
 ### 🚀 Scale Readiness Roadmap (added May 5, 2026)
-Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; **Fix #24 done May 8; Fix #25 Phase 0 in progress May 8-11;** #26, #28 below.
+Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; **Fix #24 done May 8; Fix #25 Phase 0 + Phase 1 cascade done May 12; Fix #26 parts 1/3/4 + part 2 framework done May 12;** route migration for #26 part 2 and #28 below.
 
 ### 🔴 Priority 1 — Data Integrity Blockers
 
-**Fix #25 — Incremental snapshot refresh pattern** *(IN PROGRESS — Phase 0 underway, May 11, 2026)*
-- **Status:** See "Fix #25 Phase 0" entry in Completed Fixes above for current state. Phase 0 (materialize `chapter_model.lifecycle_chapters`) replaces the original "incremental on top of existing snapshots" approach after diagnostic proved the source view chain is too slow for the original design.
-- **Phase 1 (after Phase 0):** Port `purchase_base`, `canonical_v1`, `canonical_v2`, and other Class B snapshots to incremental. Now feasible because source view chain becomes fast.
-- **Design doc:** `/docs/fix-25-incremental-refresh-design.md`.
-- **Why P1:** Without this, 30 clients × full rebuilds = guaranteed exhaustion. Phase 0 is the prerequisite that makes Phase 1 + Fix #28 (scheduling) viable.
+**Fix #26 Part 2 (remaining) — Route migration to per-client Postgres roles**
+- **Framework already in place (May 12):** per-client roles created, RLS policies enabled on 10 tables. service_role bypasses RLS today, so no current route is affected.
+- **What's left:** migrate each ingest route to open connections AS the per-client role (not service_role), so RLS actually enforces. Three implementation patterns documented in `/docs/fix-26-multi-tenant-isolation-design.md`: (a) switch routes from supabase-js to raw pg/postgres-js with `SET ROLE` + `SET LOCAL app.client_key`, (b) PostgreSQL RPC functions wrapping each ingest path, (c) `FORCE ROW LEVEL SECURITY` + supabase-js wrappers.
+- **Effort:** ~4-8 hours focused session. Touches every ingest path (8+ routes). Cutover-risky — a misconfigured route locks out its client.
+- **Doesn't block:** reporting / Looker work, dashboard builds, new datasources. Those use service_role (unchanged). Future route migration won't regress that work.
 
-**Fix #26 — Multi-tenant isolation hardening** *(scale roadmap — security + scale)*
-- **Problem:** Currently all queries filter by `client_key` in the WHERE clause, but there's no enforcement at the schema level. If a future query forgets a `client_key` filter, it scans all clients' data. Plus no RLS policies. Plus shared API key for all clients.
-- **Fix:**
-  1. **Indexes:** ensure every query path on chapter_ingest, chapter_identity, chapter_model, chapter_attribution has a leading index on `client_key`.
-  2. **RLS policies:** add Row Level Security on `chapter_ingest.*`, `chapter_identity.*`, etc. — service role bypasses but app-tier connections are confined to their client_key.
-  3. **Per-client API keys:** rotate `AFG_CLIENT_SECRETS_JSON` away from a single dict; make each client's key independently rotatable + revocable.
-  4. **Audit logging:** log every `client_key` resolution attempt, especially failures, for security forensics.
-- **Effort:** ~2-4 days. Security-sensitive — needs careful testing.
-- **Why P1:** Required before signing the dentist or school accounts (compliance/data isolation expectations).
+**44-row attribution gap (RESOLVED May 12, 2026)**
+- **Symptom:** 494 raw `purchase_events` post-April-1 but only 450 chapters in `purchase_base` — 44 valid purchases (~9% of revenue events) being dropped silently.
+- **Root cause:** 41 distinct deterministic identities (email_sha256:..., shopify_customer_id:...) from those orphan purchases were missing from `chapter_identity.identity_canon` entirely. Fix #20's backfill went `identity_canonical → identity_canon`, but these emails had no alias edges → not in `identity_canonical` → not picked up. The chunked rebuilder iterates only over canonicals in `identity_canon`, so these orphans never made it into `lifecycle_chapters_snapshot`, which then cascaded down.
+- **Two populations:** 35 pre-May-4 orphans (Fix #20's backfill couldn't have caught them — pre-date the fix); **6 post-May-4 orphans (code bug — Fix #20's `/api/purchase` canon-upsert path is NOT firing for some Shopify webhook flows, likely guest checkouts without cart_token bridge).**
+- **Fix applied (May 12):** SQL backfill `chapter-scripts/snapshots/2026-05-12-fix-26-followup-canon-backfill-purchases.sql` inserts missing identities as self-canonical (`identity_canon` 2,227 → 2,276 rows, +49). Re-ran chunked rebuilder (+44 rows to `lifecycle_chapters_snapshot`). Re-ran Phase 1 cascade. All snapshots now reconcile cleanly: 494 raw = 494 in `purchase_base` = 494 in canonical_v2 (349 with session entry data + 145 fallback no-session, including the 44 newly-recovered orphans). `canonical_v1` stays at 349 by design (it only includes chapters with session-entry data, and orphans had none).
+- **Code fix still TBD:** find where `/api/purchase`'s canon-upsert path is skipped for Shopify webhook flows that don't trigger a cart_token bridge. Tracked as a separate follow-up — future orders will continue to silently orphan until that's fixed.
+- **Diagnostic files:** `chapter-scripts/diag-7-row-gap.js` (misnamed — gap was 44), `chapter-scripts/diag-orphan-purchase-trace.js` (single-row trace through the view chain), `chapter-scripts/diag-orphan-canon-check.js` (canon-presence audit).
+
+**Fix #28 — Snapshot scheduling + per-client isolation** *(scale roadmap — depends on Fix #25)*
+- **Problem:** Currently snapshots are run manually + on-demand. With many clients, manual coordination doesn't scale. Concurrent refreshes for multiple clients would hit resource exhaustion.
+- **Fix:** `pg_cron` or Vercel scheduled functions. Stagger per-client refreshes (client A 1am UTC, client B 1:30am, etc.) — never all simultaneous. Run during off-peak (UTC night). Fix #25 (incremental refresh) makes each refresh small enough to fit in a stagger window.
+- **Effort:** ~1-2 days. Phase 0 + Phase 1 are done; Fix #28 is now unblocked.
+- **Why P2:** Quality-of-life optimization. Manual refresh works fine for now.
 
 **Fix #28 — Snapshot scheduling + per-client isolation** *(scale roadmap — depends on Fix #25)*
 - **Problem:** Currently snapshots are run manually + on-demand. With many clients, manual coordination doesn't scale. Concurrent refreshes for multiple clients would hit resource exhaustion.
@@ -336,10 +374,10 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ---
 
-**Fix #5 phase 3 — Cleanup (deferred until Looker audit)**
+**Fix #5 phase 3 — Cleanup (effectively unblocked since May 12 Looker rebuild)**
 - **Phases 1 + 2 complete (May 4, 2026):** additive shim across all 11 views; both reporting snapshots (sessionized_universe_summary, identity_overlap_summary) migrated to canonical_identity_key.
 - **Phase 3 work:** drop `final_identity_key` from view outputs and body references; harmonize `identity_canon` (table) vs `identity_canonical` (recursive view) across the chain.
-- **Blocked on:** Looker tile audit — confirm no dashboard reads `final_identity_key` directly. Once verified, phase 3 is a series of CREATE OR REPLACE VIEWs removing the column + a final pass to swap upstream JOIN/COALESCE refs from final to canonical.
+- **Blocker removed (May 12):** the 5 parked Looker sources that originally required a tile audit were deleted (strategic call to rebuild reporting post-multi-tenant). Phase 3 is now a straightforward series of CREATE OR REPLACE VIEWs.
 
 
 ---

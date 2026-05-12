@@ -241,6 +241,36 @@ if (emailHash && purchaseCartToken) {
     }
   }
 
+// Self-canonical fallback (May 12 2026 fix for the 44-row attribution gap).
+// The two alias paths above (explicit-identify, cart-token-bridge) only fire
+// when there's a browser identity to alias FROM. Guest checkouts with only
+// email_hash (typical Shopify-direct order, no anonymous_id, no cart_token
+// match in pixel_events) hit neither path → the email_hash never gets a
+// canon entry → the purchase silently orphans out of attribution.
+// This unconditional upsert ensures every purchase identity at least exists
+// in canon as self-canonical. Idempotent — no-op if the row already exists.
+if (emailHash || payload.customer_id) {
+  const detKey = emailHash
+    ? `email_sha256:${emailHash}`
+    : `shopify_customer_id:${String(payload.customer_id).trim()}`;
+  try {
+    await chapterSchemas.identity(supabase).from("identity_canon").upsert(
+      {
+        client_key: clientKey,
+        identity_key: detKey,
+        canonical_identity_key: detKey,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "client_key,identity_key" }
+    );
+  } catch (canonErr) {
+    console.error(
+      "identity_canon self-canonical upsert (purchase fallback) failed:",
+      canonErr
+    );
+  }
+}
+
 // Ask the DB for canonical identity (falls back to lookupKey if none)
 const canonLookupKey = bridgedFromIdentityKey || lookupKey;
 
