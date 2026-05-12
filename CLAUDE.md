@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: May 7, 2026
+> Last updated: May 11, 2026
 
 ---
 
@@ -108,7 +108,31 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of May 7, 2026)
+## ✅ Completed Fixes (as of May 11, 2026)
+
+### Fix #25 Phase 0 — Materialize `chapter_model.lifecycle_chapters` (IN PROGRESS, May 8-11, 2026)
+- **Scope pivot (May 8, 2026):** Original Fix #25 design (incremental refresh layered on existing snapshots) failed during validation. Diagnostic on `chapter_attribution.purchase_chapters_base` (the proposed first port) showed: COUNT(*) over full date range times out at 5 min; narrowing to last 7 days doesn't help; filtering by 3 specific canonicals also times out. EXPLAIN cost ~20M. Root cause: `chapter_model.lifecycle_chapters` is a VIEW running a window function over `unified_timeline_v1` (2.77M pixel events for EOS); every consumer recomputes the whole window. Predicates on the view's output don't push down through the WindowAgg.
+- **Phase 0 = make `lifecycle_chapters` a real materialized table** before any incremental work above it. After Phase 0 lands, the original Fix #25 plan resumes (Phase 1 = port `purchase_base`, `canonical_v1`, `canonical_v2` to incremental — now feasible because the source view chain is fast).
+- **Day 1 (May 8):** `chapter_model.lifecycle_chapters_snapshot` DDL applied (22 columns mirroring view + `snapshot_ts_hi`; 5 indexes). PK dropped to allow nullable `source_id`. Loader written at `chapter-scripts/run-lifecycle-chapters-rebuild.js`.
+- **Day 1 attempt FAILED:** Initial population via Node loader ran 36 min then dropped with `CONNECTION_CLOSED`. Root: postgres-js doesn't enable TCP keepalive by default; middlebox (NAT / firewall / sleep) closed the idle TCP connection during the long-running INSERT. Server-side transaction was killed too. Lesson saved to memory `feedback_postgres_js_keepalive.md` — fix is `keep_alive: 60` option OR run server-side DO blocks via SQL Editor.
+- **Day 2 (May 11):** Pivoted to server-side DO block (`chapter-scripts/snapshots/2026-05-08-fix-25-phase0-lifecycle-rebuild.sql`) submitted via Supabase SQL Editor. Editor's UI HTTP times out at 5 min ("Failed to fetch") but the query keeps running server-side. Phase 0 rebuild is currently running.
+- **Day 2 parallel work:** Draft incremental loader at `chapter-scripts/snapshots/2026-05-11-fix-25-phase0-lifecycle-incremental-DRAFT.sql` documenting Class B pattern with **five-source affected-canonical detection**: new pixel events, new purchase events, new conversion events, new offline milestones, new alias edges (both sides of edge + current canonical mapping). Strategy A (use view with `WHERE canonical_identity_key IN (...)`) vs Strategy B (replicate three-branch logic inline at source tables) — undetermined until pushdown can be tested post-rebuild.
+- **Open follow-ups:** Day 3 = rewrite `chapter_model.lifecycle_chapters` view as facade over snapshot (Fix #7-style). Day 4+ = port `purchase_base`, `canonical_v1`, `canonical_v2` to incremental.
+- **Design doc:** `/docs/fix-25-incremental-refresh-design.md` (includes Phase 0 addendum).
+
+### Fix #24 — Supabase read replica + analytical isolation (May 8, 2026)
+- **Replica provisioned** in us-west-2 (same region as primary, sub-second lag expected). Cost: ~$16/mo. IPv4 add-on (Fix #23) already covered the replica host automatically.
+- **Connection routing:** primary handles writes (pixel ingest, purchase webhooks, identity_aliases updates). Replica handles reads — Looker, internal monitoring routes, future dashboards.
+- **Code changes:** Vercel env added `SUPABASE_REPLICA_URL` and `DATABASE_REPLICA_DIRECT_URL` (Production + Preview). Three Next.js routes updated to use replica via fallback (`process.env.SUPABASE_REPLICA_URL ?? process.env.SUPABASE_URL`): `/api/internal/monitoring/stuck-runs`, `/api/internal/monitoring/daily-digest`, `/demo/snapshot`. `chapter-scripts/.env` got `DATABASE_REPLICA_DIRECT_URL` too. `run-snapshot.js` deliberately stays on primary (its INSERT-FROM-SELECT pattern can't split — already covered by Fix #24's plan).
+- **Looker migration:** 15 of 20 data sources reconnected to replica host directly. 5 still failing with generic "encountered an error" (no useful detail in Looker's UI). Original theory was "bulk-edit cache settle, retry in 15 min." May 11 update: 3-day wait didn't clear those 5 → cache theory invalidated. **Current hypothesis: those 5 are slow-view-chain bound** — their underlying views chain through `pixel_events` and time out during Looker's reconnect validation query. Confirms Fix #25 Phase 0 + Day 3 (view facade) will resolve them. **Parked pending Phase 0 completion.**
+- **Memory:** `feedback_looker_connection_edit_intermittent.md` documents the bulk-edit pattern. **Update needed (May 11):** the "wait ~15 min" hypothesis was wrong for the stragglers; they're query-timeout bound, not cache bound.
+- **Why critical:** primary now insulated from analytical load. The May 5 cascade meltdown pattern (50-min `canonical_v1` build holding locks + degrading ingest) becomes impossible because analytical reads never hit primary.
+
+### Fix #11 — Consolidated reference doc (May 8, 2026)
+- **Created `/docs/chapter-reference.md`** — single source-of-truth doc combining the user's existing schema reference (table-level descriptions) + new conceptual definitions glossary (first/last/linear/channel contribution/only touch/middle touch/unknown/chapter/journey/sessionized journey/canonical identity/boundary event/bot-likely/etc.) + audit history through May 11 + open follow-ups + pricing/scaling notes.
+- **30+ terms** grouped by schema-flow (Identity → Journey → Events/Chapters → Channels → Traffic Quality → Attribution) per user preference.
+- **Stale items updated** in the schema reference body: linear attribution definition rewritten to per-session-entry (Fix #9), all `_deprecated` objects removed from listings (Fix #10), `canonical_v1`/_v2 snapshot tables added (Fix #7 / #7b), `_snapshot_runs` documented (Fix #1).
+- **New section added:** `chapter_analysis` schema — was missing from the original schema reference even though the schema exists.
 
 ### Schema Cleanup (April 6, 2026 audit — DONE)
 - Journey schema cleaned — removed `journeys_filtered_v1`, `journeys_filtered_v2`
@@ -284,22 +308,15 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ## 🔧 Open Fix List (Priority Order)
 
 ### 🚀 Scale Readiness Roadmap (added May 5, 2026)
-Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; #24, #25, #26, #28 below.
+Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; **Fix #24 done May 8; Fix #25 Phase 0 in progress May 8-11;** #26, #28 below.
 
 ### 🔴 Priority 1 — Data Integrity Blockers
 
-**Fix #24 — Enable Supabase read replica + route analytics to it** *(scale roadmap — strategic)*
-- **Problem:** Real-time pixel/webhook ingest and heavy analytical reads share the same primary DB. A runaway analytical query degrades ingest performance. As clients scale, this gets worse.
-- **Fix:** Enable Supabase Pro read replica. Route analytical workloads (Looker, snapshot reads, `run-snapshot.js` non-INSERT queries) to replica. Writes (pixel ingest, purchase webhooks, identity_aliases) stay on primary. Primary becomes insulated from analytical load.
-- **Effort:** ~2-4 hours. Supabase setting + connection routing + test.
-- **Cost:** ~$10-25/mo extra depending on instance size.
-- **Why P1:** Single biggest "this can't take us down" lever as client count grows.
-
-**Fix #25 — Incremental snapshot refresh pattern** *(scale roadmap — biggest refactor)*
-- **Problem:** Every snapshot today does `TRUNCATE + INSERT` over the full live window. Refresh time is `O(all data since 2026-04-01)`. With 30 clients × daily refreshes × growing per-client volume, that's untenable. Today's canonical_v1 took 50+ min for one client.
-- **Fix:** Track `last_processed_event_ts` per snapshot table. Each refresh only processes events with `event_ts > last_processed`. Refresh time becomes `O(today's new data)`. For canonical_v1 specifically: track per-(client_key, canonical_identity_key) max processed boundary_ts, INSERT only chapters with newer boundaries.
-- **Effort:** ~2-3 days of refactor work — biggest payoff. Required for daily refreshes at scale.
-- **Why P1:** Without this, 30 clients × full rebuilds = guaranteed exhaustion.
+**Fix #25 — Incremental snapshot refresh pattern** *(IN PROGRESS — Phase 0 underway, May 11, 2026)*
+- **Status:** See "Fix #25 Phase 0" entry in Completed Fixes above for current state. Phase 0 (materialize `chapter_model.lifecycle_chapters`) replaces the original "incremental on top of existing snapshots" approach after diagnostic proved the source view chain is too slow for the original design.
+- **Phase 1 (after Phase 0):** Port `purchase_base`, `canonical_v1`, `canonical_v2`, and other Class B snapshots to incremental. Now feasible because source view chain becomes fast.
+- **Design doc:** `/docs/fix-25-incremental-refresh-design.md`.
+- **Why P1:** Without this, 30 clients × full rebuilds = guaranteed exhaustion. Phase 0 is the prerequisite that makes Phase 1 + Fix #28 (scheduling) viable.
 
 **Fix #26 — Multi-tenant isolation hardening** *(scale roadmap — security + scale)*
 - **Problem:** Currently all queries filter by `client_key` in the WHERE clause, but there's no enforcement at the schema level. If a future query forgets a `client_key` filter, it scans all clients' data. Plus no RLS policies. Plus shared API key for all clients.
@@ -343,10 +360,6 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 **Fix #8 — Historical identity gap documentation**
 - **Note:** Early EOS data had identity persistence gaps. Cookie fixes applied April 1 (identity) and April 14 (journey). Fallback paths are needed for older chapters. Future data should have full coverage.
 - **Action:** Document formally. No code change required.
-
-**Fix #11 — Document definitions**
-- **Write clear definitions for:** first touch, last touch, linear, channel contribution, only touch, middle touch, unknown, chapter, journey/session.
-- **Location:** `/docs/chapter-definitions.md` (create this file)
 
 **Fix #19 — POS / Quick Sale orders rejected by Shopify webhook adapter** *(code-complete May 5, 2026 — pending deploy + real-world verification)*
 - **Problem:** orders-create webhook returned 400 `missing_purchase_identity` when an order had neither email nor customer_id. POS / Quick Sale walk-ins typically have neither, so they were silently dropped. Confirmed by the Apr 9 order #102256 ($78, source_name=`pos`) miss.

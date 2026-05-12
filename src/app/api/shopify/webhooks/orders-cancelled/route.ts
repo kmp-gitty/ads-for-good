@@ -1,5 +1,10 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
+import { getActiveSecretForOutbound } from "@/app/lib/auth/client-secrets";
+
+const ENDPOINT = "/api/shopify/webhooks/orders-cancelled";
+const SHOPIFY_CLIENT_KEY = "eos_fabrics";
 
 function verifyShopifyWebhook(rawBody: string, hmacHeader: string, secret: string): boolean {
   const digest = crypto
@@ -64,6 +69,8 @@ function sanitizeShopifyOrderForRaw(order: any) {
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
+  const ipHash = hashIp(getClientIp(req));
+  const ua = req.headers.get("user-agent");
 
   try {
     const shopifyHmac = (req.headers.get("x-shopify-hmac-sha256") || "").trim();
@@ -72,12 +79,26 @@ export async function POST(req: NextRequest) {
 
     const shopifySecret = process.env.SHOPIFY_API_SECRET;
     if (!shopifySecret) {
+      await logAuthAttempt({
+        endpoint: ENDPOINT, client_key: SHOPIFY_CLIENT_KEY, success: false,
+        failure_reason: "missing_shopify_secret", ip_hash: ipHash, user_agent_snippet: ua,
+      });
       return NextResponse.json({ error: "missing_shopify_secret" }, { status: 500 });
     }
 
     if (!verifyShopifyWebhook(rawBody, shopifyHmac, shopifySecret)) {
+      await logAuthAttempt({
+        endpoint: ENDPOINT, client_key: SHOPIFY_CLIENT_KEY, success: false,
+        failure_reason: shopifyHmac.length === 0 ? "missing_shopify_hmac" : "invalid_shopify_hmac",
+        ip_hash: ipHash, user_agent_snippet: ua,
+      });
       return NextResponse.json({ error: "invalid_shopify_hmac" }, { status: 401 });
     }
+
+    await logAuthAttempt({
+      endpoint: ENDPOINT, client_key: SHOPIFY_CLIENT_KEY, success: true,
+      ip_hash: ipHash, user_agent_snippet: ua,
+    });
 
     let order: any;
     try {
@@ -88,19 +109,9 @@ export async function POST(req: NextRequest) {
 
     const clientKey = "eos_fabrics";
 
-    const afgSecretsJson = process.env.AFG_CLIENT_SECRETS_JSON;
-    if (!afgSecretsJson) {
-      return NextResponse.json({ error: "missing_afg_client_secrets" }, { status: 500 });
-    }
-
-    let afgSecret: string | null = null;
-    try {
-      const parsed = JSON.parse(afgSecretsJson) as Record<string, string>;
-      afgSecret = parsed[clientKey] ?? null;
-    } catch {
-      return NextResponse.json({ error: "invalid_afg_client_secrets_json" }, { status: 500 });
-    }
-
+    // Fix #26 part 3: read newest active secret from chapter_config.client_secrets
+    // (replaces AFG_CLIENT_SECRETS_JSON env var).
+    const afgSecret = await getActiveSecretForOutbound(clientKey);
     if (!afgSecret) {
       return NextResponse.json({ error: "missing_afg_secret_for_client" }, { status: 500 });
     }

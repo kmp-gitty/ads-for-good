@@ -6,7 +6,7 @@ import { unauthorizedIfNotCron } from "@/app/lib/monitoring/auth";
 import type { SnapshotRunRow } from "@/app/lib/monitoring/types";
 
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_REPLICA_URL ?? process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 

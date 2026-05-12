@@ -2,6 +2,10 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { chapterSchemas } from "@/app/lib/chapter-db";
+import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
+import { getActiveSecrets } from "@/app/lib/auth/client-secrets";
+
+const ENDPOINT = "/api/conversion";
 
 function hmacSha256Hex(secret: string, body: string): string {
   return crypto.createHmac("sha256", secret).update(body).digest("hex");
@@ -11,16 +15,8 @@ function sha256(input: string): string {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
 
-function getClientSecret(clientKey: string): string | null {
-  const json = process.env.AFG_CLIENT_SECRETS_JSON;
-  if (!json) return null;
-  try {
-    const map = JSON.parse(json) as Record<string, string>;
-    return map[clientKey] ?? null;
-  } catch {
-    return null;
-  }
-}
+// getClientSecret removed in Fix #26 part 3 — replaced by getActiveSecrets()
+// from @/app/lib/auth/client-secrets which reads from chapter_config.client_secrets.
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -38,6 +34,8 @@ function hasDedupeId(p: any): boolean {
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
+  const ipHash = hashIp(getClientIp(req));
+  const ua = req.headers.get("user-agent");
 
   let payload: any;
   try {
@@ -48,24 +46,50 @@ export async function POST(req: NextRequest) {
 
   const clientKey = String(payload?.client_key ?? "").trim();
   if (!clientKey) {
+    await logAuthAttempt({
+      endpoint: ENDPOINT, client_key: null, success: false,
+      failure_reason: "missing_client_key", ip_hash: ipHash, user_agent_snippet: ua,
+    });
     return NextResponse.json({ error: "missing_client_key" }, { status: 400 });
   }
 
-  const secret = getClientSecret(clientKey);
-  if (!secret) {
+  const secrets = await getActiveSecrets(clientKey);
+  if (secrets.length === 0) {
+    await logAuthAttempt({
+      endpoint: ENDPOINT, client_key: clientKey, success: false,
+      failure_reason: "unknown_client", ip_hash: ipHash, user_agent_snippet: ua,
+    });
     return NextResponse.json({ error: "unknown_client" }, { status: 401 });
   }
 
   const sig = (req.headers.get("x-afg-signature") || "").trim();
-  const expected = hmacSha256Hex(secret, rawBody);
 
-  const ok =
-    sig.length === expected.length &&
-    crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+  // Try each active secret (rotation overlap window).
+  let ok = false;
+  for (const secret of secrets) {
+    const expected = hmacSha256Hex(secret, rawBody);
+    if (
+      sig.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))
+    ) {
+      ok = true;
+      break;
+    }
+  }
 
   if (!ok) {
+    await logAuthAttempt({
+      endpoint: ENDPOINT, client_key: clientKey, success: false,
+      failure_reason: sig.length === 0 ? "missing_signature" : "invalid_signature",
+      ip_hash: ipHash, user_agent_snippet: ua,
+    });
     return NextResponse.json({ error: "invalid_signature" }, { status: 401 });
   }
+
+  await logAuthAttempt({
+    endpoint: ENDPOINT, client_key: clientKey, success: true,
+    ip_hash: ipHash, user_agent_snippet: ua,
+  });
 
   // Contract validation
   if (!payload.event_name) {
