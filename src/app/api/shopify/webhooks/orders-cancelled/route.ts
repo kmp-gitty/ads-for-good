@@ -9,7 +9,7 @@ const ENDPOINT = "/api/shopify/webhooks/orders-cancelled";
 // Multi-tenant: resolve client_key from the x-shopify-shop-domain header.
 // Add a row here when onboarding a new Shopify client.
 const SHOPIFY_SHOP_DOMAIN_TO_CLIENT_KEY: Record<string, string> = {
-  "eosfabrics.myshopify.com": "eos_fabrics",
+  "emmaonesock.myshopify.com": "eos_fabrics",
   "projectagram.myshopify.com": "projectagram_reels",
 };
 function resolveClientKey(shopDomain: string | null): string | null {
