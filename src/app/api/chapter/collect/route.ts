@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { POST as pixelPost } from "@/app/api/pixel/route";
+import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
 
 function safeClientKey(v: unknown): string | null {
   if (v === null || v === undefined) return null;
@@ -55,42 +56,11 @@ function getIp(req: NextRequest): string {
     );
   }
 
-  // Multi-tenant CORS: allow each client's storefront domain (apex + www).
-  // To onboard a new client, add their domains here. Browsers will only allow
-  // requests originating from listed domains; the OPTIONS preflight returns
-  // the matching origin back (never a wildcard) so credentials work.
-  const ALLOWED_ORIGINS = new Set<string>([
-    "https://eosfabrics.com",
-    "https://www.eosfabrics.com",
-    "https://projectagram.com",
-    "https://www.projectagram.com",
-  ]);
-  const FALLBACK_ORIGIN = "https://eosfabrics.com";
-
-  function resolveAllowedOrigin(req: NextRequest): string {
-    const origin = req.headers.get("origin");
-    if (origin && ALLOWED_ORIGINS.has(origin)) return origin;
-    return FALLBACK_ORIGIN;
-  }
-
-  function withCors(req: NextRequest, res: NextResponse) {
-    res.headers.set("Access-Control-Allow-Origin", resolveAllowedOrigin(req));
-    res.headers.set("Access-Control-Allow-Credentials", "true");
-    res.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.headers.set("Access-Control-Allow-Headers", "Content-Type");
-    return res;
-  }
+  // CORS: shared helper at @/app/lib/auth/cors — onboard new clients by editing
+  // CHAPTER_ALLOWED_ORIGINS there, applies to all browser-facing routes.
 
   export async function OPTIONS(req: NextRequest) {
-    return new NextResponse(null, {
-      status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": resolveAllowedOrigin(req),
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
-    });
+    return new NextResponse(null, { status: 200, headers: corsPreflightHeaders(req) });
   }
   
   export async function POST(req: NextRequest) {
