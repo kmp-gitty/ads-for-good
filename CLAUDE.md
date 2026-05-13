@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: May 12, 2026
+> Last updated: May 13, 2026
 
 ---
 
@@ -96,9 +96,10 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - `chapter_model.lifecycle_chapters` — attribution boundary events (VIEW)
 - `chapter_model.unified_events_v2` — canonical event stream (VIEW)
 
-### Current Client
-- **EOS Fabrics** (`client_key = 'eos_fabrics'`) — only active client as of April 2026
-- All `chapter_reporting` objects are EOS-specific for now
+### Active Clients (as of May 13, 2026)
+- **EOS Fabrics** (`client_key = 'eos_fabrics'`, shop `emmaonesock.myshopify.com`, storefront `eosfabrics.com`) — primary client since April 2026.
+- **Projectagram Reels** (`client_key = 'projectagram_reels'`, shop `projectagram.myshopify.com`, storefront `projectagram.com`) — onboarded May 12, 2026. Same Shopify 3P pattern as EOS.
+- `chapter_reporting.*` is still EOS-specific. Projectagram has data flowing into `chapter_ingest.*` but no per-client dashboards yet — bespoke for now until reporting generalization happens (will be forced by 3rd client onboarding).
 
 ### Known Data Gaps
 - Identity cookie was not persistent before **April 1, 2026 17:00 UTC** (new identities per event)
@@ -108,7 +109,27 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of May 12, 2026)
+## ✅ Completed Fixes (as of May 13, 2026)
+
+### Projectagram client onboarded — second production client (May 12, 2026)
+- **Client:** `projectagram_reels` (storefront `projectagram.com`, Shopify shop `projectagram.myshopify.com`). Shopify ecommerce, similar shape to EOS (3P pixel pattern; user's preferred 1P-HOSTED variant not viable on Shopify until a custom app is built).
+- **Onboarding shape:** four phases — (1) DB setup, (2) code changes for multi-tenant, (3) pixel scripts installed in their `theme.liquid`, (4) Shopify webhooks configured. Total ~2 hours from "client wants in" to "pixel + webhook fully verified."
+- **Phase 1 DB:** HMAC secret generated + INSERTed to `chapter_config.client_secrets` via `chapter-scripts/onboard-projectagram.js`. Per-client Postgres role `client_projectagram_reels` created (forward-compat for Fix #26 part 2 route migration).
+- **Phase 2 code — multi-tenant CORS:** `src/app/api/chapter/collect/route.ts`'s hardcoded `ALLOWED_ORIGIN = "https://eosfabrics.com"` replaced with a `Set<string>` containing both clients' apex + www. CORS dynamically reflects the matching `Origin` header (never wildcard, so credentials work).
+- **Phase 2 code — multi-tenant Shopify webhook routing:** both `/api/shopify/webhooks/orders-create` and `orders-cancelled` now resolve `client_key` from the `x-shopify-shop-domain` header via a `SHOPIFY_SHOP_DOMAIN_TO_CLIENT_KEY` map (currently `emmaonesock.myshopify.com → eos_fabrics`, `projectagram.myshopify.com → projectagram_reels`). Unknown shop → 401 `unknown_shopify_shop` with audit log.
+- **Phase 2 code — DB-backed per-shop webhook secrets** (built during onboarding, applies retroactively to EOS too): new table `chapter_config.shopify_webhook_secrets (client_key, shop_domain, secret, key_version, rotated_at, revoked_at, notes)`. Helper at `src/app/lib/auth/shopify-webhook-secrets.ts` (`getActiveWebhookSecrets(shop_domain)`, 5-min in-memory cache, supports rotation overlap). Webhook routes try each non-revoked secret in turn. `SHOPIFY_API_SECRET` env var is now ignored by code (can be dropped from Vercel after stable period). EOS's secret backfilled from the env var; projectagram's pasted from their Shopify Admin → Settings → Notifications → Webhooks.
+- **Phase 3 pixel:** pixel scripts (base + identification + Add-to-Cart + Cart-View) installed in `theme.liquid` <head>. Newsletter identification: custom selector for Shopify native footer signup (`form#newsletter-footer`). Contact identification: form ID `contact-template--18751776522284__form` (projectagram's theme uses different prefix than EOS — `contact-` vs EOS's `ContactForm-`). Login + Add-to-Cart + Cart-View identical to EOS's idempotent versions.
+- **Phase 4 Shopify config:** orders-create + orders-cancelled webhooks created in projectagram.myshopify.com admin (scenario B = Admin-configured, per-shop signing key). Both verified end-to-end via Shopify's "Send test notification" → success rows in `chapter_audit.api_auth_attempts`.
+- **Lesson learned:** initially guessed EOS's `.myshopify.com` handle as `eosfabrics.myshopify.com` based on company name. Wrong — actual is `emmaonesock.myshopify.com`. First EOS test webhook failed `unknown_shopify_shop`, requiring code + DB correction + redeploy. Saved to memory `feedback_never_guess_external_identifiers.md`. Going forward: always ask the user for the exact handle/identifier; never derive from a company name or pattern.
+- **EOS dedup cleanup (same session):** EOS had all 6 pixel script blocks duplicated in `<head>` (template-copy artifact). Analyzed each — Base / Login / Cart-View were idempotent already; Mailchimp / Contact / Add-to-Cart were duplicating real network calls (Add-to-Cart was inflating `add_to_cart` event counts 2×). User deleted the 6 duplicate blocks and replaced the surviving Mailchimp / Contact / Add-to-Cart copies with idempotent versions (added `window.__chapter_*_bound` global flags). Historical `add_to_cart` event counts in `chapter_ingest.pixel_events` likely 2× actual for the duplication window — accepted gap, no backfill.
+- **/api/purchase canon-upsert bug fix (closes the bleed for new orphan purchases):** added unconditional self-canonical `identity_canon` upsert at the start of the purchase write path. Previously the two existing canon-upsert paths (explicit-identify + cart_token-bridge) only fired when an anonymous_id or cart_token existed; guest checkouts with only email_hash hit neither path → email_hash never made it into canon → purchase orphaned out of attribution. Fix: every purchase with email_hash or customer_id now upserts a self-canonical row. Idempotent. Deployed alongside the projectagram onboarding code changes.
+
+### 44-row attribution gap (RESOLVED May 12, 2026)
+- **Symptom:** 494 raw `purchase_events` post-April-1 but only 450 chapters in `purchase_base` — 44 valid purchases (~9% of revenue events) being dropped silently.
+- **Root cause:** 41 distinct deterministic identities (email_sha256:..., shopify_customer_id:...) from those orphan purchases were missing from `chapter_identity.identity_canon` entirely. Fix #20's backfill went `identity_canonical → identity_canon`, but these emails had no alias edges → not in `identity_canonical` → not picked up. The chunked rebuilder iterates only over canonicals in `identity_canon`, so these orphans never made it into `lifecycle_chapters_snapshot`, which then cascaded down.
+- **Two populations:** 35 pre-May-4 orphans (Fix #20's backfill couldn't have caught them — pre-date the fix); 6 post-May-4 orphans (now-closed code bug — Fix #20's `/api/purchase` canon-upsert path was NOT firing for guest-checkout Shopify webhook flows without cart_token bridge).
+- **Fix applied (May 12):** SQL backfill `chapter-scripts/snapshots/2026-05-12-fix-26-followup-canon-backfill-purchases.sql` inserts missing identities as self-canonical (`identity_canon` 2,227 → 2,276 rows, +49). Re-ran chunked rebuilder (+44 rows to `lifecycle_chapters_snapshot`). Re-ran Phase 1 cascade. All snapshots now reconcile cleanly: 494 raw = 494 in `purchase_base` = 494 in canonical_v2 (349 with session entry data + 145 fallback no-session, including the 44 newly-recovered orphans). `canonical_v1` stays at 349 by design (it only includes chapters with session-entry data, and orphans had none).
+- **Code fix shipped (also May 12):** see Projectagram onboarding entry above — `/api/purchase` now unconditionally upserts a self-canonical row, closing the orphan bleed for all future orders.
 
 ### Fix #26 Part 2 framework — RLS policies + per-client Postgres roles (May 12, 2026)
 - **Scope:** establish the database-level isolation framework. Per-client Postgres roles created (`client_eos_fabrics`, `client_adsforgood_prod`, NOINHERIT/NOLOGIN). RLS enabled with `USING (client_key = current_setting('app.client_key', true))` policies on 10 high-risk tables: all of `chapter_ingest.*` (6 tables), `chapter_identity.identity_aliases`/`identity_canon`/`identity_links`, and `chapter_journey.journeys`. Grants on `chapter_ingest.*` and `chapter_identity.*` to per-client roles: SELECT + INSERT (append-only matches the "raw ingest, never mutated" principle).
@@ -351,20 +372,6 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 - **What's left:** migrate each ingest route to open connections AS the per-client role (not service_role), so RLS actually enforces. Three implementation patterns documented in `/docs/fix-26-multi-tenant-isolation-design.md`: (a) switch routes from supabase-js to raw pg/postgres-js with `SET ROLE` + `SET LOCAL app.client_key`, (b) PostgreSQL RPC functions wrapping each ingest path, (c) `FORCE ROW LEVEL SECURITY` + supabase-js wrappers.
 - **Effort:** ~4-8 hours focused session. Touches every ingest path (8+ routes). Cutover-risky — a misconfigured route locks out its client.
 - **Doesn't block:** reporting / Looker work, dashboard builds, new datasources. Those use service_role (unchanged). Future route migration won't regress that work.
-
-**44-row attribution gap (RESOLVED May 12, 2026)**
-- **Symptom:** 494 raw `purchase_events` post-April-1 but only 450 chapters in `purchase_base` — 44 valid purchases (~9% of revenue events) being dropped silently.
-- **Root cause:** 41 distinct deterministic identities (email_sha256:..., shopify_customer_id:...) from those orphan purchases were missing from `chapter_identity.identity_canon` entirely. Fix #20's backfill went `identity_canonical → identity_canon`, but these emails had no alias edges → not in `identity_canonical` → not picked up. The chunked rebuilder iterates only over canonicals in `identity_canon`, so these orphans never made it into `lifecycle_chapters_snapshot`, which then cascaded down.
-- **Two populations:** 35 pre-May-4 orphans (Fix #20's backfill couldn't have caught them — pre-date the fix); **6 post-May-4 orphans (code bug — Fix #20's `/api/purchase` canon-upsert path is NOT firing for some Shopify webhook flows, likely guest checkouts without cart_token bridge).**
-- **Fix applied (May 12):** SQL backfill `chapter-scripts/snapshots/2026-05-12-fix-26-followup-canon-backfill-purchases.sql` inserts missing identities as self-canonical (`identity_canon` 2,227 → 2,276 rows, +49). Re-ran chunked rebuilder (+44 rows to `lifecycle_chapters_snapshot`). Re-ran Phase 1 cascade. All snapshots now reconcile cleanly: 494 raw = 494 in `purchase_base` = 494 in canonical_v2 (349 with session entry data + 145 fallback no-session, including the 44 newly-recovered orphans). `canonical_v1` stays at 349 by design (it only includes chapters with session-entry data, and orphans had none).
-- **Code fix still TBD:** find where `/api/purchase`'s canon-upsert path is skipped for Shopify webhook flows that don't trigger a cart_token bridge. Tracked as a separate follow-up — future orders will continue to silently orphan until that's fixed.
-- **Diagnostic files:** `chapter-scripts/diag-7-row-gap.js` (misnamed — gap was 44), `chapter-scripts/diag-orphan-purchase-trace.js` (single-row trace through the view chain), `chapter-scripts/diag-orphan-canon-check.js` (canon-presence audit).
-
-**Fix #28 — Snapshot scheduling + per-client isolation** *(scale roadmap — depends on Fix #25)*
-- **Problem:** Currently snapshots are run manually + on-demand. With many clients, manual coordination doesn't scale. Concurrent refreshes for multiple clients would hit resource exhaustion.
-- **Fix:** `pg_cron` or Vercel scheduled functions. Stagger per-client refreshes (client A 1am UTC, client B 1:30am, etc.) — never all simultaneous. Run during off-peak (UTC night). Fix #25 (incremental refresh) makes each refresh small enough to fit in a stagger window.
-- **Effort:** ~1-2 days. Phase 0 + Phase 1 are done; Fix #28 is now unblocked.
-- **Why P2:** Quality-of-life optimization. Manual refresh works fine for now.
 
 **Fix #28 — Snapshot scheduling + per-client isolation** *(scale roadmap — depends on Fix #25)*
 - **Problem:** Currently snapshots are run manually + on-demand. With many clients, manual coordination doesn't scale. Concurrent refreshes for multiple clients would hit resource exhaustion.
