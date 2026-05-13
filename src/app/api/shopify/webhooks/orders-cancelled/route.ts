@@ -4,7 +4,17 @@ import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
 import { getActiveSecretForOutbound } from "@/app/lib/auth/client-secrets";
 
 const ENDPOINT = "/api/shopify/webhooks/orders-cancelled";
-const SHOPIFY_CLIENT_KEY = "eos_fabrics";
+
+// Multi-tenant: resolve client_key from the x-shopify-shop-domain header.
+// Add a row here when onboarding a new Shopify client.
+const SHOPIFY_SHOP_DOMAIN_TO_CLIENT_KEY: Record<string, string> = {
+  "eosfabrics.myshopify.com": "eos_fabrics",
+  "projectagram.myshopify.com": "projectagram_reels",
+};
+function resolveClientKey(shopDomain: string | null): string | null {
+  if (!shopDomain) return null;
+  return SHOPIFY_SHOP_DOMAIN_TO_CLIENT_KEY[shopDomain] ?? null;
+}
 
 function verifyShopifyWebhook(rawBody: string, hmacHeader: string, secret: string): boolean {
   const digest = crypto
@@ -77,10 +87,20 @@ export async function POST(req: NextRequest) {
     const shopDomain = (req.headers.get("x-shopify-shop-domain") || "").trim();
     const topic = (req.headers.get("x-shopify-topic") || "").trim();
 
+    // Resolve client_key from shop domain (multi-tenant). Reject if shop unknown.
+    const resolvedClientKey = resolveClientKey(shopDomain);
+    if (!resolvedClientKey) {
+      await logAuthAttempt({
+        endpoint: ENDPOINT, client_key: null, success: false,
+        failure_reason: "unknown_shopify_shop", ip_hash: ipHash, user_agent_snippet: ua,
+      });
+      return NextResponse.json({ error: "unknown_shopify_shop" }, { status: 401 });
+    }
+
     const shopifySecret = process.env.SHOPIFY_API_SECRET;
     if (!shopifySecret) {
       await logAuthAttempt({
-        endpoint: ENDPOINT, client_key: SHOPIFY_CLIENT_KEY, success: false,
+        endpoint: ENDPOINT, client_key: resolvedClientKey, success: false,
         failure_reason: "missing_shopify_secret", ip_hash: ipHash, user_agent_snippet: ua,
       });
       return NextResponse.json({ error: "missing_shopify_secret" }, { status: 500 });
@@ -88,7 +108,7 @@ export async function POST(req: NextRequest) {
 
     if (!verifyShopifyWebhook(rawBody, shopifyHmac, shopifySecret)) {
       await logAuthAttempt({
-        endpoint: ENDPOINT, client_key: SHOPIFY_CLIENT_KEY, success: false,
+        endpoint: ENDPOINT, client_key: resolvedClientKey, success: false,
         failure_reason: shopifyHmac.length === 0 ? "missing_shopify_hmac" : "invalid_shopify_hmac",
         ip_hash: ipHash, user_agent_snippet: ua,
       });
@@ -96,7 +116,7 @@ export async function POST(req: NextRequest) {
     }
 
     await logAuthAttempt({
-      endpoint: ENDPOINT, client_key: SHOPIFY_CLIENT_KEY, success: true,
+      endpoint: ENDPOINT, client_key: resolvedClientKey, success: true,
       ip_hash: ipHash, user_agent_snippet: ua,
     });
 
@@ -107,7 +127,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "invalid_json" }, { status: 400 });
     }
 
-    const clientKey = "eos_fabrics";
+    const clientKey = resolvedClientKey;
 
     // Fix #26 part 3: read newest active secret from chapter_config.client_secrets
     // (replaces AFG_CLIENT_SECRETS_JSON env var).

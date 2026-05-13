@@ -55,21 +55,37 @@ function getIp(req: NextRequest): string {
     );
   }
 
-  const ALLOWED_ORIGIN = "https://eosfabrics.com";
+  // Multi-tenant CORS: allow each client's storefront domain (apex + www).
+  // To onboard a new client, add their domains here. Browsers will only allow
+  // requests originating from listed domains; the OPTIONS preflight returns
+  // the matching origin back (never a wildcard) so credentials work.
+  const ALLOWED_ORIGINS = new Set<string>([
+    "https://eosfabrics.com",
+    "https://www.eosfabrics.com",
+    "https://projectagram.com",
+    "https://www.projectagram.com",
+  ]);
+  const FALLBACK_ORIGIN = "https://eosfabrics.com";
 
-  function withCors(res: NextResponse) {
-    res.headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+  function resolveAllowedOrigin(req: NextRequest): string {
+    const origin = req.headers.get("origin");
+    if (origin && ALLOWED_ORIGINS.has(origin)) return origin;
+    return FALLBACK_ORIGIN;
+  }
+
+  function withCors(req: NextRequest, res: NextResponse) {
+    res.headers.set("Access-Control-Allow-Origin", resolveAllowedOrigin(req));
     res.headers.set("Access-Control-Allow-Credentials", "true");
     res.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.headers.set("Access-Control-Allow-Headers", "Content-Type");
     return res;
   }
-  
-  export async function OPTIONS() {
+
+  export async function OPTIONS(req: NextRequest) {
     return new NextResponse(null, {
       status: 200,
       headers: {
-        "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+        "Access-Control-Allow-Origin": resolveAllowedOrigin(req),
         "Access-Control-Allow-Credentials": "true",
         "Access-Control-Allow-Methods": "POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
@@ -83,13 +99,13 @@ function getIp(req: NextRequest): string {
     try {
       body = await req.json();
     } catch {
-      return withCors(
+      return withCors(req,
         NextResponse.json({ error: "invalid_json" }, { status: 400 })
       );
     }
 
     if (isBot(body, req)) {
-      return withCors(NextResponse.json({ ok: true, ignored: "bot" }));
+      return withCors(req,NextResponse.json({ ok: true, ignored: "bot" }));
     }
 
     const isInternal =
@@ -98,31 +114,31 @@ function getIp(req: NextRequest): string {
     body?.props?.is_internal === true;
 
   if (isInternal) {
-    return withCors(NextResponse.json({ ok: true, ignored: "internal" }));
+    return withCors(req,NextResponse.json({ ok: true, ignored: "internal" }));
   }
   
     const client_key = safeClientKey(body?.client_key);
     if (!client_key) {
-      return withCors(
+      return withCors(req,
         NextResponse.json({ error: "missing_client_key" }, { status: 400 })
       );
     }
 
     if (isRateLimited(req)) {
-      return withCors(NextResponse.json({ ok: true, ignored: "rate_limited" }));
+      return withCors(req,NextResponse.json({ ok: true, ignored: "rate_limited" }));
     }
   
     const ip = getIp(req);
   
     if (!body?.event_name || typeof body.event_name !== "string") {
-      return withCors(
+      return withCors(req,
         NextResponse.json({ error: "missing_event_name" }, { status: 400 })
       );
     }
   
     const ua = req.headers.get("user-agent") || "";
     if (!ua) {
-      return withCors(
+      return withCors(req,
         NextResponse.json({ error: "missing_user_agent" }, { status: 400 })
       );
     }
@@ -138,6 +154,6 @@ function getIp(req: NextRequest): string {
     });
   
     const res = await pixelPost(forwarded);
-    return withCors(res);
+    return withCors(req,res);
     
   }
