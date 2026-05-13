@@ -349,7 +349,7 @@ export async function POST(req: NextRequest) {
             ts, client_key, journey_id, identity_key, event_name, props
           ) VALUES (
             ${eventTsIso}, ${clientKey}, ${null}, ${resolvedIdentityKey}, 'identify',
-            ${JSON.stringify({
+            ${tx.json({
               source: "purchase",
               confidence: identityConfidence,
               identity_reason: identityReason,
