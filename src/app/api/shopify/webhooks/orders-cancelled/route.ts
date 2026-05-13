@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
 import { getActiveSecretForOutbound } from "@/app/lib/auth/client-secrets";
+import { getActiveWebhookSecrets } from "@/app/lib/auth/shopify-webhook-secrets";
 
 const ENDPOINT = "/api/shopify/webhooks/orders-cancelled";
 
@@ -97,8 +98,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "unknown_shopify_shop" }, { status: 401 });
     }
 
-    const shopifySecret = process.env.SHOPIFY_API_SECRET;
-    if (!shopifySecret) {
+    // Per-shop webhook secret lookup (replaces SHOPIFY_API_SECRET env var).
+    const shopifySecrets = await getActiveWebhookSecrets(shopDomain);
+    if (shopifySecrets.length === 0) {
       await logAuthAttempt({
         endpoint: ENDPOINT, client_key: resolvedClientKey, success: false,
         failure_reason: "missing_shopify_secret", ip_hash: ipHash, user_agent_snippet: ua,
@@ -106,7 +108,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "missing_shopify_secret" }, { status: 500 });
     }
 
-    if (!verifyShopifyWebhook(rawBody, shopifyHmac, shopifySecret)) {
+    // Try each active secret (rotation overlap window).
+    let hmacOk = false;
+    for (const secret of shopifySecrets) {
+      if (verifyShopifyWebhook(rawBody, shopifyHmac, secret)) {
+        hmacOk = true;
+        break;
+      }
+    }
+
+    if (!hmacOk) {
       await logAuthAttempt({
         endpoint: ENDPOINT, client_key: resolvedClientKey, success: false,
         failure_reason: shopifyHmac.length === 0 ? "missing_shopify_hmac" : "invalid_shopify_hmac",
