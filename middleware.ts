@@ -1,10 +1,14 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+// Routes gated by this middleware:
+//   /for-clients/*  â HTTP Basic auth, per-client credentials in env vars
+//   /chapter/*      â shared-password cookie (agency operator dashboard)
 export const config = {
-  matcher: ["/for-clients/:path*"],
+  matcher: ["/for-clients/:path*", "/chapter/:path*"],
 };
 
+// ---------- /for-clients/* HTTP Basic auth ----------
 function unauthorized(realm: string) {
   return new NextResponse("Authentication required.", {
     status: 401,
@@ -29,8 +33,7 @@ function getCreds(slug: string) {
   return map[slug];
 }
 
-
-export function middleware(req: NextRequest) {
+function gateForClients(req: NextRequest) {
   const parts = req.nextUrl.pathname.split("/").filter(Boolean);
   const clientSlug = parts[1]; // /for-clients/<client>
 
@@ -56,7 +59,48 @@ export function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
+// ---------- /chapter/* cookie auth ----------
+// The shared password lives in CHAPTER_DASH_TOKEN (env var). On successful
+// submission to /api/chapter-auth, a chapter_auth cookie is set with this same
+// value. Middleware compares cookie â env.
+//
+// This is a stopgap until Supabase auth (or a real provider) is wired up.
+const CHAPTER_AUTH_COOKIE = "chapter_auth";
 
+function gateChapter(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  // Allow the login page + the auth API to render unauthenticated â otherwise
+  // the user can never get a cookie.
+  if (
+    pathname === "/chapter/login" ||
+    pathname.startsWith("/chapter/login/") ||
+    pathname === "/api/chapter-auth"
+  ) {
+    return NextResponse.next();
+  }
 
+  const expectedToken = process.env.CHAPTER_DASH_TOKEN;
+  if (!expectedToken) {
+    return new NextResponse(
+      "CHAPTER_DASH_TOKEN not configured. Set it in Vercel + .env.local.",
+      { status: 503 },
+    );
+  }
 
+  if (req.cookies.get(CHAPTER_AUTH_COOKIE)?.value === expectedToken) {
+    return NextResponse.next();
+  }
 
+  const loginUrl = req.nextUrl.clone();
+  loginUrl.pathname = "/chapter/login";
+  loginUrl.searchParams.set("next", pathname);
+  return NextResponse.redirect(loginUrl);
+}
+
+// ---------- Dispatcher ----------
+export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+  if (pathname.startsWith("/chapter")) return gateChapter(req);
+  if (pathname.startsWith("/for-clients")) return gateForClients(req);
+  return NextResponse.next();
+}

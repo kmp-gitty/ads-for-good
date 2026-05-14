@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 export function NavBar() {
   const pathname = usePathname();
 
-  if (pathname?.startsWith("/for-clients")) {
+  if (pathname?.startsWith("/for-clients") || pathname?.startsWith("/chapter")) {
     return null;
   }
 

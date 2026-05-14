@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 const CONSENT_KEY = "afg_consent_v1";
 
 export default function ChapterLoader() {
+  const pathname = usePathname();
   useEffect(() => {
+    // Skip the pixel on the chapter dashboard (internal agency-operator surface).
+    if (pathname?.startsWith("/chapter")) return;
     try {
       const consent = localStorage.getItem(CONSENT_KEY);
-      
+
       if (consent === "declined") return;
 
       const existing = document.querySelector('script[data-chapter-loader="true"]');
@@ -25,7 +29,7 @@ export default function ChapterLoader() {
     } catch {
       // fail quietly
     }
-  }, []);
+  }, [pathname]);
 
   return null;
 }

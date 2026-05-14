@@ -7,8 +7,8 @@ import { usePathname } from "next/navigation";
 export function Footer() {
   const pathname = usePathname();
 
-  // Hide footer on client portal pages
-  if (pathname.startsWith("/for-clients")) {
+  // Hide footer on client portal + chapter dashboard pages
+  if (pathname.startsWith("/for-clients") || pathname.startsWith("/chapter")) {
     return null;
   }
   
