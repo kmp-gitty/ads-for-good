@@ -18,11 +18,20 @@ export function TopBar({
   showModel?: boolean;
   showCompare?: boolean;
 }) {
-  const { dateRange, setDateRange, compare, setCompare, model, setModel } = useChapter();
+  const { dateRange, setDateRange, compare, setCompare, model, setModel, setSidebarOpen } = useChapter();
   return (
     <div className="topbar">
       <div className="topbar-row">
-        <div>
+        {/* Hamburger — mobile only (CSS-hidden on desktop). */}
+        <button
+          type="button"
+          className="topbar-hamburger"
+          aria-label="Open navigation"
+          onClick={() => setSidebarOpen(true)}
+        >
+          <span /><span /><span />
+        </button>
+        <div className="topbar-title">
           <h1>{title}</h1>
           <div className="sub">{subtitle}</div>
         </div>

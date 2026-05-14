@@ -28,6 +28,10 @@ type Ctx = {
 
   highlightTarget: string | null;
   setHighlightTarget: (id: string | null) => void;
+
+  // Mobile sidebar drawer state.
+  sidebarOpen: boolean;
+  setSidebarOpen: (b: boolean) => void;
 };
 
 const ChapterCtx = createContext<Ctx | null>(null);
@@ -40,20 +44,24 @@ export function ChapterProvider({ children }: { children: React.ReactNode }) {
   const [model, setModel] = useState<AttributionModel>("linear");
   const [pinnedObs, setPinnedObs] = useState<Observation | null>(null);
   const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const pinObservation = useCallback((o: Observation | null) => {
     setPinnedObs(o);
     setHighlightTarget(o?.id ?? null);
   }, []);
 
-  // Auto-dismiss pinned obs when navigating off the destination page.
+  // Auto-dismiss pinned obs when navigating off the destination page,
+  // and auto-close the mobile sidebar when route changes.
   useEffect(() => {
-    if (!pinnedObs) return;
-    const pinnedPath = `/chapter/${pinnedObs.page}`;
-    if (pathname !== pinnedPath) {
-      setPinnedObs(null);
-      setHighlightTarget(null);
+    if (pinnedObs) {
+      const pinnedPath = `/chapter/${pinnedObs.page}`;
+      if (pathname !== pinnedPath) {
+        setPinnedObs(null);
+        setHighlightTarget(null);
+      }
     }
+    setSidebarOpen(false);
   }, [pathname, pinnedObs]);
 
   return (
@@ -64,6 +72,7 @@ export function ChapterProvider({ children }: { children: React.ReactNode }) {
       model, setModel,
       pinnedObs, pinObservation,
       highlightTarget, setHighlightTarget,
+      sidebarOpen, setSidebarOpen,
     }}>
       {children}
     </ChapterCtx.Provider>

@@ -83,8 +83,8 @@ export default function ObservationsPage() {
       />
       <div className="content">
         <div className="card" style={{ background: "var(--navy)", color: "white", border: "none", padding: "22px 26px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 18 }}>
-            <div style={{ maxWidth: 720 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+            <div style={{ maxWidth: 720, flex: "1 1 320px", minWidth: 0 }}>
               <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600, marginBottom: 8 }}>
                 How this page works
               </div>
@@ -96,7 +96,7 @@ export default function ObservationsPage() {
                 </button>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 18 }}>
+            <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontSize: 24, fontWeight: 700, color: "white" }}>3</div>
                 <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em", color: "rgba(255,255,255,0.55)" }}>New this week</div>

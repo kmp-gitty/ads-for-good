@@ -11,7 +11,7 @@ import { CLIENTS } from "./mockdata";
 type NavItem = { key: string; label: string; icon: IconName; badge?: string; locked?: boolean };
 
 export function Sidebar() {
-  const { client, setClient } = useChapter();
+  const { client, setClient, sidebarOpen, setSidebarOpen } = useChapter();
   const pathname = usePathname();
 
   const obsItem: NavItem = {
@@ -31,7 +31,10 @@ export function Sidebar() {
   const isActive = (key: string) => pathname === `/chapter/${key}` || (key === "observations" && pathname === "/chapter");
 
   return (
-    <aside className="sidebar">
+    <>
+      {/* Mobile scrim — tap outside the open sidebar to dismiss. */}
+      {sidebarOpen && <div className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />}
+    <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
       <div className="brand">
         <div className="brand-mark">C</div>
         <div className="brand-name">Chapter<span>by afG</span></div>
@@ -122,5 +125,6 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
   );
 }

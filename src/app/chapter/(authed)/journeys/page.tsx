@@ -107,7 +107,7 @@ export default function JourneysPage() {
           <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{filtered.length} identities</div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 14, alignItems: "start" }}>
+        <div className="journeys-layout">
           <div className="card flush" style={{ maxHeight: 720, overflow: "auto" }}>
             <table className="t">
               <thead style={{ position: "sticky", top: 0, background: "var(--panel)", zIndex: 1 }}>
@@ -170,7 +170,7 @@ export default function JourneysPage() {
               <ChapterEventList events={detail.events} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 24 }}>
+            <div className="journeys-detail-grid">
               <div>
                 <div className="h-section">Attribution under each model</div>
                 <div className="row-list" style={{ marginTop: 10 }}>
