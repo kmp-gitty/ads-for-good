@@ -789,8 +789,16 @@
  *    - up to 1024px → tablet: sidebar collapses to off-canvas drawer,
  *      KPI strip wraps, grids stack.
  *    - up to 640px  → phone: tighter padding, fewer KPIs per row,
- *      smaller typography on hero panels.
+ *      smaller typography on hero panels, subtitle hidden,
+ *      non-critical dropdowns hidden.
+ *  Cardinal rule: NOTHING extends beyond viewport width. Anything that needs
+ *  to be wider scrolls inside its own card, not the page body.
  * ========================================================================== */
+
+/* Prevent any element from spilling past the viewport — the body has a dark
+ * agency-site background that would otherwise show through on overflow. */
+.chapter-app { overflow-x: hidden; max-width: 100vw; }
+.chapter-app .main { min-width: 0; overflow-x: hidden; }
 
 /* Hamburger button — visible on mobile/tablet, hidden on desktop. */
 .chapter-app .topbar-hamburger {
@@ -822,11 +830,11 @@
   animation: chapter-scrim-in .15s;
 }
 
+/* ---------- Tablet (≤1024px): sidebar drawer + most grids stack ---------- */
 @media (max-width: 1024px) {
-  /* Sidebar becomes off-canvas drawer */
-  .chapter-app .app {
-    grid-template-columns: 1fr;
-  }
+  .chapter-app .app { grid-template-columns: 1fr; }
+
+  /* Sidebar off-canvas */
   .chapter-app .sidebar {
     position: fixed;
     top: 0; left: 0; bottom: 0;
@@ -837,99 +845,132 @@
     box-shadow: 4px 0 24px rgba(0,0,0,0.2);
     overflow-y: auto;
   }
-  .chapter-app .sidebar.open {
-    transform: translateX(0);
-  }
+  .chapter-app .sidebar.open { transform: translateX(0); }
   .chapter-app .sidebar-scrim { display: block; }
   .chapter-app .topbar-hamburger { display: inline-flex; }
 
-  /* Topbar: tighten, allow wrap of right-side controls */
-  .chapter-app .topbar {
-    padding: 12px 18px 0 18px;
-  }
-  .chapter-app .topbar-row {
-    flex-wrap: wrap;
-    row-gap: 8px;
-  }
-  .chapter-app .topbar h1 { font-size: 20px; }
-  .chapter-app .topbar .sub { font-size: 12px; }
-
-  /* Content: shrink horizontal padding */
-  .chapter-app .content {
-    padding: 18px 18px 48px 18px;
-    gap: 16px;
-  }
-
-  /* All grid layouts stack on tablet */
+  /* All grid layouts stack */
   .chapter-app .grid-2,
   .chapter-app .grid-2-flip,
-  .chapter-app .grid-3 {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
+  .chapter-app .grid-3 { grid-template-columns: 1fr; gap: 14px; }
   .chapter-app .role-grid { grid-template-columns: 1fr; gap: 12px; }
 
-  /* KPI strip wraps to 3+2 */
+  /* Lift method explainer head: stack title + claim */
+  .chapter-app .lift-method-explainer-head { flex-direction: column; gap: 12px; }
+  .chapter-app .lift-method-explainer-claim { max-width: 100%; }
+
+  /* Drawer takes most of the viewport */
+  .chapter-app .drawer { width: min(560px, 100vw); }
+
+  /* Pinned-observation panel reaches both edges */
+  .chapter-app .pinned-obs { bottom: 16px; right: 16px; left: 16px; width: auto; }
+}
+
+/* ---------- Phone (≤768px): redesign topbar + tables + several panels ----- */
+@media (max-width: 768px) {
+  /* ===== Topbar: compact, two clean rows (title + dropdowns) ===== */
+  .chapter-app .topbar { padding: 10px 14px 0 14px; }
+
+  /* Row 1: hamburger + title fills viewport. Row 2: all dropdowns. */
+  .chapter-app .topbar-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 8px;
+  }
+  .chapter-app .topbar-row .topbar-title {
+    flex: 1 1 calc(100% - 44px);
+    min-width: 0;
+  }
+  .chapter-app .topbar-row .spacer { display: none; }
+  /* Force dropdowns onto a row of their own, right-aligned */
+  .chapter-app .topbar-row > .pos {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+  .chapter-app .topbar-row > .pos + .pos { margin-left: 6px; }
+
+  .chapter-app .topbar h1 {
+    font-size: 18px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chapter-app .topbar .sub {
+    font-size: 11px;
+    line-height: 1.35;
+    /* Clamp to 1 line so it never balloons the topbar height */
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Toolbar buttons: smaller on phone */
+  .chapter-app .toolbar-btn { padding: 6px 10px; font-size: 11px; gap: 6px; }
+  .chapter-app .toolbar-btn span:not(.chev) { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ===== KPI strip: compact, 2 cols, smaller font ===== */
   .chapter-app .kpi-strip {
-    grid-template-columns: repeat(3, 1fr);
-    row-gap: 12px;
+    grid-template-columns: repeat(2, 1fr);
+    column-gap: 8px;
+    row-gap: 8px;
+    padding: 8px 0 10px;
   }
-  .chapter-app .kpi-cell {
-    border-right: none;
-    padding: 4px 12px;
-  }
+  .chapter-app .kpi-cell { border-right: none; padding: 0; }
+  .chapter-app .kpi-label { font-size: 9px; }
+  .chapter-app .kpi-value { font-size: 14px; gap: 6px; }
 
-  /* Lifecycle metrics wrap to 3+2 */
+  /* ===== Content area: tighter ===== */
+  .chapter-app .content { padding: 14px 14px 40px 14px; gap: 14px; }
+
+  /* ===== Lifecycle hero: compact ===== */
+  .chapter-app .lifecycle-hero { padding: 18px 18px; }
+  .chapter-app .lifecycle-hero h2 { font-size: 16px; }
   .chapter-app .lifecycle-metrics {
-    grid-template-columns: repeat(3, 1fr);
-    row-gap: 18px;
+    grid-template-columns: repeat(2, 1fr);
+    row-gap: 18px; padding-top: 16px;
   }
-  .chapter-app .lcm {
-    border-right: none;
-    padding: 0 14px;
-  }
-  .chapter-app .lifecycle-hero {
-    padding: 22px 22px;
-  }
-  .chapter-app .lifecycle-hero h2 { font-size: 18px; }
-  .chapter-app .lcm-value { font-size: 24px; }
+  .chapter-app .lcm { border-right: none; padding: 0; }
+  .chapter-app .lcm-value { font-size: 22px; }
 
-  /* Cards: lighter padding */
-  .chapter-app .card { padding: 16px 18px; }
-  .chapter-app .obs-card { padding: 16px 18px; gap: 14px; }
+  /* ===== Cards: tighter ===== */
+  .chapter-app .card { padding: 14px 16px; }
+  .chapter-app .obs-card { padding: 14px 16px; gap: 12px; }
+  .chapter-app .obs-headline { font-size: 15px; }
 
-  /* Tables: enable horizontal scroll inside any flush card */
+  /* ===== Tables: NEVER force min-width. Internal scroll inside the card. ===== */
   .chapter-app .card.flush {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    min-width: 0;
   }
-  .chapter-app .card.flush table.t {
-    min-width: 720px;
-  }
+  .chapter-app table.t { font-size: 12px; }
+  .chapter-app table.t th, .chapter-app table.t td { padding: 8px 10px; }
 
-  /* Funnel: shrink label column on tablet */
+  /* ===== Funnel: drop the % column on phone ===== */
   .chapter-app .funnel-step {
-    grid-template-columns: 110px 1fr 70px 70px;
-    gap: 10px;
+    grid-template-columns: 80px 1fr 56px;
+    gap: 8px;
   }
+  .chapter-app .funnel-step .funnel-drop { display: none; }
+  .chapter-app .funnel-label { font-size: 12px; }
 
-  /* Drawer takes full width on small screens */
-  .chapter-app .drawer { width: min(560px, 100vw); }
+  /* ===== Role-card stats ===== */
+  .chapter-app .role-stats { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .chapter-app .role-stats > div:nth-child(3) { grid-column: span 2; }
 
-  /* Pinned-observation panel: shrink + reposition above sticky bars */
-  .chapter-app .pinned-obs {
-    bottom: 16px; right: 16px; left: 16px;
-    width: auto;
-  }
+  /* ===== Lift page mobile-specific ===== */
+  /* Hide the 3-step progression rail on phone — it's visual scaffolding,
+   * the tabs below convey the same info more compactly. */
+  .chapter-app .lift-rail { display: none; }
+  .chapter-app .lift-hero { padding: 18px 18px 16px; }
+  .chapter-app .lift-hero-body { font-size: 13px; }
 
-  /* Bump chart: scale down */
-  .chapter-app .bump-svg { height: 260px; }
-
-  /* Lift compare: collapse three-column comparison to stacked rows */
-  .chapter-app .lift-compare {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
+  /* Lift findings: stack stats and CI bar internals */
+  .chapter-app .lift-stat-row { grid-template-columns: repeat(2, 1fr); }
+  .chapter-app .lift-compare { grid-template-columns: 1fr; gap: 12px; }
   .chapter-app .lift-compare-mid {
     flex-direction: row;
     justify-content: space-between;
@@ -940,76 +981,37 @@
     min-width: 0;
   }
   .chapter-app .lift-compare-mid .lift-compare-delta { font-size: 18px; }
+  .chapter-app .lift-card-head { flex-direction: column; gap: 10px; }
+  .chapter-app .lift-stat-tags { flex-direction: row; align-items: center; align-self: flex-start; }
+  .chapter-app .lift-card-headline { font-size: 15px; }
+  .chapter-app .lift-method-block .lift-method-row { grid-template-columns: 90px 1fr; }
 
-  /* Lift stat row → 2 columns on tablet */
-  .chapter-app .lift-stat-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  /* Lift rail: stack steps vertically */
-  .chapter-app .lift-rail {
-    flex-direction: column;
-    gap: 12px;
-  }
-  .chapter-app .lift-rail-link { display: none; }
-
-  /* Method explainer head: stack title + claim */
-  .chapter-app .lift-method-explainer-head {
-    flex-direction: column;
-    gap: 12px;
-  }
-  .chapter-app .lift-method-explainer-claim { max-width: 100%; }
-
-  /* Topbar inline pills wrap nicely */
-  .chapter-app .filter-bar { gap: 8px 6px; }
-}
-
-@media (max-width: 640px) {
-  /* Phone tweaks */
-  .chapter-app .topbar { padding: 10px 14px 0 14px; }
-  .chapter-app .topbar h1 { font-size: 18px; }
-  .chapter-app .content { padding: 14px 14px 40px 14px; gap: 14px; }
-
-  /* KPI strip: 2 cols */
-  .chapter-app .kpi-strip { grid-template-columns: repeat(2, 1fr); }
-
-  /* Lifecycle metrics: 2 cols */
-  .chapter-app .lifecycle-metrics { grid-template-columns: repeat(2, 1fr); }
-  .chapter-app .lifecycle-hero h2 { font-size: 17px; }
-  .chapter-app .lcm-value { font-size: 22px; }
-
-  /* Cards: tighter */
-  .chapter-app .card { padding: 14px 16px; }
-  .chapter-app .obs-card { padding: 14px 16px; }
-  .chapter-app .obs-headline { font-size: 15px; }
-
-  /* Funnel: drop the percent column to fit on phone */
-  .chapter-app .funnel-step {
-    grid-template-columns: 90px 1fr 60px;
-    gap: 8px;
-  }
-  .chapter-app .funnel-step .funnel-drop { display: none; }
-
-  /* Tighten hero panels */
-  .chapter-app .lifecycle-hero { padding: 18px 18px; }
-  .chapter-app .lift-hero { padding: 18px 18px 16px; }
-
-  /* Role-card stats row */
-  .chapter-app .role-stats { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .chapter-app .role-stats > div:nth-child(3) { grid-column: span 2; }
-
-  /* Tags wrap inside obs cards */
-  .chapter-app .obs-meta { row-gap: 6px; }
-
-  /* Observations hero: stack stats below body text */
-  .chapter-app .obs-hero-stats { flex-wrap: wrap; gap: 12px; }
-}
-
-/* Bump chart container — let it scroll horizontally on phones rather than squish */
-@media (max-width: 720px) {
+  /* ===== Bump chart: horizontal scroll inside its card ===== */
   .chapter-app .bump-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .chapter-app .bump-svg { min-width: 640px; }
-  .chapter-app .bump-row { min-width: 640px; }
+  .chapter-app .bump-svg { min-width: 560px; height: 280px; }
+  .chapter-app .bump-row { min-width: 560px; }
+
+  /* ===== Observations card: tighten ===== */
+  .chapter-app .obs-data { padding: 10px 12px; gap: 14px; }
+  .chapter-app .obs-data .d-val { font-size: 13px; }
+  .chapter-app .obs-meta { row-gap: 6px; }
+  .chapter-app .obs-foot { flex-direction: column; gap: 8px; align-items: flex-start; }
+
+  /* ===== Hide the "Comparison" dropdown on phone (rarely critical here) ===== */
+  .chapter-app .topbar [title="Comparison"] {
+    display: none;
+  }
+}
+
+/* ---------- Very narrow phones (≤420px): even tighter ---------- */
+@media (max-width: 420px) {
+  .chapter-app .topbar h1 { font-size: 16px; }
+  .chapter-app .kpi-value { font-size: 13px; }
+  .chapter-app .kpi-label { font-size: 8px; }
+  .chapter-app .card { padding: 12px 14px; }
+  .chapter-app .content { padding: 12px 12px 32px 12px; gap: 12px; }
+  .chapter-app .lcm-value { font-size: 19px; }
+  .chapter-app .lifecycle-hero h2 { font-size: 15px; }
 }
 
 /* ============================================================================
@@ -1017,7 +1019,10 @@
  *  need to reflow on mobile but inline styles win over CSS media queries).
  * ========================================================================== */
 
-/* Journeys: identity list + detail panel side-by-side, stacks on mobile. */
+/* Journeys: identity list + detail panel side-by-side on desktop.
+ * On phone, hide the detail panel — the full timeline + sub-grids are too
+ * much to render usefully on a small screen. The list itself is the most
+ * meaningful mobile view; full identity detail is desktop-only for now. */
 .chapter-app .journeys-layout {
   display: grid;
   grid-template-columns: 340px 1fr;
@@ -1025,9 +1030,11 @@
   align-items: start;
 }
 @media (max-width: 1024px) {
-  .chapter-app .journeys-layout {
-    grid-template-columns: 1fr;
-  }
+  .chapter-app .journeys-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  /* Hide the right-side detail panel on phone (second child of the layout grid). */
+  .chapter-app .journeys-layout > :nth-child(2) { display: none; }
 }
 
 /* Journeys detail page bottom: two-up attribution + identity blocks. */
@@ -1041,10 +1048,14 @@
   .chapter-app .journeys-detail-grid { grid-template-columns: 1fr; gap: 14px; }
 }
 
-/* Row-list rows with custom inline grid columns (top-combos, history) get a
- * horizontal-scroll container on mobile so they don't crush together. */
-@media (max-width: 640px) {
-  .chapter-app .row-list { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .chapter-app .row-list > .lrow { min-width: 520px; }
+/* Row-list rows with custom inline grid columns get a horizontal-scroll
+ * container on mobile so they don't crush together. The lrow children keep
+ * their inline grid sizing; the parent row-list scrolls horizontally. */
+@media (max-width: 768px) {
+  .chapter-app .row-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -4px;
+  }
 }
 
