@@ -109,7 +109,81 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of May 13, 2026)
+## 📊 Chapter Dashboard (agency-operator surface)
+
+**URL:** `/chapter/*` — agency-operator dashboard, sees all clients via top-of-sidebar switcher. **First-paint default:** `/chapter/observations`.
+
+**Future:** `/chapter/[client_key]/*` — client-scoped surface, one dashboard per client_key with scoped auth. **Deferred** until agency surface is data-wired. Today's URL/code structure is compatible (page components read `client_key` from context, not hardcoded) so adding the route group later is additive. Constraint: `client_key` always contains an underscore by convention (e.g. `eos_fabrics`, `projectagram_reels`, future `lift_agency`) so it can never collide with the static page slugs (`observations`, `overview`, etc.).
+
+### Auth (stopgap until Supabase auth)
+- Env var `CHAPTER_DASH_TOKEN` (random secret) compared verbatim against a `chapter_auth` cookie set by `POST /api/chapter-auth`
+- Middleware at root `middleware.ts` gates `/chapter/*` except `/chapter/login` + `/api/chapter-auth`
+- 14-day cookie session; fail-closed if env var is unset (returns 503)
+- **Migration path:** when Supabase auth is wired, the cookie+middleware logic gets replaced by Supabase's middleware helpers; UI for login swaps; rest of the app reads `user` from server-side auth instead of cookie.
+
+### File layout
+- `src/app/chapter/layout.tsx` — minimal pass-through (lets login render without chrome)
+- `src/app/chapter/(authed)/layout.tsx` — sidebar + topbar chrome + ChapterProvider + PinnedObservation
+- `src/app/chapter/(authed)/<page>/page.tsx` — one per nav item (8 pages: observations, overview, channels, paths, lift, attribution, journeys, raw)
+- `src/app/chapter/login/page.tsx` — password form
+- `src/app/chapter/chapter.css` — design tokens scoped to `.chapter-app` wrapper so they cannot leak into agency Tailwind
+- `src/app/chapter/_components/*` — 13 reusable primitives (Icon, Move, Lcm, Dropdown, RoleBar, PathRender, ChannelChip, Sidebar, TopBar, KpiStrip, PinnedObservation, ChapterContext, mockdata, format)
+- `src/app/api/chapter-auth/route.ts` — login POST handler
+
+### Data fetching pattern (locked May 15, 2026)
+- Dashboard is a **trusted agency-operator surface** → queries use `service_role` with explicit `WHERE client_key = $selected` in every WHERE clause
+- NOT `chapter_app` + `SET ROLE` — that's the ingest-layer defense-in-depth (Fix #26 Part 2). Dashboard's defense-in-depth is the password gate.
+- Per-page split:
+  - `<page>/page.tsx` — **server component**, reads `searchParams`, runs Supabase queries, passes data + params via props
+  - `<page>/<Page>Client.tsx` — **client component**, holds interactive state (filters/drawers), receives data via props
+- Each existing all-`"use client"` page gets split during its wiring session; ~20–40 LOC of refactor per page (no new logic, just relocation).
+
+### State persistence (URL query params)
+- **Selected client** → `?client=eos_fabrics` (fallback to cookie, fallback to first client in CLIENTS list)
+- **Date range** → `?range=30d` (other accepted values: `7d` / `14d` / `90d` / `mtd` / `qtd` / `ytd` / custom-as-ISO-pair)
+- **Compare mode** → `?compare=prior|yoy|none`
+- **Attribution model** → `?model=first|last|linear|custom`
+- Server components read from `searchParams` in `page.tsx`. Client components read same via `useSearchParams()`. Updates write back via `router.replace()` (no history pollution per click).
+- Middleware preserves the full path + query string when redirecting unauthenticated users to login, so a bookmarked URL like `/chapter/raw?client=eos_fabrics&range=90d` survives the auth round-trip.
+- Rationale: shareable/bookmarkable URLs; server-side fetching gets params natively; fewer client-state syncing bugs than a separate global store.
+
+### Reporting generalization strategy (decided May 14, 2026)
+- New tables live in `chapter_reporting.*` **alongside** existing `eos_*` tables — no schema rename, no big-bang migration.
+- Naming: drop the `eos_` prefix. `chapter_reporting.eos_traffic_overview_snapshot` → `chapter_reporting.traffic_overview_snapshot_v1`.
+- **Per-tile recipe** when wiring a dashboard tile:
+  1. If an `eos_*` analog exists, use its loader SQL as the template
+  2. Strip the `client_key = 'eos_fabrics'` filter + any other EOS hardcoding
+  3. Add `client_key` to the output column list if missing
+  4. Add an index on `(client_key, ...)` per the multi-tenant pattern (Fix #26 Part 1)
+  5. Run the new loader populating all active clients
+  6. **Verify the new table against the existing `eos_*` equivalent** — `WHERE client_key='eos_fabrics'` row counts + values match
+  7. **Also verify against an external truth source** — Shopify Admin reports, Google Analytics, the platform's own analytics — to catch logic the `eos_*` loader inherited that may be quietly wrong (or that may diverge by definition; document divergences)
+  8. Wire the dashboard tile to the new generic table
+- Old `eos_*` tables remain live indefinitely. No drop until we've operated for ~weeks on the new ones with confidence (cleanup is a future session).
+- **Scope discipline:** only generalize tables the dashboard actually consumes. The 51-object `chapter_reporting` set (audit `chapter-scripts/audit-chapter-reporting.js`) has many intermediate/deprecated entries. Don't touch what's not consumed.
+
+### Tier-based feature stripping
+- All clients see the full feature set in v1. When tier-based stripping is needed, gate sections/tiles by `client.tier` (`Starter` / `Mid` / `Top`). The sidebar already shows a lock pill for Starter on the Observations item — extend this pattern to per-page lockouts rather than designing for tier-stripping from scratch.
+
+### Mobile responsiveness
+- Sidebar collapses to off-canvas drawer (hamburger toggle in topbar) below 1024px
+- KPI strip → 2 cols on phone; lifecycle hero metrics same
+- Tables: horizontal scroll inside their card, never the page
+- Top bar: title row + dropdown row stack; subtitle clamped to 1 line; "Compare" dropdown hidden on phone
+- `/chapter/journeys`: detail panel **hidden on phone** (event timeline + sub-grids don't render usefully on small screens). Identity list is the mobile view.
+- `.chapter-app { overflow-x: hidden; max-width: 100vw }` is the hard guarantee against dark-body bleed-through from any rogue child element.
+
+---
+
+## ✅ Completed Fixes (as of May 14, 2026)
+
+### Chapter Dashboard v1 shell shipped (May 14, 2026)
+- **Scope shipped today:** the full agency-operator dashboard surface at `/chapter/*` — 8 pages (Observations, Lifecycle Overview, Channel Roles, Path Patterns, Lift & Incrementality, Attribution Models, Customer Journeys, Raw Performance) — running on `_components/mockdata.ts`. Page-by-page Supabase wiring starts May 15.
+- **Design:** ported from a Claude Design handoff (high-fidelity React-in-browser prototype). 13 reusable primitives. Tokens scoped to a `.chapter-app` wrapper class so they cannot leak into agency Tailwind. Mobile-responsive (sidebar drawer, KPI wrap, table internal-scroll, Journeys detail panel hidden on phone).
+- **Auth:** shared `CHAPTER_DASH_TOKEN` env var compared verbatim against `chapter_auth` cookie. Middleware extends to gate `/chapter/*` alongside the existing `/for-clients/*` HTTP Basic. Login at `/chapter/login`; 14d session.
+- **Architectural decisions** (data fetching pattern, reporting generalization strategy, URL state, mobile rules, future `/chapter/[client_key]/*` plan) all live in the new **📊 Chapter Dashboard** section above. That section is the source of truth for data-wiring sessions ahead — read it before touching the dashboard.
+- **Files:** `src/app/chapter/*` (layout, route group, 8 pages, login, primitives), `src/app/api/chapter-auth/route.ts`, `middleware.ts` extension. Plus `src/components/NavBar.tsx` / `Footer.tsx` / `ChapterLoader.tsx` updated to hide on `/chapter/*` paths.
+- **Known UI polish deferred to data-wiring sessions:** channel drawer + path-combo drawer (designed, not built), bump-chart hot-channel emphasis, tier-based feature stripping beyond the existing Starter lock-pill pattern.
 
 ### Projectagram client onboarded — second production client (May 12, 2026)
 - **Client:** `projectagram_reels` (storefront `projectagram.com`, Shopify shop `projectagram.myshopify.com`). Shopify ecommerce, similar shape to EOS (3P pixel pattern; user's preferred 1P-HOSTED variant not viable on Shopify until a custom app is built).
@@ -502,10 +576,13 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ---
 
-## 🔜 Future Work (Not Started)
+## 🔜 Future Work
 
-- **Dashboard build** — Chapter dashboard to be built in this repo under a new route (e.g., `src/app/chapter/`) and deployed to Vercel alongside the agency site
-- **Multi-client generalization** — `chapter_reporting` is currently EOS-specific. Future clients need generic reporting primitives
+- **Dashboard build** — v1 shell shipped May 14, 2026 (see "Chapter Dashboard v1 shell" in Completed Fixes). Data-wiring page-by-page in progress starting May 15. First target: Raw Performance page.
+- **Multi-client generalization of `chapter_reporting`** — happening incrementally per-tile during dashboard wiring (see "Reporting generalization strategy" in the 📊 Chapter Dashboard section). Not a separate big-bang.
+- **`/chapter/[client_key]/*` client-scoped surface** — deferred until agency surface is data-wired. Today's code structure is compatible; adding the route group is additive.
+- **Observations question-library engine** — UI shell exists at `/chapter/observations`. Backend (weekly run, severity classifier, history) not built. Defer until first real engagement question is identified.
+- **Lift & Incrementality backend** — UI shell exists for all 3 tabs. Correlation is computable from existing data. Incrementality (holdout assignment + suppression mechanics + p-value/power) and Causation (propensity-score matching + covariate storage) are real systems, weeks of work each. Build when first client needs to run a structured lift test.
 - **Offline attribution expansion** — Pack D / online+offline modeling via `offline_milestones`
 - **`purchase_items` population** — not yet populated for EOS
-- **`chapter_config` schema** — reserved for future client-level configuration (event mapping, attribution rules, channel normalization, feature flags)
+- **`chapter_config` schema** — reserved for future client-level configuration (event mapping, attribution rules, channel normalization, feature flags). Currently used for `client_secrets` + `shopify_webhook_secrets` only.

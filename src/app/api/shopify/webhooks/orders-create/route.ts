@@ -145,18 +145,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "invalid_json" }, { status: 400 });
     }
 
-    // Only treat paid orders as purchases
-    const financialStatus = String(order?.financial_status || "").toLowerCase();
-    if (financialStatus !== "paid") {
-      return NextResponse.json(
-        {
-          status: "ignored",
-          reason: "order_not_paid",
-          financial_status: financialStatus || null,
-        },
-        { status: 200 }
-      );
-    }
+    // NOTE on financial_status: previously this route filtered to only "paid"
+    // orders. That filter was inherited when the route was renamed from
+    // `orders-paid` → `orders-create` on Mar 18, 2026, and silently dropped
+    // every order arriving as "pending" at creation time. For most payment
+    // processors, orders/create fires BEFORE payment capture, so status is
+    // pending at this moment. Removing the filter so every order is recorded
+    // at creation. The financial_status itself is preserved in
+    // raw.order.financial_status for downstream filtering.
+    //
+    // Subscribing also to orders/updated (or orders/paid) to keep status fresh
+    // is a separate future improvement; not needed for accurate creation-time
+    // intake.
 
     const clientKey = resolvedClientKey;
 

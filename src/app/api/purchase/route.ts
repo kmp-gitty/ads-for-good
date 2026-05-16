@@ -290,39 +290,54 @@ export async function POST(req: NextRequest) {
       `;
       const resolved = canon[0]?.canonical_identity_key ?? lookupKey;
 
-      try {
-        const inserted = await tx<{ id: string }[]>`
-          INSERT INTO chapter_ingest.purchase_events (
-            client_key, event_name, event_ts, source_platform,
-            order_id, payment_id, event_id,
-            value, currency,
-            email_hash, customer_id, client_identity_key, anonymous_id,
-            resolved_identity_key, identity_confidence, identity_reason,
-            coupon, shipping, tax,
-            utm_source, utm_medium, utm_campaign, utm_term, utm_content,
-            click_id, page_url, referrer,
-            user_agent, raw
-          ) VALUES (
-            ${clientKey}, 'purchase', ${eventTsIso}, ${payload.source_platform},
-            ${payload.order_id ?? null}, ${payload.payment_id ?? null}, ${payload.event_id ?? null},
-            ${payload.value}, ${payload.currency},
-            ${emailHash}, ${payload.customer_id ?? null}, ${payload.client_identity_key ?? null}, ${payload.anonymous_id ?? null},
-            ${resolved}, ${identityConfidence}, ${identityReason},
-            ${payload.coupon ?? null}, ${payload.shipping ?? null}, ${payload.tax ?? null},
-            ${payload.utm_source ?? null}, ${payload.utm_medium ?? null}, ${payload.utm_campaign ?? null}, ${payload.utm_term ?? null}, ${payload.utm_content ?? null},
-            ${payload.click_id ?? null}, ${payload.page_url ?? null}, ${payload.referrer ?? null},
-            ${typeof payload.user_agent === "string" ? payload.user_agent : null},
-            ${payload.raw ?? null}
-          )
-          RETURNING id
-        `;
-        return { id: inserted[0]?.id ?? null, deduped: false, resolved };
-      } catch (err: any) {
-        if (err?.code === "23505") {
-          return { id: null, deduped: true, resolved };
-        }
-        throw err;
-      }
+      // UPSERT on the dedup index (client_key, source_platform, event_id||order_id||payment_id).
+      // First webhook (orders/create) inserts the row. Subsequent webhooks for the same
+      // order (orders/updated, orders/paid) refresh the mutable fields — value, currency,
+      // raw (which carries financial_status), coupon/shipping/tax, user_agent — so the
+      // row reflects the latest Shopify state. Immutable fields (event_ts, identity_*)
+      // stay at their creation-time values.
+      //
+      // The (xmax > 0) trick distinguishes an INSERT (xmax=0) from an UPDATE (xmax>0).
+      const upserted = await tx<{ id: string; was_update: boolean }[]>`
+        INSERT INTO chapter_ingest.purchase_events (
+          client_key, event_name, event_ts, source_platform,
+          order_id, payment_id, event_id,
+          value, currency,
+          email_hash, customer_id, client_identity_key, anonymous_id,
+          resolved_identity_key, identity_confidence, identity_reason,
+          coupon, shipping, tax,
+          utm_source, utm_medium, utm_campaign, utm_term, utm_content,
+          click_id, page_url, referrer,
+          user_agent, raw
+        ) VALUES (
+          ${clientKey}, 'purchase', ${eventTsIso}, ${payload.source_platform},
+          ${payload.order_id ?? null}, ${payload.payment_id ?? null}, ${payload.event_id ?? null},
+          ${payload.value}, ${payload.currency},
+          ${emailHash}, ${payload.customer_id ?? null}, ${payload.client_identity_key ?? null}, ${payload.anonymous_id ?? null},
+          ${resolved}, ${identityConfidence}, ${identityReason},
+          ${payload.coupon ?? null}, ${payload.shipping ?? null}, ${payload.tax ?? null},
+          ${payload.utm_source ?? null}, ${payload.utm_medium ?? null}, ${payload.utm_campaign ?? null}, ${payload.utm_term ?? null}, ${payload.utm_content ?? null},
+          ${payload.click_id ?? null}, ${payload.page_url ?? null}, ${payload.referrer ?? null},
+          ${typeof payload.user_agent === "string" ? payload.user_agent : null},
+          ${payload.raw ?? null}
+        )
+        ON CONFLICT (client_key, source_platform, COALESCE(NULLIF(event_id, ''::text), NULLIF(order_id, ''::text), NULLIF(payment_id, ''::text)))
+        DO UPDATE SET
+          value      = EXCLUDED.value,
+          currency   = EXCLUDED.currency,
+          coupon     = EXCLUDED.coupon,
+          shipping   = EXCLUDED.shipping,
+          tax        = EXCLUDED.tax,
+          user_agent = COALESCE(EXCLUDED.user_agent, chapter_ingest.purchase_events.user_agent),
+          raw        = EXCLUDED.raw
+        RETURNING id, (xmax::text::int > 0) AS was_update
+      `;
+      const row = upserted[0];
+      return {
+        id: row?.id ?? null,
+        deduped: row?.was_update === true,
+        resolved,
+      };
     });
     purchaseEventId = result.id;
     deduped = result.deduped;

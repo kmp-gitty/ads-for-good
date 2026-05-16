@@ -91,9 +91,13 @@ function gateChapter(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Preserve full path + query string so a bookmarked URL like
+  // /chapter/raw?client=eos_fabrics&range=90d survives the auth round-trip.
+  const fullPath = req.nextUrl.pathname + req.nextUrl.search;
   const loginUrl = req.nextUrl.clone();
   loginUrl.pathname = "/chapter/login";
-  loginUrl.searchParams.set("next", pathname);
+  loginUrl.search = ""; // clear any params copied from the cloned URL
+  loginUrl.searchParams.set("next", fullPath);
   return NextResponse.redirect(loginUrl);
 }
 
