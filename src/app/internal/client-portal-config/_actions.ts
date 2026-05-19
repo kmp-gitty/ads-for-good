@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@supabase/supabase-js";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { VALID_PLANS, VALID_SERVICES, type PlanKey } from "./_constants";
 
@@ -158,7 +158,9 @@ export async function saveClient(
     }
   }
 
-  revalidateTag("portal-data");
+  // updateTag is the Next 16 server-action-friendly tag invalidator —
+  // provides read-your-own-writes (the redirect target sees fresh data).
+  updateTag("portal-data");
   revalidatePath("/internal/client-portal-config");
   revalidatePath(`/internal/client-portal-config/${clientKey}`);
 
