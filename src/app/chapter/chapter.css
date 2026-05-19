@@ -800,6 +800,25 @@
 .chapter-app { overflow-x: hidden; max-width: 100vw; }
 .chapter-app .main { min-width: 0; overflow-x: hidden; }
 
+/* Topbar dropdown + date-window subtitle. Stack the dropdown button on top
+ * and a small date-range string (e.g. "Apr 16 – May 16, 2026") below it so
+ * the user knows what the selection actually resolves to. */
+.chapter-app .topbar-dd-with-sub {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.chapter-app .topbar-dd-sub {
+  font-size: 10px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  padding-right: 4px;
+}
+
 /* Hamburger button — visible on mobile/tablet, hidden on desktop. */
 .chapter-app .topbar-hamburger {
   display: none;

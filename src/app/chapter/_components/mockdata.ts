@@ -4,6 +4,14 @@
 
 // ---------- Types ----------
 
+// Both styles coexist during the page-by-page wire-up:
+//   - snake_case keys (direct, organic, paid_search, paid_social) are used by
+//     still-mocked pages: attribution, journeys, overview, lift, channels.
+//   - RPC-format keys ("(direct)", "organic search", "paid search",
+//     "paid social", "organic social", "(unknown)") match the strings emitted
+//     by chapter_reporting.channel_performance_overview and any future live
+//     RPC. Single source of truth for display name + color.
+// Each page swaps from snake_case to RPC-format when its loader goes live.
 export type ChannelKey =
   | "direct"
   | "email"
@@ -14,7 +22,13 @@ export type ChannelKey =
   | "tiktok"
   | "referral"
   | "affiliate"
-  | "sms";
+  | "sms"
+  | "(direct)"
+  | "organic search"
+  | "paid search"
+  | "paid social"
+  | "organic social"
+  | "(unknown)";
 
 export type Channel = { name: string; color: string; short: string };
 
@@ -189,12 +203,25 @@ export const CHANNELS: Record<ChannelKey, Channel> = {
   referral:     { name: "Referral",       color: "#B26B2A", short: "RF" },
   affiliate:    { name: "Affiliate",      color: "#7A6720", short: "AF" },
   sms:          { name: "SMS",            color: "#C9550B", short: "SM" },
+  // RPC-format aliases (same display semantics, just key shape differs).
+  "(direct)":        { name: "Direct",          color: "#1F2D43", short: "DR" },
+  "organic search":  { name: "Organic Search",  color: "#2E7D5B", short: "OS" },
+  "paid search":     { name: "Paid Search",     color: "#3F6FB5", short: "PS" },
+  "paid social":     { name: "Paid Social",     color: "#8B5BC9", short: "SO" },
+  "organic social":  { name: "Organic Social",  color: "#5868D6", short: "SO" },
+  "(unknown)":       { name: "Unknown",         color: "#9CA0A8", short: "UN" },
 };
 
+// IMPORTANT: `id` MUST match the client_key in chapter_config.client_secrets.
+// This value flows into the dashboard URL (?client=<id>) and into every
+// server-side query's WHERE clause. Onboarding a new client requires:
+//   1. INSERT into chapter_config.client_secrets with this client_key
+//   2. CREATE ROLE client_<client_key> + grants (per Fix #26 Part 2)
+//   3. Add a row here with id = that same client_key
 export const CLIENTS: Client[] = [
-  { id: "eos",         name: "EOS Fabrics",        tier: "Mid",     color: "#E36410" },
-  { id: "projectagram", name: "Projectagram Reels", tier: "Mid",     color: "#5868D6" },
-  { id: "adsforgood",   name: "Ads for Good",       tier: "Top",     color: "#2E7D5B" },
+  { id: "eos_fabrics",        name: "EOS Fabrics",        tier: "Mid",     color: "#E36410" },
+  { id: "projectagram_reels", name: "Projectagram Reels", tier: "Mid",     color: "#5868D6" },
+  { id: "adsforgood_prod",    name: "Ads for Good",       tier: "Top",     color: "#2E7D5B" },
 ];
 
 export const KPI: Kpi[] = [
@@ -533,7 +560,8 @@ export const CHANNEL_PERF: ChannelPerf[] = [
 
 export const DATE_RANGES = [
   "Last 7 days", "Last 14 days", "Last 30 days", "Last 90 days",
-  "This month", "Last month", "This quarter", "Last quarter", "Year to date", "Custom…",
+  "This month", "Last month", "This quarter", "Last quarter", "Year to date",
+  "All time", "Custom…",
 ];
 
 export const COMPARISONS = [

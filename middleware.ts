@@ -2,10 +2,11 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 // Routes gated by this middleware:
-//   /for-clients/*  â HTTP Basic auth, per-client credentials in env vars
-//   /chapter/*      â shared-password cookie (agency operator dashboard)
+//   /for-clients/*  — HTTP Basic auth, per-client credentials in env vars
+//   /chapter/*      — shared-password cookie (agency operator dashboard)
+//   /internal/*     — same cookie as /chapter (agency-internal admin surfaces)
 export const config = {
-  matcher: ["/for-clients/:path*", "/chapter/:path*"],
+  matcher: ["/for-clients/:path*", "/chapter/:path*", "/internal/:path*"],
 };
 
 // ---------- /for-clients/* HTTP Basic auth ----------
@@ -27,6 +28,10 @@ function getCreds(slug: string) {
     "Tigerbyte-Digital": {
       user: process.env.CLIENT_TIGERBYTE_DIGITAL_USER,
       pass: process.env.CLIENT_TIGERBYTE_DIGITAL_PASS,
+    },
+    "Not-So-Cavalier": {
+      user: process.env.CLIENT_NOT_SO_CAVALIER_USER,
+      pass: process.env.CLIENT_NOT_SO_CAVALIER_PASS,
     },
   };
 
@@ -101,10 +106,35 @@ function gateChapter(req: NextRequest) {
   return NextResponse.redirect(loginUrl);
 }
 
+// ---------- /internal/* cookie auth ----------
+// Agency-internal admin surfaces (e.g. /internal/client-portal-config). Same
+// CHAPTER_DASH_TOKEN cookie as /chapter — anyone authenticated for the Chapter
+// dashboard can also use the admin surfaces. Redirect to /chapter/login on
+// miss so we have a single login flow.
+function gateInternal(req: NextRequest) {
+  const expectedToken = process.env.CHAPTER_DASH_TOKEN;
+  if (!expectedToken) {
+    return new NextResponse(
+      "CHAPTER_DASH_TOKEN not configured. Set it in Vercel + .env.local.",
+      { status: 503 },
+    );
+  }
+  if (req.cookies.get(CHAPTER_AUTH_COOKIE)?.value === expectedToken) {
+    return NextResponse.next();
+  }
+  const fullPath = req.nextUrl.pathname + req.nextUrl.search;
+  const loginUrl = req.nextUrl.clone();
+  loginUrl.pathname = "/chapter/login";
+  loginUrl.search = "";
+  loginUrl.searchParams.set("next", fullPath);
+  return NextResponse.redirect(loginUrl);
+}
+
 // ---------- Dispatcher ----------
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (pathname.startsWith("/chapter")) return gateChapter(req);
+  if (pathname.startsWith("/internal")) return gateInternal(req);
   if (pathname.startsWith("/for-clients")) return gateForClients(req);
   return NextResponse.next();
 }
