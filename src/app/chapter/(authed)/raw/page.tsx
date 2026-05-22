@@ -19,6 +19,8 @@ import {
   cachedEngagementQuality,
   cachedFunnelOverview,
   cachedChannelPerformance,
+  cachedDashboardTimeseries,
+  priorWindow,
 } from "../../_lib/dashboard-rpc";
 
 type SearchParams = Promise<{
@@ -40,17 +42,37 @@ export default async function RawPage({ searchParams }: { searchParams: SearchPa
     p_end_ts:   end.toISOString(),
   };
 
-  const [purchase, journey, engagement, funnel, channels] = await Promise.all([
+  // Prior-period window: same-duration window immediately preceding [start, end).
+  // We call the headline tile RPCs again with shifted args to compute movement
+  // deltas. Cached separately because the args are different.
+  const prior = priorWindow(start, end);
+  const priorArgs = {
+    p_client_key: clientKey,
+    p_start_ts: prior.start.toISOString(),
+    p_end_ts:   prior.end.toISOString(),
+  };
+
+  const [
+    purchase, journey, engagement, funnel, channels, timeseries,
+    purchasePrior, journeyPrior, engagementPrior,
+  ] = await Promise.all([
     cachedPurchaseOverview(args),
     cachedJourneyOverview(args),
     cachedEngagementQuality(args),
     cachedFunnelOverview(args),
     cachedChannelPerformance(args),
+    cachedDashboardTimeseries({ ...args, p_n_buckets: 12 }),
+    cachedPurchaseOverview(priorArgs),
+    cachedJourneyOverview(priorArgs),
+    cachedEngagementQuality(priorArgs),
   ]);
 
   const summary    = purchase[0]   ?? null;
   const journeyRow = journey[0]    ?? null;
   const engageRow  = engagement[0] ?? null;
+  const priorSummary    = purchasePrior[0]   ?? null;
+  const priorJourneyRow = journeyPrior[0]    ?? null;
+  const priorEngageRow  = engagementPrior[0] ?? null;
 
   return (
     <RawClient
@@ -59,6 +81,10 @@ export default async function RawPage({ searchParams }: { searchParams: SearchPa
       engagement={engageRow}
       funnel={funnel}
       channels={channels}
+      timeseries={timeseries}
+      priorSummary={priorSummary}
+      priorJourney={priorJourneyRow}
+      priorEngagement={priorEngageRow}
       clientKey={clientKey}
       range={range}
     />

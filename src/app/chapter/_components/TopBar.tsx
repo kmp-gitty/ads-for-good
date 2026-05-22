@@ -9,16 +9,20 @@ import { KpiStrip } from "./KpiStrip";
 import {
   DATE_RANGES, COMPARISONS,
   ATTRIBUTION_MODELS, ATTRIBUTION_MODEL_LABELS, AttributionModel,
+  type Kpi,
 } from "./mockdata";
 import { fmtRangeSubtitle, rangeToWindow, compareWindow, fmtDateRange } from "./format";
 
 export function TopBar({
-  title, subtitle, showModel = false, showCompare = true,
+  title, subtitle, showModel = false, showCompare = true, kpis,
 }: {
   title: string;
   subtitle: React.ReactNode;
   showModel?: boolean;
   showCompare?: boolean;
+  /** Live KPI strip data. When omitted, KpiStrip falls back to mock so
+   *  unwired pages still render something. */
+  kpis?: Kpi[];
 }) {
   const { dateRange, setDateRange, compare, setCompare, model, setModel, setSidebarOpen } = useChapter();
 
@@ -145,7 +149,7 @@ export function TopBar({
         )}
       </div>
 
-      <KpiStrip />
+      <KpiStrip kpis={kpis} />
     </div>
   );
 }

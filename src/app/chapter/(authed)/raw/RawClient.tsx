@@ -1,23 +1,25 @@
 "use client";
 
 import React from "react";
+import { useSearchParams } from "next/navigation";
 import { TopBar } from "../../_components/TopBar";
 import { useChapter } from "../../_components/ChapterContext";
 import { fmtNum, fmtMoney } from "../../_components/format";
-import { CHANNELS, type ChannelKey } from "../../_components/mockdata";
+import { CHANNELS, type ChannelKey, type Kpi } from "../../_components/mockdata";
+import type { DashboardTimeseriesRow } from "../../_lib/dashboard-rpc";
 
 // Fallback for any RPC channel string not yet mapped in CHANNELS (e.g., a new
 // channel taxonomy entry the dashboard hasn't been updated for yet).
 const CHANNEL_FALLBACK = { name: "Unknown", color: "#9CA0A8", short: "—" };
 
 type RawClientProps = {
-  /** chapter_reporting.purchase_overview() — orders/revenue/AOV (Total Sales definition). */
+  /** chapter_reporting.purchase_overview() — orders/revenue/AOV. */
   summary: {
     total_orders: number | null;
     total_revenue: number | null;
     avg_order_value: number | null;
   } | null;
-  /** chapter_reporting.journey_overview() — total non-bot journeys + stitched-identity counts. */
+  /** chapter_reporting.journey_overview() — total non-bot + stitched-identity counts. */
   journey: {
     total_journeys: number | null;
     identified_journeys: number | null;
@@ -46,16 +48,32 @@ type RawClientProps = {
     revenue: number | null;
     cr: number | null;
   }>;
-  /** Server-resolved URL params (echoed for display + future updates). */
+  /** chapter_reporting.dashboard_timeseries() — 12 buckets, one row per. */
+  timeseries: DashboardTimeseriesRow[];
+  /** Same RPCs as above but for the prior-period window. Used for deltas. */
+  priorSummary: {
+    total_orders: number | null;
+    total_revenue: number | null;
+    avg_order_value: number | null;
+  } | null;
+  priorJourney: {
+    total_journeys: number | null;
+    identified_journeys: number | null;
+    pct_identified: number | null;
+  } | null;
+  priorEngagement: {
+    engagement_rate: number | null;
+  } | null;
   clientKey: string;
   range: string;
 };
 
 function Sparkline({ data, color = "var(--accent)" }: { data: number[]; color?: string }) {
   const w = 120, h = 36, pad = 2;
+  if (data.length === 0) return null;
   const max = Math.max(...data);
   const min = Math.min(...data);
-  const xs = (i: number) => pad + (i * (w - pad * 2)) / (data.length - 1);
+  const xs = (i: number) => pad + (i * (w - pad * 2)) / Math.max(data.length - 1, 1);
   const ys = (v: number) => pad + (1 - (v - min) / (max - min || 1)) * (h - pad * 2);
   const d = data.map((v, i) => `${i === 0 ? "M" : "L"} ${xs(i)} ${ys(v)}`).join(" ");
   return (
@@ -66,53 +84,54 @@ function Sparkline({ data, color = "var(--accent)" }: { data: number[]; color?: 
   );
 }
 
-export default function RawClient({ summary, journey, engagement, funnel, channels, clientKey: _clientKey, range: _range }: RawClientProps) {
-  const { client } = useChapter();
+// Percent change current vs prior. Returns null when the prior value is null
+// or zero (no meaningful denominator) so consumers can decide whether to
+// render a "—" or hide the badge.
+function pctDelta(current: number | null | undefined, prior: number | null | undefined): number | null {
+  if (current == null || prior == null) return null;
+  const c = Number(current), p = Number(prior);
+  if (!Number.isFinite(c) || !Number.isFinite(p) || p === 0) return null;
+  return ((c - p) / p) * 100;
+}
 
-  // Sparkline trends remain mock until we wire a per-week time series RPC.
-  // Headline values (orders / revenue / AOV) come from real data; movement
-  // deltas remain mock until we compute prior-period values too.
+export default function RawClient({
+  summary, journey, engagement, funnel, channels, timeseries,
+  priorSummary, priorJourney, priorEngagement,
+  clientKey: _clientKey, range: _range,
+}: RawClientProps) {
+  const { client } = useChapter();
+  const sp = useSearchParams();
+  const showDelta = (sp.get("compare") || "prior") !== "none";
+
+  // Sparkline arrays come from one bucketed RPC (dashboard_timeseries).
+  // Each per-tile array is a thin projection; the full row stays in TS in case
+  // we want to render hover tooltips with bucket dates later.
   const trends = {
-    orders:    [128, 142, 138, 155, 168, 172, 195, 188, 210, 224, 235, 247].map(x => x * 7),
-    revenue:   [28, 32, 30, 36, 38, 41, 46, 44, 50, 53, 56, 58].map(x => x * 1000),
-    aov:       [218, 224, 226, 228, 226, 230, 234, 232, 240, 244, 250, 226],
-    journeys:  [5200, 5800, 6100, 6300, 6800, 7100, 7400, 7800, 8200, 8400, 8600, 8800],
-    identified:[22, 24, 25, 26, 26, 28, 28, 29, 30, 30, 31, 31],
-    engagement:[42, 44, 43, 45, 44, 46, 45, 47, 46, 48, 47, 48],
+    orders:     timeseries.map(b => Number(b.orders     ?? 0)),
+    revenue:    timeseries.map(b => Number(b.revenue    ?? 0)),
+    journeys:   timeseries.map(b => Number(b.journeys   ?? 0)),
+    identified: timeseries.map(b => Number(b.identified ?? 0)),
+    engagement: timeseries.map(b => Number(b.engagement_rate ?? 0)),
+    // AOV: per-bucket = revenue / orders. Null-safe (returns 0 when orders=0
+    // so the sparkline doesn't NaN; that bucket just shows a flat segment).
+    aov: timeseries.map(b => {
+      const o = Number(b.orders ?? 0), r = Number(b.revenue ?? 0);
+      return o > 0 ? r / o : 0;
+    }),
   };
 
-  // Format all 6 metrics from live data. NULL → "—" so callers can tell
-  // an empty range from a real zero.
-  const ordersDisplay  = summary?.total_orders != null
-    ? fmtNum(Number(summary.total_orders))
-    : "—";
-  const revenueDisplay = summary?.total_revenue != null
-    ? fmtMoney(Number(summary.total_revenue))
-    : "—";
-  const aovDisplay     = summary?.avg_order_value != null
-    ? "$" + Number(summary.avg_order_value).toFixed(2)
-    : "—";
+  // Display strings for headline values.
+  const ordersDisplay  = summary?.total_orders    != null ? fmtNum(Number(summary.total_orders))           : "—";
+  const revenueDisplay = summary?.total_revenue   != null ? fmtMoney(Number(summary.total_revenue))         : "—";
+  const aovDisplay     = summary?.avg_order_value != null ? "$" + Number(summary.avg_order_value).toFixed(2) : "—";
+  const journeysDisplay = journey?.total_journeys != null ? fmtNum(Number(journey.total_journeys))         : "—";
 
-  const journeysDisplay = journey?.total_journeys != null
-    ? fmtNum(Number(journey.total_journeys))
-    : "—";
-
-  // "Identified journeys" composite value: "N / X%" matching the mock format,
-  // with a sub-line below showing identify events + sessions-per-identification.
-  // The sub-line is rendered separately in the card JSX (see below).
-  const identifiedCount = journey?.identified_journeys != null
-    ? fmtNum(Number(journey.identified_journeys))
-    : "—";
-  const identifiedPct = journey?.pct_identified != null
-    ? (Number(journey.pct_identified) * 100).toFixed(1) + "%"
-    : null;
-  const identifiedDisplay = identifiedPct
-    ? `${identifiedCount} / ${identifiedPct}`
-    : identifiedCount;
+  // "Identified journeys" composite value: "N / X%" with sub-line below.
+  const identifiedCount = journey?.identified_journeys != null ? fmtNum(Number(journey.identified_journeys)) : "—";
+  const identifiedPct   = journey?.pct_identified      != null ? (Number(journey.pct_identified) * 100).toFixed(1) + "%" : null;
+  const identifiedDisplay = identifiedPct ? `${identifiedCount} / ${identifiedPct}` : identifiedCount;
   const identifyEvents = journey?.identify_events != null ? Number(journey.identify_events) : null;
-  const sessionsPerId  = journey?.sessions_per_identification != null
-    ? Number(journey.sessions_per_identification)
-    : null;
+  const sessionsPerId  = journey?.sessions_per_identification != null ? Number(journey.sessions_per_identification) : null;
   const identifiedFoot = identifyEvents != null
     ? `${fmtNum(identifyEvents)} identify events${sessionsPerId != null ? ` · ${sessionsPerId.toFixed(2)} sessions per identification` : ""}`
     : null;
@@ -121,13 +140,37 @@ export default function RawClient({ summary, journey, engagement, funnel, channe
     ? (Number(engagement.engagement_rate) * 100).toFixed(1) + "%"
     : "—";
 
+  // Movement deltas vs prior period. Percent-point absolutes (e.g. engagement
+  // rate going from 50% → 60% = +10pp = +20% relative); we use relative %
+  // throughout for consistency with how dashboards typically express movement.
+  const moveOrders     = pctDelta(summary?.total_orders,         priorSummary?.total_orders);
+  const moveRevenue    = pctDelta(summary?.total_revenue,        priorSummary?.total_revenue);
+  const moveAov        = pctDelta(summary?.avg_order_value,      priorSummary?.avg_order_value);
+  const moveJourneys   = pctDelta(journey?.total_journeys,       priorJourney?.total_journeys);
+  const moveIdentified = pctDelta(journey?.identified_journeys,  priorJourney?.identified_journeys);
+  const moveEngagement = pctDelta(engagement?.engagement_rate,   priorEngagement?.engagement_rate);
+
   const cards = [
-    { label: "Total orders",        value: ordersDisplay,    move: -2.4,  good: false, data: trends.orders,     live: true,  foot: null },
-    { label: "Total revenue",       value: revenueDisplay,   move: +8.6,  good: true,  data: trends.revenue,    live: true,  foot: null },
-    { label: "AOV",                 value: aovDisplay,       move: +11.3, good: true,  data: trends.aov,        live: true,  foot: null },
-    { label: "Total journeys",      value: journeysDisplay,  move: +14.2, good: null,  data: trends.journeys,   live: true,  foot: "non-bot only" },
-    { label: "Identified journeys", value: identifiedDisplay, move: +1.8, good: true,  data: trends.identified, live: true,  foot: identifiedFoot },
-    { label: "Engagement rate",     value: engagementDisplay, move: +0.6, good: true,  data: trends.engagement, live: true,  foot: "of non-bot journeys with time_on_page" },
+    { label: "Total orders",        value: ordersDisplay,     move: moveOrders,     good: null,  data: trends.orders,     foot: null },
+    { label: "Total revenue",       value: revenueDisplay,    move: moveRevenue,    good: true,  data: trends.revenue,    foot: null },
+    { label: "AOV",                 value: aovDisplay,        move: moveAov,        good: true,  data: trends.aov,        foot: null },
+    { label: "Total journeys",      value: journeysDisplay,   move: moveJourneys,   good: null,  data: trends.journeys,   foot: "non-bot only" },
+    { label: "Identified journeys", value: identifiedDisplay, move: moveIdentified, good: true,  data: trends.identified, foot: identifiedFoot },
+    { label: "Engagement rate",     value: engagementDisplay, move: moveEngagement, good: true,  data: trends.engagement, foot: "of non-bot journeys with time_on_page" },
+  ] as Array<{
+    label: string; value: string; move: number | null; good: boolean | null;
+    data: number[]; foot: string | null;
+  }>;
+
+  // KPI strip on top bar — first 5 metrics, condensed. "Orders" semantic is
+  // up-good (more orders = better); journeys is neutral (more = more, but bot
+  // share can muddy the signal).
+  const kpis: Kpi[] = [
+    { label: "Orders",       value: ordersDisplay,     move: moveOrders     ?? 0, good: moveOrders     != null && moveOrders     >= 0, semantic: "up-good" },
+    { label: "Revenue",      value: revenueDisplay,    move: moveRevenue    ?? 0, good: moveRevenue    != null && moveRevenue    >= 0, semantic: "up-good" },
+    { label: "AOV",          value: aovDisplay,        move: moveAov        ?? 0, good: moveAov        != null && moveAov        >= 0, semantic: "up-good" },
+    { label: "Journeys",     value: journeysDisplay,   move: moveJourneys   ?? 0, good: null, semantic: "neutral" },
+    { label: "% Identified", value: identifiedPct ?? "—", move: moveIdentified ?? 0, good: moveIdentified != null && moveIdentified >= 0, semantic: "up-good" },
   ];
 
   // Funnel rows arrive as { step_ord, step_name, journeys, share_pct, drop_pct }
@@ -141,7 +184,6 @@ export default function RawClient({ summary, journey, engagement, funnel, channe
   const total   = funnelSteps[0]?.count ?? 0;
   const drops   = funnelSteps.filter(x => x.drop !== null).map(x => x.drop as number);
   const maxDrop = drops.length ? Math.max(...drops) : 0;
-  // Find which transition has the largest drop for the callout text.
   const largestDropIdx = funnelSteps.findIndex(x => x.drop === maxDrop);
   const largestDropFrom = largestDropIdx > 0 ? funnelSteps[largestDropIdx - 1].step : null;
   const largestDropTo   = largestDropIdx > 0 ? funnelSteps[largestDropIdx].step     : null;
@@ -151,6 +193,7 @@ export default function RawClient({ summary, journey, engagement, funnel, channe
       <TopBar
         title="Raw Performance"
         subtitle={`Volume metrics and traditional analytics · ${client.name}`}
+        kpis={kpis}
       />
       <div className="content">
         <div className="callout" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
@@ -162,24 +205,24 @@ export default function RawClient({ summary, journey, engagement, funnel, channe
 
         <div className="grid-3">
           {cards.map((c, i) => {
-            const arrow = c.move > 0 ? "↑" : c.move < 0 ? "↓" : "—";
+            const arrow = c.move == null ? "—" : c.move > 0 ? "↑" : c.move < 0 ? "↓" : "—";
             let cls: "good" | "bad" | "neutral" = "neutral";
-            if (c.good === true)  cls = c.move > 0 ? "good" : "bad";
-            if (c.good === false) cls = c.move > 0 ? "bad"  : "good";
+            if (c.move == null) cls = "neutral";
+            else if (c.good === true)  cls = c.move > 0 ? "good" : c.move < 0 ? "bad" : "neutral";
+            else if (c.good === false) cls = c.move > 0 ? "bad"  : c.move < 0 ? "good" : "neutral";
             return (
               <div key={i} className="card" style={{ padding: 18, position: "relative" }}>
                 <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".12em", color: "var(--ink-3)", fontWeight: 600 }}>
                   {c.label}
-                  {!c.live && (
-                    <span style={{ marginLeft: 6, fontSize: 9, padding: "1px 6px", background: "var(--bg-2)", borderRadius: 999, letterSpacing: ".06em" }} title="Mock — not yet wired to live data">
-                      mock
-                    </span>
-                  )}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 6 }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-.01em" }}>{c.value}</div>
-                    <span className={`move ${cls}`} style={{ marginTop: 4 }}>{arrow}{Math.abs(c.move).toFixed(1)}% vs. prior</span>
+                    {showDelta && (
+                      <span className={`move ${cls}`} style={{ marginTop: 4 }}>
+                        {c.move == null ? "— no prior data" : `${arrow}${Math.abs(c.move).toFixed(1)}% vs. prior`}
+                      </span>
+                    )}
                   </div>
                   <Sparkline data={c.data} color={c.good === false ? "var(--bad)" : "var(--accent)"} />
                 </div>

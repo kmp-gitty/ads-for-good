@@ -116,3 +116,50 @@ export const cachedJourneyOverview      = makeCachedRpc<JourneyOverviewRow>("jou
 export const cachedEngagementQuality    = makeCachedRpc<EngagementQualityRow>("engagement_quality");
 export const cachedFunnelOverview       = makeCachedRpc<FunnelStepRow>("funnel_overview");
 export const cachedChannelPerformance   = makeCachedRpc<ChannelPerformanceRow>("channel_performance_overview");
+
+// ─────── Time series for sparklines ──────────────────────────────────────────
+// dashboard_timeseries returns N equi-width buckets across [start, end). One
+// round-trip backs every sparkline on the page (orders/revenue/journeys/
+// identified/engagement). Per-bucket sums reconcile to the headline tile RPCs
+// when the same window is used; identified count matches journey_overview's
+// semantics exactly (no bot filter, by design — flagged inconsistency to
+// revisit later).
+
+export type DashboardTimeseriesRow = {
+  bucket_idx: number;
+  bucket_start: string;
+  orders: number | null;
+  revenue: number | null;
+  journeys: number | null;
+  identified: number | null;
+  engagement_rate: number | null;
+};
+
+type TimeseriesArgs = RpcArgs & { p_n_buckets: number };
+
+export const cachedDashboardTimeseries = unstable_cache(
+  async (args: TimeseriesArgs): Promise<DashboardTimeseriesRow[]> => {
+    const r = await supabase
+      .schema("chapter_reporting")
+      .rpc("dashboard_timeseries", args);
+    if (r.error) {
+      console.error(`[dashboard-rpc] chapter_reporting.dashboard_timeseries failed:`, {
+        message: r.error.message, details: r.error.details, hint: r.error.hint, code: r.error.code,
+      });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as DashboardTimeseriesRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:dashboard_timeseries"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:dashboard_timeseries"] },
+);
+
+// ─────── Prior-period window helper ──────────────────────────────────────────
+// Returns the same-duration window immediately preceding [start, end). Caller
+// uses this to call the existing tile RPCs a second time with the prior args
+// — no new RPC needed. Cache stays effective because the prior window is also
+// stable within a 5-min bucket.
+export function priorWindow(start: Date, end: Date): { start: Date; end: Date } {
+  const durMs = end.getTime() - start.getTime();
+  return { start: new Date(start.getTime() - durMs), end: new Date(start.getTime()) };
+}
