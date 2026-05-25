@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: May 13, 2026
+> Last updated: May 25, 2026
 
 ---
 
@@ -175,7 +175,85 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of May 14, 2026)
+## ✅ Completed Fixes (as of May 25, 2026)
+
+### Stale-MV diagnosis + dashboard refresh script (May 25, 2026)
+- **Symptom:** `/chapter/raw` rendered with sparse/empty tile fields and Next.js dev indicator showed 5 failed RPC calls (`journey_overview` ×2, `engagement_quality` ×2, `dashboard_timeseries` ×1) all returning `code: 57014 — canceling statement due to statement timeout` (PostgREST 8s ceiling).
+- **Diagnosis:** `chapter_reporting.journey_bot_classification_v1` (+ siblings `journey_funnel_steps_v1`, `journey_entry_channel_v1`) had max `journey_start_ts = 2026-05-16 23:02 UTC` — **9 days stale** vs source `chapter_journey.journeys` max `first_seen = 2026-05-25 18:12 UTC`. The MVs are not auto-refreshed. Stale Postgres stats + cold buffer cache pushed `journey_overview` from sub-second to 4.27s (EXPLAIN ANALYZE), and current+prior calls combined exceeded the PostgREST 8s timeout.
+- **Fix:** `chapter-scripts/refresh-dashboard-mvs.js` — refreshes all 3 dashboard-critical MVs with `REFRESH MATERIALIZED VIEW CONCURRENTLY` (all have unique PK indexes) + `ANALYZE` per MV. Uses `DATABASE_DIRECT_URL` + `statement_timeout = '30min'` + `keep_alive: 60` (memory: `feedback_postgres_js_keepalive`).
+- **Cadence pending:** the script is one-shot. A nightly Vercel Cron schedule (or pg_cron) needs to be wired — this is the now-active "Build MV refresh script + cron" item that was originally in the backlog.
+- **Lesson:** materialized views that back live dashboard surfaces must have a refresh cadence from day one. The dashboard's `unstable_cache` (5-min TTL) sits on top of the RPC layer, but the RPCs read from MVs that don't auto-refresh — so a stale MV creates the illusion of working caches while serving frozen data. Detection signal: max-timestamp drift between MV and source table. Add this check to monitoring (Fix #27 daily-digest is the natural home).
+
+### Chapter Dashboard data-wiring — Raw Performance fully wired (May 22-25, 2026)
+- **Page status:** `/chapter/raw` is the first of 8 Chapter dashboard pages to be fully live-wired. Other 7 (Observations, Overview, Channels, Paths, Lift, Attribution, Journeys) still on mockdata.
+- **New RPC `chapter_reporting.dashboard_timeseries(client_key, start, end, n_buckets)`** — returns N equi-width buckets across `[start, end)` with per-bucket `orders / revenue / journeys / identified / engagement_rate`. One round-trip backs every sparkline on the page. Reconciles to headline tile values exactly when same window is used (370 orders / $32,743.55 net revenue / 43,771 non-bot journeys / 1,597 identified — verified Apr 22 → May 22 window).
+- **Live wiring scope:**
+  - 6 tile cards each get a real sparkline (12 buckets) + real movement delta ("+8.6% vs prior") computed from a second parallel call to existing tile RPCs with a `priorWindow(start, end)`-shifted window
+  - Top-bar KPI strip (`Orders / Revenue / AOV / Journeys / % Identified`) now pulls live values for each page that passes the `kpis` prop to `TopBar`; unwired pages still see mock via the fallback in `KpiStrip`
+  - "No comparison" choice in the Compare dropdown (`?compare=none`) cleanly hides all movement-delta UI everywhere (tile cards + KPI strip) — both `KpiStrip` and `RawClient` check `useSearchParams().get("compare")`
+- **Caching:** `cachedDashboardTimeseries` added to `src/app/chapter/_lib/dashboard-rpc.ts`. Same `unstable_cache` + 5-min TTL + 5-min bucket pattern as the rest. Prior-period args don't need a new RPC — just shifted window into existing tile RPCs.
+- **Files touched:** `src/app/chapter/(authed)/raw/page.tsx`, `RawClient.tsx`; `src/app/chapter/_lib/dashboard-rpc.ts` (added `DashboardTimeseriesRow`, `cachedDashboardTimeseries`, `priorWindow()`); `src/app/chapter/_components/KpiStrip.tsx` (accepts `kpis?: Kpi[]`, hides delta when `?compare=none`); `src/app/chapter/_components/TopBar.tsx` (accepts + passes `kpis`).
+- **Pattern for wiring the remaining 7 pages:** server page fetches current + prior + (page-specific RPCs) in `Promise.all`, computes deltas in TS, builds a `Kpi[]` array, passes everything to client component. Reuse `priorWindow()`, `pctDelta()`, the `kpis` prop on TopBar. No DB schema changes needed for next pages unless their tiles require new RPCs.
+
+### Chapter Dashboard data validation pass — all 5 Raw tiles reconcile (May 22, 2026)
+- **Scope:** every tile on `/chapter/raw` cross-checked against raw tables in `chapter_ingest.*` + `chapter_journey.*` + `chapter_identity.*`. Window: Apr 22 → May 22 (30d UTC).
+- **Results:**
+  | RPC | Result | Match |
+  |---|---|---|
+  | `purchase_overview` | 370 orders, $32,743.55 net rev | matches raw (370 orders, $32,781.36 gross − $37.81 refunds) ✓ |
+  | `journey_overview` | 43,771 non-bot, 1,597 identified, 1,684 identify events | all exact ✓ |
+  | `channel_performance_overview` | 8 channel rows | journey/order/revenue totals reconcile within $0.01 rounding ✓ |
+  | `funnel_overview` | 43,250 page-views → 30,828 product → 448 cart → 370 purchase | exact ✓ |
+  | `engagement_quality` | 43,771 total / 26,161 with-time / 0.5977 engagement | exact ✓ |
+- **Override layer working correctly:** 771 (direct) journeys reclassified in window — 728 → email, 43 → referral. Total journey count unchanged (overrides only rewrite labels, never adjust counts).
+- **5 design observations flagged for future** (none are bugs, all are intentional choices to revisit):
+  1. **`pct_identified` denominator is bot-filtered but numerator isn't** — could yield >100% if a bot ever resolves identity. Easy guard when next touching the RPC.
+  2. **521 non-bot journeys have no `page_view` event** (43,771 total − 43,250 page_view) — started with hover_intent, identify, or scroll. The funnel's "Page view" is therefore not the *true* top; should be read as "page view among journeys that have one." **Tier 1 redirect domain will largely close this** because the redirect owns the landing URL → can deterministically fire a server-side page_view equivalent at redirect time.
+  3. **Funnel's Purchase step doesn't apply the non-bot filter** — by design (orders are authoritative regardless of bot classification). For EOS data this is fine.
+  4. **Shopify Admin "Gross sales" vs Chapter `value`** — definitional difference (Shopify gross = subtotal × qty, pre-tax/ship/discount; Chapter `value` = total_price post-everything). Documented in Fix #3.
+  5. **(unknown) bucket = 27.7% of attributable revenue ($9,054.61)** — chapters with no canonical_v1 session entry (purchase via email-bridge / cart_token bridge without browser session in window). Likely repeat customers reusing cart links / Shopify Email wrapped URLs. Not a bug, but the size suggests there's still attribution lift available if you wanted to chase it further.
+
+### Email channel attribution backfill — multi-pronged, EOS now within 2.4pp of GA (May 17-22, 2026)
+- **Goal:** close the gap between Chapter's email-channel attribution and GA's. Pre-backfill Chapter showed email at ~27% of GA's share; post-backfill Chapter shows email at ~75% of GA's share for EOS (~2.4pp absolute residual gap, mostly cross-device users without identity link — structural, not addressable without Tier 1 redirect).
+- **Five backfill passes**, each writing to `chapter_reporting.journey_entry_channel_overrides` (read-time overlay table; channel_performance_overview applies via `COALESCE(override.entry_channel, ec.entry_channel)` so MVs don't need rebuilding):
+  1. **Mailchimp URL+14d match (3,460 overrides)** — loaded 27 campaigns / 666 link rows from xlsx export → `chapter_config.email_campaigns (platform='mailchimp')`. Matched (direct) journeys whose entry page_url path matched a known email link within 14d of campaign send.
+  2. **Mailchimp identity-stitch via identity_canon (214 overrides)** — Mailchimp Reports API → `chapter_config.email_engagement_events` (12,427 clicks + 105,533 opens across 30 campaigns). For each click, found journeys where `canonical_identity = email_sha256:X` of the recipient AND journey.first_seen ∈ [click_ts, click_ts + 14d].
+  3. **Mailchimp URL+time precision (239 overrides)** — for clicks within 90s of an anonymous (direct) journey landing on the same URL. 3-phase materialization (click landings → direct landings filtered to clicked URLs → 90s JOIN) to dodge the 5-min PostgREST API timeout. Phase 2: 234k journeys → 20,356 filtered = 12× reduction.
+  4. **AI source reclassification (77 overrides)** — (direct) journeys where the AI parsed a probable real source from URL params / referrer → reclassified mostly to referral.
+  5. **Shopify Messaging URL+14d match (416 overrides)** — 19 campaigns manually pasted from Shopify Messaging admin into `/tmp/shopify_messaging_campaigns.json` (no per-recipient API available — only aggregate clicks). Loaded into same `email_campaigns` table with `platform='shopify_messaging'`. Backfilled with `ON CONFLICT DO NOTHING` so Mailchimp's stronger signals (identity-stitch) take precedence.
+- **Total overrides for eos_fabrics: 4,406.** Distribution: `email_url_match` 3,460 / `shopify_url_match` 416 / `mailchimp_url_time_match` 239 / `mailchimp_click_match` 214 / `ai_source_reclassify` 77.
+- **Architectural notes:**
+  - Email_sha256 hash convention: `SHA256(lowercase(trim(email)))` — used by both ingest (`identity_canon`) and these backfills consistently.
+  - The override table is keyed on `(client_key, journey_id)` UNIQUE — so a journey can only have one override. Multiple backfill passes use `ON CONFLICT DO NOTHING` to preserve precedence (stronger signal wins because it ran first).
+  - Mailchimp API key + Shopify Messaging access flow: see chapter-scripts/sync-mailchimp-engagement.js, chapter-scripts/load-eos-shopify-messaging-campaigns.js, chapter-scripts/run-shopify-messaging-url-match-backfill.js.
+- **Pricing/scaling note:** Mailchimp Reports API calls don't incur incremental cost on their subscription. Shopify Messaging has no per-recipient API — manual paste is the only path until/unless Shopify exposes it. **Recipient-list-only data (without per-recipient clicks) was deemed not worth chasing** — would back-attribute visits from people who never opened the email, creating noise without proportional signal.
+
+### Refunds webhook + refund-netting in dashboards (May 17-25, 2026)
+- **New table** `chapter_ingest.refund_events`: `(refund_id PK, client_key, order_id, shop_domain, amount, currency, refund_ts, raw, ingested_at)`. RLS-enabled (Fix #26 framework). Refund_id format distinguishes source: `csv_backfill:#102173` (historical) vs `shopify_refund_{shopify_refund_id}` (webhook-flowing).
+- **CSV backfill (May 17):** 17 historical EOS refunds totaling $450.96 imported from a manual export.
+- **Webhook route** `src/app/api/shopify/webhooks/refunds-create/route.ts`: same per-shop HMAC pattern as orders-create. Sums `transactions[].amount` where `kind='refund' AND status='success'`; zero-amount returns 200 with `skipped: "zero_amount"` (Shopify "Send test notification" sends a zero-amount mock — by design). Configured + verified in EOS Shopify admin (verified May 20: auth path + skip path); INSERT path will validate on first real refund event.
+- **Refund-netting in dashboard RPCs:**
+  - `purchase_overview` — `total_revenue` now subtracts `refunds.amount` for orders in window
+  - `channel_performance_overview` — net revenue distributed across channels via linear attribution
+  - `dashboard_timeseries` — refunds bucketed by `refund_ts` and netted out of bucket revenue
+  - **AOV uses net revenue ÷ gross order count** — matches Shopify Admin's "Gross sales" / "Net sales" convention. Total_orders count is NOT decremented by refunds (intentional — "transactions processed" remains accurate).
+- **Validation:** Apr 22 → May 22 window had 3 refunds totaling $37.81 (within 17 backfill rows). RPC's net revenue ($32,743.55) = raw gross ($32,781.36) − $37.81 refunds. Exact match.
+
+### /internal/tasks page — n8n-driven task tracker (May 21, 2026)
+- **Use case:** the user's email-to-clients flow now has an n8n pipeline that (1) parses outgoing project-update emails via Claude, (2) extracts actionable tasks, (3) writes to Supabase. This page is the human review surface where tasks can be ticked done.
+- **Schema in `tasks` schema (new):**
+  - `tasks.task_batches`: `(id uuid PK, client_id uuid FK→crm.clients.id nullable, subject_line, source_phrase, gmail_message_id UNIQUE, unmatched bool, match_score real, created_at)`
+  - `tasks.tasks`: `(id uuid PK, batch_id uuid FK→task_batches CASCADE, topic, task_text, note nullable, status text CHECK IN ('draft','open','done','dropped') default 'draft', sort_order, created_at)`
+  - RLS-enabled. service_role has full grants (USAGE schema, SELECT/INSERT/UPDATE/DELETE tables, default privileges set for future tables, schema added to PostgREST exposed schemas).
+- **Page `/internal/tasks`:**
+  - Gated by `CHAPTER_DASH_TOKEN` cookie (same middleware gate as `/internal/client-portal-config`)
+  - Client columns (`crm.clients.business_name`) → topic groups → task rows
+  - "Unassigned" column appended for batches with `client_id IS NULL` (n8n's unmatched bucket)
+  - Defaults to `status='open'`; toggle pill switches to also show `done` (URL: `?done=1`)
+  - **Inline editing on click**: task_text, note, and topic header all editable. Enter saves (Shift+Enter for newline), Esc cancels, blur also saves. Optimistic UI with error-revert. Editing a topic header re-topics the *first task only* (avoids surprise bulk re-grouping; to move multiple, edit each task individually).
+  - Server actions: `toggleTaskStatus`, `updateTaskText`, `updateTaskNote`, `updateTaskTopic` — all use `revalidatePath("/internal/tasks")` to refresh.
+- **n8n integration shape:** n8n writes directly to Supabase via service_role (no Next.js webhook). Promotion `draft → open` happens via an n8n form submit (out of scope for this repo). Future plan: when a task hits `status='open'`, n8n triggers Claude to write code → opens a PR or posts a Gchat reply.
+- **Files:** `src/app/internal/tasks/layout.tsx`, `page.tsx`, `TasksBoard.tsx`, `_actions.ts`.
 
 ### Chapter Dashboard v1 shell shipped (May 14, 2026)
 - **Scope shipped today:** the full agency-operator dashboard surface at `/chapter/*` — 8 pages (Observations, Lifecycle Overview, Channel Roles, Path Patterns, Lift & Incrementality, Attribution Models, Customer Journeys, Raw Performance) — running on `_components/mockdata.ts`. Page-by-page Supabase wiring starts May 15.
@@ -457,15 +535,40 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ## 🔧 Open Fix List (Priority Order)
 
 ### 🚀 Scale Readiness Roadmap (added May 5, 2026)
-Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; **Fix #24 done May 8; Fix #25 Phase 0 + Phase 1 cascade done May 12; Fix #26 parts 1/3/4 + part 2 framework done May 12; Fix #26 Part 2 route migration done May 13.** Remaining scale items: #28 below.
+Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; **Fix #24 done May 8; Fix #25 Phase 0 + Phase 1 cascade done May 12; Fix #26 parts 1/3/4 + part 2 framework done May 12; Fix #26 Part 2 route migration done May 13.** Remaining scale items: #28 below + dashboard MV refresh cadence.
 
-### 🔴 Priority 1 — Data Integrity Blockers
+### 🔴 Priority 1 — Active
+
+**Wire MV refresh cadence — nightly Vercel Cron or pg_cron** *(active, blocks reliable dashboard)*
+- **Problem:** `chapter_reporting.journey_bot_classification_v1` + siblings drifted 9 days stale between May 16 and May 25 with no auto-refresh. Caused dashboard timeouts + sparse fields (diagnosed in the May 25 Completed Fix entry).
+- **Done:** `chapter-scripts/refresh-dashboard-mvs.js` exists. Refreshes all 3 MVs with `REFRESH MATERIALIZED VIEW CONCURRENTLY` + `ANALYZE`. Tested + idempotent.
+- **Still to do:** wire it to a schedule. Options:
+  - **Vercel Cron** → new API route `/api/internal/cron/refresh-dashboard-mvs` (auth via `CRON_SECRET` like Fix #27's monitoring routes). Daily 04:00 UTC = 21:00 PT (off-peak).
+  - **pg_cron** inside Supabase. More native but requires the extension + an outbound-to-Supabase-only env.
+- **Recommended:** Vercel Cron — keeps the runtime + auth pattern consistent with Fix #27 (`stuck-runs` + `daily-digest`).
+- **Monitoring add-on:** extend Fix #27's daily-digest to surface MV staleness (max `journey_start_ts` in MV vs `now()`). If gap > 24h, alert.
+
+**Wire remaining 7 Chapter dashboard pages to live data** *(active, biggest scope)*
+- `/chapter/raw` is the only one live (as of May 25). Other 7 use mockdata.
+- **Order by leverage:**
+  1. **Observations** — default landing page (first paint), highest impression count
+  2. **Lifecycle Overview** — top-level KPI tile (most "what's our state?" usage)
+  3. **Channel Roles** — leans on channel_performance_overview which is already live-validated
+  4. **Customer Journeys** — most data-dense but useful per-account drill-down
+  5. **Path Patterns** — depends on canonical_v1/v2 snapshots (heavy queries)
+  6. **Attribution Models** — depends on linear/first/last RPCs; needs the model dropdown wired
+  7. **Lift & Incrementality** — UI shell only; backend mostly not built yet (correlation is doable, incrementality + causation are weeks-each)
+- **Pattern to reuse:** the Raw wiring (see Completed Fix May 22-25). Server page → `Promise.all` of current + prior + page-specific RPCs → client component → reuse `priorWindow()` / `pctDelta()` / `TopBar kpis` prop.
+
+---
+
+### 🟡 Priority 2 — Attribution Quality
 
 **Fix #28 — Snapshot scheduling + per-client isolation** *(scale roadmap — depends on Fix #25)*
 - **Problem:** Currently snapshots are run manually + on-demand. With many clients, manual coordination doesn't scale. Concurrent refreshes for multiple clients would hit resource exhaustion.
 - **Fix:** `pg_cron` or Vercel scheduled functions. Stagger per-client refreshes (client A 1am UTC, client B 1:30am, etc.) — never all simultaneous. Run during off-peak (UTC night). Fix #25 (incremental refresh) makes each refresh small enough to fit in a stagger window.
 - **Effort:** ~1-2 days. After Fix #25 is done.
-- **Why P2:** Optimization layer on top of Fix #25.
+- **Why P2:** Optimization layer on top of Fix #25. Same shape as the MV refresh cadence above — likely a unified Cron handler covers both.
 
 ---
 
@@ -500,6 +603,20 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 - **Code fix (May 5, 2026):** `src/app/api/shopify/webhooks/orders-create/route.ts` now generalizes the identity-missing branch — for any order with a `source_name` and `id` but no email/customer, synthesizes `customer_id = shopify_{source_name}_anonymous:{order_id}`. Covers POS, mobile_app, draft_order, and future non-web sources. Strict 400 only fires when both source_name and order id are missing (malformed webhook).
 - **To verify after deploy:** wait for next non-web order (or trigger one). Confirm `purchase_events` has a row with `customer_id` matching the `shopify_*_anonymous:` pattern. Reporting/snapshot scripts can filter POS via `raw->'order'->>'source_name'`.
 - **Location:** `src/app/api/shopify/webhooks/orders-create/route.ts`
+
+---
+
+### 📦 Pending shipments & backlog (May 25, 2026)
+
+**Push current branch to prod (Vercel deploy)** *(ready, low risk)*
+- Local-only as of May 25: `/internal/tasks` page + `/chapter/raw` live-wiring + `chapter-scripts/refresh-dashboard-mvs.js`.
+- DB migrations already in prod (no schema changes needed beyond the `dashboard_timeseries` RPC migration which was applied directly).
+- Pre-deploy: confirm `CHAPTER_DASH_TOKEN` and `SUPABASE_SERVICE_ROLE_KEY` are set in Vercel (they should be — same vars `/internal/client-portal-config` already uses).
+- Dev server has been running on port 3000 since May 22; stop it if you don't need it locally anymore.
+
+**Backlog items (small, opportunistic):**
+- **Investigate load-balancer hostname DNS for prod** — surfaced earlier; reason was forgotten before being documented. Worth grepping commit history for context if/when picked up.
+- **Move shop-display tz into `chapter_config`** — currently the dashboard's date math is anchored to PT (`America/Los_Angeles`) hardcoded in `src/app/chapter/_components/format.ts:rangeToWindow`. Multi-tenant scaling needs per-client display tz: add a `chapter_config.client_display_tz(client_key, tz)` table or a `display_tz` column on `crm.clients`, read via server component → pass to `rangeToWindow`. Trigger to do this: first non-PT client onboarding.
 
 ---
 
@@ -578,11 +695,15 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ## 🔜 Future Work
 
-- **Dashboard build** — v1 shell shipped May 14, 2026 (see "Chapter Dashboard v1 shell" in Completed Fixes). Data-wiring page-by-page in progress starting May 15. First target: Raw Performance page.
+- **Dashboard build** — v1 shell shipped May 14, 2026. **Raw Performance fully live-wired May 22-25** (sparklines, prior-period deltas, KPI strip, compare-mode toggle). Remaining 7 pages on mockdata — wiring order + pattern in the Open Fix List above.
+- **Tier 1 first-party redirect domain** — intelligent routing layer; "Branch.io for open-web ecom" positioning. Memory: `project_tier1_redirect_scope.md`. ~4-5 day build. Adds (a) clean campaign attribution (closes the 521-missing-page-views finding from May 22 validation), (b) programmatic destination injection per identity/cart/geo/device.
+- **Google Search Console backfill** — OAuth client setup pending in GCP (path A in the May 24 session). Once flowing: per-page + per-keyword search performance data into `chapter_config.gsc_*` (TBD table name). Doesn't move attribution numbers — unlocks SEO reporting depth for Tigerbyte's portal + Channels page drill-down.
 - **Multi-client generalization of `chapter_reporting`** — happening incrementally per-tile during dashboard wiring (see "Reporting generalization strategy" in the 📊 Chapter Dashboard section). Not a separate big-bang.
 - **`/chapter/[client_key]/*` client-scoped surface** — deferred until agency surface is data-wired. Today's code structure is compatible; adding the route group is additive.
 - **Observations question-library engine** — UI shell exists at `/chapter/observations`. Backend (weekly run, severity classifier, history) not built. Defer until first real engagement question is identified.
 - **Lift & Incrementality backend** — UI shell exists for all 3 tabs. Correlation is computable from existing data. Incrementality (holdout assignment + suppression mechanics + p-value/power) and Causation (propensity-score matching + covariate storage) are real systems, weeks of work each. Build when first client needs to run a structured lift test.
+- **Gchat slash-command bot** on top of `saveClient` action — admin team interface for updating client portal config without the form UI.
+- **Replace JSON textareas in `/internal/client-portal-config` admin form with structured editors** — current `project_summaries` + `reporting_tiles` fields are raw JSON textareas. Easy to break with invalid JSON.
 - **Offline attribution expansion** — Pack D / online+offline modeling via `offline_milestones`
 - **`purchase_items` population** — not yet populated for EOS
-- **`chapter_config` schema** — reserved for future client-level configuration (event mapping, attribution rules, channel normalization, feature flags). Currently used for `client_secrets` + `shopify_webhook_secrets` only.
+- **`chapter_config` schema** — reserved for future client-level configuration (event mapping, attribution rules, channel normalization, feature flags). Currently used for `client_secrets` + `shopify_webhook_secrets` + `email_campaigns` + `email_engagement_events` only.
