@@ -154,6 +154,265 @@ export const cachedDashboardTimeseries = unstable_cache(
   { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:dashboard_timeseries"] },
 );
 
+// ─────── Attribution overview (channel × first/last/linear) ────────────────
+// One row per channel for the given client + window, with orders + revenue
+// totals under each of three attribution models. Page computes percentages
+// (channel revenue / sum of channel revenues per model) client-side.
+
+export type AttributionOverviewRow = {
+  channel: string;
+  first_orders:   number | null;
+  first_revenue:  number | null;
+  last_orders:    number | null;
+  last_revenue:   number | null;
+  linear_orders:  number | null;
+  linear_revenue: number | null;
+};
+
+export const cachedAttributionOverview = makeCachedRpc<AttributionOverviewRow>("attribution_overview");
+
+// ─────── Path combinations (set / collapsed / raw modes) ────────────────────
+// One row per (mode-specific grouping key). Returns `channels` + `gaps` arrays
+// that drive PathRender directly:
+//   - set       → channels = sorted distinct chips; gaps = null
+//   - collapsed → channels = [first, last] (or [single] if len=1);
+//                 gaps = [middle_step_count] (or null)
+//   - raw       → channels = full sequence; gaps = null
+
+export type PathMode = "set" | "collapsed" | "raw";
+
+export type PathCombinationRow = {
+  channels:    string[];
+  gaps:        number[] | null;
+  chapters:    number | null;
+  revenue:     number | null;
+  aov:         number | null;
+  avg_touches: number | null;
+};
+
+type PathArgs = RpcArgs & { p_mode: PathMode };
+
+// ─────── Channel roles (per-channel opener/mid/closer/only distribution) ───
+// One row per channel. Drives /chapter/channels. Page computes the dominant-
+// role label (Closer / Opener / Middle / Generalist / Solo) from these
+// percentages with adjustable thresholds.
+
+export type ChannelRoleRow = {
+  channel:               string;
+  chapters:              number | null;
+  revenue_touched:       number | null;
+  only_pct:              number | null;
+  opener_pct:            number | null;
+  mid_pct:               number | null;
+  closer_pct:            number | null;
+  presence_pct:          number | null;
+  /** Chapters where this channel appears AND chapter_id = 0 (first ever
+   *  purchase for that identity — acquisition cohort). */
+  acquisition_chapters:  number | null;
+  /** Chapters where this channel appears AND chapter_id >= 1 (repeat
+   *  purchase — retention cohort). */
+  retention_chapters:    number | null;
+};
+
+export const cachedChannelRolesOverview = makeCachedRpc<ChannelRoleRow>("channel_roles_overview");
+
+// ─────── Lifecycle Overview hero metrics ────────────────────────────────────
+// One row of chapter-level aggregates: median touches, median + p90 days to
+// close, % multi-touch, % returning purchasers. Drives the /chapter/overview
+// hero text + LIFECYCLE_METRICS row.
+
+export type LifecycleOverviewRow = {
+  total_chapters:        number | null;
+  median_touches:        number | null;
+  median_days_to_close:  number | null;
+  p90_days_to_close:     number | null;
+  multi_touch_chapters:  number | null;
+  multi_touch_pct:       number | null;
+  /** Returning purchasers — all-time history.
+   *  Chapters whose chapter_id >= 1 (the customer has any prior chapter
+   *  in canonical_v1, even before this window). */
+  returning_chapters:    number | null;
+  returning_pct:         number | null;
+  /** Returning purchasers — within-window only.
+   *  Chapters that are NOT the customer's first chapter inside this window
+   *  (regardless of all-time history). Smaller, captures repeat-purchase
+   *  velocity during the period. */
+  in_window_returning_chapters: number | null;
+  in_window_returning_pct:      number | null;
+};
+
+export const cachedLifecycleOverview = makeCachedRpc<LifecycleOverviewRow>("lifecycle_overview");
+
+// ─────── Path length trend (12 weekly buckets) ──────────────────────────────
+// Per-bucket median + p90 of path_length. Mirrors dashboard_timeseries shape;
+// page passes p_n_buckets explicitly (typically 12 for the weekly chart).
+
+export type PathLengthTrendRow = {
+  bucket_idx:      number;
+  bucket_start:    string;
+  chapters:        number | null;
+  median_touches:  number | null;
+  avg_touches:     number | null;
+  /** P90 = 90th percentile. UI labels this "90% Max" — 90% of chapters had
+   *  AT MOST this many touches; the top 10% had more. */
+  p90_touches:     number | null;
+};
+
+type PathLengthTrendArgs = RpcArgs & { p_n_buckets: number };
+
+export const cachedPathLengthTrend = unstable_cache(
+  async (args: PathLengthTrendArgs): Promise<PathLengthTrendRow[]> => {
+    const r = await supabase
+      .schema("chapter_reporting")
+      .rpc("path_length_trend", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] path_length_trend failed:", {
+        message: r.error.message, details: r.error.details, hint: r.error.hint, code: r.error.code,
+      });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as PathLengthTrendRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:path_length_trend"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:path_length_trend"] },
+);
+
+// ─────── Channel co-occurrence affinity (Matrix view) ──────────────────────
+// One row per ordered (src, dst) pair of distinct channels. affinity_pct is
+// asymmetric — % of `src` chapters that ALSO contain `dst`.
+
+export type ChannelAffinityRow = {
+  src:           string;
+  dst:           string;
+  co_chapters:   number | null;
+  src_chapters:  number | null;
+  affinity_pct:  number | null;
+};
+
+export const cachedChannelAffinityOverview = makeCachedRpc<ChannelAffinityRow>("channel_affinity_overview");
+
+// ─────── Journeys page ──────────────────────────────────────────────────────
+// Two list-level RPCs + three detail-level RPCs. List RPCs are window-bound
+// and accept action + outcome filters. Detail RPCs are lifetime (all-time)
+// per identity and require server-side audit-logging — see logPiiView in
+// src/app/lib/audit/pii-views.ts.
+
+export type JourneysFilterArgs = RpcArgs & {
+  p_action?:  string | null;
+  p_outcome?: string | null;
+  p_limit?:   number;
+};
+
+export type JourneysStatsRow = {
+  total_identities:  number | null;
+  converted_count:   number | null;
+  pct_converted:     number | null;
+  total_ltv:         number | null;
+  avg_ltv:           number | null;
+  median_ltv:        number | null;
+};
+
+export type JourneysListRow = {
+  canonical_identity_key:  string;
+  matching_events:         number | null;
+  lifetime_chapters:       number | null;
+  lifetime_value:          number | null;
+  last_purchase_ts:        string | null;
+  last_activity_ts:        string | null;
+  outcome:                 string;     // 'converted' | 'open'
+};
+
+export const cachedJourneysStats = unstable_cache(
+  async (args: JourneysFilterArgs): Promise<JourneysStatsRow[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc("journeys_overview_stats", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] journeys_overview_stats failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as JourneysStatsRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:journeys_overview_stats"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_stats"] },
+);
+
+export const cachedJourneysList = unstable_cache(
+  async (args: JourneysFilterArgs): Promise<JourneysListRow[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc("journeys_overview_list", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] journeys_overview_list failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as JourneysListRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:journeys_overview_list"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_list"] },
+);
+
+// ── Detail RPCs (per identity, lifetime) ────────────────────────────────────
+
+export type JourneyDetailChapterRow = {
+  chapter_id:    number;
+  first_ts:      string;
+  boundary_ts:   string;
+  channel_path:  string;
+  revenue:       number | null;
+  currency:      string | null;
+};
+
+export type JourneyDetailEventRow = {
+  chapter_id:  number;
+  event_ts:    string;
+  event_name:  string;
+  is_boundary: boolean;
+};
+
+export type JourneyDetailAliasRow = {
+  alias_key:        string;
+  first_seen_ts:    string | null;
+  method:           string;
+  is_deterministic: boolean;
+  confidence:       number;
+};
+
+type JourneyDetailArgs = {
+  p_client_key:             string;
+  p_canonical_identity_key: string;
+};
+
+const _makeDetailRpc = <T>(rpcName: string, tag: string) => unstable_cache(
+  async (args: JourneyDetailArgs): Promise<T[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc(rpcName, args);
+    if (r.error) {
+      console.error(`[dashboard-rpc] ${rpcName} failed:`, { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as T[];
+  },
+  [`dashboard-rpc:chapter_reporting:${rpcName}`],
+  { revalidate: REVALIDATE_SEC, tags: [tag] },
+);
+
+export const cachedJourneyDetailChapters = _makeDetailRpc<JourneyDetailChapterRow>("journey_detail_chapters", "dashboard-rpc:journey_detail_chapters");
+export const cachedJourneyDetailEvents   = _makeDetailRpc<JourneyDetailEventRow>("journey_detail_events", "dashboard-rpc:journey_detail_events");
+export const cachedJourneyDetailAliases  = _makeDetailRpc<JourneyDetailAliasRow>("journey_detail_aliases", "dashboard-rpc:journey_detail_aliases");
+
+export const cachedPathCombinationsOverview = unstable_cache(
+  async (args: PathArgs): Promise<PathCombinationRow[]> => {
+    const r = await supabase
+      .schema("chapter_reporting")
+      .rpc("path_combinations_overview", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] path_combinations_overview failed:", {
+        message: r.error.message, details: r.error.details, hint: r.error.hint, code: r.error.code,
+      });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as PathCombinationRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:path_combinations_overview"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:path_combinations_overview"] },
+);
+
 // ─────── Prior-period window helper ──────────────────────────────────────────
 // Returns the same-duration window immediately preceding [start, end). Caller
 // uses this to call the existing tile RPCs a second time with the prior args

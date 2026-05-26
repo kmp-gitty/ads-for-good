@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: May 25, 2026
+> Last updated: May 26, 2026
 
 ---
 
@@ -175,7 +175,118 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of May 25, 2026)
+## ✅ Completed Fixes (as of May 26, 2026)
+
+### Two more Chapter Dashboard pages live-wired (Overview + Journeys) — 6 of 8 pages live (May 26, 2026)
+- **Goal:** finish wiring the actively-buildable dashboard pages. Started with Overview (mostly reuses RPCs from other pages, plus 2 new ones), then Journeys (most complex — full audit/privacy infrastructure required). Both shipped end-to-end including UI polish.
+
+#### Overview (Lifecycle Overview) page wired
+- **2 new RPCs:**
+  - `chapter_reporting.lifecycle_overview(client, start, end)` — chapter-level aggregates (median touches, median + p90 days to close, % multi-touch, % returning all-time). Later extended to include `in_window_returning_chapters` / `in_window_returning_pct` — a SECOND retention metric scoped to "bought multiple times within this window" (vs. all-time history).
+  - `chapter_reporting.path_length_trend(client, start, end, n_buckets)` — N equi-width buckets with per-bucket median + p90 + **avg** (added after launch). Drives the trend chart.
+- **Reused 2 existing RPCs** for the bottom-row preview tiles: `channel_roles_overview` (top 5 channels) and `path_combinations_overview` (top 5 combinations).
+- **Trend tile enhancements** (post-launch polish, all shipped same day):
+  - Added **average** as a 3rd line on the chart (median solid orange, avg dashed steel-blue #2D7AC9, p90 dotted violet #8E5DA8) — three visually-distinct colors so the lines are easy to tell apart
+  - Per-tile time-range picker: 4w / 12w / 26w / 52w (defaults 12w). Server pre-fetches all 4 windows in parallel so toggling is instant.
+  - Renamed "p90" → **"90% Max"** throughout (chart legend, what-tooltip, lifecycle metric foot text). More readable for non-stats audiences.
+  - X-axis labels switched from "W1, W3, W5…" placeholder to actual bucket-start dates ("May 6", "Mar 17", etc.) with first + last always anchored to window edges.
+  - Chart legend reformatted: each label colored to match its line + descriptor in muted gray (e.g. **Median**: typical length).
+- **Returning purchasers split into two stats** (after user feedback that one number was ambiguous):
+  - **All-time returning** — chapters whose `chapter_id ≥ 1` (customer has any prior chapter ever in canonical_v1). Promoted into the hero header area (right of H2) so it doesn't crowd the metrics row.
+  - **Returning this window** — chapters that are NOT the customer's first chapter inside this window (regardless of all-time history). Smaller metric (~10% vs ~33% all-time for EOS). Lives in the metrics row.
+  - For EOS 30d: 33% all-time returning, 10.1% returning this window — confirms the gap is meaningful signal.
+- **Lifecycle metric labels** fixed: "Avg touches to close" → **"Median touches to close"** (was always computing median; label was inaccurate inherited from mock). Same for "Avg time" → "Median time".
+- **Top combinations tile** got an inline picker swapping between Set/Collapsed/Raw modes (server pre-fetches all 3 like the trend windows). Now ranked by revenue (was chapter count). Title: "Top converting channel combinations".
+- **Channel roles preview tile** got a color-matched legend in the subtitle: <span color=solo>solo</span> / <span color=opener>opener</span> / <span color=mid>mid</span> / <span color=closer>closer</span> — each colored to match its bar segment.
+
+#### Journeys (Customer Journeys) page wired — most complex page, audit + privacy infrastructure built alongside
+- **Privacy architecture decisions** (made BEFORE building, with user):
+  - **Browse-only** — NO email/phone input search. Dropping the search box that the mock had. Targeted PII lookup deferred to a separate elevated-permission endpoint (`/chapter/admin/lookup` style, future).
+  - **Truncated hashes** displayed: `email_sha256:4ee3a1a6…` (prefix + 8 chars). Operators can copy-paste between pages but can't read the original PII.
+  - **Audit log every detail view** — see new audit infra below.
+- **New audit table `chapter_audit.dashboard_pii_views`** + 3 indexes (ts DESC; client+identity+ts; viewer_session+ts). Columns: page, client_key, viewed_identity, viewer_session (SHA-256 of chapter_auth cookie — coarse until per-user auth), ip_hash, user_agent_snippet, request_id. New helper at [src/app/lib/audit/pii-views.ts](src/app/lib/audit/pii-views.ts) (`logPiiView`, `hashSecret`).
+- **Audit logging is fire-and-forget** in the server page (`void logPiiView(...)`) — never blocks page render. Only fires when user EXPLICITLY navigates to `?identity=xxx` (not on the default first-row auto-selection) to avoid noise.
+- **5 new RPCs:**
+  - `journeys_overview_stats(client, start, end, action, outcome)` — summary stats for filtered cohort (total identities, % converted, total/avg/median LTV)
+  - `journeys_overview_list(client, start, end, action, outcome, limit)` — paginated identity list (top 50 by lifetime value)
+  - `journey_detail_chapters(client, canonical_identity_key)` — lifetime chapter list per identity
+  - `journey_detail_events(client, canonical_identity_key)` — per-event timeline, FILTERED to meaningful actions (skips `visibility_change`, `hover_intent`, `scroll_depth`, `time_on_page`, `page_exit` noise)
+  - `journey_detail_aliases(client, canonical_identity_key)` — stitched alias list from `identity_aliases` graph
+- **Filter UX:**
+  - **Action dropdown** — curated funnel-order list: All actions / Page view / Add to cart / Cart View / Identify / form fill / Purchase. Maps to underlying `event_name` values. Auto-discovered full list deferred to v2.
+  - **Outcome dropdown** — Converted / Open. Hardcoded to `boundary_event_name = 'purchase'` for MVP. **Future:** per-client boundary event config in `chapter_config` (B2B brands would use `lead_submission` instead of `purchase`).
+- **Detail panel polish:**
+  - **Collapsible chapter cards** (default collapsed, click to expand). Each chapter header shows summary: chapter id, event count, time span, "Closed at $X", channel path. Expanded view reveals the full event timeline below. Expand-all / Collapse-all batch button next to the section title. State resets when selected identity changes.
+  - **Run-length encoding** for events in the expanded view — consecutive same-name events collapse to "5× Page view  over 2m" instead of 5 separate rows. Purchases always break the run (own line with ★ marker + revenue).
+  - **Closing "Purchase" pill** at the end of each chapter's channel path (`Email → Direct → Direct → ★ Purchase +$235`) — soft-accent rounded chip matching the boundary-event style in the expanded timeline.
+- **Sales-pitch concrete example from live data:** for EOS 30d with action=`identify`: **288 identities did form-fill → 69 converted (24%) → $11.8K total LTV from that cohort**. Exactly the "ran a newsletter campaign, want to know who signed up + what they're worth" use case.
+
+#### Cumulative wiring scorecard (end of May 26, full session)
+- **Live-wired pages (6 of 8):** Raw Performance, Lifecycle Overview, Channel Roles, Path Patterns, Attribution Models, Customer Journeys
+- **Deferred indefinitely (2):** Observations (needs question-library engine), Lift & Incrementality (needs holdout/causation infrastructure)
+- **All live pages use the same architectural pattern:** server component does Promise.all of cached RPCs + page-specific data → client component renders + handles interactivity. URL searchParams are the source of truth for filters (client, range, action, outcome, identity, etc.).
+
+### Three Chapter Dashboard pages live-wired + MV refresh cron (May 25–26, 2026)
+- **Goal:** ship the next batch of Chapter dashboard pages on live data after Raw Performance was completed May 22–25. Started Channels, then ended up nailing Attribution Models + Paths + Channels (with two enhancements). Two pages remain on mockdata: **Overview** and **Journeys**. Observations + Lift deferred (no engine).
+- **Process lesson reinforced:** Raw was 30–60 min because all 6 of its RPCs already existed. The remaining pages need 3–5 NEW RPCs each (sometimes new snapshot tables). Each new page is a 2–4 hour project done properly per the CLAUDE.md "Reporting generalization strategy" recipe — not the original "all in one day" estimate.
+
+#### Dashboard MV refresh cron (Priority 1 completed)
+- **Cron route** [src/app/api/internal/cron/refresh-dashboard-mvs/route.ts](src/app/api/internal/cron/refresh-dashboard-mvs/route.ts) — uses `DATABASE_DIRECT_URL` + `keep_alive: 60` + 30-min statement_timeout. Runs `REFRESH MATERIALIZED VIEW CONCURRENTLY` + `ANALYZE` on all 3 dashboard MVs (`journey_bot_classification_v1`, `journey_funnel_steps_v1`, `journey_entry_channel_v1`). Posts GChat alert only on failure (daily success would be noise).
+- **`vercel.json`** [vercel.json](vercel.json) — scheduled `0 4 * * *` (04:00 UTC = 21:00 PT off-peak), joining the existing Fix #27 monitoring crons.
+- **Daily-digest extended** [src/app/api/internal/monitoring/daily-digest/route.ts](src/app/api/internal/monitoring/daily-digest/route.ts) — adds "Dashboard MV freshness" section comparing `MAX(journey_start_ts)` per MV vs `MAX(first_seen)` from `chapter_journey.journeys`. Alerts if any MV is > 24h behind source. This catches BOTH stale data AND a silently-failed cron (since the digest fires at 14:00 UTC daily regardless).
+- **Pre-deploy:** `DATABASE_DIRECT_URL` added to Vercel Production env (user confirmed deployed). Replica direct URL is read-only and would fail REFRESH MV; uses primary direct host.
+
+#### Attribution Models page wired (RPC + Single-then-Compare layout)
+- **2 new multi-tenant snapshot tables in `chapter_reporting`** (no `eos_` prefix, per CLAUDE.md reporting-generalization recipe):
+  - `purchase_channel_final_v1` (chapter-level final first/last touch + purchase_ts, indexed on `(client_key, purchase_ts)`)
+  - `attribution_linear_chapter_v1` (chapter×channel fractional credit + purchase_ts)
+- **Loader function `chapter_reporting.refresh_attribution_tables(p_cohort_start)`** — v1 used `chapter_attribution.chapter_summary_v1` for first/last and timed out at 28+ min on first run. **v2 (shipped) reads first/last from `canonical_v1.channel_path` directly** (parse first/last segments) — completes in seconds. Same source as Phase 2's linear, so first/last/linear are semantically consistent. Trade-off: ~1% drift vs legacy `eos_attribution_*_v1` (the legacy uses chapter_summary_v1 which includes non-session-entry events).
+- **RPC `chapter_reporting.attribution_overview(client_key, start, end)`** — single round-trip returning channel × first/last/linear orders+revenue, windowed by `purchase_ts`. Page computes percentages client-side.
+- **Page wiring** [src/app/chapter/(authed)/attribution/page.tsx](src/app/chapter/(authed)/attribution/page.tsx) + [AttributionClient.tsx](src/app/chapter/(authed)/attribution/AttributionClient.tsx): server Promise.all of attribution + 3 KPI strip RPCs + 3 prior-window RPCs. Client converts rows → percentages, J-shape custom = 40% first + 20% linear + 40% last.
+- **Layout change** (per user request): dropped the "Compare models / Single model" toggle. Page now shows Single Model section (with model dropdown + allocation card) at top, then Compare Models section (multi-select + bump chart + allocation table) below. Both views always rendered.
+- **Validation:** new linear matches legacy `eos_attribution_linear_v1` within ~1% drift on every channel at the May 3 cutoff (drift = canonical_v1 being fresher than May-3-frozen `eos_attribution_linear_v1` snapshot).
+- **Override-layer note:** the new RPC does NOT apply the email backfill override layer (Fix #21+ work). To match override-aware semantics in the future, we'd need to either join `journey_entry_channel_overrides` on session-level journey_ids (not exposed in canonical_v1_snapshot) OR rebuild via the old `chapter_summary_v1` path and accept its 28+ min runtime. Deferred — accepted ~10-15% per-channel divergence vs legacy.
+
+#### Paths page wired (Set + Collapsed + Raw modes, all real data)
+- **RPC `chapter_reporting.path_combinations_overview(client_key, start, end, p_mode)`** — single function accepts `p_mode = 'set' | 'collapsed' | 'raw'` and switches grouping inside the SQL:
+  - **Set**: `GROUP BY` sorted distinct channels (e.g., `{direct, email}`). 14 rows for EOS in 30d window. Order-independent.
+  - **Collapsed**: `GROUP BY (first_touch, last_touch, middle_step_count)`. Returns `channels = [first, last]` + `gaps = [middle_count]`. 109 rows. E.g., `Direct → 2 steps → Email`. Exact step count is part of the grouping key — two chapters with different middle counts are separate rows.
+  - **Raw**: `GROUP BY` exact `channel_path` string. 132 rows. Most granular.
+- **Server page fetches all 3 modes (+ both windows) in parallel** — 6 RPC calls in one Promise.all. Each independently cached via `unstable_cache`, so toggling mode after first load is free.
+- **PathsClient renders mode-appropriate row IDs** so the "New" badge compares apples-to-apples per mode (a "new raw path" means that exact sequence didn't appear in prior; a "new set" means that channel combination didn't).
+- **"New" badge bug fix:** when prior window has zero data at all (e.g., 90d range but cohort only starts 30d ago), suppress the badge entirely. Otherwise every combo would look "new" against an empty baseline.
+- **UI removed at user request:** Compare button, row-checkbox selectors, right-side chevron column. Just the data table.
+- **Files:** [src/app/chapter/(authed)/paths/page.tsx](src/app/chapter/(authed)/paths/page.tsx), [PathsClient.tsx](src/app/chapter/(authed)/paths/PathsClient.tsx).
+
+#### Channels page wired (role classifier + Cards/Matrix views)
+- **RPC `chapter_reporting.channel_roles_overview(client_key, start, end)`** — one row per channel with `only_pct / opener_pct / mid_pct / closer_pct` (sum to 100) + `presence_pct` + `revenue_touched` + `chapters`. Per (chapter, channel) where channel appears:
+  - `only` = chapter has exactly 1 distinct channel
+  - `closer` = multi-channel AND channel is the last session
+  - `opener` = multi-channel AND channel is first session AND not also last (closer wins ties)
+  - `mid` = appears in chapter but isn't opener/closer/only
+- **Dominant-role labeling done client-side** with tunable thresholds (`dominantLabel` in [ChannelsClient.tsx](src/app/chapter/(authed)/channels/ChannelsClient.tsx)):
+  - `Solo` if only ≥ 60%
+  - `Generalist` if opener/mid/closer spread ≤ 12pp
+  - else dominant = max of opener/mid/closer
+- **Live EOS results (30d):** Direct = Closer (41% close, 39% only), Email = Opener (33% open), Organic Search = Generalist (all roles ~23-30%), Referral = Closer, Organic Social = Solo (100% only with N=1).
+- **`roleSentence` templates** generate the per-card narrative based on dominant label, with an appended "solo clause" when `Only ≥ 25%` (e.g., "Direct closes 41%... That said, it's the only channel a notable 39% of the time"). Tunable in TS, no LLM.
+
+#### Channels enhancements: Acq/Ret split + Affinity matrix
+- **Acquisition vs Retention split per channel (Cards view):**
+  - RPC `channel_roles_overview` extended with `acquisition_chapters` (chapter_id = 0 = first ever purchase for that identity) + `retention_chapters` (chapter_id ≥ 1).
+  - Rendered as "New · Ret" stat (labeled "New · Ret" not "Acq · Ret" per user preference). Shown as `63% / 37%` style next to Presence/Revenue/Chapters.
+  - 4 stats now fit on one row per card via inline `gridTemplateColumns: "repeat(4, 1fr)"` override (CSS default was 3 columns).
+- **Channel co-occurrence affinity matrix (Matrix view):**
+  - RPC `chapter_reporting.channel_affinity_overview(client_key, start, end)` returns one row per ordered (src, dst) pair of distinct channels. `affinity_pct = % of chapters containing src that ALSO contain dst`. Asymmetric by design.
+  - Renders as a 5×5 grid below the role-distribution table. Cell intensity scales with affinity (transparent at 0, navy at ≥50%, white text at ≥50%). Hover shows full precision.
+  - **Row labels (left, "anchor" channel) = warm orange band**; **column headers (top, "checked" channel) = cool gray band**. Black 2px L-divider between the header band and data cells. User-driven styling — visual reinforcement of which axis is which.
+  - Header reads: "When [row] channel appears, [column] channel appears…" with `[row]` in orange and `[column]` in gray to mirror the cell coloring.
+- **Key EOS insight from affinity matrix:** Email→Direct = 67% (when Email appears, Direct does too 67% of time); Direct→Email = 42% (asymmetric — Direct is mostly solo / return-customer traffic).
+
+#### Cumulative wiring scorecard (end of May 26)
+- **Live-wired pages (4 of 8):** Raw Performance, Attribution Models, Path Patterns, Channel Roles
+- **Still on mockdata (2):** Lifecycle Overview, Customer Journeys
+- **Deferred indefinitely (2):** Observations (needs question-library engine), Lift & Incrementality (needs holdout/causation infrastructure)
 
 ### Stale-MV diagnosis + dashboard refresh script (May 25, 2026)
 - **Symptom:** `/chapter/raw` rendered with sparse/empty tile fields and Next.js dev indicator showed 5 failed RPC calls (`journey_overview` ×2, `engagement_quality` ×2, `dashboard_timeseries` ×1) all returning `code: 57014 — canceling statement due to statement timeout` (PostgREST 8s ceiling).
@@ -539,26 +650,33 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ### 🔴 Priority 1 — Active
 
-**Wire MV refresh cadence — nightly Vercel Cron or pg_cron** *(active, blocks reliable dashboard)*
-- **Problem:** `chapter_reporting.journey_bot_classification_v1` + siblings drifted 9 days stale between May 16 and May 25 with no auto-refresh. Caused dashboard timeouts + sparse fields (diagnosed in the May 25 Completed Fix entry).
-- **Done:** `chapter-scripts/refresh-dashboard-mvs.js` exists. Refreshes all 3 MVs with `REFRESH MATERIALIZED VIEW CONCURRENTLY` + `ANALYZE`. Tested + idempotent.
-- **Still to do:** wire it to a schedule. Options:
-  - **Vercel Cron** → new API route `/api/internal/cron/refresh-dashboard-mvs` (auth via `CRON_SECRET` like Fix #27's monitoring routes). Daily 04:00 UTC = 21:00 PT (off-peak).
-  - **pg_cron** inside Supabase. More native but requires the extension + an outbound-to-Supabase-only env.
-- **Recommended:** Vercel Cron — keeps the runtime + auth pattern consistent with Fix #27 (`stuck-runs` + `daily-digest`).
-- **Monitoring add-on:** extend Fix #27's daily-digest to surface MV staleness (max `journey_start_ts` in MV vs `now()`). If gap > 24h, alert.
+**Dashboard wiring queue is empty — 6 of 8 pages live.** Remaining 2 (Observations, Lift & Incrementality) are not "wiring" tasks; they need entire backends built (see Future Work).
 
-**Wire remaining 7 Chapter dashboard pages to live data** *(active, biggest scope)*
-- `/chapter/raw` is the only one live (as of May 25). Other 7 use mockdata.
-- **Order by leverage:**
-  1. **Observations** — default landing page (first paint), highest impression count
-  2. **Lifecycle Overview** — top-level KPI tile (most "what's our state?" usage)
-  3. **Channel Roles** — leans on channel_performance_overview which is already live-validated
-  4. **Customer Journeys** — most data-dense but useful per-account drill-down
-  5. **Path Patterns** — depends on canonical_v1/v2 snapshots (heavy queries)
-  6. **Attribution Models** — depends on linear/first/last RPCs; needs the model dropdown wired
-  7. **Lift & Incrementality** — UI shell only; backend mostly not built yet (correlation is doable, incrementality + causation are weeks-each)
-- **Pattern to reuse:** the Raw wiring (see Completed Fix May 22-25). Server page → `Promise.all` of current + prior + page-specific RPCs → client component → reuse `priorWindow()` / `pctDelta()` / `TopBar kpis` prop.
+**Lift & Incrementality — design methodology in Claude Chat first, then implement here** *(staged)*
+- The page has 3 tabs: Correlation, Incrementality, Causation.
+- **Correlation tab** is straightforward — computable from existing canonical_v1 + channel_roles data. ~2 hours of pure implementation in Claude Code; no methodology design needed.
+- **Incrementality + Causation tabs** require real experimental-design choices that flow better in a conversational chat:
+  - Unit of randomization (user / geo / time-block)
+  - Holdout percentage, minimum sample size, MDE thresholds
+  - How to handle channel contamination (holdout user still sees organic Meta posts)
+  - Bayesian vs frequentist, sequential testing
+  - Causation methodology: propensity-score matching, covariate selection
+- **Recommended workflow:** design methodology in Claude Chat → produce a written 1-2 page spec → bring back to Claude Code → implementation here validates against real EOS data shapes (e.g., "do we have enough holdout-eligible journeys for an 80%-power test?") before writing RPCs/UI.
+
+**Wire `refresh_attribution_tables()` to a daily cron** *(small, opportunistic)*
+- The function `chapter_reporting.refresh_attribution_tables(p_cohort_start)` populates `purchase_channel_final_v1` + `attribution_linear_chapter_v1` for all clients. Currently invoked manually.
+- Matches the MV refresh cron pattern shipped May 25. Add a new Vercel Cron route `/api/internal/cron/refresh-attribution` at e.g. 04:30 UTC (after MV refresh at 04:00 UTC).
+- Extend daily-digest with attribution-table freshness check (`MAX(snapshot_ts)` vs `now()`).
+
+**Push current branch to prod (Vercel deploy)** *(ready, low risk)*
+- Local-only as of end-of-May-26 session: Attribution + Paths + Channels + **Overview + Journeys** page wiring, **9 new RPCs total** (`attribution_overview`, `path_combinations_overview`, `channel_roles_overview`, `channel_affinity_overview`, `lifecycle_overview`, `path_length_trend`, `journeys_overview_stats`, `journeys_overview_list`, plus 3 detail RPCs `journey_detail_chapters/events/aliases`), 2 new snapshot tables (`purchase_channel_final_v1`, `attribution_linear_chapter_v1`), 1 new loader function (`refresh_attribution_tables`), **new audit table `chapter_audit.dashboard_pii_views`** + helper, MV refresh cron route + daily-digest extension. DB migrations already applied to prod via Supabase MCP.
+- Pre-deploy already done: `DATABASE_DIRECT_URL` added to Vercel Production env.
+- Dev server has been running on port 3000 since May 22; stop or leave it as you prefer.
+
+**Per-client boundary event configuration** *(needed before first B2B client)*
+- Currently `/chapter/journeys` outcome filter hardcodes `boundary_event_name = 'purchase'`. Same for `lifecycle_overview`'s returning-purchaser computation.
+- For B2B clients whose conversion event is `lead_submission` (or similar), this breaks the "Converted" classification.
+- **Fix design:** add `chapter_config.client_boundary_events(client_key, boundary_event_name)` lookup table. RPCs join + use the value per client. Update CLAUDE.md's Onboard New Client checklist when this lands.
 
 ---
 
@@ -695,7 +813,7 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ## 🔜 Future Work
 
-- **Dashboard build** — v1 shell shipped May 14, 2026. **Raw Performance fully live-wired May 22-25** (sparklines, prior-period deltas, KPI strip, compare-mode toggle). Remaining 7 pages on mockdata — wiring order + pattern in the Open Fix List above.
+- **Dashboard build** — v1 shell shipped May 14, 2026. **6 of 8 pages live-wired** as of end of May 26: Raw Performance (May 22-25), Attribution Models + Path Patterns + Channel Roles + Lifecycle Overview + Customer Journeys (May 25-26). **2 deferred indefinitely** — Observations (needs question-library engine), Lift & Incrementality (needs holdout/causation infrastructure — design phase recommended in Claude Chat before implementation).
 - **Tier 1 first-party redirect domain** — intelligent routing layer; "Branch.io for open-web ecom" positioning. Memory: `project_tier1_redirect_scope.md`. ~4-5 day build. Adds (a) clean campaign attribution (closes the 521-missing-page-views finding from May 22 validation), (b) programmatic destination injection per identity/cart/geo/device.
 - **Google Search Console backfill** — OAuth client setup pending in GCP (path A in the May 24 session). Once flowing: per-page + per-keyword search performance data into `chapter_config.gsc_*` (TBD table name). Doesn't move attribution numbers — unlocks SEO reporting depth for Tigerbyte's portal + Channels page drill-down.
 - **Multi-client generalization of `chapter_reporting`** — happening incrementally per-tile during dashboard wiring (see "Reporting generalization strategy" in the 📊 Chapter Dashboard section). Not a separate big-bang.
