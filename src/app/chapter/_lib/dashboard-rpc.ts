@@ -396,6 +396,150 @@ export const cachedJourneyDetailChapters = _makeDetailRpc<JourneyDetailChapterRo
 export const cachedJourneyDetailEvents   = _makeDetailRpc<JourneyDetailEventRow>("journey_detail_events", "dashboard-rpc:journey_detail_events");
 export const cachedJourneyDetailAliases  = _makeDetailRpc<JourneyDetailAliasRow>("journey_detail_aliases", "dashboard-rpc:journey_detail_aliases");
 
+// ─────── Lift & Incrementality — Correlation tab ────────────────────────────
+// One row per channel actually present in the client's data within window.
+// Two distinct metric spaces (see RPC comments):
+//   - Identity-level (conversion rate): ids_with/without, conv_ids_with/without
+//   - Chapter-level (continuous, converters only): AOV / days-to-close / touches
+//     each with mean + sample stddev for the SE noise gate in TS.
+//
+// Statistical honesty gate is applied CLIENT-SIDE in TS — see CorrelationTab
+// component. Three states:
+//   - Hidden:    min(n_with, n_without) < 30
+//   - Noise:     |delta| < 2 × SE(delta)    → grayed render
+//   - Confident: |delta| ≥ 2 × SE(delta)    → colored render
+
+export type CorrelationChannelRow = {
+  channel: string;
+  // Identity-level (conversion rate)
+  ids_with:         number | null;
+  ids_without:      number | null;
+  conv_ids_with:    number | null;
+  conv_ids_without: number | null;
+  // Chapter-level (converters only) with mean + sample stddev per arm
+  chapters_with:    number | null;
+  chapters_without: number | null;
+  aov_with:         number | null;
+  aov_sd_with:      number | null;
+  aov_without:      number | null;
+  aov_sd_without:   number | null;
+  days_with:        number | null;
+  days_sd_with:     number | null;
+  days_without:     number | null;
+  days_sd_without:  number | null;
+  touches_with:     number | null;
+  touches_sd_with:  number | null;
+  touches_without:  number | null;
+  touches_sd_without: number | null;
+};
+
+export const cachedCorrelationChannelOverview = makeCachedRpc<CorrelationChannelRow>("correlation_channel_overview");
+
+// ─────── Lift & Incrementality — Incrementality tab ─────────────────────────
+// One row per (channel × bucket). Returns sufficient statistics for the
+// TS-layer regression-adjusted lift computation per spec §6 (Lin's-style
+// adjustment with pre-channel touches as the covariate).
+//
+// adj_diff = (y_with - y_without) - β·(x_with - x_without)
+// SE(adj_diff) ≈ sqrt((1 - r²) · s_y² · (1/n_with + 1/n_without))
+//
+// Population is CONVERTERS ONLY (canonical_v1 chapters in window) — Inc-
+// rementality compares converter outcomes by channel presence, NOT con-
+// version rate (that's the Correlation tab).
+
+export type IncrementalityAxis = "subscriber" | "value_band" | "location";
+
+export type IncrementalityRow = {
+  channel:       string;
+  bucket:        string;
+  bucket_label:  string;
+  // Conv rate (identity-level; NULL on value_band axis per RPC contract)
+  ids_with:         number | null;
+  ids_without:      number | null;
+  conv_ids_with:    number | null;
+  conv_ids_without: number | null;
+  // AOV chapter counts + stats (pre-channel touch covariate)
+  n_with:        number | null;
+  n_without:     number | null;
+  aov_with:        number | null;
+  aov_sd_with:     number | null;
+  aov_without:     number | null;
+  aov_sd_without:  number | null;
+  aov_cov_with:    number | null;
+  aov_cov_without: number | null;
+  aov_slope:       number | null;
+  aov_r2:          number | null;
+  // Time to close — STRICT SUBSET (chapter_id ≥ 1; recency covariate)
+  days_n_with:     number | null;
+  days_n_without:  number | null;
+  days_with:        number | null;
+  days_sd_with:     number | null;
+  days_without:     number | null;
+  days_sd_without:  number | null;
+  days_cov_with:    number | null;   // mean recency (days since prior purchase)
+  days_cov_without: number | null;
+  days_slope:       number | null;
+  days_r2:          number | null;
+};
+
+type IncrementalityArgs = RpcArgs & { p_cohort_axis: IncrementalityAxis };
+
+// Lightweight metadata RPC that exposes the auto-derived cohort cutoffs
+// (subscriber count, value-band terciles, top regions) for the description
+// box next to the cohort axis picker on the Incrementality tab.
+export type IncrementalityAxisMetadataRow = {
+  subscriber_count: number | null;
+  value_band_n:     number | null;
+  value_band_p33:   number | null;
+  value_band_p67:   number | null;
+  value_band_max:   number | null;
+  top_regions:      string[] | null;
+  total_regions:    number | null;
+};
+
+export const cachedIncrementalityAxisMetadata = makeCachedRpc<IncrementalityAxisMetadataRow>("incrementality_axis_metadata");
+
+// ─────── Lift & Incrementality — Contribution tab (Tab 3) ──────────────────
+// One row per channel. Returns raw components for:
+//   - Measure A: Incremental Loss projection (incremental_rate + variance →
+//     CI in TS, then × touched_chapters for the range)
+//   - Measure B: Contribution Index (3 signals — TS normalizes 0-1 across
+//     channels and averages)
+//   - 2×2 quadrant (TS median-splits on incremental_rate + contribution_index)
+
+export type ContributionChannelRow = {
+  channel:                    string;
+  touched_chapters:           number | null;
+  touched_revenue:            number | null;
+  total_chapters:             number | null;
+  total_revenue:              number | null;
+  participation_rate:         number | null;
+  fractional_revenue:         number | null;
+  fractional_orders:          number | null;
+  recurrence_score:           number | null;
+  incremental_rate:           number | null;
+  incremental_rate_variance:  number | null;
+  incremental_buckets_n:      number | null;
+  cohort_axis_used:           string;
+};
+
+export const cachedContributionOverview = makeCachedRpc<ContributionChannelRow>("contribution_overview");
+
+export const cachedIncrementalityChannelOverview = unstable_cache(
+  async (args: IncrementalityArgs): Promise<IncrementalityRow[]> => {
+    const r = await supabase
+      .schema("chapter_reporting")
+      .rpc("incrementality_channel_overview", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] incrementality_channel_overview failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as IncrementalityRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:incrementality_channel_overview"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:incrementality_channel_overview"] },
+);
+
 export const cachedPathCombinationsOverview = unstable_cache(
   async (args: PathArgs): Promise<PathCombinationRow[]> => {
     const r = await supabase

@@ -22,7 +22,7 @@ export function Sidebar() {
     { key: "overview",    label: "Lifecycle Overview",    icon: "overview" },
     { key: "channels",    label: "Channel Roles",         icon: "channels" },
     { key: "paths",       label: "Path Patterns",         icon: "paths" },
-    { key: "lift",        label: "Lift & Incrementality", icon: "lift" },
+    { key: "lift",        label: "Lift, Incrementality & Value", icon: "lift" },
     { key: "attribution", label: "Attribution Models",    icon: "attribution" },
     { key: "journeys",    label: "Customer Journeys",     icon: "journeys" },
     { key: "raw",         label: "Raw Performance",       icon: "raw" },

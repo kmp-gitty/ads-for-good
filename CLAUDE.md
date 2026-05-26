@@ -177,6 +177,66 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of May 26, 2026)
 
+### Incrementality v2 + Contribution tab — Lift & Incrementality page now fully live (3 of 3 tabs) (May 26, 2026)
+- **Scope:** finished wiring the L&I page in two pieces: (a) Incrementality v2 corrections after the first build exposed methodology faults on live EOS data, (b) the brand-new Contribution tab replacing the placeholder Causation tab. End-of-day state: all 3 tabs running on real data; page sidebar nav renamed "Lift, Incrementality & Value" to reflect the new third measure.
+
+#### Incrementality v2 corrections (per spec v2 §12, live-data-exposed)
+- **Touches metric DROPPED from Incrementality** (kept on Correlation). Structurally degenerate: covariate is "pre-channel touches"; for WITHOUT chapters the covariate equals the outcome by definition → regression can't adjust → circular. Removal is the only honest fix; this is structural, not tunable.
+- **Conv Rate ADDED as left-most metric.** Identity-level (matches Correlation tab denominator definition), pre-channel-touch covariate. Hidden on `value_band` axis with tailored "n/a for value-band axis" message — value buckets are derived from purchase amount, so non-converters can't be bucketed → denominator would degenerate. Documented in the expander.
+- **Time-to-close covariate SWITCHED from pre-channel touches → recency** (days since prior purchase, measured at chapter start). Reasoning per spec §12 Change 3: match the covariate's units to the outcome's units. Recency derived from ALL-TIME canonical_v1 history (not window-bound LAG). First-ever chapters (`chapter_id = 0`) excluded — separate `days_n_with` / `days_n_without` counts so the n≥30 gate is honest about the strict-subset denominator (109 of 426 90d chapters at EOS).
+- **Time-to-close visually DEMOTED** per spec §12 Change 4: opacity 0.95 (vs 1.0), label color `var(--ink-2)` (vs `var(--ink)`), inline "WEAKEST" pill with hover-tooltip explaining selection bias, EXCLUDED from headline candidacy so the "HEADLINE" chip never lands on it. Expander adds: *"covariate adjustment shrinks confounding from journey length, but it does not eliminate selection bias — channel-present chapters disproportionately come from customers with structurally different browsing habits."*
+- **UI polish during testing:**
+  - Cohort axis layout reworked — picker stacks UNDER tabs, definition box top-aligns with tabs (3-column flex), "Showing N findings" stays top-right. Cohort axis definition box renders live metadata (subscriber count, value-band terciles, current top 5 regions) so operators understand what "Subscribers" / "Low spenders" / "Other" actually mean for THIS client in THIS window.
+  - Grayed states darkened (hidden 0.4→0.7 opacity, noise text `var(--ink-4)` → `var(--ink-2)`).
+  - Confidence threshold shown on its own line per stat: `need ±5.2% for confident` (noise state) / `gate ±3.8%` (confident state). Computed from CI half-width (`ci_high - adj_lift = 2·SE`). Tells operators how far from real signal a within-noise number is.
+- **Files:** [src/app/chapter/_lib/dashboard-rpc.ts](src/app/chapter/_lib/dashboard-rpc.ts) (`IncrementalityRow` type updated), [src/app/chapter/(authed)/lift/LiftClient.tsx](src/app/chapter/(authed)/lift/LiftClient.tsx) (gate computation + render). DB: `incrementality_channel_overview` v2 + `incrementality_axis_metadata` RPCs.
+
+#### Contribution tab (3rd of 3) — replaces placeholder Causation tab
+- **Per contribution_tab_spec.md.** Tab is named "Contribution" (sells the concept); two internal measures stay distinctly labeled. **Critical labeling discipline:** the confident-causal word never attaches to the Contribution Index — that's what keeps this tab honest.
+- **New RPC `chapter_reporting.contribution_overview(client, start, end)`** returns one row per channel with sufficient stats for:
+  - **Measure A (Incremental Loss):** cohort-summed incremental rate + variance (subscriber axis as the default cohort). TS computes range = touched_volume × ±2·SE band. Per spec: NEVER a bare point number, ALWAYS a range + mechanism clause.
+  - **Measure B (Contribution Index):** 3 signals — participation rate, aggregate fractional revenue (from `attribution_linear_chapter_v1`), recurrence score (for returning customers, avg fraction of their chapters containing channel). TS normalizes each 0-1 across channel set + averages.
+  - 2×2 quadrant inputs.
+- **TS layer** (`computeContribution`): equal-weight average of 3 normalized signals → Contribution Index 0-100. Median-split across channels for quadrant assignment. CI propagation from RPC's `incremental_rate_variance` field.
+- **Quadrant taxonomy (final naming):**
+  - High Inc + High Con → **Core driver** ("Protect — both incremental AND deeply embedded")
+  - **Low Inc + High Con** → **Connective tissue** ("DO NOT CUT despite low incremental") — bottom-right quadrant is THE reason the tab exists; gets orange tint on the matrix
+  - High Inc + Low Con → **Closing spark** ("Rarely appears, but converts when it does")
+  - Low Inc + Low Con → **Coasting** ("Low incremental + low embedded footprint")
+- **ContributionCard layout:** headline = range + mechanism clause; below it, Measure A + Measure B in side-by-side panels (counterweight always adjacent so "low incremental" never reads alone); quadrant verdict caveat at bottom; "how we calculated" expander.
+- **Channel Value Matrix** (inline SVG, no chart library): x-axis "Incrementality (matched-cohort)" -30%→+50%, y-axis "Contribution Index" 0-100. Dashed median-split lines; quadrant backgrounds shaded (orange tint on connective-tissue corner per spec §4). Channel chips colored to channel taxonomy.
+- **Live EOS narrative** (90d): Direct (69% participation, 80% recurrence, ~0% incremental) and Email (43% participation, 43% recurrence, ~5% incremental within noise) both land in **Connective Tissue** — exactly the cohort a ROAS-only tool would wrongly cut. This is the highest-value sales narrative the L&I feature produces.
+- **Sidebar nav renamed** "Lift & Incrementality" → "**Lift, Incrementality & Value**" in [src/app/chapter/_components/Sidebar.tsx](src/app/chapter/_components/Sidebar.tsx). Route stays `/chapter/lift`; page header TopBar stays "Lift & Incrementality" (the page header is the analytical-frame label; the nav label sells the user-facing benefit).
+- **Deferred for v2:** (a) shared matched-lift engine refactor between Incrementality and Contribution (spec §9 — both RPCs currently inline the matched-lift math), (b) modeling where substituting buyers redistribute (which channel absorbs them; spec §2 — dies at EOS's n), (c) Causation mock data + types are now unused but not yet cleaned out of `mockdata.ts`.
+
+#### Cumulative wiring scorecard (end of May 26, 2026)
+- **7 of 8 pages fully live-wired:** Raw Performance, Lifecycle Overview, Channel Roles, Path Patterns, Attribution Models, Customer Journeys, Lift / Incrementality / Value (all 3 tabs).
+- **1 deferred indefinitely:** Observations (needs question-library engine — multi-day project, deferred until first real engagement question is identified).
+
+### Correlation tab on /chapter/lift live-wired (1st of 3 L&I tabs) (May 26, 2026)
+- **Scope:** Phase-1 implementation of the Lift & Incrementality page per a methodology spec produced in Claude Chat (see `correlation_tab_spec.md`). Only the Correlation tab — Incrementality + Causation tabs explicitly stay on mockdata pending their own methodology design phase.
+- **New RPC `chapter_reporting.correlation_channel_overview(client, start, end)`** returns one row per channel actually present in the client's data with two distinct metric spaces:
+  - **Identity-level (conversion rate):** `ids_with` / `ids_without` (canonical_identity_keys with ≥1 non-bot human journey in window touching that channel via `journey_entry_channel_v1`) and `conv_ids_with` / `conv_ids_without` (subset that also has ≥1 `canonical_v1` purchase chapter in window). Conversion rate is `conv / total` per arm.
+  - **Chapter-level (continuous metrics, converters only):** `chapters_with` / `chapters_without` based on whether the channel appears in `canonical_v1.channel_path`. Returns mean + **sample stddev** per arm for AOV (`boundary_value`), time-to-close (`boundary_ts - first_ts` in days), and touches (`array_length(channel_path)`). Stddev shipped in v1 so the SE noise gate covers all metrics from day one.
+- **Bot filter convention:** matches existing `journey_overview` (`bot_class IN ('human_likely', 'suspect')` AND `event_count > 1`). Numbers stay consistent with Overview/Raw/Channels pages. The spec author's stricter "human_likely only" was explicitly rejected for cross-page consistency.
+- **Channel list is data-driven** from the union of channels-in-traffic (identity-level) and channels-in-purchase-paths (chapter-level). No template/demo channels — if EOS doesn't have Meta, no Meta card appears.
+- **Statistical honesty gate (TS-side, in [LiftClient.tsx](src/app/chapter/(authed)/lift/LiftClient.tsx)):**
+  - **Hidden** (`min(n_with, n_without) < 30`) — metric renders as "need n ≥ 30", grayed
+  - **Within noise** (`|Δ|/SE < 2`) — delta shown but grayed with "within noise" tag; hover-tooltip shows the math
+  - **Confident** (`|Δ|/SE ≥ 2`) — colored delta (good/bad)
+  - SE formulas: proportion-difference for conv rate (`sqrt(p_pool*(1-p_pool)*(1/n_w + 1/n_wo))`); Welch mean-diff for continuous (`sqrt(s_w²/n_w + s_wo²/n_wo)`). Computed in TS per spec §4 — thresholds tunable without a migration.
+  - **Card-level hidden:** if ALL metrics for a channel are hidden, render a single "Not enough data yet — need ≥30 samples with and without this channel" card instead of an empty card.
+- **Dynamic headline metric** (spec §3): picks the metric with largest `|Δ_rel|` that clears the confidence gate. Defaults to conversion rate if no metric clears. Headline metric gets a small `HEADLINE` chip on its stat block. Card headline text follows the locked claim shape: *"When [channel] is present in paths, we see [X]% [metric]."*
+- **Per-channel observational caveat** in each card (e.g. Email: *"Email subscribers are typically more engaged than non-subscribers. This is correlation, not a causal estimate."* Direct: *"Direct traffic skews toward returning customers…"*).
+- **Page-default window = 90d** (vs 30d elsewhere) because the noise gate needs sample size — at EOS's ~270 conv/mo volume a 30d window would gray out most cards. Spec §6 locked decision.
+- **Tab labels** now show `LIVE` (Correlation) vs `mock` (Incrementality, Causation) so it's unambiguous which tab is real.
+- **Live EOS findings the gate surfaces** (90d window):
+  - **Email**: conv rate +14.4% relative (68.5% vs 59.5%). Likely confident — Email "headline" metric.
+  - **Direct**: conv rate -7.1% (60.3% vs 65.0%). Counterintuitive but explained by Direct being mostly returning customers who browse without buying (caveat surfaces this).
+  - **Organic Search**: conv rate ~flat (within noise), but touches metric shows 23.86 vs 5.22 — Organic Search chapters are ~4.5x longer paths (deep browsing).
+  - **Referral / Organic Social / Paid Social**: hidden at n<30.
+- **Server/client split:** [page.tsx](src/app/chapter/(authed)/lift/page.tsx) is server (fetches correlation RPC, defaults to 90d), [LiftClient.tsx](src/app/chapter/(authed)/lift/LiftClient.tsx) handles tab state and renders all three tabs with the appropriate data source per tab.
+
 ### Two more Chapter Dashboard pages live-wired (Overview + Journeys) — 6 of 8 pages live (May 26, 2026)
 - **Goal:** finish wiring the actively-buildable dashboard pages. Started with Overview (mostly reuses RPCs from other pages, plus 2 new ones), then Journeys (most complex — full audit/privacy infrastructure required). Both shipped end-to-end including UI polish.
 
@@ -650,18 +710,17 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ### 🔴 Priority 1 — Active
 
-**Dashboard wiring queue is empty — 6 of 8 pages live.** Remaining 2 (Observations, Lift & Incrementality) are not "wiring" tasks; they need entire backends built (see Future Work).
+**Dashboard wiring queue: 7 of 8 pages fully live.** Only Observations remains; on deck for tomorrow.
 
-**Lift & Incrementality — design methodology in Claude Chat first, then implement here** *(staged)*
-- The page has 3 tabs: Correlation, Incrementality, Causation.
-- **Correlation tab** is straightforward — computable from existing canonical_v1 + channel_roles data. ~2 hours of pure implementation in Claude Code; no methodology design needed.
-- **Incrementality + Causation tabs** require real experimental-design choices that flow better in a conversational chat:
-  - Unit of randomization (user / geo / time-block)
-  - Holdout percentage, minimum sample size, MDE thresholds
-  - How to handle channel contamination (holdout user still sees organic Meta posts)
-  - Bayesian vs frequentist, sequential testing
-  - Causation methodology: propensity-score matching, covariate selection
-- **Recommended workflow:** design methodology in Claude Chat → produce a written 1-2 page spec → bring back to Claude Code → implementation here validates against real EOS data shapes (e.g., "do we have enough holdout-eligible journeys for an 80%-power test?") before writing RPCs/UI.
+**Observations page — design + build** *(next on deck — tomorrow)*
+- Page exists at `/chapter/observations` with full UI shell but pulls from `OBSERVATIONS` mockdata. Per CLAUDE.md Future Work: needs the question-library engine itself, not just wiring.
+- Engine requirements per spec the UI was built against: (a) library of SQL-encoded "questions" / patterns to detect (e.g. "channel X presence dropped > 20% week-over-week"), (b) runner that executes on a schedule (weekly), (c) severity classifier (high/med/low), (d) history persistence so prior weeks can be referenced, (e) state tracking ("new this week" / "changed" / "standing").
+- **Suggested workflow:** like the L&I tabs — design the question library + severity rubric in Claude Chat first, produce a written spec (`observations_engine_spec.md`), bring back to Claude Code for implementation. The shape of the engine is fairly determinate; the open question is WHICH questions are worth asking and HOW severity is scored.
+- **One known constraint:** at EOS's 270 conv/mo, many week-over-week deltas will be noise. The library's questions should be calibrated to the volume (run weekly windows that have enough sample; consider 4-week rolling rather than week-over-week for some).
+
+**Shared matched-lift engine refactor (L&I Incrementality + Contribution share math)** *(deferred from L&I shipment)*
+- Tab 2 (Incrementality) and Tab 3 (Contribution) both compute cohort-summed matched lift from the same underlying data, but each RPC inlines the math independently. Per contribution_tab_spec §1+§9: the shared matched-lift core should be refactored into a reusable callable (Postgres function or shared CTE template) that both tabs call.
+- Not blocking — the math is small enough that the duplication is honest, and changes to one have so far stayed in sync with the other manually. But worth doing before a third consumer (e.g. a future "Lift over time" chart) appears.
 
 **Wire `refresh_attribution_tables()` to a daily cron** *(small, opportunistic)*
 - The function `chapter_reporting.refresh_attribution_tables(p_cohort_start)` populates `purchase_channel_final_v1` + `attribution_linear_chapter_v1` for all clients. Currently invoked manually.
@@ -813,7 +872,7 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ## 🔜 Future Work
 
-- **Dashboard build** — v1 shell shipped May 14, 2026. **6 of 8 pages live-wired** as of end of May 26: Raw Performance (May 22-25), Attribution Models + Path Patterns + Channel Roles + Lifecycle Overview + Customer Journeys (May 25-26). **2 deferred indefinitely** — Observations (needs question-library engine), Lift & Incrementality (needs holdout/causation infrastructure — design phase recommended in Claude Chat before implementation).
+- **Dashboard build** — v1 shell shipped May 14, 2026. **7 of 8 pages fully live-wired** as of end of May 26: Raw Performance (May 22-25), Attribution Models + Path Patterns + Channel Roles + Lifecycle Overview + Customer Journeys (May 25-26), Lift / Incrementality / Value with all 3 tabs (May 26 — Correlation, then Incrementality v2 after first-build live-data review, then Contribution replacing Causation). **1 page remaining** — Observations (needs question-library engine; on deck for the next session).
 - **Tier 1 first-party redirect domain** — intelligent routing layer; "Branch.io for open-web ecom" positioning. Memory: `project_tier1_redirect_scope.md`. ~4-5 day build. Adds (a) clean campaign attribution (closes the 521-missing-page-views finding from May 22 validation), (b) programmatic destination injection per identity/cart/geo/device.
 - **Google Search Console backfill** — OAuth client setup pending in GCP (path A in the May 24 session). Once flowing: per-page + per-keyword search performance data into `chapter_config.gsc_*` (TBD table name). Doesn't move attribution numbers — unlocks SEO reporting depth for Tigerbyte's portal + Channels page drill-down.
 - **Multi-client generalization of `chapter_reporting`** — happening incrementally per-tile during dashboard wiring (see "Reporting generalization strategy" in the 📊 Chapter Dashboard section). Not a separate big-bang.
