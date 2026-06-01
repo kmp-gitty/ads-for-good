@@ -7,7 +7,7 @@ export type IconName =
   | "journeys" | "raw" | "calendar" | "compare" | "chev" | "chevR" | "chevL"
   | "check" | "x" | "search" | "arrowUp" | "arrowDown" | "filter" | "plus"
   | "receipt" | "settings" | "info" | "sparkle" | "history" | "target"
-  | "chart" | "cohort" | "lock" | "lift";
+  | "chart" | "cohort" | "lock" | "lift" | "influence" | "lagged";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   overview:   (<><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></>),
@@ -39,6 +39,8 @@ const PATHS: Record<IconName, React.ReactNode> = {
   cohort:     (<><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2"/><path d="M3 21c0-3 2.5-6 6-6s6 3 6 6"/><path d="M14 17c1-1.5 2-2 3-2s2.5.5 3 2"/></>),
   lock:       (<><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></>),
   lift:       (<><rect x="3" y="14" width="6" height="7" rx="1"/><rect x="15" y="8" width="6" height="13" rx="1"/><path d="M9 11l3-4 3 4"/></>),
+  influence:  (<><circle cx="12" cy="12" r="2"/><circle cx="4" cy="4" r="2"/><circle cx="20" cy="4" r="2"/><circle cx="4" cy="20" r="2"/><circle cx="20" cy="20" r="2"/><path d="M10.5 10.5L5.5 5.5M13.5 10.5l5-5M10.5 13.5l-5 5M13.5 13.5l5 5"/></>),
+  lagged:     (<><circle cx="10" cy="12" r="7"/><path d="M10 8v4l3 2"/><path d="M19 12h3M20 9l3 3-3 3"/></>),
 };
 
 export function Icon({ name, size = 16, stroke = 2 }: { name: IconName; size?: number; stroke?: number }) {

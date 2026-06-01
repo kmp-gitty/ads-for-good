@@ -18,6 +18,10 @@ export function Sidebar() {
     key: "observations", label: "Observations", icon: "observations",
     badge: "8 new", locked: client.tier === "Starter",
   };
+  const connections: NavItem[] = [
+    { key: "connections/influence",     label: "Cross-Source Influence", icon: "influence" },
+    { key: "connections/lagged-impact", label: "Lagged Impact",          icon: "lagged" },
+  ];
   const analyze: NavItem[] = [
     { key: "overview",    label: "Lifecycle Overview",    icon: "overview" },
     { key: "channels",    label: "Channel Roles",         icon: "channels" },
@@ -89,8 +93,8 @@ export function Sidebar() {
       </div>
 
       <div className="nav-section">
-        <div className="nav-section-label">Analyze</div>
-        {analyze.map(it => (
+        <div className="nav-section-label">Connections</div>
+        {connections.map(it => (
           <Link
             key={it.key}
             href={`/chapter/${it.key}`}
@@ -106,15 +110,20 @@ export function Sidebar() {
       </div>
 
       <div className="nav-section">
-        <div className="nav-section-label">Configure</div>
-        <button className="nav-item">
-          <span className="icon"><Icon name="settings" size={16}/></span>
-          <span>Pixel & sources</span>
-        </button>
-        <button className="nav-item">
-          <span className="icon"><Icon name="cohort" size={16}/></span>
-          <span>Audiences</span>
-        </button>
+        <div className="nav-section-label">Analyze</div>
+        {analyze.map(it => (
+          <Link
+            key={it.key}
+            href={`/chapter/${it.key}`}
+            className={`nav-item ${isActive(it.key) ? "active" : ""} ${it.locked ? "locked" : ""}`}
+          >
+            <span className="icon"><Icon name={it.icon} size={16}/></span>
+            <span>{it.label}</span>
+            {it.locked
+              ? <span className="pill lock"><Icon name="lock" size={9} /></span>
+              : it.badge ? <span className="pill">{it.badge}</span> : null}
+          </Link>
+        ))}
       </div>
 
       <div className="sidebar-foot">

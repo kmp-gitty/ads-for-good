@@ -727,11 +727,6 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 - Matches the MV refresh cron pattern shipped May 25. Add a new Vercel Cron route `/api/internal/cron/refresh-attribution` at e.g. 04:30 UTC (after MV refresh at 04:00 UTC).
 - Extend daily-digest with attribution-table freshness check (`MAX(snapshot_ts)` vs `now()`).
 
-**Push current branch to prod (Vercel deploy)** *(ready, low risk)*
-- Local-only as of end-of-May-26 session: Attribution + Paths + Channels + **Overview + Journeys** page wiring, **9 new RPCs total** (`attribution_overview`, `path_combinations_overview`, `channel_roles_overview`, `channel_affinity_overview`, `lifecycle_overview`, `path_length_trend`, `journeys_overview_stats`, `journeys_overview_list`, plus 3 detail RPCs `journey_detail_chapters/events/aliases`), 2 new snapshot tables (`purchase_channel_final_v1`, `attribution_linear_chapter_v1`), 1 new loader function (`refresh_attribution_tables`), **new audit table `chapter_audit.dashboard_pii_views`** + helper, MV refresh cron route + daily-digest extension. DB migrations already applied to prod via Supabase MCP.
-- Pre-deploy already done: `DATABASE_DIRECT_URL` added to Vercel Production env.
-- Dev server has been running on port 3000 since May 22; stop or leave it as you prefer.
-
 **Per-client boundary event configuration** *(needed before first B2B client)*
 - Currently `/chapter/journeys` outcome filter hardcodes `boundary_event_name = 'purchase'`. Same for `lifecycle_overview`'s returning-purchaser computation.
 - For B2B clients whose conversion event is `lead_submission` (or similar), this breaks the "Converted" classification.
@@ -783,13 +778,9 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ---
 
-### 📦 Pending shipments & backlog (May 25, 2026)
+### 📦 Backlog (May 26, 2026)
 
-**Push current branch to prod (Vercel deploy)** *(ready, low risk)*
-- Local-only as of May 25: `/internal/tasks` page + `/chapter/raw` live-wiring + `chapter-scripts/refresh-dashboard-mvs.js`.
-- DB migrations already in prod (no schema changes needed beyond the `dashboard_timeseries` RPC migration which was applied directly).
-- Pre-deploy: confirm `CHAPTER_DASH_TOKEN` and `SUPABASE_SERVICE_ROLE_KEY` are set in Vercel (they should be — same vars `/internal/client-portal-config` already uses).
-- Dev server has been running on port 3000 since May 22; stop it if you don't need it locally anymore.
+**All dashboard-wiring code is currently deployed to prod as of end of May 26.** The L&I shipment (all 3 tabs + audit table + 4 new RPCs + sidebar rename) went out in a successful build at end of day. No deploy queue.
 
 **Backlog items (small, opportunistic):**
 - **Investigate load-balancer hostname DNS for prod** — surfaced earlier; reason was forgotten before being documented. Worth grepping commit history for context if/when picked up.

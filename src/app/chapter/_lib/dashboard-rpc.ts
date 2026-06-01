@@ -557,6 +557,238 @@ export const cachedPathCombinationsOverview = unstable_cache(
   { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:path_combinations_overview"] },
 );
 
+// ─────── Connections #1 — Cross-Source Influence ────────────────────────────
+// Channel anchor only for v1. Resolver returns a lightweight summary; panel
+// returns ranked connection rows (per-identity anchor moments + lag window).
+
+export type ConnectionsAnchorPayload =
+  | { channel: string;     start_ts: string; end_ts: string }
+  | { page_path: string;   start_ts: string; end_ts: string }
+  | { campaign_id: string; start_ts: string; end_ts: string }
+  | { cohort_id: string;   start_ts: string; end_ts: string };
+
+export type ConnectionsAnchorType = "channel" | "page" | "campaign" | "cohort";
+
+export type ConnectionsAnchorResolveArgs = {
+  p_client_key:     string;
+  p_anchor_type:    ConnectionsAnchorType;
+  p_anchor_payload: ConnectionsAnchorPayload;
+};
+
+export type ConnectionsAnchorResolveRow = {
+  n_identities:    number | null;
+  match_rate:      number | null;
+  anchor_summary:  string;
+  anchor_start_ts: string;
+  anchor_end_ts:   string;
+};
+
+export const cachedConnectionsAnchorResolve = unstable_cache(
+  async (args: ConnectionsAnchorResolveArgs): Promise<ConnectionsAnchorResolveRow[]> => {
+    const r = await supabase
+      .schema("chapter_reporting")
+      .rpc("connections_anchor_resolve", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] connections_anchor_resolve failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as ConnectionsAnchorResolveRow[];
+  },
+  // v3 — busts cached empty results from when system cohorts were being
+  // wired up. Args shape unchanged.
+  ["dashboard-rpc:chapter_reporting:connections_anchor_resolve:v3"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_anchor_resolve:v3"] },
+);
+
+export type ConnectionsConnectionType = "channel" | "page";
+
+export type ConnectionsPanelArgs = {
+  p_client_key:           string;
+  p_anchor_type:          ConnectionsAnchorType;
+  p_anchor_payload:       ConnectionsAnchorPayload;
+  p_direction:            "upstream" | "downstream";
+  p_window_days:          number;
+  p_outcome_window_days?: number;   // default 30 server-side
+  p_exclude_channels?:    string[];
+  p_connection_type?:     ConnectionsConnectionType; // default 'channel'
+  p_exclude_pages?:       string[];
+  p_min_n?:               number;   // default 5; pass 1 for Person anchor
+};
+
+export type ConnectionsPanelRow = {
+  connected_thing_type:  string;
+  connected_thing_id:    string;
+  connected_thing_label: string;
+  n_identities:          number | null;
+  pct_of_anchor:         number | null;
+  median_lag_days:       number | null;
+  outcome_rate:          number | null;
+};
+
+export const cachedConnectionsPanel = unstable_cache(
+  async (args: ConnectionsPanelArgs): Promise<ConnectionsPanelRow[]> => {
+    const r = await supabase
+      .schema("chapter_reporting")
+      .rpc("connections_panel", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] connections_panel failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as ConnectionsPanelRow[];
+  },
+  // v5 — busts cached empty results that may have been served while the
+  // system-cohort panel branches were being shaken out. Args shape unchanged.
+  ["dashboard-rpc:chapter_reporting:connections_panel:v5"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_panel:v5"] },
+);
+
+export type ConnectionsPageOption = { page_path: string; views: number };
+
+export type ConnectionsCampaignOption = {
+  campaign_id:     string;
+  campaign_name:   string | null;
+  platform:        string | null;
+  last_click_ts:   string | null;
+  unique_clickers: number;
+};
+
+export type ConnectionsCohortOption = {
+  cohort_id:       string;
+  name:            string;
+  identifier_type: string;
+  kind:            "system" | "uploaded";
+  event_at:        string;
+  created_at:      string;
+  total_uploaded:  number;
+  total_matched:   number;
+};
+
+export const cachedConnectionsCohortOptions = unstable_cache(
+  async (args: { p_client_key: string; p_limit?: number }): Promise<ConnectionsCohortOption[]> => {
+    const r = await supabase
+      .schema("chapter_reporting")
+      .rpc("connections_cohort_options", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] connections_cohort_options failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as ConnectionsCohortOption[];
+  },
+  // v2 — picker return shape gained `kind` (system vs uploaded) so system
+  // cohorts can be styled differently in the dropdown.
+  ["dashboard-rpc:chapter_reporting:connections_cohort_options:v2"],
+  { revalidate: 30, tags: ["dashboard-rpc:connections_cohort_options:v2"] },
+);
+
+export const cachedConnectionsCampaignOptions = unstable_cache(
+  async (args: RpcArgs & { p_limit?: number }): Promise<ConnectionsCampaignOption[]> => {
+    const r = await supabase
+      .schema("chapter_reporting")
+      .rpc("connections_campaign_options", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] connections_campaign_options failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as ConnectionsCampaignOption[];
+  },
+  ["dashboard-rpc:chapter_reporting:connections_campaign_options"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_campaign_options"] },
+);
+
+export const cachedConnectionsPageOptions = unstable_cache(
+  async (args: RpcArgs & { p_limit?: number }): Promise<ConnectionsPageOption[]> => {
+    const r = await supabase
+      .schema("chapter_reporting")
+      .rpc("connections_page_options", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] connections_page_options failed:", { ...r.error });
+      return [];
+    }
+    const rows = (Array.isArray(r.data) ? r.data : []) as ConnectionsPageOption[];
+    if (rows.length === 0) {
+      // First call right after function creation can hit PostgREST while its
+      // schema cache is still stale → empty result. Log it so we can spot if
+      // this recurs after the cache key bump below.
+      console.warn("[dashboard-rpc] connections_page_options returned 0 rows for args:", args);
+    }
+    return rows;
+  },
+  // v2 cache namespace — busts stale empty entries from before the PostgREST
+  // schema cache caught up to the new function.
+  ["dashboard-rpc:chapter_reporting:connections_page_options:v2"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_page_options:v2"] },
+);
+
+// ─────── Connections #2 — Lagged Impact ─────────────────────────────────────
+// Per-pair / per-lag lightweight-tier RPC. Each call is one (A→B, lag) cell.
+
+export type LaggedImpactArgs = {
+  p_client_key:      string;
+  p_channel_a:       string;
+  p_channel_b:       string;
+  p_treatment_start: string;     // ISO
+  p_treatment_end:   string;     // ISO
+  p_lag_days:        number;
+};
+
+export type LaggedImpactRow = {
+  treated_n:             number;
+  baseline_n:            number;
+  treated_return_n:      number;
+  baseline_return_n:     number;
+  treated_return_rate:   number | null;
+  baseline_return_rate:  number | null;
+  abs_lift_pp:           number | null;
+  rel_lift_pct:          number | null;
+  abs_lift_ci_low:       number | null;
+  abs_lift_ci_high:      number | null;
+  rel_lift_ci_low:       number | null;
+  rel_lift_ci_high:      number | null;
+  cell_gate_status:      "ok" | "within_noise" | "below_n_floor";
+};
+
+export type LaggedImpactSeriesRow = {
+  bucket_start:       string;
+  bucket_end:         string;
+  channel_a_journeys: number;
+  channel_b_journeys: number;
+};
+
+export const cachedLaggedImpactPairSeries = unstable_cache(
+  async (args: {
+    p_client_key: string;
+    p_channel_a:  string;
+    p_channel_b:  string;
+    p_start_ts:   string;
+    p_end_ts:     string;
+    p_n_buckets?: number;
+  }): Promise<LaggedImpactSeriesRow[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc("lagged_impact_pair_series", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] lagged_impact_pair_series failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as LaggedImpactSeriesRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:lagged_impact_pair_series"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:lagged_impact_pair_series"] },
+);
+
+export const cachedLaggedImpactPair = unstable_cache(
+  async (args: LaggedImpactArgs): Promise<LaggedImpactRow[]> => {
+    const r = await supabase
+      .schema("chapter_reporting")
+      .rpc("lagged_impact_pair", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] lagged_impact_pair failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as LaggedImpactRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:lagged_impact_pair"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:lagged_impact_pair"] },
+);
+
 // ─────── Prior-period window helper ──────────────────────────────────────────
 // Returns the same-duration window immediately preceding [start, end). Caller
 // uses this to call the existing tile RPCs a second time with the prior args

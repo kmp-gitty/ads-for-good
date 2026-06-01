@@ -11,6 +11,10 @@
     {
       "path": "/api/internal/cron/refresh-dashboard-mvs",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/internal/cron/refresh-system-cohorts",
+      "schedule": "30 4 * * *"
     }
   ]
 }
