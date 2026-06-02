@@ -644,6 +644,27 @@ export const cachedConnectionsPanel = unstable_cache(
 
 export type ConnectionsPageOption = { page_path: string; views: number };
 
+export type ConnectionsSelfRecurrenceRow = {
+  total_anchored:         number;
+  n_recurrent:            number;
+  pct_recurrent:          number | null;
+  avg_chapters_recurrent: number | null;
+  revenue_recurrent:      number | null;
+};
+
+export const cachedConnectionsSelfRecurrence = unstable_cache(
+  async (args: ConnectionsAnchorResolveArgs): Promise<ConnectionsSelfRecurrenceRow[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc("connections_self_recurrence", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] connections_self_recurrence failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as ConnectionsSelfRecurrenceRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:connections_self_recurrence"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_self_recurrence"] },
+);
+
 export type ConnectionsCampaignOption = {
   campaign_id:     string;
   campaign_name:   string | null;

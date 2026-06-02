@@ -25,6 +25,7 @@ import type {
   ConnectionsCampaignOption,
   ConnectionsCohortOption,
   ConnectionsConnectionType,
+  ConnectionsSelfRecurrenceRow,
 } from "../../../_lib/dashboard-rpc";
 
 const CHANNEL_OPTIONS: { value: string; label: string }[] = [
@@ -49,6 +50,37 @@ const ANCHOR_TYPES: { value: string; label: string; enabled: boolean }[] = [
 
 function channelLabel(v: string): string {
   return CHANNEL_OPTIONS.find(o => o.value === v)?.label ?? v;
+}
+
+// ── Breadcrumb encoding ─────────────────────────────────────────────────────
+// Trail format in URL: ?bc=<type>:<value>|<type>:<value>|…
+// Each entry encodes one anchor that was previously selected before we hopped
+// to the current one. Pipe + colon are URL-safe-enough for the values we emit
+// (channel names are tokens, page paths get encodeURIComponent'd).
+
+type BreadcrumbEntry = { anchorType: string; value: string };
+
+function encodeBcEntry(e: BreadcrumbEntry): string {
+  return `${e.anchorType}:${encodeURIComponent(e.value)}`;
+}
+function decodeBcEntry(s: string): BreadcrumbEntry | null {
+  const colon = s.indexOf(":");
+  if (colon === -1) return null;
+  return { anchorType: s.slice(0, colon), value: decodeURIComponent(s.slice(colon + 1)) };
+}
+function encodeBcTrail(trail: BreadcrumbEntry[]): string {
+  return trail.map(encodeBcEntry).join("|");
+}
+function decodeBcTrail(s: string | null): BreadcrumbEntry[] {
+  if (!s) return [];
+  return s.split("|").map(decodeBcEntry).filter((e): e is BreadcrumbEntry => e !== null);
+}
+
+// Breadcrumb display label per entry.
+function bcEntryLabel(e: BreadcrumbEntry): string {
+  if (e.anchorType === "channel") return channelLabel(e.value);
+  if (e.anchorType === "page") return e.value;
+  return e.value; // campaign/cohort use the raw id; the breadcrumb is back-button-flavored, not pretty-name
 }
 
 function fmtPct(n: number | null | undefined, digits = 1): string {
@@ -86,12 +118,14 @@ const cellDivided = (firstCell: boolean): React.CSSProperties => ({
   borderLeft:   firstCell ? undefined : DIVIDER,
 });
 
-function ConnectionRow({ row, index }: { row: ConnectionsPanelRow; index: number }) {
+function ConnectionRow({ row, index, onClick }: { row: ConnectionsPanelRow; index: number; onClick?: (r: ConnectionsPanelRow) => void }) {
   const isPageRow = row.connected_thing_type === "page";
   const stripe = index % 2 === 1 ? "rgba(15,23,34,0.025)" : "transparent";
   return (
     <div
       className="lrow"
+      onClick={onClick ? () => onClick(row) : undefined}
+      title={onClick ? "Click to re-anchor on this row" : undefined}
       style={{
         gridTemplateColumns: PANEL_GRID,
         columnGap: 0,
@@ -99,6 +133,7 @@ function ConnectionRow({ row, index }: { row: ConnectionsPanelRow; index: number
         padding: "10px 16px",
         borderBottom: DIVIDER,
         background: stripe,
+        cursor: onClick ? "pointer" : "default",
       }}
     >
       <div style={{ ...cellDivided(true), minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -173,12 +208,13 @@ function PanelHeader({ outcomeWindowDays }: { outcomeWindowDays: number }) {
 }
 
 function Panel({
-  title, subtitle, rows, outcomeWindowDays, emptyText,
+  title, subtitle, rows, outcomeWindowDays, emptyText, onRowClick,
 }: {
   title: string; subtitle: string;
   rows: ConnectionsPanelRow[];
   outcomeWindowDays: number;
   emptyText: string;
+  onRowClick?: (r: ConnectionsPanelRow) => void;
 }) {
   return (
     <div className="card" style={{ flex: 1, minWidth: 0, padding: 0, display: "flex", flexDirection: "column" }}>
@@ -195,7 +231,7 @@ function Panel({
           <div style={{ minWidth: 380 }}>
             <PanelHeader outcomeWindowDays={outcomeWindowDays} />
             <div>
-              {rows.map((r, i) => <ConnectionRow key={i} row={r} index={i} />)}
+              {rows.map((r, i) => <ConnectionRow key={i} row={r} index={i} onClick={onRowClick} />)}
             </div>
           </div>
         </div>
@@ -275,7 +311,7 @@ function AnchorExplanation({
 }
 
 export default function InfluenceClient({
-  clientKey, range, anchorType, anchorChannel, anchorPagePath, anchorCampaignId, anchorCohortId, pageOptions, campaignOptions, cohortOptions, windowDays, outcomeWindowDays, connectionType, resolve, upstream, downstream,
+  clientKey, range, anchorType, anchorChannel, anchorPagePath, anchorCampaignId, anchorCohortId, pageOptions, campaignOptions, cohortOptions, windowDays, outcomeWindowDays, connectionType, resolve, selfRecurrence, upstream, downstream,
 }: {
   clientKey:         string;
   range:             string;
@@ -291,6 +327,7 @@ export default function InfluenceClient({
   outcomeWindowDays: number;
   connectionType:    ConnectionsConnectionType;
   resolve:           ConnectionsAnchorResolveRow | null;
+  selfRecurrence:    ConnectionsSelfRecurrenceRow | null;
   upstream:          ConnectionsPanelRow[];
   downstream:        ConnectionsPanelRow[];
 }) {
@@ -302,6 +339,68 @@ export default function InfluenceClient({
     const next = new URLSearchParams(sp.toString());
     if (val == null) next.delete(key);
     else next.set(key, val);
+    router.replace(`${pathname}?${next.toString()}`);
+  };
+
+  // ── Breadcrumb state + handlers ────────────────────────────────────────
+  const trail = decodeBcTrail(sp.get("bc"));
+
+  // Push a row click → new anchor. Current anchor moves to the breadcrumb
+  // trail. Uses router.push so browser back works.
+  const rehomeOn = (row: ConnectionsPanelRow) => {
+    const currentAnchorValue =
+      anchorType === "channel"  ? anchorChannel    :
+      anchorType === "page"     ? anchorPagePath   :
+      anchorType === "campaign" ? anchorCampaignId :
+      anchorType === "cohort"   ? anchorCohortId   : "";
+    const newTrail = [...trail, { anchorType, value: currentAnchorValue }].slice(-6); // cap at 6 deep
+    const next = new URLSearchParams(sp.toString());
+    next.set("bc", encodeBcTrail(newTrail));
+
+    if (row.connected_thing_type === "channel") {
+      next.set("anchor_type",    "channel");
+      next.set("anchor_channel", row.connected_thing_id);
+      next.delete("anchor_page_path");
+      next.delete("anchor_campaign_id");
+      next.delete("anchor_cohort_id");
+      // Switching to channel anchor → channel connections become the natural
+      // default; clear connection_type so the server picks the right default.
+      next.delete("connection_type");
+    } else if (row.connected_thing_type === "page") {
+      next.set("anchor_type",      "page");
+      next.set("anchor_page_path", row.connected_thing_id);
+      next.delete("anchor_channel");
+      next.delete("anchor_campaign_id");
+      next.delete("anchor_cohort_id");
+      next.delete("connection_type");
+    }
+    router.push(`${pathname}?${next.toString()}`);
+  };
+
+  // Click breadcrumb entry → restore THAT anchor; chop trail at that point.
+  const rehomeToBreadcrumb = (idx: number) => {
+    const entry = trail[idx];
+    if (!entry) return;
+    const newTrail = trail.slice(0, idx);
+    const next = new URLSearchParams(sp.toString());
+    if (newTrail.length === 0) next.delete("bc");
+    else next.set("bc", encodeBcTrail(newTrail));
+    next.set("anchor_type", entry.anchorType);
+    next.delete("anchor_channel");
+    next.delete("anchor_page_path");
+    next.delete("anchor_campaign_id");
+    next.delete("anchor_cohort_id");
+    next.delete("connection_type");
+    if (entry.anchorType === "channel")  next.set("anchor_channel",      entry.value);
+    if (entry.anchorType === "page")     next.set("anchor_page_path",    entry.value);
+    if (entry.anchorType === "campaign") next.set("anchor_campaign_id",  entry.value);
+    if (entry.anchorType === "cohort")   next.set("anchor_cohort_id",    entry.value);
+    router.push(`${pathname}?${next.toString()}`);
+  };
+
+  const clearTrail = () => {
+    const next = new URLSearchParams(sp.toString());
+    next.delete("bc");
     router.replace(`${pathname}?${next.toString()}`);
   };
 
@@ -399,6 +498,42 @@ export default function InfluenceClient({
             </div>
           </div>
         </div>
+
+        {/* Breadcrumb trail — only renders when the operator has hopped at
+            least once via click-to-rehome. Each entry takes them back to that
+            anchor and chops the trail there. */}
+        {trail.length > 0 && (
+          <div className="card" style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--ink-3)", fontWeight: 600 }}>
+              You came from
+            </span>
+            {trail.map((e, i) => (
+              <React.Fragment key={i}>
+                <button
+                  onClick={() => rehomeToBreadcrumb(i)}
+                  className="toolbar-btn"
+                  style={{ fontSize: 11, padding: "4px 10px" }}
+                  title={`Back to ${e.anchorType} · ${bcEntryLabel(e)}`}
+                >
+                  <span style={{ color: "var(--ink-3)", marginRight: 4 }}>{e.anchorType}</span>
+                  <span style={{ fontWeight: 500 }}>{bcEntryLabel(e)}</span>
+                </button>
+                <span style={{ color: "var(--ink-4)", fontSize: 14 }}>→</span>
+              </React.Fragment>
+            ))}
+            <span style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 500 }}>
+              now: <strong>{anchorType} · {anchorDisplay}</strong>
+            </span>
+            <button
+              onClick={clearTrail}
+              className="toolbar-btn icon-only"
+              style={{ marginLeft: "auto" }}
+              title="Clear breadcrumb trail"
+            >
+              <Icon name="x" size={12} />
+            </button>
+          </div>
+        )}
 
         {/* Anchor picker bar */}
         <div className="filter-bar" style={{ alignItems: "center", flexWrap: "wrap", gap: 14 }}>
@@ -717,6 +852,7 @@ export default function InfluenceClient({
               rows={upstream}
               outcomeWindowDays={outcomeWindowDays}
               emptyText={`No upstream ${connectionsNoun} meeting the 5-identity minimum within ${windowDays}d.`}
+              onRowClick={rehomeOn}
             />
 
             {/* ANCHOR (middle) — kept compact so side panels have room for all columns */}
@@ -778,6 +914,28 @@ export default function InfluenceClient({
                   Matched <strong style={{ color: "var(--ink-2)" }}>{Number(selectedCohort.total_matched).toLocaleString()}</strong> of {Number(selectedCohort.total_uploaded).toLocaleString()} uploads
                 </div>
               )}
+              {/* Self-recurrence tile — Channel anchor only for v1. Shows the
+                  "this channel keeps producing for this person" pattern, per
+                  spec §4.3b. Hidden when there are zero recurrent identities. */}
+              {anchorType === "channel" && selfRecurrence && Number(selfRecurrence.n_recurrent) > 0 && (
+                <div style={{ marginTop: 4, padding: "8px 10px", borderRadius: 6, background: "rgba(227,100,16,0.10)", border: "1px solid rgba(227,100,16,0.18)", textAlign: "center" }}>
+                  <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".12em", color: "var(--accent)", fontWeight: 600 }}>
+                    Self-recurrence
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
+                    {Math.round(Number(selfRecurrence.pct_recurrent) * 100)}%
+                    <span style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 500, marginLeft: 4 }}>
+                      ({Number(selfRecurrence.n_recurrent).toLocaleString()} of {Number(selfRecurrence.total_anchored).toLocaleString()})
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 2, lineHeight: 1.3 }}>
+                    have {channelLabel(anchorChannel)} in <strong style={{ color: "var(--ink-2)" }}>{Number(selfRecurrence.avg_chapters_recurrent || 0).toFixed(1)}</strong> chapters
+                    {Number(selfRecurrence.revenue_recurrent) > 0 && (
+                      <> · ${Math.round(Number(selfRecurrence.revenue_recurrent)).toLocaleString()} attributable</>
+                    )}
+                  </div>
+                </div>
+              )}
               <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 4 }}>
                 Bot-filtered · resolved across all sources
               </div>
@@ -790,6 +948,7 @@ export default function InfluenceClient({
               rows={downstream}
               outcomeWindowDays={outcomeWindowDays}
               emptyText={`No downstream ${connectionsNoun} meeting the 5-identity minimum within ${windowDays}d.`}
+              onRowClick={rehomeOn}
             />
           </div>
         )}

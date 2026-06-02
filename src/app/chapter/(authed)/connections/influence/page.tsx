@@ -12,6 +12,7 @@ import {
   cachedConnectionsPageOptions,
   cachedConnectionsCampaignOptions,
   cachedConnectionsCohortOptions,
+  cachedConnectionsSelfRecurrence,
   type ConnectionsAnchorPayload,
   type ConnectionsAnchorType,
   type ConnectionsConnectionType,
@@ -116,7 +117,7 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
   const excludeChannels = (anchorType === "channel" && connectionType === "channel") ? [channel]  : [];
   const excludePages    = (anchorType === "page"    && connectionType === "page")    ? [pagePath] : [];
 
-  const [resolveRows, upstreamRows, downstreamRows] = await Promise.all([
+  const [resolveRows, upstreamRows, downstreamRows, selfRecurrenceRows] = await Promise.all([
     cachedConnectionsAnchorResolve({
       p_client_key:     clientKey,
       p_anchor_type:    anchorType,
@@ -144,9 +145,17 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
       p_connection_type:      connectionType,
       p_exclude_pages:        excludePages,
     }),
+    // Self-recurrence tile — only meaningful for channel anchor in v1 but the
+    // RPC is safe to call for any anchor type (returns zeros for others).
+    cachedConnectionsSelfRecurrence({
+      p_client_key:     clientKey,
+      p_anchor_type:    anchorType,
+      p_anchor_payload: anchorPayload,
+    }),
   ]);
 
-  const resolve = resolveRows[0] ?? null;
+  const resolve         = resolveRows[0] ?? null;
+  const selfRecurrence  = selfRecurrenceRows[0] ?? null;
 
   return (
     <InfluenceClient
@@ -164,6 +173,7 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
       outcomeWindowDays={outcomeWindowDays}
       connectionType={connectionType}
       resolve={resolve}
+      selfRecurrence={selfRecurrence}
       upstream={upstreamRows}
       downstream={downstreamRows}
     />
