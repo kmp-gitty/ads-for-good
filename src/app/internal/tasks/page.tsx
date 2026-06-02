@@ -100,6 +100,14 @@ export default async function TasksPage({
 
   const clientById = new Map(((rawClients ?? []) as ClientRow[]).map((c) => [c.id, c]));
 
+  // Full CRM client list so the "Add client" picker can offer clients that don't yet have a column.
+  const { data: rawAllClients } = await supabase
+    .schema("crm")
+    .from("clients")
+    .select("id, business_name")
+    .order("business_name", { ascending: true });
+  const allClients = (rawAllClients ?? []) as ClientRow[];
+
   // Group: clientId → topic → tasks. "unassigned" key for batches with no client_id.
   const columnsMap = new Map<
     string,
@@ -174,7 +182,7 @@ export default async function TasksPage({
             No {showDone ? "tasks" : "open tasks"} right now.
           </div>
         ) : (
-          <TasksBoard columns={columns} />
+          <TasksBoard columns={columns} allClients={allClients} />
         )}
       </div>
     </>
