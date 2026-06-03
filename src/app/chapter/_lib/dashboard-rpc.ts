@@ -810,6 +810,77 @@ export const cachedLaggedImpactPair = unstable_cache(
   { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:lagged_impact_pair"] },
 );
 
+// ─────── Observations engine ────────────────────────────────────────────────
+
+export type ObservationFinding = {
+  id:                     string;
+  question_id:            string;
+  subject_key:            string;
+  category:               "acquisition" | "retention" | "conversion" | "channel_mix" | "audience" | "data_integrity";
+  severity:               "high" | "med" | "low";
+  current_state:          "new" | "standing" | "changed" | "resolved";
+  action_type:            "mechanical" | "analytical" | "strategic_prompting";
+  headline:               string;
+  data:                   { label: string; value: string }[];
+  action:                 string;
+  page:                   string;
+  page_label:             string;
+  last_fired_at:          string;
+  first_fired_at:         string;
+  gating_priority_active: boolean;
+  is_hero:                boolean;
+};
+
+export type ObservationHistoryRow = {
+  recorded_at:   string;
+  question_id:   string;
+  subject_key:   string;
+  category:      string;
+  severity:      string;
+  current_state: string;
+  headline:      string;
+  run_id:        string;
+};
+
+export type DormantQuestion = {
+  question_id:             string;
+  name:                    string;
+  category:                string;
+  min_data_depth_weeks:    number;
+  capability_requirements: string[];
+  reason:                  string;
+};
+
+export const cachedObservationsList = unstable_cache(
+  async (args: { p_client_key: string }): Promise<ObservationFinding[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc("observations_list_current", args);
+    if (r.error) { console.error("[dashboard-rpc] observations_list_current failed:", { ...r.error }); return []; }
+    return (Array.isArray(r.data) ? r.data : []) as ObservationFinding[];
+  },
+  ["dashboard-rpc:chapter_reporting:observations_list_current"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:observations_list_current"] },
+);
+
+export const cachedObservationsHistory = unstable_cache(
+  async (args: { p_client_key: string; p_lookback_days?: number }): Promise<ObservationHistoryRow[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc("observations_list_history", args);
+    if (r.error) { console.error("[dashboard-rpc] observations_list_history failed:", { ...r.error }); return []; }
+    return (Array.isArray(r.data) ? r.data : []) as ObservationHistoryRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:observations_list_history"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:observations_list_history"] },
+);
+
+export const cachedObservationsDormant = unstable_cache(
+  async (args: { p_client_key: string }): Promise<DormantQuestion[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc("observations_dormant_questions", args);
+    if (r.error) { console.error("[dashboard-rpc] observations_dormant_questions failed:", { ...r.error }); return []; }
+    return (Array.isArray(r.data) ? r.data : []) as DormantQuestion[];
+  },
+  ["dashboard-rpc:chapter_reporting:observations_dormant_questions"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:observations_dormant_questions"] },
+);
+
 // ─────── Prior-period window helper ──────────────────────────────────────────
 // Returns the same-duration window immediately preceding [start, end). Caller
 // uses this to call the existing tile RPCs a second time with the prior args

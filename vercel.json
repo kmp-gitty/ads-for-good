@@ -15,6 +15,10 @@
     {
       "path": "/api/internal/cron/refresh-system-cohorts",
       "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/internal/cron/run-observations",
+      "schedule": "0 5 * * *"
     }
   ]
 }
