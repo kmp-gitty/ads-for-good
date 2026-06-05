@@ -219,9 +219,9 @@ export const CHANNELS: Record<ChannelKey, Channel> = {
 //   2. CREATE ROLE client_<client_key> + grants (per Fix #26 Part 2)
 //   3. Add a row here with id = that same client_key
 export const CLIENTS: Client[] = [
-  { id: "eos_fabrics",        name: "EOS Fabrics",        tier: "Mid",     color: "#E36410" },
-  { id: "projectagram_reels", name: "Projectagram Reels", tier: "Mid",     color: "#5868D6" },
-  { id: "adsforgood_prod",    name: "Ads for Good",       tier: "Top",     color: "#2E7D5B" },
+  { id: "eos_fabrics",        name: "Client A",           tier: "Mid",     color: "#E36410" },
+  { id: "projectagram_reels", name: "Client B",           tier: "Mid",     color: "#5868D6" },
+  { id: "adsforgood_prod",    name: "Client C",           tier: "Top",     color: "#2E7D5B" },
 ];
 
 export const KPI: Kpi[] = [

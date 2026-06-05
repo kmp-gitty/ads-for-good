@@ -126,13 +126,6 @@ export function Sidebar() {
         ))}
       </div>
 
-      <div className="sidebar-foot">
-        <div className="user-av">JR</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ color: "white", fontSize: 12, fontWeight: 500 }}>Jordan R.</div>
-          <div style={{ fontSize: 11 }}>Agency operator</div>
-        </div>
-      </div>
     </aside>
     </>
   );

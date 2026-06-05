@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: June 4, 2026
+> Last updated: June 5, 2026
 
 ---
 
@@ -178,7 +178,36 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of June 4, 2026)
+## ✅ Completed Fixes (as of June 5, 2026)
+
+### Pre-demo validation + dashboard anonymization (June 5, 2026 late night)
+- **Validation pass before tomorrow's demo:**
+  - `chapter_observations.run_engine('eos_fabrics')` ran clean: 27 catalog total → 11 executed (data-depth + capability gates), 16 dormant, 8 emitted findings, status='ok', no errors.
+  - `chapter_reporting.refresh_full_attribution_chain('eos_fabrics')` ran clean: lifecycle 17,941 rows / canonical_v1 742 / canonical_v2 855, all 'ok'.
+  - **The production Vercel cron at 03:30 UTC fired for the first time tonight and succeeded across all 3 clients** (`adsforgood_prod`: 0/0/0 rows — correct, no data; `eos_fabrics`: 17,941 / 742 / 855; `projectagram_reels`: 327 / 4 / 15). All 9 stage runs `status='ok'`, zero errors. End-to-end production attribution chain is healthy.
+  - `chapter_config` PostgREST exposure verified via existing prod code paths (`client_secrets`, `shopify_webhook_secrets` already read from it).
+- **Dashboard client-name anonymization for tomorrow's demo** [src/app/chapter/_components/mockdata.ts:222-224](src/app/chapter/_components/mockdata.ts#L222-L224) — `CLIENTS` array now reads "Client A / Client B / Client C" (mapped to `eos_fabrics` / `projectagram_reels` / `adsforgood_prod`). Only changes the sidebar dropdown label; underlying `client_key` stays the same so all RPCs + URL params + auth unchanged.
+- **Sidebar foot block removed** [src/app/chapter/_components/Sidebar.tsx:128-135](src/app/chapter/_components/Sidebar.tsx#L128-L135) — placeholder "Jordan R. / Agency operator" user identity removed pending real per-user auth.
+- **Other agency surfaces unchanged:** `/for-clients/EOS-Fabrics/*` portal pages and other agency-public paths intentionally keep the real EOS branding — only the Chapter dashboard surface (`/chapter/*`) is anonymized.
+
+---
+
+### Per-client boundary event wiring — Phase 1 (June 5, 2026)
+- **Scope:** the explicit B2B blocker called out in CLAUDE.md was that every Observations question + every dashboard RPC hardcoded `boundary_event_name = 'purchase'`. For a B2B client whose conversion event is `lead_submission`, every finding + every "Converted" count + every "no-purchase-yet" copy string was wrong. **Phase 1 closes the highest-leverage surfaces** (Observations engine + Journeys page + Lifecycle Overview). Lower-leverage surfaces (channel/path/contribution/correlation/incrementality RPCs) are catalogued as Phase 2; B2B pitches today are unblocked on the Observations + Journeys claim.
+- **New helper `chapter_config.boundary_event(p_client_key) RETURNS text`** — STABLE SQL function with `COALESCE(..., 'purchase')` fallback. Cheap; safe to call inline. Every wired RPC opens with `v_boundary_event text := chapter_config.boundary_event(p_client_key);` and replaces the literal `'purchase'` with the variable.
+- **Wired (15 SQL functions):**
+  - `chapter_observations._snapshot_now`, `chapter_observations.run_engine`, all 13 `chapter_observations.run_question_*` functions (A1/A2/A3/A4, R1, C4, M3/M4, S1, I1/I3/I4) — capability-detection week count, snapshot anchor, and every boundary-event filter now per-client.
+  - `chapter_reporting.lifecycle_overview` — returning-purchaser metrics on the hero strip.
+  - `chapter_reporting.journey_detail_chapters`, `journeys_overview_stats`, `journeys_overview_list` — the "Converted" / "Open" classification + lifetime-value math.
+- **Wired (frontend):** new `cachedClientConfig(client_key)` helper in `dashboard-rpc.ts` returns `{ storefront_domain, boundary_event_name, display_tz }` with 5-min TTL. `journeys/page.tsx` fetches it in the parallel `Promise.all`; `JourneysClient.tsx` receives `boundaryEvent` as a prop and builds the action-filter dropdown + outcome-filter copy dynamically via `buildActionOptions(boundaryEvent)` / `buildOutcomeOptions(boundaryEvent)`. The "Purchase" action row becomes "Lead Submission" (or whatever's configured); the "Open (no purchase yet)" copy becomes "Open (no lead submission yet)".
+- **Run_engine's `boundary_event_definition` audit field** now stores the configured value (was hardcoded 'purchase' regardless of what the questions actually filtered on — fixed for honest provenance).
+- **EOS regression check:** lifecycle_overview returns the same numbers as before (332 chapters / 33.7% returning all-time / 13% returning-this-window / 10 median touches at 30d window) because `boundary_event('eos_fabrics') = 'purchase'`. No behavior change for existing clients; the surface is now correctly parameterized for B2B clients onboarding into the same code paths.
+- **Phase 2 — remaining 13 hardcoded SQL surfaces** (catalogued, deferred until first B2B onboarding):
+  - **High-leverage if B2B uses these pages:** `channel_performance_overview`, `channel_roles_overview`, `channel_affinity_overview`, `path_combinations_overview`, `path_length_trend`, `funnel_overview`, `correlation_channel_overview`, `contribution_overview`, `incrementality_channel_overview`, `incrementality_axis_metadata`.
+  - **Lower-leverage but worth touching:** `connections_panel`, `observations_dormant_questions`, `journey_detail_events`.
+  - Each follows the same pattern: add `v_boundary_event := chapter_config.boundary_event(p_client_key)` to the DECLARE block, replace `'purchase'` literals. Mechanical work, ~30 min total — but defer until there's actually a B2B client whose data justifies validating each surface.
+
+---
 
 ### Connections suite + Observations engine + Option B SQL port of attribution refresh chain (May 27 – June 4, 2026)
 - **Scope:** post-dashboard-completion sprint focused on (a) two brand-new pages under a new `/chapter/connections/*` route group, (b) a complete Observations engine + nightly cron, and (c) replacing the EOS-hardcoded Node attribution refresh scripts with multi-tenant SQL functions so the daily cron can fan out across every active client.
@@ -791,27 +820,32 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ### 🚀 Scale Readiness Roadmap (added May 5, 2026)
 Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; **Fix #24 done May 8; Fix #25 Phase 0 + Phase 1 cascade done May 12; Fix #26 parts 1/3/4 + part 2 framework done May 12; Fix #26 Part 2 route migration done May 13.** Remaining scale items: #28 below + dashboard MV refresh cadence.
 
-### 🔴 Priority 1 — Active
+### 🔴 Priority 1 — Active build plan (sequenced June 5, 2026)
 
-**Dashboard wiring queue: 10 of 10 pages fully live** (Observations engine landed June 2; Connections #1 + #2 shipped June 1–3).
+**Dashboard wiring queue: 10 of 10 pages fully live** (Observations engine landed June 2; Connections #1 + #2 shipped June 1–3). **Production attribution chain cron is live and healthy** (validated tonight's 03:30 UTC fire across all 3 clients).
 
-**Option B COMPLETE (Steps 2–6) — June 4–5, 2026.** Full SQL port of the attribution refresh chain shipped and cron wired at 03:30 UTC. See the Completed Fixes section for detail. Awaiting next prod deploy to activate the cron. Post-deploy follow-up: extend daily-digest with chain-freshness check (`MAX(snapshot_ts_hi) WHERE status='ok' AND target_table='chapter_attribution.chapter_channel_paths_canonical_v2_snapshot'` per client vs. `now() - 24h`).
+**Build philosophy locked (June 5):** hybrid sales-pulled + primitive-first. Sales drives priority; every feature ships as a config-driven primitive (no `if (client === 'x')`). The abstraction is the hard part — the second instance is cheap. Build abstractions at client #2 of any new vertical, not at client #5.
 
-**Shared matched-lift engine refactor (L&I Incrementality + Contribution share math)** *(deferred from L&I shipment)*
-- Tab 2 (Incrementality) and Tab 3 (Contribution) both compute cohort-summed matched lift from the same underlying data, but each RPC inlines the math independently. Per contribution_tab_spec §1+§9: the shared matched-lift core should be refactored into a reusable callable (Postgres function or shared CTE template) that both tabs call.
-- Not blocking — the math is small enough that the duplication is honest, and changes to one have so far stayed in sync with the other manually. But worth doing before a third consumer (e.g. a future "Lift over time" chart) appears.
-- **Also unlocks Connections #2 heavyweight tier** — the "statistical lift across lag buckets" view designed in the spec but deferred from v1.
+#### Sprint 1 — Platform readiness (must land before client #4–5 onboard)
+1. **Cron parallelism for `/api/internal/cron/refresh-attribution-chain`** — current sequential design = ~130 sec per client × N clients. At 10 clients = 1,300 sec, blowing Vercel's 600s `maxDuration`. Either (a) `Promise.all` clients inside the route with bounded concurrency, (b) split into N per-client cron entries (one per `client_key`), or (c) move to background worker. Lift = mathematical certainty before scaling past ~4 clients.
+2. **Onboarding automation script** — codifies the existing playbook DB+config steps into one CLI: INSERT `chapter_config.clients` + `client_secrets`, CREATE per-client Postgres role + grants, add `CLIENT_ROLE_MAP` entry in `src/app/lib/db/per-client.ts`, add origin to `CHAPTER_ALLOWED_ORIGINS`, generate HMAC secret, run post-install verification probe. Idempotent re-runs. **The playbooks already exist** — the script automates their steps, doesn't replace them.
+3. **Boundary-event Phase 2** — wire `chapter_config.boundary_event(p_client_key)` through the 13 remaining dashboard RPCs: `channel_performance_overview`, `channel_roles_overview`, `channel_affinity_overview`, `path_combinations_overview`, `path_length_trend`, `funnel_overview`, `correlation_channel_overview`, `contribution_overview`, `incrementality_channel_overview`, `incrementality_axis_metadata`, `connections_panel`, `observations_dormant_questions`, `journey_detail_events`. Mechanical pattern (~30 min total).
+4. **Configurable email-source patterns** — move canonical_v1's hardcoded email classifier (`shopify_email` / `mailchimp` / `back-in-stock` CASE branches) into `chapter_config` (JSONB column on `clients` or sibling table). Cheap; unblocks first Klaviyo / Marketo / HubSpot Marketing / Sendinblue client without code changes.
 
-**Per-client boundary event configuration** *(needed before first B2B client)*
-- Currently `/chapter/journeys` outcome filter hardcodes `boundary_event_name = 'purchase'`. Same for `lifecycle_overview`'s returning-purchaser computation. **Same for every Observations question SQL that touches a boundary event** — the engine still assumes `'purchase'`.
-- For B2B clients whose conversion event is `lead_submission` (or similar), this breaks the "Converted" classification AND silently miscalibrates Observations findings.
-- **Fix design:** the `chapter_config.client_thresholds` table already has a `boundary_event_name` column (stub-populated for EOS to `'purchase'`). Wire it through every `chapter_observations.run_question_*` function via `chapter_observations._client_boundary_event(p_client_key)` helper; same for the dashboard journeys/overview RPCs. Update CLAUDE.md's Onboard New Client checklist when this lands.
+**Sprint 1 estimated effort:** ~1 week. End-state: ready to onboard 5+ more ecom clients without touching code.
 
-**Observations engine — manual severity override UI + popup detail polish**
-- Engine emits computed severity per question rubric (high/med/low), but operators may want to override per-finding (e.g. "we know this is a Black Friday spike — mark it acknowledged"). Schema slot exists (`findings.severity` is writable) but no UI yet.
-- Popup detail view for a card is functional but rough — needs chart polish + sparkline for the per-question trend.
+#### Sprint 2 — B2B client (next on calendar; ~2 weeks pending real onboarding)
+5. **Onboard the B2B client end-to-end** — Sprint 1.2 script + playbook + `chapter_config.clients` configured with `boundary_event_name` (likely `lead_submission` or `demo_request`). Verify ingest lands properly + canonical chain refresh fires per the 03:30 UTC nightly cron.
+6. **Validate Observation question thresholds against B2B data shape** — expect divergence from EOS norms: I3 direct-share band (B2B norm is higher), R1 returning-customer band (often N/A — single conversion event), C4 touches-per-close (B2B avg ~3× ecom), M3/M4 channel-mix shifts (LinkedIn-paid emerging as a real channel). Either tune defaults globally or add per-client overrides in `chapter_observations.client_thresholds`.
+7. **CRM ingest adapter** — scope during onboarding intake (Salesforce / HubSpot / Pipedrive?). Build minimal viable webhook + identity stitch: contact / lead / opportunity events → `chapter_ingest`, joining `identity_canon` via `email_hash`. Adds CRM stages to the journey timeline.
+8. **B2B-specific dashboard copy + channel taxonomy** — review every page for ecom-only language ("Cart View", "Add to cart", "Returning customers"). Move `JourneysClient.ACTION_OPTIONS` taxonomy into `chapter_config.clients` so B2B sees `lead` / `demo` / `opportunity` rows instead of cart actions. Similar treatment for outcome copy + dashboard headline text.
 
-**Observations engine — deferred questions (14 remaining of 27)**
+#### Cross-cutting nice-to-haves (can land in any sprint without blocking)
+- **Daily-digest chain-freshness check** — extend the 14:00 UTC digest with `MAX(snapshot_ts_hi) WHERE status='ok'` per client per stage vs. `now() - 24h`. Catches silently-failed crons.
+- **Shared matched-lift engine refactor** — L&I Incrementality + Contribution + the deferred Connections #2 heavyweight tier all want this. Build before a third consumer appears.
+- **Observations severity override UI + popup polish** — operators may want to override computed severity per finding (Black Friday spike → acknowledged). Schema slot exists; UI doesn't.
+
+#### Observations engine — deferred questions (14 of 27, blocked on data)
 - **A5 / A6 / S4** depend on a spend-data ingest path (none today; would be a Google/Meta API connector or operator CSV).
 - **M1 / M2** depend on a `lift_history` snapshot table that doesn't yet exist (would be populated by a future test-result-capture flow when operators run controlled lift tests).
 - **R3 / R5** need 26-week history; EOS only has ~9 weeks of clean post-cookie-fix data. Will activate naturally over time.
@@ -864,15 +898,17 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ---
 
-### 📦 Backlog (June 5, 2026)
+### 📦 Backlog + deploy state (June 5, 2026 — end of day)
 
-**Deployed to prod as of June 3 (`dba823c`)**: Connections #1 + #2 pages, Observations engine + nightly cron + dormant affordance, system cohorts + 04:30 UTC refresh cron, cohort upload with in-process SHA-256 hashing. **Live in DB but pending next prod deploy (June 4–5):** Option B SQL functions (`refresh_lifecycle_chapters_incremental`, `refresh_canonical_v1_snapshot`, `refresh_canonical_v2_snapshot`, `refresh_full_attribution_chain`) + `chapter_config.clients` table; cron route `/api/internal/cron/refresh-attribution-chain` (03:30 UTC); `vercel.json` updated to schedule it.
+**Live in prod:** the full Chapter dashboard (10 pages), Observations engine + 05:00 UTC cron, Connections #1 + #2, system cohorts + 04:30 UTC cron, Option B SQL attribution chain + 03:30 UTC cron (**verified end-to-end across all 3 clients tonight**), `chapter_config.clients` table, per-client boundary event Phase 1 (helper + 15 wired SQL functions), `chapter_observations.runs.boundary_event_definition` audit-aware.
+
+**Live in DB but pending next prod deploy** (frontend changes from late June 5): `cachedClientConfig` helper in `dashboard-rpc.ts`, `JourneysClient` boundary-event-aware action / outcome filters, dashboard client-name anonymization (Client A/B/C), sidebar `Jordan R.` footer removal.
 
 **Backlog items (small, opportunistic):**
-- **Investigate load-balancer hostname DNS for prod** — surfaced earlier; reason was forgotten before being documented. Worth grepping commit history for context if/when picked up.
-- **Move shop-display tz into `chapter_config`** — currently the dashboard's date math is anchored to PT (`America/Los_Angeles`) hardcoded in `src/app/chapter/_components/format.ts:rangeToWindow`. Multi-tenant scaling needs per-client display tz: add a `chapter_config.client_display_tz(client_key, tz)` table or a `display_tz` column on `crm.clients`, read via server component → pass to `rangeToWindow`. Trigger to do this: first non-PT client onboarding.
+- **Move shop-display tz into `chapter_config.clients.display_tz`** — column already exists; just need to wire it through `src/app/chapter/_components/format.ts:rangeToWindow` (currently hardcoded `America/Los_Angeles`). Trigger to do this: first non-PT client onboarding.
 - **MV-ify Email subscribers cohort JOIN inside Connections panel resolver** — currently the Connections RPCs re-do the cohort JOIN per call. Fine at EOS volume; revisit when first client has >50k subscribers.
 - **Clean up unused `LIFT_CAUSATION` mock + `LiftCausation` type from `mockdata.ts`** — leftover from when Causation tab was a placeholder. Now superseded by Contribution.
+- **Investigate load-balancer hostname DNS for prod** — surfaced earlier; reason was forgotten before being documented. Worth grepping commit history for context if/when picked up.
 
 ---
 

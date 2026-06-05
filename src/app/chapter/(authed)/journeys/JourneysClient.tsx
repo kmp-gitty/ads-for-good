@@ -25,25 +25,34 @@ type Props = {
   range:             string;
   action:            string;  // 'all' | 'identify' | 'add_to_cart' | ...
   outcome:           string;  // 'all' | 'converted' | 'open'
+  boundaryEvent:     string;  // from chapter_config.clients (e.g. 'purchase' or 'lead_submission')
 };
 
 // Curated action filter — matches user-friendly labels to underlying event_name
-// values that lifecycle_chapters_snapshot exposes for EOS. Order follows the
-// natural top-to-bottom funnel a marketer thinks in.
-const ACTION_OPTIONS: { value: string; label: string }[] = [
-  { value: "all",         label: "All actions" },
-  { value: "page_view",   label: "Page view" },
-  { value: "add_to_cart", label: "Add to cart" },
-  { value: "view_cart",   label: "Cart View" },
-  { value: "identify",    label: "Identify / form fill" },
-  { value: "purchase",    label: "Purchase" },
-];
+// values that lifecycle_chapters_snapshot exposes. Order follows the natural
+// top-to-bottom funnel a marketer thinks in. The boundary action row is
+// per-client (e.g. 'purchase' for ecommerce; 'lead_submission' for B2B).
+function buildActionOptions(boundaryEvent: string): { value: string; label: string }[] {
+  const labelize = (ev: string) =>
+    ev.split(/[_\s]+/).map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
+  return [
+    { value: "all",          label: "All actions" },
+    { value: "page_view",    label: "Page view" },
+    { value: "add_to_cart",  label: "Add to cart" },
+    { value: "view_cart",    label: "Cart View" },
+    { value: "identify",     label: "Identify / form fill" },
+    { value: boundaryEvent,  label: labelize(boundaryEvent) },
+  ];
+}
 
-const OUTCOME_OPTIONS: { value: string; label: string }[] = [
-  { value: "all",       label: "All outcomes" },
-  { value: "converted", label: "Converted" },
-  { value: "open",      label: "Open (no purchase yet)" },
-];
+function buildOutcomeOptions(boundaryEvent: string): { value: string; label: string }[] {
+  const friendly = boundaryEvent.replace(/_/g, " ");
+  return [
+    { value: "all",       label: "All outcomes" },
+    { value: "converted", label: "Converted" },
+    { value: "open",      label: `Open (no ${friendly} yet)` },
+  ];
+}
 
 // Truncate canonical_identity_key for display so operators don't accidentally
 // memorize/screenshot full hashes. Keeps prefix + first 8 chars of hash.
@@ -129,12 +138,15 @@ const EVENT_COLOR: Record<string, string> = {
 
 export default function JourneysClient({
   stats, list, selectedIdentity, chapters, events, aliases,
-  clientKey: _clientKey, range: _range, action, outcome,
+  clientKey: _clientKey, range: _range, action, outcome, boundaryEvent,
 }: Props) {
   const { client } = useChapter();
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
+
+  const ACTION_OPTIONS  = buildActionOptions(boundaryEvent);
+  const OUTCOME_OPTIONS = buildOutcomeOptions(boundaryEvent);
 
   // ── URL update helper. Preserves existing params, replaces one key.
   function updateParam(key: string, value: string | null) {

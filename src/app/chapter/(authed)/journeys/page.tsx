@@ -28,6 +28,7 @@ import {
   cachedJourneyDetailChapters,
   cachedJourneyDetailEvents,
   cachedJourneyDetailAliases,
+  cachedClientConfig,
 } from "../../_lib/dashboard-rpc";
 import { logPiiView, hashSecret } from "@/app/lib/audit/pii-views";
 import { hashIp, getClientIp } from "@/app/lib/audit/auth";
@@ -57,11 +58,12 @@ export default async function JourneysPage({ searchParams }: { searchParams: Sea
     p_outcome:  outcome,
   };
 
-  // Fetch list + summary in parallel. Detail RPCs fire only when an identity
-  // is selected.
-  const [statsRows, listRows] = await Promise.all([
+  // Fetch list + summary + per-client config in parallel. Detail RPCs fire
+  // only when an identity is selected.
+  const [statsRows, listRows, clientConfig] = await Promise.all([
     cachedJourneysStats(filterArgs),
     cachedJourneysList({ ...filterArgs, p_limit: 50 }),
+    cachedClientConfig(clientKey),
   ]);
 
   const stats = statsRows[0] ?? null;
@@ -122,6 +124,7 @@ export default async function JourneysPage({ searchParams }: { searchParams: Sea
       range={range}
       action={action ?? "all"}
       outcome={outcome ?? "all"}
+      boundaryEvent={clientConfig.boundary_event_name}
     />
   );
 }

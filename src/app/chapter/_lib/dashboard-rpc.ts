@@ -890,3 +890,40 @@ export function priorWindow(start: Date, end: Date): { start: Date; end: Date } 
   const durMs = end.getTime() - start.getTime();
   return { start: new Date(start.getTime() - durMs), end: new Date(start.getTime()) };
 }
+
+// ─────── Per-client config (chapter_config.clients) ──────────────────────────
+// Single source of truth for `storefront_domain`, `boundary_event_name`,
+// `display_tz`. Cached with the same 5-min TTL pattern.
+export type ClientConfig = {
+  client_key: string;
+  storefront_domain: string | null;
+  boundary_event_name: string;
+  display_tz: string;
+};
+
+const DEFAULT_CLIENT_CONFIG = {
+  storefront_domain: null,
+  boundary_event_name: "purchase",
+  display_tz: "America/Los_Angeles",
+} as const;
+
+export const cachedClientConfig = unstable_cache(
+  async (clientKey: string): Promise<ClientConfig> => {
+    const r = await supabase
+      .schema("chapter_config")
+      .from("clients")
+      .select("client_key, storefront_domain, boundary_event_name, display_tz")
+      .eq("client_key", clientKey)
+      .maybeSingle();
+    if (r.error) {
+      console.error("[dashboard-rpc] chapter_config.clients lookup failed:", r.error.message);
+    }
+    return {
+      client_key: clientKey,
+      ...DEFAULT_CLIENT_CONFIG,
+      ...(r.data ?? {}),
+    };
+  },
+  ["dashboard-rpc:chapter_config:clients"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:client-config"] },
+);
