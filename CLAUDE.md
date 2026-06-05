@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: May 26, 2026
+> Last updated: June 4, 2026
 
 ---
 
@@ -78,9 +78,11 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 | `chapter_journey` | Session/journey containers |
 | `chapter_model` | Unified event stream, timeline, lifecycle chapters |
 | `chapter_attribution` | Channel paths, attribution models (first/last/linear) |
-| `chapter_reporting` | Dashboard-ready outputs (currently EOS Fabrics specific) |
+| `chapter_reporting` | Dashboard-ready outputs (generalizing per-tile; new tables drop the `eos_` prefix) |
 | `chapter_analysis` | Experimental, QA, debug objects — not production |
-| `chapter_config` | Reserved for future client config — currently empty |
+| `chapter_config` | Per-client config — `clients` (PK config: storefront_domain / boundary_event_name / display_tz), `client_secrets`, `shopify_webhook_secrets`, `email_campaigns`, `email_engagement_events`, `connections_cohorts` + `connections_cohort_members` |
+| `chapter_observations` | Observations engine — `questions` catalog, `findings` state machine, `runs` audit (added June 2, 2026) |
+| `chapter_audit` | Auth-attempt + PII-view audit logs (added Fix #26 part 4) |
 
 ### Critical Tables
 - `chapter_ingest.pixel_events` — primary behavioral feed
@@ -96,10 +98,11 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - `chapter_model.lifecycle_chapters` — attribution boundary events (VIEW)
 - `chapter_model.unified_events_v2` — canonical event stream (VIEW)
 
-### Active Clients (as of May 13, 2026)
-- **EOS Fabrics** (`client_key = 'eos_fabrics'`, shop `emmaonesock.myshopify.com`, storefront `eosfabrics.com`) — primary client since April 2026.
-- **Projectagram Reels** (`client_key = 'projectagram_reels'`, shop `projectagram.myshopify.com`, storefront `projectagram.com`) — onboarded May 12, 2026. Same Shopify 3P pattern as EOS.
-- `chapter_reporting.*` is still EOS-specific. Projectagram has data flowing into `chapter_ingest.*` but no per-client dashboards yet — bespoke for now until reporting generalization happens (will be forced by 3rd client onboarding).
+### Active Clients (as of June 4, 2026)
+- **EOS Fabrics** (`client_key = 'eos_fabrics'`, shop `emmaonesock.myshopify.com`, storefront `eosfabrics.com`) — primary client since April 2026. Full dashboard + Observations + cohorts live.
+- **Projectagram Reels** (`client_key = 'projectagram_reels'`, shop `projectagram.myshopify.com`, storefront `projectagram.com`) — onboarded May 12, 2026. Same Shopify 3P pattern as EOS. Ingest is live; dashboard renders against the multi-tenant RPC layer (no `eos_*` hardcoding remains on the live-wired pages).
+- **adsforgood_prod** (`client_key = 'adsforgood_prod'`) — agency-internal smoke-test client; used for cross-tenant isolation validation and connection-test endpoints. Not a paying client.
+- The remaining EOS-specific `chapter_reporting.eos_*` snapshot tables are still EOS-only and being generalized incrementally per the May 14 strategy. New RPCs (cohorts, Connections, Observations) all read multi-tenant from day one.
 
 ### Known Data Gaps
 - Identity cookie was not persistent before **April 1, 2026 17:00 UTC** (new identities per event)
@@ -175,7 +178,87 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of May 26, 2026)
+## ✅ Completed Fixes (as of June 4, 2026)
+
+### Connections suite + Observations engine + Option B SQL port of attribution refresh chain (May 27 – June 4, 2026)
+- **Scope:** post-dashboard-completion sprint focused on (a) two brand-new pages under a new `/chapter/connections/*` route group, (b) a complete Observations engine + nightly cron, and (c) replacing the EOS-hardcoded Node attribution refresh scripts with multi-tenant SQL functions so the daily cron can fan out across every active client.
+- **Architectural through-line:** "make everything we build multi-tenant ready now." Materialized cohorts, parameterized refresh functions, and per-client `_snapshot_runs` watermarks all designed so a new client onboarding is purely additive (config row + DNS/CORS entries) — no per-feature refactor.
+
+#### Connections #1 — Cross-Source Influence page (`/chapter/connections/influence`)
+- **Per `connections_1_cross_source_influence_spec.md`.** Anchor-first interaction model: pick an anchor (Channel / Page / Campaign / Cohort), see ranked Upstream + Downstream connections with median lag + 30D outcome %. **Person anchor was explicitly DROPPED** — Customer Journeys page already covers per-identity drill-in, so adding a Person anchor here would duplicate that surface.
+- **Anchor definitions (locked after operator-clarification pass):**
+  - **Channel anchor** = journey-entry channel from `journey_entry_channel_v1` (the session-entry classifier used everywhere else on the dashboard, NOT mid-journey touches). "Anchored on Direct" means "people whose journey began as Direct."
+  - **Page anchor** = `page_path` from any pixel event in window. Asymmetric vs Channel (a page can be Upstream or Downstream of a journey-entry channel).
+  - **Campaign anchor** = identities with a CLICK on a campaign within window (operator-confirmed — not just opens; not impression-counted). Pulls from `chapter_config.email_engagement_events` for Mailchimp + uploaded equivalent for other platforms.
+  - **Cohort anchor** = identity membership in a system or uploaded cohort (see Cohorts below).
+- **Upstream / Downstream semantics:** measured at the journey-entry level. "Upstream of Direct" = the channels people entered via BEFORE the Direct journey we're anchored on. "Downstream of Direct" = the channels people entered via AFTER. Median lag = median (in days) between the prior/next journey-entry and the anchored journey-entry.
+- **30D Outcome %** = share of anchored identities who had a `purchase` chapter close within 30 days of the anchored journey. **Outcome window is independently picker-controlled (NOT tied to the lag window)** — operator-driven change after seeing the first build conflate the two on screen.
+- **Single RPC `chapter_reporting.connections_panel(p_client_key, p_anchor_type, p_anchor_payload, p_range_start, p_range_end, p_lag_days, p_outcome_days, p_filters)`** returns Upstream + Downstream rows + anchor totals. Anchor payload is JSONB so the same function serves all four anchor types via a discriminated union. Per-anchor logic dispatched via plpgsql IF/ELSIF.
+- **Default page view = Upstream/Downstream by Page (not Channel)** per operator preference. Toggle keeps Channel view one click away.
+- **Click-to-rehome + breadcrumbs:** clicking any Upstream/Downstream row re-anchors the page to that connection (URL: `?anchor_type=channel&anchor_payload={...}`). Breadcrumbs above the anchor card track the rehome chain — `Direct → Email → Organic Search` so operators can backtrack. Reset link at the right.
+- **Self-recurrence indicator:** when the same channel/page appears in both Upstream and Downstream of itself (a returning visitor pattern), badge it inline so it's not mistaken for "a different channel that happens to share a name." Common for Direct (return-visitor behavior).
+- **"How this page works" expander** with anchor-by-anchor explanation lives under the anchor picker. Lightweight prose; no inline help icons.
+
+#### Connections #2 — Lagged Impact page (`/chapter/connections/lagged-impact`)
+- **Per `connections_2_lagged_impact_spec.md`.** Different angle than #1: rather than "who is upstream/downstream of this anchor," asks "how long does it take for a channel touch to convert?" Tabular: channel × lag bucket (0-1d / 2-7d / 8-14d / 15-30d / 30d+) × conversion rate + revenue.
+- **Single RPC `chapter_reporting.lagged_impact_panel(client_key, start, end, channel_filter, cohort_filter)`** powers the table. Cohort filter shares the cohort resolver from Connections #1.
+- **Heavyweight tier (statistical lift across lag buckets) DEFERRED** — depends on the shared matched-lift engine refactor (Open Fix List). v1 ships as descriptive table only.
+- **Header copy lessons from #1 applied:** anchor concept renamed "channel" here since there's no per-anchor pivot — just one table.
+
+#### Cohorts — system pre-bake + uploaded + privacy-first hashing (May 27 – June 1, 2026)
+- **Storage:** `chapter_config.cohorts(client_key, cohort_id, kind, name, description, criteria_jsonb, created_at, updated_at)` + `chapter_config.cohort_members(client_key, cohort_id, canonical_identity_key)` with unique idx `(client_key, cohort_id, canonical_identity_key)`. RLS-enabled.
+- **`kind` taxonomy:** `'system'` (pre-baked, refreshed nightly), `'uploaded'` (operator-supplied CSV), and a partial unique index `(client_key, kind) WHERE kind <> 'uploaded'` enforces at-most-one row per system kind per client.
+- **Materialized for multi-tenant:** original implementation had cohort logic inline in the Connections RPC ("for system kind X, do this JOIN..."). Operator caught it: *"No rows for cohorts... doesn't that make the query extremely slow and multi-tenant harder?"* Refactored to a unified resolver: `chapter_config.refresh_system_cohorts(p_client_key)` populates `cohort_members` once per night; Connections RPCs JOIN that table.
+- **System cohorts shipped:** `email_subscribers` (any identity that ever fired an `identify` event with a known email_hash + Mailchimp-list membership) and 3 purchase-value bands (`low_value` / `mid_value` / `high_value`) computed via NTILE(3) over identity-level lifetime revenue in the prior 90 days.
+- **Nightly cron `/api/internal/cron/refresh-system-cohorts` at 04:30 UTC** (between MV refresh at 04:00 and Observations engine at 05:00). Iterates active clients from `chapter_config.client_secrets WHERE revoked_at IS NULL`; calls `refresh_system_cohorts(client_key)` for each. GChat alert only on failure.
+- **Cohort upload — privacy-first SHA-256 hashing IN-PROCESS:** operator uploads CSV with raw emails; route streams it, hashes `SHA256(lowercase(trim(email)))` in memory, resolves to `canonical_identity_key` via `identity_canon`, INSERTs into `cohort_members`. **RAW EMAILS NEVER PERSIST.** The route returns a count of resolved + unresolved identities; the unresolved list is **truncated email_sha256 hashes** (first 8 chars) so the operator can audit without ever seeing the original PII. This is the load-bearing privacy claim for sales conversations with B2B/health/dental clients.
+- **Cohort picker UX:** dropdown shows system cohorts first (with row counts per client), then uploaded cohorts. Empty state ("0 identities") renders a contextual hint about why the cohort is empty (e.g. "Email subscribers cohort is computed nightly at 04:30 UTC; if you onboarded today, check back tomorrow").
+- **Future:** MV-ify the Email subscribers cohort JOIN inside the Connections panel resolver; currently each panel call re-does the JOIN. Trade-off chosen for v1: simpler invariants + bounded EOS volume (~1.5k identities) makes the JOIN cheap enough.
+
+#### Observations engine — schema + 27 questions + runner + state machine + nightly cron (May 30 – June 2, 2026)
+- **Per `observations_engine_spec.md`** the Observations page is no longer a mock — engine is live with 13 of 27 questions firing on EOS data.
+- **Schema in new `chapter_observations` schema:**
+  - `questions(question_id text PK, category, title, description, severity_rubric_jsonb, capability_required text[], data_depth_required text[], deferred boolean, enabled boolean)` — 27 seeded questions across 6 categories (Acquisition / Retention / Conversion / Mix / Spend / Identity).
+  - `findings(finding_id uuid PK, client_key, question_id, run_id, severity text CHECK ('high','med','low'), state text CHECK ('new','changed','standing','resolved'), payload_jsonb, observed_at, prior_finding_id nullable)` — state machine: NEW → STANDING after first observation; CHANGED if payload diff exceeds question rubric; RESOLVED when next run no longer fires the question.
+  - `runs(run_id uuid PK, client_key, started_at, finished_at, questions_executed int, findings_produced int, capability_snapshot_jsonb, error text)` — one row per engine invocation per client.
+- **Question execution:** each question is its own `chapter_observations.run_question_<id>(client_key, snapshot_ts)` function returning a result set of (severity, payload) rows. **13 questions implemented + firing on EOS:** A1 (channel mix shift), A2 (new channel emerged), A3 (channel disappeared), A4 (entry channel growth/decline), R1 (returning purchaser rate), C4 (cart abandonment spike), M3 (path-length shift), M4 (multi-touch concentration), S1 (single-channel close rate), I1 (identity stitching rate), I2 (new identity volume), I3 (canonical reduction), I4 (alias-edge growth).
+- **Capability detection:** `run_engine(client_key)` introspects what data the client has (`has_pixel`, `has_purchases`, `has_email_campaigns`, `has_offline`, etc.) before dispatching. Questions declare prerequisites in `capability_required[]`. Questions whose prerequisites aren't met are skipped with a `'dormant'` reason rather than firing on bad data.
+- **Snapshot-anchored windows (critical):** initial build had A1 firing but S1/I1/I3 returning 0 because they were reading windows ending at `now()` while `canonical_v1_snapshot` lagged by ~2 weeks. Fixed via `chapter_observations._snapshot_now(p_client_key)` returning `MAX(boundary_ts)` from canonical_v1 — every question's "now" is anchored to the snapshot's freshness. The engine and the dashboard always agree about what "now" means for this client.
+- **State machine helper `chapter_observations.record_finding(...)`:** atomically reads prior open finding for the same (client_key, question_id), computes next state via `_compute_next_state(...)` (NEW vs CHANGED vs STANDING), INSERTs the new row, and updates the prior row's state if RESOLVED. After the engine run, `mark_stale_findings_resolved(client_key, run_id)` flips any non-current-run open findings to RESOLVED.
+- **Read RPCs for the UI:** `observations_list_current(client_key)` / `observations_history(client_key, lookback_days)` / `observations_dormant_questions(client_key)`. Cached via `unstable_cache` with the same `bucketedNow()` 5-min TTL pattern used elsewhere.
+- **Page wiring** [src/app/chapter/(authed)/observations/page.tsx](src/app/chapter/(authed)/observations/page.tsx) + [ObservationsClient.tsx](src/app/chapter/(authed)/observations/ObservationsClient.tsx): server component fetches findings/history/dormant via `Promise.all` of cached RPCs; client component renders severity-filtered cards (LOW hidden by default per spec §6), gating-priority banner at top, dormant affordance at bottom ("If you connected Klaviyo, 4 more questions would activate").
+- **Nightly cron `/api/internal/cron/run-observations` at 05:00 UTC** (after dashboard MVs at 04:00 + cohorts at 04:30, so the engine reads fresh data). Iterates active clients from `chapter_config.client_secrets WHERE revoked_at IS NULL`. GChat alert only on failure summary (rolls up all errors across clients).
+- **Lessons captured in conversation memory but worth flagging here:**
+  - `CREATE OR REPLACE FUNCTION` only replaces if the signature is identical — adding a parameter requires `DROP FUNCTION IF EXISTS ... (sig)` first or you get PGRST203 overload conflicts.
+  - Returning-table column names that collide with table columns inside the function body cause ambiguity errors — rename the return column (e.g. `cohort_kind` instead of `kind`).
+  - `unstable_cache` keys must be bumped (v2, v3...) when the underlying RPC payload shape changes, or stale empty results stick around invisibly for the 5-min TTL window.
+- **Still pending** (open backlog): manual severity override UI, popup detail view polish, 14 deferred questions (A5/A6/S4 need spend data, M1/M2 need lift_history, R3/R5 need 26w history, C3/C2 need a pixel-to-chapter MV, R2/S2/S3 are capability-gated on data we don't yet ingest).
+
+#### Option B SHIPPED — SQL port of attribution refresh chain + nightly cron (June 3 – June 5, 2026)
+- **Goal:** the previous `chapter-scripts/run-lifecycle-chapters-incremental.js` + `run-snapshot.js` are Node scripts hardcoded to `eos_fabrics`. To get multi-tenant production-ready, port the whole refresh chain to pure SQL functions, parameterize on `p_client_key`, then wire a single Vercel cron route that fans out across active clients.
+- **Per-client watermarks (Step 1):** `chapter_reporting._snapshot_runs` gained a `client_key text` column (existing rows backfilled to `'eos_fabrics'` — verified all pre-multi-tenant runs were EOS). New index `(client_key, target_table, status, snapshot_ts_hi DESC)`. The `status` CHECK constraint extended to allow `'partial'` for chunked invocations that didn't process all affected canonicals.
+- **`chapter_config.clients` table added** (June 5) as the canonical per-client config home: `(client_key PK, storefront_domain, boundary_event_name, display_tz, notes, created_at, updated_at)`. Populated for all 3 active clients (EOS, projectagram, adsforgood_prod). Used by canonical_v1's session-entry classifier for self-referral detection, and by all functions that need per-client boundary-event awareness. Covers the deferred timezone item too (display_tz column).
+- **Step 2 — `chapter_model.refresh_lifecycle_chapters_incremental(p_client_key, p_snapshot_ts_hi, p_safety_margin_hours, p_max_canonicals)`:** SQL port of the Node script's Strategy B (inline source reads — the `lifecycle_chapters` view is now a facade, so reading from it would be circular).
+  - Reads per-client watermark from `_snapshot_runs`.
+  - Detects affected canonicals from 4 sources (new pixel / new purchase / new offline / new alias edges with current-canon mapping) via UNION; INNER JOINs `identity_canon` to mirror the rebuilder's "exclude bots" coverage.
+  - Optional `p_max_canonicals` parameter caps work per call so the cron can checkpoint; if `more_remaining` is true, the run row is marked `'partial'` (not `'ok'`) so the next call's watermark lookup correctly re-detects the unprocessed canonicals.
+  - DELETE-affected + INSERT-fresh in a single transaction — readers never see partial state.
+  - chapter_id computed via window function: `SUM(CASE WHEN is_boundary_event THEN 1 ELSE 0 END) OVER (PARTITION BY client_key, canonical_identity_key ORDER BY event_ts, created_at) - CASE WHEN is_boundary_event THEN 1 ELSE 0 END`.
+  - Preserves the Node rebuilder's offline-milestone double emission (online flavor + offline flavor) for forward-compat with non-EOS clients that have offline data; EOS has zero offline milestones so the double-emission is currently dormant.
+  - First production call (during initial smoke test) processed 595k rows in 77s. Subsequent incremental calls on EOS now complete in 2-3s.
+- **Step 3 — `chapter_attribution.refresh_canonical_v1_snapshot(p_client_key, p_snapshot_ts_hi)`:** SQL port of the canonical_v1 loader; per-client full rebuild (DELETE + INSERT). Bypasses the EOS-only legacy view chain (`eos_sessionized_events_v1` → `_canonical_v1` → `chapter_session_entry_channels_canonical_v1`) entirely by inlining the session-entry classifier in the function body. Reads `chapter_ingest.pixel_events` directly, filters bots via `journey_bot_classification_v1`, resolves canonical via `identity_canon`, re-sessionizes on the fly (>1hr gap or external-referrer break), classifies each session's entry channel via a CASE expression that pulls `storefront_domain` from `chapter_config.clients` for self-referral detection. Stripped 4 EOS-specific UTM patterns (`eosfabrics.com general` etc); kept universal patterns (`shopify_email`, `mailchimp`, `back-in-stock`). 740 rows in 101 seconds at EOS — **~30× faster than the legacy 50-min Node loader**.
+- **Step 4 — `chapter_attribution.refresh_canonical_v2_snapshot(p_client_key, p_snapshot_ts_hi)`:** the BIG simplification. Investigation revealed the legacy canonical_v2 loader's 5-deep `chapter_reporting.eos_*` cache chain (`purchase_base` → `purchase_touch_summary` → `purchase_fallback` → `purchase_channel_final` → `filtered_purchases`) collapses in practice to a single LEFT JOIN with canonical_v1 — every cache's CASE for non-session chapters defaults to `'(direct)'`. The new SQL function is a 50-line one-shot INSERT against `lifecycle_chapters_snapshot` LEFT JOINed with `canonical_v1_snapshot`: chapters with session entries inherit their v1 path, chapters without get `'(direct)'`. 852 rows in 4.6 seconds at EOS. **No reporting-layer caches needed.** Per Fix #18's old decision, the cache-relocation question is now moot — the caches aren't required at all.
+- **Step 5 — `chapter_reporting.refresh_full_attribution_chain(p_client_key, p_snapshot_ts_hi)` orchestrator:** chains all 3 stages in one SQL call with a shared `v_snapshot_ts_hi` cutoff. Returns one summary row per invocation. End-to-end EOS run = ~130 seconds.
+- **Step 6 — `/api/internal/cron/refresh-attribution-chain` scheduled at 03:30 UTC daily** (before the dashboard MV refresh at 04:00 UTC so downstream MVs see fresh attribution data). Iterates `chapter_config.client_secrets WHERE revoked_at IS NULL`, calls the orchestrator for each. GChat alert only on failure summary. `vercel.json` updated; not yet deployed to prod.
+- **Multi-tenant verification:** the new functions take `p_client_key` only — no other parameters depend on EOS-specific knowledge. Per-client `_snapshot_runs` row per stage gives full audit visibility. New client onboarding now reduces to: (1) `INSERT chapter_config.clients`, (2) `INSERT chapter_config.client_secrets`, (3) per-client Postgres role + `CLIENT_ROLE_MAP` entry, (4) CORS origin. No per-feature SQL writing.
+- **Why this matters for the sales pitch:** "Chapter scales cleanly to N clients" stops being aspirational and becomes provable. Onboarding day-1 a new client gets nightly attribution refresh, nightly cohort materialization, nightly Observations engine — all automatically, no per-client engineering ceremony.
+
+#### Cumulative wiring scorecard (end of June 4, 2026)
+- **Live-wired pages (10 of 10):** Raw Performance, Lifecycle Overview, Channel Roles, Path Patterns, Attribution Models, Customer Journeys, Lift / Incrementality / Value (3 tabs), **Observations (live engine)**, **Cross-Source Influence (new)**, **Lagged Impact (new)**.
+- **Nightly crons:** stuck-runs (15-min) and daily-digest (14:00 UTC) are running in production. The full nightly chain — refresh-attribution-chain (03:30 UTC, new in Option B Step 6), refresh-dashboard-mvs (04:00 UTC), refresh-system-cohorts (04:30 UTC), run-observations (05:00 UTC) — is wired in `vercel.json`; awaiting the next prod deploy to activate.
+- **3 active clients:** `eos_fabrics` (primary), `projectagram_reels`, `adsforgood_prod`. Dashboard data exists for `eos_fabrics` and `projectagram_reels`; `adsforgood_prod` is the agency-internal smoke-test client.
+
+---
 
 ### Incrementality v2 + Contribution tab — Lift & Incrementality page now fully live (3 of 3 tabs) (May 26, 2026)
 - **Scope:** finished wiring the L&I page in two pieces: (a) Incrementality v2 corrections after the first build exposed methodology faults on live EOS data, (b) the brand-new Contribution tab replacing the placeholder Causation tab. End-of-day state: all 3 tabs running on real data; page sidebar nav renamed "Lift, Incrementality & Value" to reflect the new third measure.
@@ -710,27 +793,30 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ### 🔴 Priority 1 — Active
 
-**Dashboard wiring queue: 7 of 8 pages fully live.** Only Observations remains; on deck for tomorrow.
+**Dashboard wiring queue: 10 of 10 pages fully live** (Observations engine landed June 2; Connections #1 + #2 shipped June 1–3).
 
-**Observations page — design + build** *(next on deck — tomorrow)*
-- Page exists at `/chapter/observations` with full UI shell but pulls from `OBSERVATIONS` mockdata. Per CLAUDE.md Future Work: needs the question-library engine itself, not just wiring.
-- Engine requirements per spec the UI was built against: (a) library of SQL-encoded "questions" / patterns to detect (e.g. "channel X presence dropped > 20% week-over-week"), (b) runner that executes on a schedule (weekly), (c) severity classifier (high/med/low), (d) history persistence so prior weeks can be referenced, (e) state tracking ("new this week" / "changed" / "standing").
-- **Suggested workflow:** like the L&I tabs — design the question library + severity rubric in Claude Chat first, produce a written spec (`observations_engine_spec.md`), bring back to Claude Code for implementation. The shape of the engine is fairly determinate; the open question is WHICH questions are worth asking and HOW severity is scored.
-- **One known constraint:** at EOS's 270 conv/mo, many week-over-week deltas will be noise. The library's questions should be calibrated to the volume (run weekly windows that have enough sample; consider 4-week rolling rather than week-over-week for some).
+**Option B COMPLETE (Steps 2–6) — June 4–5, 2026.** Full SQL port of the attribution refresh chain shipped and cron wired at 03:30 UTC. See the Completed Fixes section for detail. Awaiting next prod deploy to activate the cron. Post-deploy follow-up: extend daily-digest with chain-freshness check (`MAX(snapshot_ts_hi) WHERE status='ok' AND target_table='chapter_attribution.chapter_channel_paths_canonical_v2_snapshot'` per client vs. `now() - 24h`).
 
 **Shared matched-lift engine refactor (L&I Incrementality + Contribution share math)** *(deferred from L&I shipment)*
 - Tab 2 (Incrementality) and Tab 3 (Contribution) both compute cohort-summed matched lift from the same underlying data, but each RPC inlines the math independently. Per contribution_tab_spec §1+§9: the shared matched-lift core should be refactored into a reusable callable (Postgres function or shared CTE template) that both tabs call.
 - Not blocking — the math is small enough that the duplication is honest, and changes to one have so far stayed in sync with the other manually. But worth doing before a third consumer (e.g. a future "Lift over time" chart) appears.
-
-**Wire `refresh_attribution_tables()` to a daily cron** *(small, opportunistic)*
-- The function `chapter_reporting.refresh_attribution_tables(p_cohort_start)` populates `purchase_channel_final_v1` + `attribution_linear_chapter_v1` for all clients. Currently invoked manually.
-- Matches the MV refresh cron pattern shipped May 25. Add a new Vercel Cron route `/api/internal/cron/refresh-attribution` at e.g. 04:30 UTC (after MV refresh at 04:00 UTC).
-- Extend daily-digest with attribution-table freshness check (`MAX(snapshot_ts)` vs `now()`).
+- **Also unlocks Connections #2 heavyweight tier** — the "statistical lift across lag buckets" view designed in the spec but deferred from v1.
 
 **Per-client boundary event configuration** *(needed before first B2B client)*
-- Currently `/chapter/journeys` outcome filter hardcodes `boundary_event_name = 'purchase'`. Same for `lifecycle_overview`'s returning-purchaser computation.
-- For B2B clients whose conversion event is `lead_submission` (or similar), this breaks the "Converted" classification.
-- **Fix design:** add `chapter_config.client_boundary_events(client_key, boundary_event_name)` lookup table. RPCs join + use the value per client. Update CLAUDE.md's Onboard New Client checklist when this lands.
+- Currently `/chapter/journeys` outcome filter hardcodes `boundary_event_name = 'purchase'`. Same for `lifecycle_overview`'s returning-purchaser computation. **Same for every Observations question SQL that touches a boundary event** — the engine still assumes `'purchase'`.
+- For B2B clients whose conversion event is `lead_submission` (or similar), this breaks the "Converted" classification AND silently miscalibrates Observations findings.
+- **Fix design:** the `chapter_config.client_thresholds` table already has a `boundary_event_name` column (stub-populated for EOS to `'purchase'`). Wire it through every `chapter_observations.run_question_*` function via `chapter_observations._client_boundary_event(p_client_key)` helper; same for the dashboard journeys/overview RPCs. Update CLAUDE.md's Onboard New Client checklist when this lands.
+
+**Observations engine — manual severity override UI + popup detail polish**
+- Engine emits computed severity per question rubric (high/med/low), but operators may want to override per-finding (e.g. "we know this is a Black Friday spike — mark it acknowledged"). Schema slot exists (`findings.severity` is writable) but no UI yet.
+- Popup detail view for a card is functional but rough — needs chart polish + sparkline for the per-question trend.
+
+**Observations engine — deferred questions (14 remaining of 27)**
+- **A5 / A6 / S4** depend on a spend-data ingest path (none today; would be a Google/Meta API connector or operator CSV).
+- **M1 / M2** depend on a `lift_history` snapshot table that doesn't yet exist (would be populated by a future test-result-capture flow when operators run controlled lift tests).
+- **R3 / R5** need 26-week history; EOS only has ~9 weeks of clean post-cookie-fix data. Will activate naturally over time.
+- **C3 / C2** depend on a pixel-to-chapter MV that hasn't been built (joins pixel events to their owning chapter at boundary time; useful but not blocking).
+- **R2 / S2 / S3** capability-gated on data we don't yet ingest (loyalty signals, returns, churn surveys).
 
 ---
 
@@ -778,13 +864,15 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ---
 
-### 📦 Backlog (May 26, 2026)
+### 📦 Backlog (June 5, 2026)
 
-**All dashboard-wiring code is currently deployed to prod as of end of May 26.** The L&I shipment (all 3 tabs + audit table + 4 new RPCs + sidebar rename) went out in a successful build at end of day. No deploy queue.
+**Deployed to prod as of June 3 (`dba823c`)**: Connections #1 + #2 pages, Observations engine + nightly cron + dormant affordance, system cohorts + 04:30 UTC refresh cron, cohort upload with in-process SHA-256 hashing. **Live in DB but pending next prod deploy (June 4–5):** Option B SQL functions (`refresh_lifecycle_chapters_incremental`, `refresh_canonical_v1_snapshot`, `refresh_canonical_v2_snapshot`, `refresh_full_attribution_chain`) + `chapter_config.clients` table; cron route `/api/internal/cron/refresh-attribution-chain` (03:30 UTC); `vercel.json` updated to schedule it.
 
 **Backlog items (small, opportunistic):**
 - **Investigate load-balancer hostname DNS for prod** — surfaced earlier; reason was forgotten before being documented. Worth grepping commit history for context if/when picked up.
 - **Move shop-display tz into `chapter_config`** — currently the dashboard's date math is anchored to PT (`America/Los_Angeles`) hardcoded in `src/app/chapter/_components/format.ts:rangeToWindow`. Multi-tenant scaling needs per-client display tz: add a `chapter_config.client_display_tz(client_key, tz)` table or a `display_tz` column on `crm.clients`, read via server component → pass to `rangeToWindow`. Trigger to do this: first non-PT client onboarding.
+- **MV-ify Email subscribers cohort JOIN inside Connections panel resolver** — currently the Connections RPCs re-do the cohort JOIN per call. Fine at EOS volume; revisit when first client has >50k subscribers.
+- **Clean up unused `LIFT_CAUSATION` mock + `LiftCausation` type from `mockdata.ts`** — leftover from when Causation tab was a placeholder. Now superseded by Contribution.
 
 ---
 
@@ -863,15 +951,14 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ## 🔜 Future Work
 
-- **Dashboard build** — v1 shell shipped May 14, 2026. **7 of 8 pages fully live-wired** as of end of May 26: Raw Performance (May 22-25), Attribution Models + Path Patterns + Channel Roles + Lifecycle Overview + Customer Journeys (May 25-26), Lift / Incrementality / Value with all 3 tabs (May 26 — Correlation, then Incrementality v2 after first-build live-data review, then Contribution replacing Causation). **1 page remaining** — Observations (needs question-library engine; on deck for the next session).
+- **Dashboard build** — v1 shell shipped May 14, 2026. **10 of 10 pages fully live-wired** as of end of June 4, 2026: Raw Performance (May 22-25), Attribution Models + Path Patterns + Channel Roles + Lifecycle Overview + Customer Journeys (May 25-26), Lift / Incrementality / Value with all 3 tabs (May 26 — Correlation, then Incrementality v2 after first-build live-data review, then Contribution replacing Causation), Observations with live engine (June 2), Cross-Source Influence + Lagged Impact (June 1-3).
 - **Tier 1 first-party redirect domain** — intelligent routing layer; "Branch.io for open-web ecom" positioning. Memory: `project_tier1_redirect_scope.md`. ~4-5 day build. Adds (a) clean campaign attribution (closes the 521-missing-page-views finding from May 22 validation), (b) programmatic destination injection per identity/cart/geo/device.
 - **Google Search Console backfill** — OAuth client setup pending in GCP (path A in the May 24 session). Once flowing: per-page + per-keyword search performance data into `chapter_config.gsc_*` (TBD table name). Doesn't move attribution numbers — unlocks SEO reporting depth for Tigerbyte's portal + Channels page drill-down.
-- **Multi-client generalization of `chapter_reporting`** — happening incrementally per-tile during dashboard wiring (see "Reporting generalization strategy" in the 📊 Chapter Dashboard section). Not a separate big-bang.
+- **Multi-client generalization of `chapter_reporting`** — happening incrementally per-tile during dashboard wiring (see "Reporting generalization strategy" in the 📊 Chapter Dashboard section). Not a separate big-bang. **Option B (June 4–5, 2026)** covers the snapshot-loader generalization end-to-end: lifecycle_chapters / canonical_v1 / canonical_v2 are now multi-tenant SQL functions; the 5 legacy `eos_purchase_*_snapshot_v1` reporting caches that canonical_v2 used to depend on are now bypassed (the LEFT JOIN with canonical_v1 collapsed the entire chain).
 - **`/chapter/[client_key]/*` client-scoped surface** — deferred until agency surface is data-wired. Today's code structure is compatible; adding the route group is additive.
-- **Observations question-library engine** — UI shell exists at `/chapter/observations`. Backend (weekly run, severity classifier, history) not built. Defer until first real engagement question is identified.
-- **Lift & Incrementality backend** — UI shell exists for all 3 tabs. Correlation is computable from existing data. Incrementality (holdout assignment + suppression mechanics + p-value/power) and Causation (propensity-score matching + covariate storage) are real systems, weeks of work each. Build when first client needs to run a structured lift test.
+- **Lift & Incrementality backend (heavyweight tier)** — Correlation, Incrementality v2 (matched-cohort), and Contribution are live. Heavyweight tier (holdout assignment + suppression mechanics + p-value/power; propensity-score matching + covariate storage) remains real systems, weeks of work each. Build when first client needs to run a structured lift test.
 - **Gchat slash-command bot** on top of `saveClient` action — admin team interface for updating client portal config without the form UI.
 - **Replace JSON textareas in `/internal/client-portal-config` admin form with structured editors** — current `project_summaries` + `reporting_tiles` fields are raw JSON textareas. Easy to break with invalid JSON.
-- **Offline attribution expansion** — Pack D / online+offline modeling via `offline_milestones`
+- **Offline attribution expansion** — Pack D / online+offline modeling via `offline_milestones`. SQL refresh functions (Option B) preserve the offline-milestone double-emission pattern so this stays forward-compat.
 - **`purchase_items` population** — not yet populated for EOS
-- **`chapter_config` schema** — reserved for future client-level configuration (event mapping, attribution rules, channel normalization, feature flags). Currently used for `client_secrets` + `shopify_webhook_secrets` + `email_campaigns` + `email_engagement_events` only.
+- **`chapter_config` schema** — per-client config home. Tables: `clients` (canonical per-client config: storefront_domain, boundary_event_name, display_tz — added June 5), `client_secrets`, `shopify_webhook_secrets`, `email_campaigns`, `email_engagement_events`, `connections_cohorts` + `connections_cohort_members` (added June 1).

@@ -9,6 +9,10 @@
       "schedule": "0 14 * * *"
     },
     {
+      "path": "/api/internal/cron/refresh-attribution-chain",
+      "schedule": "30 3 * * *"
+    },
+    {
       "path": "/api/internal/cron/refresh-dashboard-mvs",
       "schedule": "0 4 * * *"
     },
