@@ -3,6 +3,11 @@
 // All three stages run in one SQL call per client via
 // chapter_reporting.refresh_full_attribution_chain(client_key). Posts a
 // GChat alert only on failure.
+//
+// Sprint 1.1 — Cron parallelism.
+// Clients run with bounded concurrency. At 10 clients × ~130s each, sequential
+// blows Vercel's 600s maxDuration; with CONCURRENCY=5 we finish in ~5 min.
+// Concurrency is bounded to avoid spiking Supabase connection load when N grows.
 
 import { NextRequest, NextResponse } from "next/server";
 import postgres from "postgres";
@@ -11,6 +16,8 @@ import { postToGChat } from "../../../../lib/monitoring/gchat";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
+
+const CONCURRENCY = 5;
 
 type StageRow = {
   client_key: string;
@@ -31,29 +38,51 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "DATABASE_DIRECT_URL not set" }, { status: 500 });
   }
 
-  const sql = postgres(directUrl, { max: 1, keep_alive: 60, connect_timeout: 30 });
+  // Pool size = CONCURRENCY so workers can actually run in parallel.
+  // The orchestrator SQL function sets its own statement_timeout, so we don't
+  // need a session-level SET (which wouldn't apply across pooled connections anyway).
+  const sql = postgres(directUrl, {
+    max: CONCURRENCY,
+    keep_alive: 60,
+    connect_timeout: 30,
+  });
+
   const startedAt = new Date();
   const summary: StageRow[] = [];
   const errors: { client_key: string; error: string }[] = [];
 
   try {
-    await sql`SET statement_timeout = '30min'`;
-
     const clients = await sql<{ client_key: string }[]>`
       SELECT DISTINCT client_key FROM chapter_config.client_secrets
       WHERE revoked_at IS NULL ORDER BY client_key
     `;
 
-    for (const { client_key } of clients) {
-      try {
-        const [row] = await sql<StageRow[]>`
-          SELECT * FROM chapter_reporting.refresh_full_attribution_chain(${client_key})
-        `;
-        summary.push(row);
-      } catch (err) {
-        errors.push({ client_key, error: err instanceof Error ? err.message : String(err) });
+    // Bounded-concurrency worker pool. Each worker pulls from the shared
+    // queue until empty. With N=3 clients and CONCURRENCY=5, all 3 run in
+    // parallel and the 2 spare workers exit immediately. With N=50 and
+    // CONCURRENCY=5, workers cycle through the queue 10 times.
+    const queue: string[] = clients.map((c) => c.client_key);
+
+    async function worker(): Promise<void> {
+      for (;;) {
+        const client_key = queue.shift();
+        if (!client_key) return;
+        try {
+          const [row] = await sql<StageRow[]>`
+            SELECT * FROM chapter_reporting.refresh_full_attribution_chain(${client_key})
+          `;
+          summary.push(row);
+        } catch (err) {
+          errors.push({
+            client_key,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
     }
+
+    const workerCount = Math.min(CONCURRENCY, queue.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
   } finally {
     await sql.end({ timeout: 5 });
   }
@@ -64,7 +93,7 @@ export async function GET(req: NextRequest) {
     await postToGChat({
       text:
         `*Attribution chain refresh — ${errors.length} client(s) failed*\n` +
-        errors.map(e => `• \`${e.client_key}\`: ${e.error}`).join("\n") +
+        errors.map((e) => `• \`${e.client_key}\`: ${e.error}`).join("\n") +
         `\n\n_Elapsed: ${elapsedSec}s. ${summary.length} clients ran successfully._`,
     });
   }
@@ -72,6 +101,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     ok: errors.length === 0,
     elapsed_sec: elapsedSec,
+    concurrency: CONCURRENCY,
     runs: summary,
     errors,
   });

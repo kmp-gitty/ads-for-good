@@ -66,35 +66,23 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
 
   const { start, end } = rangeToWindow(range, bucketedNow());
 
-  // PERF INSTRUMENTATION (Sprint 1.5 — remove after debug):
-  // Time every RPC + every batch so Vercel logs show where the cold-load 24s lives.
-  const _timed = async <T,>(label: string, p: Promise<T>): Promise<T> => {
-    const t0 = Date.now();
-    const r = await p;
-    console.log(`[influence-perf] ${label}: ${Date.now() - t0}ms`);
-    return r;
-  };
-  const _pageStart = Date.now();
-
   // Always fetch picker option lists so each anchor-type's dropdown has data
   // ready (cached per window). Cheap independent calls.
-  const _batch1Start = Date.now();
   const [pageOptions, campaignOptions, cohortOptions]: [
     ConnectionsPageOption[],
     ConnectionsCampaignOption[],
     ConnectionsCohortOption[],
   ] = await Promise.all([
-    _timed("pageOptions", cachedConnectionsPageOptions({
+    cachedConnectionsPageOptions({
       p_client_key: clientKey, p_start_ts: start.toISOString(), p_end_ts: end.toISOString(), p_limit: 30,
-    })),
-    _timed("campaignOptions", cachedConnectionsCampaignOptions({
+    }),
+    cachedConnectionsCampaignOptions({
       p_client_key: clientKey, p_start_ts: start.toISOString(), p_end_ts: end.toISOString(), p_limit: 30,
-    })),
-    _timed("cohortOptions", cachedConnectionsCohortOptions({
+    }),
+    cachedConnectionsCohortOptions({
       p_client_key: clientKey, p_limit: 30,
-    })),
+    }),
   ]);
-  console.log(`[influence-perf] BATCH1 total: ${Date.now() - _batch1Start}ms`);
 
   // Anchor identifier defaults: page → top by views; campaign → most recent;
   // cohort → most recently uploaded.
@@ -129,14 +117,13 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
   const excludeChannels = (anchorType === "channel" && connectionType === "channel") ? [channel]  : [];
   const excludePages    = (anchorType === "page"    && connectionType === "page")    ? [pagePath] : [];
 
-  const _batch2Start = Date.now();
   const [resolveRows, upstreamRows, downstreamRows, selfRecurrenceRows] = await Promise.all([
-    _timed("anchorResolve", cachedConnectionsAnchorResolve({
+    cachedConnectionsAnchorResolve({
       p_client_key:     clientKey,
       p_anchor_type:    anchorType,
       p_anchor_payload: anchorPayload,
-    })),
-    _timed("panel-upstream", cachedConnectionsPanel({
+    }),
+    cachedConnectionsPanel({
       p_client_key:           clientKey,
       p_anchor_type:          anchorType,
       p_anchor_payload:       anchorPayload,
@@ -146,8 +133,8 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
       p_exclude_channels:     excludeChannels,
       p_connection_type:      connectionType,
       p_exclude_pages:        excludePages,
-    })),
-    _timed("panel-downstream", cachedConnectionsPanel({
+    }),
+    cachedConnectionsPanel({
       p_client_key:           clientKey,
       p_anchor_type:          anchorType,
       p_anchor_payload:       anchorPayload,
@@ -157,17 +144,15 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
       p_exclude_channels:     excludeChannels,
       p_connection_type:      connectionType,
       p_exclude_pages:        excludePages,
-    })),
+    }),
     // Self-recurrence tile — only meaningful for channel anchor in v1 but the
     // RPC is safe to call for any anchor type (returns zeros for others).
-    _timed("selfRecurrence", cachedConnectionsSelfRecurrence({
+    cachedConnectionsSelfRecurrence({
       p_client_key:     clientKey,
       p_anchor_type:    anchorType,
       p_anchor_payload: anchorPayload,
-    })),
+    }),
   ]);
-  console.log(`[influence-perf] BATCH2 total: ${Date.now() - _batch2Start}ms`);
-  console.log(`[influence-perf] PAGE total (server data fetch): ${Date.now() - _pageStart}ms`);
 
   const resolve         = resolveRows[0] ?? null;
   const selfRecurrence  = selfRecurrenceRows[0] ?? null;

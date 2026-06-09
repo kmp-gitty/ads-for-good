@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: June 5, 2026
+> Last updated: June 9, 2026
 
 ---
 
@@ -98,10 +98,11 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - `chapter_model.lifecycle_chapters` — attribution boundary events (VIEW)
 - `chapter_model.unified_events_v2` — canonical event stream (VIEW)
 
-### Active Clients (as of June 4, 2026)
+### Active Clients (as of June 9, 2026)
 - **EOS Fabrics** (`client_key = 'eos_fabrics'`, shop `emmaonesock.myshopify.com`, storefront `eosfabrics.com`) — primary client since April 2026. Full dashboard + Observations + cohorts live.
 - **Projectagram Reels** (`client_key = 'projectagram_reels'`, shop `projectagram.myshopify.com`, storefront `projectagram.com`) — onboarded May 12, 2026. Same Shopify 3P pattern as EOS. Ingest is live; dashboard renders against the multi-tenant RPC layer (no `eos_*` hardcoding remains on the live-wired pages).
 - **adsforgood_prod** (`client_key = 'adsforgood_prod'`) — agency-internal smoke-test client; used for cross-tenant isolation validation and connection-test endpoints. Not a paying client.
+- **Barbershop (TBD client_key, onboarding this week June 9–13, 2026)** — first B2C personal services client. Signed + paying. Booking platform: Square Appointments. Cross-domain pattern: marketing site has Chapter pixel; booking flow on Square's hosted domain. Identity stitched via customer email captured in Square webhook payload. boundary_event_name = `appointment_booked`. Sprint 2 is dedicated to this onboarding (see Priority 1).
 - The remaining EOS-specific `chapter_reporting.eos_*` snapshot tables are still EOS-only and being generalized incrementally per the May 14 strategy. New RPCs (cohorts, Connections, Observations) all read multi-tenant from day one.
 
 ### Known Data Gaps
@@ -178,7 +179,58 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of June 5, 2026)
+## ✅ Completed Fixes (as of June 9, 2026)
+
+### Sprint 1 perf sprint + cron parallelism + boundary-event Phase 2 (June 8–9, 2026)
+- **Scope:** late-night Sprint 1 push driven by a real prod observation — "every dashboard page click was 10–20+ seconds cold." Three major wins shipped: (a) connections_panel SQL + pre-aggregated MV chain for Cross-Source Influence's heaviest RPCs, (b) bounded-concurrency cron parallelism so the attribution chain scales past ~4 clients, (c) Phase 2 of the per-client boundary-event wiring (11 of 13 dashboard RPCs). Total Cross-Source Influence cold load went **24s → 4s (6× speedup)**.
+- **Diagnostic methodology** (worth documenting because we'll re-use it): suspecting cold-cache issues, added `console.log` timing instrumentation around every RPC call in `influence/page.tsx`. Deployed, refreshed page, read Vercel runtime logs filtered by `influence-perf` tag. That gave per-RPC numbers (`pageOptions: 16,447ms` was the smoking gun) instead of theoretical SQL timings from `EXPLAIN`. **The Vercel-logs approach gives REAL prod numbers** — MCP `EXPLAIN ANALYZE` hits primary and has warm buffers; the dashboard reads from the replica which has different (often colder) buffer state. Use Vercel logs for any future page-perf debugging.
+
+#### Sprint 1.5 — Cross-Source Influence cold-cache fix
+- **`connections_panel` SQL fix:** the `valid_journey` CTE had NO date filter — it materialized all 915k EOS journeys via a 4-way join (`journey_entry_channel_v1 + journey_entry_channel_overrides + journey_bot_classification_v1 + journeys + identity_canon`) before downstream filters trimmed to a few hundred. Fix: (1) push a date-bounded filter into the CTE using `v_anchor_start - GREATEST(window_days, outcome_window_days) days` to `v_anchor_end + GREATEST(...)`, (2) add btree index on `journey_entry_channel_v1(client_key, entry_ts)` so the range scan is cheap. Result: 8.0s → 2.8s primary; ~7s → ~3s on replica.
+- **`pageOptions` MV (the 16-second villain):** the dashboard's "popular pages" picker dropdown was running `SELECT page_path, COUNT(*) GROUP BY page_path` against `chapter_ingest.pixel_events` filtered to `event_name = 'page_view'` for 90d. EOS has **84,890 distinct page_paths** (URL variant bloat — query strings, fragments, UTM combos) across ~3M page_view events in 90d. The GROUP BY spills to disk (HashAggregate Disk Usage: 7016kB). Fix: pre-aggregated MV `chapter_reporting.connections_top_pages_90d_v1` with `ROW_NUMBER() OVER (PARTITION BY client_key ORDER BY view_count DESC)` filtered to `view_count > 1` (drops one-off URL variants). The picker function `connections_page_options` becomes a bounded index scan + LIMIT. Result: **16,447ms → 246ms in prod cold load (67× speedup)**.
+- **`campaignOptions` MV:** same pattern for `connections_top_campaigns_90d_v1` aggregating `chapter_config.email_engagement_events` (12k+ click events × hundreds of campaigns × distinct emails). The slowness was `COUNT(DISTINCT email_sha256) PER campaign GROUP`. Pre-aggregate once nightly. **Result: 3,803ms → 340ms (11×).**
+- **Daily-aggregated `connections_top_pages_v1` MV** built alongside the 90d summary, for future analytical use (per-day per-page breakdown). Not currently consumed by any RPC but cheap to maintain in the cron.
+- **All 3 MVs wired into `refresh-dashboard-mvs` cron** (04:00 UTC). Refreshed via `REFRESH MATERIALIZED VIEW CONCURRENTLY` so reads aren't blocked.
+- **Net page-load impact** (validated with prod instrumentation):
+  - **BATCH1 (3 RPCs in parallel):** 16,449ms → **368ms** (45× — bounded by `pageOptions` previously)
+  - **BATCH2 (4 RPCs in parallel):** 7,614ms → **3,599ms** (2.1× — partly from `connections_panel` SQL fix, partly because BATCH1 finishing fast left the replica's buffer cache warmer for BATCH2)
+  - **PAGE total:** 24,064ms → **3,967ms** (6×)
+- **Architectural pattern established + locked as a Forward Rule:** every new dashboard RPC scanning >100k rows MUST ship with a pre-aggregated MV/snapshot from day 1, wired into `refresh-dashboard-mvs` cron. No exceptions. The Cross-Source Influence work proves: with the right pre-aggregation, dashboard cold-load lives at hundreds of ms regardless of underlying data size. The wrong way (raw-event scans during page render) does not scale.
+- **Replica cold-buffer disparity observed:** my `EXPLAIN ANALYZE` via MCP showed `connections_panel` at 2.8s, but prod logs showed ~7s. The replica has its own buffer cache that warms independently from primary's. Implication: any future SQL timing measured via MCP is a primary number; multiply by ~2–3× for cold replica reality.
+
+#### Sprint 1.1 — Cron parallelism for `/api/internal/cron/refresh-attribution-chain`
+- **Math:** at 10 clients × ~130s per `refresh_full_attribution_chain` call, the sequential `for` loop = 1,300s — well past Vercel's 600s `maxDuration`. Mathematical certainty before scaling past ~4 clients.
+- **Pattern:** bounded-concurrency worker pool. `CONCURRENCY = 5` workers pull from a shared queue until empty. Postgres connection pool sized to match (`max: 5`) so workers run truly in parallel. Each worker calls `refresh_full_attribution_chain(client_key)` and pushes to either `summary` or `errors`.
+- **Scaling envelope:** 3 clients today → all 3 run in parallel in ~130s. 10 clients → 2 waves of 5 ≈ 5 min. ~22 clients before maxDuration would matter again.
+- **Why CONCURRENCY=5 not 10:** balances throughput vs Supabase connection load. Each client's chain runs 3 stages × maybe 200k rows of inserts; 5 simultaneous = bounded DB load that won't compete with daily ingest traffic.
+
+#### Sprint 1.3 — Boundary-event Phase 2 (11 of 13 dashboard RPCs)
+- **Wired through `chapter_config.boundary_event(p_client_key)`:** `channel_roles_overview`, `channel_affinity_overview`, `channel_performance_overview`, `path_combinations_overview`, `path_length_trend`, `correlation_channel_overview`, `contribution_overview`, `incrementality_channel_overview`, `incrementality_axis_metadata`, `observations_dormant_questions`, `journey_detail_events`.
+- **Pattern:** SQL functions get inline `chapter_config.boundary_event(p_client_key)` in WHERE clauses (no plpgsql DECLARE needed since they're STABLE SQL functions). The helper is itself STABLE so the planner folds it; cheap to call inline.
+- **2 deferred to Sprint 2.4** (B2C personal services / vertical-fit work): `funnel_overview` and `connections_panel`. Their `'purchase'` references aren't on `boundary_event_name` — they're raw `event_name = 'purchase'` scans against `chapter_ingest.purchase_events` (the outcome-side calc). For a B2C personal services or B2B client, the outcome event lives in a different table (`appointments`, `leads`, `opportunities`) — this is vertical-fit refactor territory, not a simple boundary-event swap.
+- **EOS regression check (load-bearing):** all 8 rewritten RPCs return identical row counts to before the swap (6 `channel_roles` rows, 14 `channel_affinity` rows, 8 `channel_performance` rows, 15 `path_combinations`, 12 `path_length_trend` buckets, 6 `correlation_channel`, 1 `incrementality_axis`, 27 `observations_dormant`). Pure behavior-preserving swap because `chapter_config.boundary_event('eos_fabrics') = 'purchase'`.
+- **Net unlock:** every dashboard RPC the barbershop's onboarding will touch is now configured-by-client. Set `chapter_config.clients.boundary_event_name = 'appointment_booked'` and the Observations engine + 11 dashboard RPCs Just Work without code changes.
+
+#### Sprint reorganization (June 9, 2026)
+- **Sprint 2 repurposed from B2B → B2C personal services.** First real new-client onboard is a barbershop (signed, onboarding this week), not the hypothetical B2B prospect. Sprint 2 sub-items adjusted:
+  - 2.1 Onboard barbershop end-to-end (boundary_event_name = `appointment_booked`)
+  - 2.2 Tune Observation thresholds for personal-services norms (higher returning-customer band — repeat haircuts; local-geo concentration; lower order-counts-per-identity initially)
+  - 2.3 Square Appointments webhook adapter (NOT a CRM adapter) + phone-first identity stitching as v2 if needed
+  - 2.4 Personal-services dashboard copy + taxonomy (action filter: `appointment_booked` not `purchase`; funnel reshape from Add-to-cart→Purchase to Service-selected→Confirmed)
+- **3 items promoted from Future Work into active sprints:**
+  - Sprint 4 — Tier 1 first-party redirect domain. Ranked AFTER barbershop onboarding because client is signed + ready to onboard now; Tier 1 retrofits after we learn what they actually need. (Note: Tier 1 would meaningfully improve barbershop attribution since their booking flow is cross-domain to Square's hosted pages — strong upsell wedge post-launch.)
+  - Sprint 5 — `/chapter/[client_key]/*` client-scoped surface with per-user auth. Today's `/chapter/*` is a shared agency-operator surface gated by one `CHAPTER_DASH_TOKEN` cookie; Sprint 5 adds Supabase Auth + per-user → client_key mapping + middleware that gates per-route. Roughly 2–3 days for the auth layer, half-day for the route group. Agency operators retain global access via `role='agency_operator'`.
+  - Sprint 6 — Offline attribution expansion (Pack D / online+offline via `offline_milestones`).
+- **L&I heavyweight tier (holdout assignment + suppression + p-value/power + propensity-score matching + covariate storage) explicitly left in Future Work.** The L&I PAGE is live with all 3 tabs (Correlation, Incrementality v2, Contribution); what's missing is the lift-TEST infrastructure (running a real controlled experiment). Build when first client demands it.
+- **Sprint 1.2 (onboarding script) deferred** until after the barbershop's manual onboarding. Script the playbook AFTER doing it once start-to-finish — easier to codify a path we've walked than to predict it.
+
+#### Barbershop intake (locked decisions)
+- **Booking platform:** Square Appointments (REST API + webhooks for `appointment.created`, `appointment.updated`, `appointment.canceled`; HMAC-signed payloads with customer email + phone).
+- **Cross-domain pattern:** marketing site has a Chapter pixel installed → captures journey up to "Book Now" click → customer goes to Square's hosted booking page (no pixel visibility) → Square webhook fires on appointment creation with customer email/phone → stitched back via `identity_canon` to the pixel-tracked identity. For v1: email-based stitching only. Phone-first stitching (`phone_sha256:` analog of `email_sha256:`) is v2 if their customers email-skip.
+- **Client stage:** signed + onboarding this week. Critical path = adapter + ingest + dashboard verification. Manual onboarding (Sprint 1.2 deferred).
+- **Still needed from user before provisioning starts:** shop name (→ `client_key`), storefront domain, Square OAuth credentials, whether their booking form reliably captures email, boundary event semantics (`appointment.created` vs `appointment.completed` — default recommend `appointment.created` since most attribution use cases want "booked").
+
+---
 
 ### Pre-demo validation + dashboard anonymization (June 5, 2026 late night)
 - **Validation pass before tomorrow's demo:**
@@ -820,28 +872,44 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ### 🚀 Scale Readiness Roadmap (added May 5, 2026)
 Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; **Fix #24 done May 8; Fix #25 Phase 0 + Phase 1 cascade done May 12; Fix #26 parts 1/3/4 + part 2 framework done May 12; Fix #26 Part 2 route migration done May 13.** Remaining scale items: #28 below + dashboard MV refresh cadence.
 
-### 🔴 Priority 1 — Active build plan (sequenced June 5, 2026)
+### 🔴 Priority 1 — Active build plan (sequenced June 9, 2026)
 
-**Dashboard wiring queue: 10 of 10 pages fully live** (Observations engine landed June 2; Connections #1 + #2 shipped June 1–3). **Production attribution chain cron is live and healthy** (validated tonight's 03:30 UTC fire across all 3 clients).
+**Dashboard wiring queue: 10 of 10 pages fully live.** **Production attribution chain cron + Observations + cohort cron all healthy** (validated). **Cross-Source Influence cold-load: 24s → 4s** after Sprint 1.5 (June 8–9). **Boundary-event Phase 2: 11 of 13 dashboard RPCs wired** through `chapter_config.boundary_event()` helper (Sprint 1.3, June 9).
 
 **Build philosophy locked (June 5):** hybrid sales-pulled + primitive-first. Sales drives priority; every feature ships as a config-driven primitive (no `if (client === 'x')`). The abstraction is the hard part — the second instance is cheap. Build abstractions at client #2 of any new vertical, not at client #5.
 
-#### Sprint 1 — Platform readiness (must land before client #4–5 onboard)
-1. **Cron parallelism for `/api/internal/cron/refresh-attribution-chain`** — current sequential design = ~130 sec per client × N clients. At 10 clients = 1,300 sec, blowing Vercel's 600s `maxDuration`. Either (a) `Promise.all` clients inside the route with bounded concurrency, (b) split into N per-client cron entries (one per `client_key`), or (c) move to background worker. Lift = mathematical certainty before scaling past ~4 clients.
-2. **Onboarding automation script** — codifies the existing playbook DB+config steps into one CLI: INSERT `chapter_config.clients` + `client_secrets`, CREATE per-client Postgres role + grants, add `CLIENT_ROLE_MAP` entry in `src/app/lib/db/per-client.ts`, add origin to `CHAPTER_ALLOWED_ORIGINS`, generate HMAC secret, run post-install verification probe. Idempotent re-runs. **The playbooks already exist** — the script automates their steps, doesn't replace them.
-3. **Boundary-event Phase 2** — wire `chapter_config.boundary_event(p_client_key)` through the 13 remaining dashboard RPCs: `channel_performance_overview`, `channel_roles_overview`, `channel_affinity_overview`, `path_combinations_overview`, `path_length_trend`, `funnel_overview`, `correlation_channel_overview`, `contribution_overview`, `incrementality_channel_overview`, `incrementality_axis_metadata`, `connections_panel`, `observations_dormant_questions`, `journey_detail_events`. Mechanical pattern (~30 min total).
-4. **Configurable email-source patterns** — move canonical_v1's hardcoded email classifier (`shopify_email` / `mailchimp` / `back-in-stock` CASE branches) into `chapter_config` (JSONB column on `clients` or sibling table). Cheap; unblocks first Klaviyo / Marketo / HubSpot Marketing / Sendinblue client without code changes.
+**Architectural Forward Rule locked (June 9):** every new dashboard RPC scanning >100k rows MUST ship with a pre-aggregated MV/snapshot from day 1, wired into `refresh-dashboard-mvs` cron. The Cross-Source Influence work proves the pattern. The wrong way (raw-event scans during page render) does not scale.
 
-**Sprint 1 estimated effort:** ~1 week. End-state: ready to onboard 5+ more ecom clients without touching code.
+#### Sprint 1 — Platform readiness
+- **Sprint 1.1 SHIPPED June 9** — Cron parallelism for `refresh-attribution-chain` (CONCURRENCY=5; ~22-client headroom under maxDuration).
+- **Sprint 1.3 SHIPPED June 9** — Boundary-event Phase 2: 11 of 13 dashboard RPCs wired through `chapter_config.boundary_event()`. 2 deferred to Sprint 2.4 (`funnel_overview` + `connections_panel` — their `'purchase'` refs are raw `event_name` scans on `chapter_ingest.purchase_events`, vertical-fit territory not boundary-swap).
+- **Sprint 1.5 SHIPPED June 8–9** — Cross-Source Influence perf fix: connections_panel SQL fix + pageOptions/campaignOptions pre-aggregated MVs (24s → 4s, 6×). All 3 new MVs wired into the 04:00 UTC refresh cron.
+- **Sprint 1.2 DEFERRED** — Onboarding automation script. Doing manual onboarding for the barbershop first; script the playbook AFTER walking it once. Easier to codify a known path than to predict it.
+- **Sprint 1.4 REMAINING** — Configurable email-source patterns. Move canonical_v1's hardcoded email classifier (`shopify_email` / `mailchimp` / `back-in-stock` CASE branches) into `chapter_config` (JSONB column). Cheap; unblocks first Klaviyo / Marketo / HubSpot Marketing / Sendinblue client without code changes.
 
-#### Sprint 2 — B2B client (next on calendar; ~2 weeks pending real onboarding)
-5. **Onboard the B2B client end-to-end** — Sprint 1.2 script + playbook + `chapter_config.clients` configured with `boundary_event_name` (likely `lead_submission` or `demo_request`). Verify ingest lands properly + canonical chain refresh fires per the 03:30 UTC nightly cron.
-6. **Validate Observation question thresholds against B2B data shape** — expect divergence from EOS norms: I3 direct-share band (B2B norm is higher), R1 returning-customer band (often N/A — single conversion event), C4 touches-per-close (B2B avg ~3× ecom), M3/M4 channel-mix shifts (LinkedIn-paid emerging as a real channel). Either tune defaults globally or add per-client overrides in `chapter_observations.client_thresholds`.
-7. **CRM ingest adapter** — scope during onboarding intake (Salesforce / HubSpot / Pipedrive?). Build minimal viable webhook + identity stitch: contact / lead / opportunity events → `chapter_ingest`, joining `identity_canon` via `email_hash`. Adds CRM stages to the journey timeline.
-8. **B2B-specific dashboard copy + channel taxonomy** — review every page for ecom-only language ("Cart View", "Add to cart", "Returning customers"). Move `JourneysClient.ACTION_OPTIONS` taxonomy into `chapter_config.clients` so B2B sees `lead` / `demo` / `opportunity` rows instead of cart actions. Similar treatment for outcome copy + dashboard headline text.
+#### Sprint 2 — B2C personal services / Barbershop (THIS WEEK, signed + onboarding)
+- **Vertical:** B2C personal services. **Client:** barbershop. **Booking platform:** Square Appointments. **Stage:** already signed; onboarding this week.
+- **2.1 Provision barbershop client (IN PROGRESS)** — `chapter_config.clients` (storefront_domain, `boundary_event_name = 'appointment_booked'`, display_tz), `client_secrets`, per-client Postgres role + grants, `CLIENT_ROLE_MAP` entry in `src/app/lib/db/per-client.ts`, CORS origin. Manual (Sprint 1.2 deferred). **Still needed from operator:** shop name (→ `client_key`), storefront domain, Square OAuth credentials, whether booking forms reliably capture email, boundary semantics (`appointment.created` vs `appointment.completed` — recommend `created`).
+- **2.3 Square Appointments webhook adapter (BIGGEST UNKNOWN, ~1–1.5 days)** — `/api/square/webhooks/appointments/route.ts`. Square HMAC signature verification (different mechanism from Shopify). Transform `appointment.created` payload → `chapter_ingest.purchase_events` row with `event_name='appointment_booked'`, `source_platform='square_appointments'`, identity stitched via customer email (phone optional). Wire Square's webhook subscription post-deploy.
+- **2.3 v2 — Phone-first identity stitching** — `phone_sha256:` analog of `email_sha256:` in `identity_canon`. Build only if barbershop customers email-skip; defer otherwise. The barbershop's Square setup likely captures email for confirmation emails, so v1 = email-only.
+- **2.1 cont — Pixel install** on barbershop's marketing site. Test cross-domain stitch: pixel-tracked journey → Square hosted booking page → webhook fires → identity_canon matches to pre-booking journey.
+- **2.4 LIGHT — Personal-services dashboard copy + taxonomy minimum-viable.** Action filter shows "Appointment Booked" instead of "Purchase" (works automatically via per-client `boundary_event`). "Cart View" / "Add to cart" polish + funnel reshape deferred until after launch.
+- **2.2 — Tune Observation thresholds for personal-services norms** once first week of data lands. Likely higher returning-customer band (repeat haircuts), local-geo concentration, lower order-counts-per-identity initially.
+
+#### Sprint 4 — Tier 1 first-party redirect domain (~4–5 days, NEXT after barbershop)
+- **Promoted from Future Work** to active queue. "Branch.io for open-web ecom" positioning. Memory: `project_tier1_redirect_scope.md`.
+- **Delivers:** (a) clean campaign attribution (closes the 521-missing-page-views finding from May 22 validation), (b) programmatic destination injection per identity/cart/geo/device.
+- **Why HIGH-VALUE for barbershop specifically:** their booking flow is cross-domain (marketing site → Square's hosted booking page). Tier 1 redirect would close their attribution gap — strong upsell wedge post-launch. Ranked AFTER barbershop onboarding so we onboard a paying client first.
+
+#### Sprint 5 — `/chapter/[client_key]/*` client-scoped surface w/ per-user auth (~2–3 days for auth, half-day for routes)
+- **Promoted from Future Work.** Today's `/chapter/*` is a shared agency-operator surface gated by one `CHAPTER_DASH_TOKEN` cookie. Sprint 5 adds Supabase Auth + per-user → client_key mapping + middleware that gates `/chapter/[client_key]/*` so only employees of that client can access their dashboard.
+- **Design:** add `chapter_config.users(user_id PK, email, client_key, role text)` where `role IN ('agency_operator', 'client_employee')`. Agency operators retain global access; client employees gated to their `client_key`'s route group. Middleware enforces.
+
+#### Sprint 6 — Offline attribution expansion (~1–2 weeks, when first client needs it)
+- **Promoted from Future Work.** Pack D / online+offline modeling via `chapter_ingest.offline_milestones`. Option B SQL refresh functions already preserve offline-milestone double-emission for forward-compat.
 
 #### Cross-cutting nice-to-haves (can land in any sprint without blocking)
-- **Daily-digest chain-freshness check** — extend the 14:00 UTC digest with `MAX(snapshot_ts_hi) WHERE status='ok'` per client per stage vs. `now() - 24h`. Catches silently-failed crons.
+- **Daily-digest chain-freshness check** — extend 14:00 UTC digest with `MAX(snapshot_ts_hi) WHERE status='ok'` per client per stage vs. `now() - 24h`. Catches silently-failed crons.
 - **Shared matched-lift engine refactor** — L&I Incrementality + Contribution + the deferred Connections #2 heavyweight tier all want this. Build before a third consumer appears.
 - **Observations severity override UI + popup polish** — operators may want to override computed severity per finding (Black Friday spike → acknowledged). Schema slot exists; UI doesn't.
 
@@ -898,11 +966,11 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ---
 
-### 📦 Backlog + deploy state (June 5, 2026 — end of day)
+### 📦 Backlog + deploy state (June 9, 2026 — end of day)
 
-**Live in prod:** the full Chapter dashboard (10 pages), Observations engine + 05:00 UTC cron, Connections #1 + #2, system cohorts + 04:30 UTC cron, Option B SQL attribution chain + 03:30 UTC cron (**verified end-to-end across all 3 clients tonight**), `chapter_config.clients` table, per-client boundary event Phase 1 (helper + 15 wired SQL functions), `chapter_observations.runs.boundary_event_definition` audit-aware.
+**Live in prod:** the full Chapter dashboard (10 pages), Observations engine + 05:00 UTC cron, Connections #1 + #2, system cohorts + 04:30 UTC cron, Option B SQL attribution chain + 03:30 UTC cron, `chapter_config.clients` table, per-client boundary event Phase 1 + Phase 2 wiring (helper + **26 wired SQL functions** across Observations engine + 11 dashboard RPCs + lifecycle_overview + 3 journeys RPCs), `chapter_observations.runs.boundary_event_definition` audit-aware, Cross-Source Influence 6× perf fix (June 8–9), cron parallelism on `refresh-attribution-chain` with `CONCURRENCY=5` (June 9).
 
-**Live in DB but pending next prod deploy** (frontend changes from late June 5): `cachedClientConfig` helper in `dashboard-rpc.ts`, `JourneysClient` boundary-event-aware action / outcome filters, dashboard client-name anonymization (Client A/B/C), sidebar `Jordan R.` footer removal.
+**Live in DB but pending next prod deploy** (from this session): cron route changes (refresh-dashboard-mvs now refreshes 3 new connections MVs at 04:00 UTC; refresh-attribution-chain uses bounded-concurrency worker pool with `max=5` pool size), perf instrumentation removal from `influence/page.tsx`.
 
 **Backlog items (small, opportunistic):**
 - **Move shop-display tz into `chapter_config.clients.display_tz`** — column already exists; just need to wire it through `src/app/chapter/_components/format.ts:rangeToWindow` (currently hardcoded `America/Los_Angeles`). Trigger to do this: first non-PT client onboarding.
@@ -987,14 +1055,14 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 ## 🔜 Future Work
 
-- **Dashboard build** — v1 shell shipped May 14, 2026. **10 of 10 pages fully live-wired** as of end of June 4, 2026: Raw Performance (May 22-25), Attribution Models + Path Patterns + Channel Roles + Lifecycle Overview + Customer Journeys (May 25-26), Lift / Incrementality / Value with all 3 tabs (May 26 — Correlation, then Incrementality v2 after first-build live-data review, then Contribution replacing Causation), Observations with live engine (June 2), Cross-Source Influence + Lagged Impact (June 1-3).
-- **Tier 1 first-party redirect domain** — intelligent routing layer; "Branch.io for open-web ecom" positioning. Memory: `project_tier1_redirect_scope.md`. ~4-5 day build. Adds (a) clean campaign attribution (closes the 521-missing-page-views finding from May 22 validation), (b) programmatic destination injection per identity/cart/geo/device.
-- **Google Search Console backfill** — OAuth client setup pending in GCP (path A in the May 24 session). Once flowing: per-page + per-keyword search performance data into `chapter_config.gsc_*` (TBD table name). Doesn't move attribution numbers — unlocks SEO reporting depth for Tigerbyte's portal + Channels page drill-down.
-- **Multi-client generalization of `chapter_reporting`** — happening incrementally per-tile during dashboard wiring (see "Reporting generalization strategy" in the 📊 Chapter Dashboard section). Not a separate big-bang. **Option B (June 4–5, 2026)** covers the snapshot-loader generalization end-to-end: lifecycle_chapters / canonical_v1 / canonical_v2 are now multi-tenant SQL functions; the 5 legacy `eos_purchase_*_snapshot_v1` reporting caches that canonical_v2 used to depend on are now bypassed (the LEFT JOIN with canonical_v1 collapsed the entire chain).
-- **`/chapter/[client_key]/*` client-scoped surface** — deferred until agency surface is data-wired. Today's code structure is compatible; adding the route group is additive.
-- **Lift & Incrementality backend (heavyweight tier)** — Correlation, Incrementality v2 (matched-cohort), and Contribution are live. Heavyweight tier (holdout assignment + suppression mechanics + p-value/power; propensity-score matching + covariate storage) remains real systems, weeks of work each. Build when first client needs to run a structured lift test.
+- **Dashboard build** — v1 shell shipped May 14, 2026. **10 of 10 pages fully live-wired** as of end of June 4, 2026. Cross-Source Influence 6× perf fix (June 8–9) brought cold-load from 24s → 4s.
+- **Tier 1 first-party redirect domain** — **PROMOTED to Sprint 4** (after barbershop onboarding). See Priority 1 section.
+- **`/chapter/[client_key]/*` client-scoped surface w/ per-user auth** — **PROMOTED to Sprint 5**. See Priority 1 section.
+- **Offline attribution expansion** — **PROMOTED to Sprint 6**. See Priority 1 section.
+- **Google Search Console backfill** — OAuth client setup pending in GCP. Once flowing: per-page + per-keyword search performance data into `chapter_config.gsc_*` (TBD table name). Doesn't move attribution numbers — unlocks SEO reporting depth for Tigerbyte's portal + Channels page drill-down.
+- **Lift & Incrementality test infrastructure (heavyweight tier)** — L&I page is live with all 3 tabs (Correlation, Incrementality v2, Contribution). What's missing is the lift-TEST engine: holdout assignment + suppression mechanics + p-value/power + propensity-score matching + covariate storage. Multi-week build. Trigger: first client demands a real controlled lift test.
+- **Multi-client generalization of `chapter_reporting`** — COMPLETE via Option B (June 4–5, 2026): lifecycle_chapters / canonical_v1 / canonical_v2 are multi-tenant SQL functions; the 5 legacy `eos_purchase_*_snapshot_v1` reporting caches that canonical_v2 used to depend on are bypassed.
 - **Gchat slash-command bot** on top of `saveClient` action — admin team interface for updating client portal config without the form UI.
 - **Replace JSON textareas in `/internal/client-portal-config` admin form with structured editors** — current `project_summaries` + `reporting_tiles` fields are raw JSON textareas. Easy to break with invalid JSON.
-- **Offline attribution expansion** — Pack D / online+offline modeling via `offline_milestones`. SQL refresh functions (Option B) preserve the offline-milestone double-emission pattern so this stays forward-compat.
-- **`purchase_items` population** — not yet populated for EOS
+- **`purchase_items` population** — not yet populated for EOS.
 - **`chapter_config` schema** — per-client config home. Tables: `clients` (canonical per-client config: storefront_domain, boundary_event_name, display_tz — added June 5), `client_secrets`, `shopify_webhook_secrets`, `email_campaigns`, `email_engagement_events`, `connections_cohorts` + `connections_cohort_members` (added June 1).
