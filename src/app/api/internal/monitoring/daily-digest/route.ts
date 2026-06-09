@@ -12,6 +12,7 @@ const supabase = createClient(
 
 const WINDOW_HOURS = 24;
 const MV_STALENESS_THRESHOLD_HOURS = 24;
+const CHAIN_STALENESS_THRESHOLD_HOURS = 24;
 
 const DASHBOARD_MVS = [
   "journey_bot_classification_v1",
@@ -19,9 +20,27 @@ const DASHBOARD_MVS = [
   "journey_entry_channel_v1",
 ] as const;
 
+// Attribution chain stages refreshed by the 03:30 UTC cron (Sprint 1.1).
+// Each (active client × stage) tuple should have a fresh _snapshot_runs row
+// within CHAIN_STALENESS_THRESHOLD_HOURS, otherwise the cron silently failed
+// or skipped that client.
+const ATTRIBUTION_CHAIN_STAGES = [
+  "chapter_model.lifecycle_chapters_snapshot",
+  "chapter_attribution.chapter_channel_paths_canonical_v1_snapshot",
+  "chapter_attribution.chapter_channel_paths_canonical_v2_snapshot",
+] as const;
+
 type MvStaleness =
   | { mv: string; ok: true; max_ts: string; gap_hours: number }
   | { mv: string; ok: false; error: string };
+
+type ChainStaleness = {
+  client_key: string;
+  stage: string;
+  ok: boolean;
+  last_ok_at: string | null;
+  gap_hours: number | null;
+};
 
 async function checkMvStaleness(): Promise<{
   source_max: string | null;
@@ -70,6 +89,78 @@ async function checkMvStaleness(): Promise<{
   );
 
   return { source_max: sourceMax, results };
+}
+
+// Cross-products active clients × attribution chain stages and reports the
+// freshness gap on each. If the 03:30 UTC cron fan-out succeeded for a client,
+// all 3 stages should have an 'ok' run with snapshot_ts_hi within ~24h. A
+// stale or missing combo means the cron silently failed for that client's
+// stage — exactly the case the digest is meant to surface.
+async function checkAttributionChainStaleness(): Promise<ChainStaleness[]> {
+  const { data: clientRows, error: clientErr } = await supabase
+    .schema("chapter_config")
+    .from("client_secrets")
+    .select("client_key")
+    .is("revoked_at", null);
+
+  if (clientErr || !clientRows) {
+    return [];
+  }
+
+  const clientKeys = Array.from(new Set(clientRows.map((r) => r.client_key as string))).sort();
+
+  // Single query to pull all latest-ok runs across the chain stages, then
+  // build the (client × stage) lookup in JS. Avoids N×M sequential queries.
+  const { data: runs, error: runsErr } = await chapterSchemas
+    .reporting(supabase)
+    .from("_snapshot_runs")
+    .select("client_key, target_table, snapshot_ts_hi")
+    .eq("status", "ok")
+    .in("target_table", ATTRIBUTION_CHAIN_STAGES as unknown as string[])
+    .order("snapshot_ts_hi", { ascending: false });
+
+  if (runsErr) {
+    console.error("[daily-digest] chain staleness query failed:", runsErr);
+    return [];
+  }
+
+  // Build map of (client_key, target_table) → most recent snapshot_ts_hi.
+  // Rows are pre-sorted DESC so first-seen wins.
+  const latest = new Map<string, string>();
+  for (const r of (runs ?? []) as Array<{ client_key: string; target_table: string; snapshot_ts_hi: string }>) {
+    const key = `${r.client_key}::${r.target_table}`;
+    if (!latest.has(key)) latest.set(key, r.snapshot_ts_hi);
+  }
+
+  const now = Date.now();
+  const results: ChainStaleness[] = [];
+  for (const client_key of clientKeys) {
+    for (const stage of ATTRIBUTION_CHAIN_STAGES) {
+      const lastOk = latest.get(`${client_key}::${stage}`) ?? null;
+      if (!lastOk) {
+        results.push({ client_key, stage, ok: false, last_ok_at: null, gap_hours: null });
+        continue;
+      }
+      const gapHours = (now - new Date(lastOk).getTime()) / 3_600_000;
+      results.push({
+        client_key,
+        stage,
+        ok: gapHours <= CHAIN_STALENESS_THRESHOLD_HOURS,
+        last_ok_at: lastOk,
+        gap_hours: gapHours,
+      });
+    }
+  }
+
+  return results;
+}
+
+// Shorten stage table name for readability in the digest message.
+function shortStage(stage: string): string {
+  if (stage.endsWith("lifecycle_chapters_snapshot")) return "lifecycle";
+  if (stage.endsWith("canonical_v1_snapshot")) return "canonical_v1";
+  if (stage.endsWith("canonical_v2_snapshot")) return "canonical_v2";
+  return stage.split(".").pop() ?? stage;
 }
 
 export async function GET(req: NextRequest) {
@@ -161,6 +252,31 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const chainStaleness = await checkAttributionChainStaleness();
+  const chainProblems = chainStaleness.filter((r) => !r.ok);
+
+  lines.push("", "*Attribution chain freshness (03:30 UTC cron):*");
+  if (chainStaleness.length === 0) {
+    lines.push("  ⚠ could not read client list or `_snapshot_runs`");
+  } else if (chainProblems.length === 0) {
+    const maxGap = Math.max(...chainStaleness.map((r) => r.gap_hours ?? 0));
+    const clientCount = new Set(chainStaleness.map((r) => r.client_key)).size;
+    lines.push(
+      `  ✅ all ${clientCount} client(s) × ${ATTRIBUTION_CHAIN_STAGES.length} stages within ${CHAIN_STALENESS_THRESHOLD_HOURS}h (max gap ${maxGap.toFixed(1)}h)`
+    );
+  } else {
+    for (const r of chainProblems.slice(0, 15)) {
+      if (r.last_ok_at === null) {
+        lines.push(`  ❌ \`${r.client_key}\` · ${shortStage(r.stage)} — no successful run found`);
+      } else {
+        lines.push(`  ⚠ \`${r.client_key}\` · ${shortStage(r.stage)} — ${r.gap_hours!.toFixed(1)}h behind`);
+      }
+    }
+    if (chainProblems.length > 15) {
+      lines.push(`  …and ${chainProblems.length - 15} more`);
+    }
+  }
+
   try {
     await postToGChat({ text: lines.join("\n") });
   } catch (err) {
@@ -180,5 +296,7 @@ export async function GET(req: NextRequest) {
     mv_staleness: mvStaleness,
     mv_stale_count: staleMvs.length,
     mv_error_count: erroredMvs.length,
+    chain_staleness: chainStaleness,
+    chain_problem_count: chainProblems.length,
   });
 }

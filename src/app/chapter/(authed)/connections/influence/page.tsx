@@ -7,6 +7,7 @@ import InfluenceClient from "./InfluenceClient";
 import { rangeToWindow } from "../../../_components/format";
 import {
   bucketedNow,
+  cachedClientConfig,
   cachedConnectionsAnchorResolve,
   cachedConnectionsPanel,
   cachedConnectionsPageOptions,
@@ -64,7 +65,8 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
     ? "channel"
     : (anchorType === "channel" ? "channel" : "page");
 
-  const { start, end } = rangeToWindow(range, bucketedNow());
+  const clientConfig = await cachedClientConfig(clientKey);
+  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
 
   // Always fetch picker option lists so each anchor-type's dropdown has data
   // ready (cached per window). Cheap independent calls.

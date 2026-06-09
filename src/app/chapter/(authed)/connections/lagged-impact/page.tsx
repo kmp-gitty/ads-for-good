@@ -10,7 +10,7 @@
 
 import LaggedImpactClient from "./LaggedImpactClient";
 import { rangeToWindow } from "../../../_components/format";
-import { bucketedNow, cachedLaggedImpactPair, cachedLaggedImpactPairSeries } from "../../../_lib/dashboard-rpc";
+import { bucketedNow, cachedClientConfig, cachedLaggedImpactPair, cachedLaggedImpactPairSeries } from "../../../_lib/dashboard-rpc";
 
 type SearchParams = Promise<{
   client?:     string;
@@ -31,7 +31,8 @@ export default async function LaggedImpactPage({ searchParams }: { searchParams:
   const channelA  = (params.channel_a && params.channel_a.trim()) || DEFAULT_A;
   const channelB  = (params.channel_b && params.channel_b.trim()) || DEFAULT_B;
 
-  const { start, end } = rangeToWindow(range, bucketedNow());
+  const clientConfig = await cachedClientConfig(clientKey);
+  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
 
   // Treatment window = first 1/3 of analysis range. Gives 2/3 for lookforward
   // observability so longer lag windows have data to look at.

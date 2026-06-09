@@ -8,6 +8,7 @@ import PathsClient from "./PathsClient";
 import { rangeToWindow } from "../../_components/format";
 import {
   bucketedNow,
+  cachedClientConfig,
   cachedPathCombinationsOverview,
   cachedPurchaseOverview,
   cachedJourneyOverview,
@@ -24,7 +25,8 @@ export default async function PathsPage({ searchParams }: { searchParams: Search
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
   const range = (params.range && params.range.trim()) || "30d";
 
-  const { start, end } = rangeToWindow(range, bucketedNow());
+  const clientConfig = await cachedClientConfig(clientKey);
+  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
   const baseArgs = { p_client_key: clientKey };
   const window = { p_start_ts: start.toISOString(), p_end_ts: end.toISOString() };
   const prior = priorWindow(start, end);

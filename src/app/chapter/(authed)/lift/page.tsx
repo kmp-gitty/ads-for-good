@@ -13,6 +13,7 @@ import LiftClient from "./LiftClient";
 import { rangeToWindow } from "../../_components/format";
 import {
   bucketedNow,
+  cachedClientConfig,
   cachedCorrelationChannelOverview,
   cachedIncrementalityChannelOverview,
   cachedIncrementalityAxisMetadata,
@@ -27,7 +28,8 @@ export default async function LiftPage({ searchParams }: { searchParams: SearchP
   // Page-default = 90d (vs 30d elsewhere) — see top-of-file comment.
   const range     = (params.range  && params.range.trim())  || "90d";
 
-  const { start, end } = rangeToWindow(range, bucketedNow());
+  const clientConfig = await cachedClientConfig(clientKey);
+  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
   const args = {
     p_client_key: clientKey,
     p_start_ts: start.toISOString(),

@@ -15,21 +15,19 @@ export const fmtNum = (n: number): string => n.toLocaleString();
 
 export type DateWindow = { start: Date; end: Date };
 
-// Timezone we anchor "today" to when resolving date codes. Matches Shopify
-// shop-tz convention so dashboard windows align with what merchants see in
-// Shopify Analytics. Hardcoded to PT for now (EOS / Projectagram both view
-// from PT). Per-client display tz should move into chapter_config when we
-// onboard a client in a different region.
-const DISPLAY_TZ = "America/Los_Angeles";
+// Default display tz fallback when a caller doesn't supply one. Most pages
+// now pass per-client display_tz from chapter_config.clients via cachedClientConfig.
+// Default kept at PT for backward compat with any caller still on the old signature.
+const DEFAULT_DISPLAY_TZ = "America/Los_Angeles";
 
-/** Returns midnight (UTC instant) of "today" as seen in DISPLAY_TZ. */
-function todayMidnightInDisplayTz(now: Date): Date {
-  // Format the current instant as a YYYY-MM-DD calendar date in DISPLAY_TZ,
-  // then re-parse as UTC midnight. This gives us "the UTC instant that
+/** Returns midnight (UTC instant) of "today" as seen in the given tz. */
+function todayMidnightInTz(now: Date, tz: string): Date {
+  // Format the current instant as a YYYY-MM-DD calendar date in tz, then
+  // re-parse as UTC midnight. This gives us "the UTC instant that
   // corresponds to 00:00 on today's calendar date" — which is what calendar
   // analytics platforms use as the boundary.
   const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: DISPLAY_TZ,
+    timeZone: tz,
     year: "numeric", month: "2-digit", day: "2-digit",
   });
   const [y, m, d] = fmt.format(now).split("-").map(Number);
@@ -39,11 +37,16 @@ function todayMidnightInDisplayTz(now: Date): Date {
 /** Resolve a URL range code into a [start, end] window.
  *  "Nd" codes match Shopify's "Last N days" convention: today + N prior days
  *  (a 31-day window for N=30 because today is inclusive). "Today" is anchored
- *  to DISPLAY_TZ so the window matches what merchants see in shop analytics.
- *  `all` returns start=epoch — caller decides whether to apply a floor. */
-export function rangeToWindow(code: string, now: Date = new Date()): DateWindow {
+ *  to the supplied display_tz so the window matches what merchants see in
+ *  their shop analytics. `all` returns start=epoch — caller decides whether
+ *  to apply a floor. */
+export function rangeToWindow(
+  code: string,
+  now: Date = new Date(),
+  tz: string = DEFAULT_DISPLAY_TZ
+): DateWindow {
   const end = new Date(now);
-  const todayMidnight = todayMidnightInDisplayTz(now);
+  const todayMidnight = todayMidnightInTz(now, tz);
   const start = new Date(todayMidnight);
   const m = code.match(/^(\d+)d$/);
   if (m) {
@@ -75,10 +78,15 @@ export function rangeToWindow(code: string, now: Date = new Date()): DateWindow 
 /** For a given range, compute the "prior period" comparison window
  *  (same span, ending exactly where the current range starts). Returns null
  *  for "all" (no prior period defined) or "none". */
-export function compareWindow(rangeCode: string, compareCode: string, now: Date = new Date()): DateWindow | null {
+export function compareWindow(
+  rangeCode: string,
+  compareCode: string,
+  now: Date = new Date(),
+  tz: string = DEFAULT_DISPLAY_TZ
+): DateWindow | null {
   if (compareCode === "none") return null;
   if (rangeCode === "all") return null;
-  const cur = rangeToWindow(rangeCode, now);
+  const cur = rangeToWindow(rangeCode, now, tz);
   if (compareCode === "prior") {
     const span = cur.end.getTime() - cur.start.getTime();
     return { start: new Date(cur.start.getTime() - span), end: new Date(cur.start) };
@@ -106,7 +114,11 @@ export function fmtDateRange(w: DateWindow): string {
 }
 
 /** Human-readable version of a range code. Handles "all" specially. */
-export function fmtRangeSubtitle(code: string, now: Date = new Date()): string {
+export function fmtRangeSubtitle(
+  code: string,
+  now: Date = new Date(),
+  tz: string = DEFAULT_DISPLAY_TZ
+): string {
   if (code === "all") return "All time";
-  return fmtDateRange(rangeToWindow(code, now));
+  return fmtDateRange(rangeToWindow(code, now, tz));
 }

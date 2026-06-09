@@ -13,6 +13,7 @@ import OverviewClient from "./OverviewClient";
 import { rangeToWindow } from "../../_components/format";
 import {
   bucketedNow,
+  cachedClientConfig,
   cachedLifecycleOverview,
   cachedPathLengthTrend,
   cachedChannelRolesOverview,
@@ -38,7 +39,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
   const range = (params.range && params.range.trim()) || "30d";
 
-  const { start, end } = rangeToWindow(range, bucketedNow());
+  const clientConfig = await cachedClientConfig(clientKey);
+  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
   const winArgs = {
     p_client_key: clientKey,
     p_start_ts: start.toISOString(),

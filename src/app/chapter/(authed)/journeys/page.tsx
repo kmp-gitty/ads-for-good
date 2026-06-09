@@ -49,7 +49,10 @@ export default async function JourneysPage({ searchParams }: { searchParams: Sea
   const outcome   = (params.outcome && params.outcome.trim() && params.outcome !== "all") ? params.outcome : null;
   const identity  = (params.identity && params.identity.trim()) || null;
 
-  const { start, end } = rangeToWindow(range, bucketedNow());
+  // Fetch per-client config first — needed for tz-aware date math.
+  // Subsequent unstable_cache hit makes this near-free for repeat visits.
+  const clientConfig = await cachedClientConfig(clientKey);
+  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
   const filterArgs = {
     p_client_key: clientKey,
     p_start_ts: start.toISOString(),
@@ -58,12 +61,11 @@ export default async function JourneysPage({ searchParams }: { searchParams: Sea
     p_outcome:  outcome,
   };
 
-  // Fetch list + summary + per-client config in parallel. Detail RPCs fire
-  // only when an identity is selected.
-  const [statsRows, listRows, clientConfig] = await Promise.all([
+  // Fetch list + summary in parallel. Detail RPCs fire only when an identity
+  // is selected.
+  const [statsRows, listRows] = await Promise.all([
     cachedJourneysStats(filterArgs),
     cachedJourneysList({ ...filterArgs, p_limit: 50 }),
-    cachedClientConfig(clientKey),
   ]);
 
   const stats = statsRows[0] ?? null;

@@ -4,6 +4,7 @@ import ChannelsClient from "./ChannelsClient";
 import { rangeToWindow } from "../../_components/format";
 import {
   bucketedNow,
+  cachedClientConfig,
   cachedChannelRolesOverview,
   cachedChannelAffinityOverview,
   cachedPurchaseOverview,
@@ -18,7 +19,8 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Sea
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
   const range = (params.range && params.range.trim()) || "30d";
 
-  const { start, end } = rangeToWindow(range, bucketedNow());
+  const clientConfig = await cachedClientConfig(clientKey);
+  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
   const args = {
     p_client_key: clientKey,
     p_start_ts: start.toISOString(),

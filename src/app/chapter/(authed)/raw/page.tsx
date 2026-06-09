@@ -14,6 +14,7 @@ import RawClient from "./RawClient";
 import { rangeToWindow } from "../../_components/format";
 import {
   bucketedNow,
+  cachedClientConfig,
   cachedPurchaseOverview,
   cachedJourneyOverview,
   cachedEngagementQuality,
@@ -35,7 +36,8 @@ export default async function RawPage({ searchParams }: { searchParams: SearchPa
 
   // Snap "now" to a 5-min bucket so cache keys are stable for everyone in the
   // same bucket. Dashboard data is up to 5 min stale (acceptable for analytics).
-  const { start, end } = rangeToWindow(range, bucketedNow());
+  const clientConfig = await cachedClientConfig(clientKey);
+  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
   const args = {
     p_client_key: clientKey,
     p_start_ts: start.toISOString(),

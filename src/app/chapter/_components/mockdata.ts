@@ -175,21 +175,6 @@ export type LiftIncrementality = {
   significant: boolean;
 };
 
-export type LiftCausation = {
-  id: string;
-  channel: ChannelKey;
-  metric: string;
-  headline: string;
-  treated: { aov: number; n: number; unit?: string };
-  control: { aov: number; n: number; unit?: string };
-  lift: number;
-  ci: [number, number];
-  matchedOn: string[];
-  matchQuality: number;
-  method: string;
-  caveat: string;
-};
-
 // ---------- Data ----------
 
 export const CHANNELS: Record<ChannelKey, Channel> = {
@@ -652,38 +637,3 @@ export const LIFT_INCREMENTALITY: LiftIncrementality[] = [
   },
 ];
 
-export const LIFT_CAUSATION: LiftCausation[] = [
-  {
-    id: "caus-email", channel: "email", metric: "AOV",
-    headline: "For matched audiences, Email-present paths show +8.7% AOV lift.",
-    treated: { aov: 244.12, n: 1086 },
-    control: { aov: 224.66, n: 1086 },
-    lift: +8.7, ci: [+4.2, +13.1],
-    matchedOn: ["device class", "30-day recency", "prior LTV decile", "acquisition channel"],
-    matchQuality: 0.94,
-    method: "Propensity score matching, k = 1, caliper = 0.05",
-    caveat: "Causal estimate for the matched cohort. Match quality is high (0.94). Effect may not generalize to populations outside the matching support.",
-  },
-  {
-    id: "caus-meta", channel: "meta", metric: "AOV",
-    headline: "For matched audiences, Meta-present paths show +2.1% AOV — within CI of zero.",
-    treated: { aov: 228.91, n: 742 },
-    control: { aov: 224.20, n: 742 },
-    lift: +2.1, ci: [-1.6, +5.8],
-    matchedOn: ["device class", "first-touch channel", "session count"],
-    matchQuality: 0.88,
-    method: "Propensity score matching, k = 1, caliper = 0.05",
-    caveat: "Once matched, the AOV gap from the correlation view largely disappears. Suggests Meta's correlation with AOV is driven by audience composition, not channel effect.",
-  },
-  {
-    id: "caus-sms", channel: "sms", metric: "Repeat rate",
-    headline: "Matched cohorts: SMS lifts 90-day repeat rate by +14.6%.",
-    treated: { aov: 5.6, n: 218, unit: "%" },
-    control: { aov: 4.9, n: 218, unit: "%" },
-    lift: +14.6, ci: [+6.8, +22.0],
-    matchedOn: ["prior LTV decile", "channel mix", "device class"],
-    matchQuality: 0.91,
-    method: "Propensity score matching, k = 1, caliper = 0.05",
-    caveat: "Strong effect persists after matching, supporting a causal interpretation. Sample is small — replicate next quarter to confirm.",
-  },
-];

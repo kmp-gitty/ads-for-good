@@ -11,6 +11,7 @@ import AttributionClient from "./AttributionClient";
 import { rangeToWindow } from "../../_components/format";
 import {
   bucketedNow,
+  cachedClientConfig,
   cachedAttributionOverview,
   cachedPurchaseOverview,
   cachedJourneyOverview,
@@ -28,7 +29,8 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
   const range = (params.range && params.range.trim()) || "30d";
 
-  const { start, end } = rangeToWindow(range, bucketedNow());
+  const clientConfig = await cachedClientConfig(clientKey);
+  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
   const args = {
     p_client_key: clientKey,
     p_start_ts: start.toISOString(),
