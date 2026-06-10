@@ -188,6 +188,88 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of June 10, 2026)
 
+### Sprint 6 — Offline attribution: community event CSV ingest (June 10, 2026)
+- **Scope:** end-to-end pipeline for ingesting offline community events (barbershop summer block party, dental free-screening day, future verticals). Each event = a CSV of attendees with name + email + phone + arbitrary questionnaire columns. The pipeline hashes PII in-process, stitches identity into `identity_canon`, creates a milestone per attendee, and auto-creates a Connections cohort so dashboards can target the audience immediately.
+- **Driving use case:** barbershop has a summer community event coming up. They collect attendee info on paper / sign-up form; operator uploads the CSV after the event. Future bookings made by those attendees stitch back via email/phone canonical so the event becomes a real attribution channel in the lifecycle chain.
+- **Privacy contract (load-bearing):**
+  - Raw email + raw phone hashed in-process via [src/app/lib/identity/hash.ts](src/app/lib/identity/hash.ts) (extracted shared module mirroring `/api/purchase` patterns: `hashEmail = sha256(lowercase(trim(email)))`, `hashPhone = sha256(E.164(phone))`).
+  - **CSV file never written to disk;** parsed via papaparse in memory only.
+  - **Raw PII never persists.** Milestone metadata stores only `name_first_initial` (single character) for audit fingerprinting + the questionnaire columns (with PII columns explicitly stripped from the questionnaire payload).
+  - Operator-facing audit: response summary shows first-8-char hash prefixes of up to 5 ingested rows so operator can sanity-check without seeing identifiers.
+- **Schema (new):** `chapter_ingest.offline_events`: `(id, client_key, event_slug, event_name, event_ts, location, attendee_count, metadata, cohort_id, created_at, created_by)`. UNIQUE on `(client_key, event_slug)`. RLS enabled. `event_slug` becomes the `milestone_name` on per-attendee rows so each event is its own attribution channel.
+- **Identity stitching per attendee:**
+  - Insert `chapter_ingest.offline_milestones` row (`milestone_name = event_slug`, `source_type = 'offline_event_upload'`, `source_id = event.id`).
+  - If both email + phone present: insert `chapter_identity.identity_aliases` edge `phone_sha256:X → email_sha256:Y` (`is_deterministic = true`, `method = 'offline_event_upload'`). Mirrors `/api/purchase` Phase 3.5 — email canonical wins because it's more stable cross-platform.
+  - Upsert `chapter_identity.identity_canon` self-canonical row so future online identifications stitch even if the visitor never had a pixel session before the event.
+- **Auto-cohort creation:** inserts a `chapter_config.connections_cohorts` row + one `connections_cohort_members` row per attendee. Cohort is named after the event, `event_at` matches the event date, totals updated at the end of the run. Operator can immediately anchor Cross-Source Influence on the cohort, compare retention vs non-attendees, etc.
+- **Admin UI at `/internal/offline-events`** — gated by `CHAPTER_DASH_TOKEN` like other internal admin surfaces. Form takes client picker (populated from `chapter_config.clients`), event slug (lowercase/underscore), event name, event date, location, CSV file. After upload, summary card shows rows ingested, rows skipped (no identity), event ID, cohort ID, hash samples.
+- **Files (new):**
+  - `chapter_ingest.offline_events` table (migration `sprint_6_offline_events`)
+  - [src/app/lib/identity/hash.ts](src/app/lib/identity/hash.ts) — shared email/phone normalization + hashing helpers
+  - [src/app/api/internal/offline-events/upload/route.ts](src/app/api/internal/offline-events/upload/route.ts) — multipart upload handler
+  - [src/app/internal/offline-events/layout.tsx](src/app/internal/offline-events/layout.tsx) — admin chrome
+  - [src/app/internal/offline-events/page.tsx](src/app/internal/offline-events/page.tsx) — upload form + recent events list
+  - [src/app/internal/offline-events/UploadForm.tsx](src/app/internal/offline-events/UploadForm.tsx) — client-side form with summary display
+- **Dependency added:** `papaparse` + `@types/papaparse` for robust CSV parsing.
+- **End-to-end verified:** all 6 insert shapes (event, cohort, milestone, alias, canon, cohort_member) tested via SQL DO block before pushing.
+- **What happens next per attendee:** the next attribution-chain refresh (03:30 UTC nightly cron) sees the new offline_milestones; `lifecycle_chapters_snapshot` already preserves "offline-milestone double emission" so the event lands as a chapter event; future online interactions (Square webhook, pixel events) by the same email/phone canonical fold into the same canonical's chapter via the existing canon/alias graph.
+- **Deliberately deferred:** (a) dedicated dashboard tile for offline events on the Channels page — the data flows through correctly without UI work, but operator clarity would benefit from a "Offline events" section; (b) backfill from third-party event-management platforms (Eventbrite / Mailchimp signup forms / etc.) — manual CSV ingest covers the barbershop use case today; (c) bulk re-upload / event editing in the admin UI — current flow assumes upload-once.
+
+### Sprint 5a — Per-user auth (Supabase + allowlist + magic link) (June 10, 2026)
+- **Scope:** replace the single shared `CHAPTER_DASH_TOKEN` cookie gate with per-user authentication via Supabase magic links, allowlisted against `chapter_config.users`. Includes role-aware route enforcement (agency_operator vs client_employee) and coexistence with the legacy token cookie during cutover. The clean URL surface `/chapter/[client_key]/*` is intentionally deferred — see "Deliberately deferred" below.
+- **The allowlist IS the gate.** `chapter_config.users(id, user_id, email, role, client_key, created_at, last_login_at, revoked_at)`. role is CHECK-constrained to `agency_operator` or `client_employee`; client_employee MUST have a client_key (table-level constraint). RLS enabled; service_role only. Unique partial index on `lower(email)` and on `user_id` (so the same Supabase user_id can't be allowlisted twice, but revoked rows can stay for audit).
+- **Login flow:**
+  1. User types email at `/chapter/login` → `POST /api/chapter-auth/magic-link`
+  2. Server looks up email in `chapter_config.users`. If not present (or revoked), returns 200 with the same shape it would on success — **allowlist is never leaked via response timing or error message.**
+  3. If allowed, `supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: /chapter/auth/callback } })` sends a magic link.
+  4. User clicks the link → `/chapter/auth/callback` exchanges the code for a session → **re-checks allowlist** (defense in depth — covers revocation between link request and click) → links `chapter_config.users.user_id` to `auth.users.id` on first login → redirects to role-appropriate landing.
+- **Middleware enforcement (root `middleware.ts`):**
+  1. Public paths (login, callback, legacy `/api/chapter-auth`) pass through unauthenticated.
+  2. If a Supabase session exists, resolve to a Chapter user via `findChapterUserByAuthId(authUser.id)`. If not on allowlist → sign out + redirect to `/chapter/login?error=not_allowlisted`.
+  3. **Path-based client_key segment** (`/chapter/<segment_with_underscore>/...`) → `canAccessClient(user, segment)`. Client employees redirected to their own client's landing if mismatched. (The route group itself isn't built yet; this branch is wired for when it lands in 5b proper.)
+  4. **Global `/chapter/*` for agency_operator** → pass through.
+  5. **Global `/chapter/*` for client_employee** → middleware enforces `?client=<their_client_key>` in the URL. If absent or mismatched, redirect with corrected param. **This is the security primitive that makes 5b's URL restructure cosmetic rather than load-bearing** — the page receives the same searchParams it always has, and any client_employee accessing a global path is auto-scoped to their own client_key regardless of what they typed.
+  6. **Fallback: legacy `CHAPTER_DASH_TOKEN` cookie.** If no Supabase session, middleware still accepts the cookie as agency-operator equivalent. Will be removed in 5d after operators have all migrated to Supabase.
+- **Naming convention (locked again):** the `clientKeyFromPath()` helper detects client_keys by underscore presence. Static slugs never contain `_` (observations, overview, channels, paths, lift, attribution, journeys, raw, connections); client_keys always do (eos_fabrics, projectagram_reels, adsforgood_prod, barber_shop). Same convention CLAUDE.md was already relying on; now enforced in middleware code.
+- **Files (new):**
+  - `chapter_config.users` table + indexes + RLS (DB migration `sprint_5_chapter_config_users`)
+  - [src/app/lib/auth/supabase-server.ts](src/app/lib/auth/supabase-server.ts) — `createSupabaseServerClient` (cookie-aware, for pages/server-actions) + `createSupabaseServiceRoleClient` (for allowlist lookups before user is authenticated)
+  - [src/app/lib/auth/supabase-middleware.ts](src/app/lib/auth/supabase-middleware.ts) — middleware-specific factory; cookies adapted to NextRequest/NextResponse, mutable response so refreshed-session cookies write through
+  - [src/app/lib/auth/chapter-user.ts](src/app/lib/auth/chapter-user.ts) — `findChapterUserByEmail` / `findChapterUserByAuthId` / `linkChapterUserToAuthId` / `touchLastLogin` / `canAccessClient` / `canAccessGlobal`
+  - [src/app/chapter/auth/callback/route.ts](src/app/chapter/auth/callback/route.ts) — magic-link callback handler
+  - [src/app/api/chapter-auth/magic-link/route.ts](src/app/api/chapter-auth/magic-link/route.ts) — request a magic link (allowlist-gated)
+  - [src/app/api/chapter-auth/signout/route.ts](src/app/api/chapter-auth/signout/route.ts) — clears both Supabase session and legacy cookie
+- **Files (modified):**
+  - [middleware.ts](middleware.ts) — `gateChapter` is now async, Supabase session lookup primary, legacy token fallback. Dispatcher made async.
+  - [src/app/chapter/login/page.tsx](src/app/chapter/login/page.tsx) — password form replaced with magic-link form. Error messages handle `not_allowlisted`, `forbidden`, `no_role`, `callback_failed`. Submitted-state confirmation never reveals whether the email is on the allowlist.
+  - [src/app/chapter/_components/Sidebar.tsx](src/app/chapter/_components/Sidebar.tsx) — sign-out button in the sidebar foot. Posts to `/api/chapter-auth/signout` then hard-navigates to `/chapter/login`.
+  - [src/app/chapter/chapter.css](src/app/chapter/chapter.css) — `.sidebar-foot` + `.sidebar-signout` styles.
+- **Dependency added:** `@supabase/ssr` (official SSR auth helpers for Next.js App Router).
+- **Deploy checklist BEFORE pushing to prod:**
+  1. Add `SUPABASE_ANON_KEY` to Vercel env vars (Production + Preview). Found in Supabase dashboard → Project Settings → API → "anon public" key.
+  2. In Supabase dashboard → Authentication → URL Configuration, add `https://ads4good.com/chapter/auth/callback` (and the Vercel preview URL pattern) to "Redirect URLs."
+  3. Set Authentication → Settings → Site URL to the production origin.
+  4. Verify the email magic-link template at Authentication → Email Templates → Magic Link is acceptable.
+  5. `INSERT INTO chapter_config.users` for every operator who needs immediate access (already seeded `katoa@ads4good.com` as agency_operator).
+  6. Keep `CHAPTER_DASH_TOKEN` in env vars — middleware still honors it during cutover.
+- **Deliberately deferred (5b real / 5c / 5d):**
+  - **5b real — `/chapter/[client_key]/*` URL surface.** The clean URL (e.g. `/chapter/eos_fabrics/observations`) is purely cosmetic right now because middleware already auto-scopes client_employees to their client via `?client=` mediation. Implementation needs either a catch-all `[client_key]/[[...slug]]/page.tsx` redirect shim OR a full duplicate route tree; both are sizable and not unlocking new security. Build when the sales pitch demands the cleaner URL.
+  - **5c — Sidebar conditional rendering** (hide client switcher for client_employee, show user email + role). Currently sidebar still shows the multi-client dropdown for everyone; client_employees can pick another client from the dropdown but the middleware redirects them back. Functional but ugly. Polish item.
+  - **5d — Remove `CHAPTER_DASH_TOKEN` cookie path.** Wait until every operator has logged in via Supabase at least once (verify by `last_login_at IS NOT NULL` on each chapter_config.users row), then delete the cookie branch from middleware and drop the env var.
+
+### Sprint 3b — Suspense boundaries / streaming perceived-perf (June 10, 2026)
+- **Goal:** make every navigation feel instant. Real latency was largely addressed by Sprint 3; this sprint addresses the gap between "click sidebar item" and "see something on screen."
+- **Pattern:** Next.js App Router `loading.tsx` files at the (authed) group level + per-page overrides for the heavy pages. Layout's sidebar + topbar + pinned observation stay visible because the layout doesn't re-render between pages — only the content area swaps the page's body for the skeleton until the server component resolves.
+- **Skeleton primitives** in [src/app/chapter/_components/Skeleton.tsx](src/app/chapter/_components/Skeleton.tsx): `<SkelLine>`, `<SkelTitle>`, `<SkelChip>`, `<SkelCard>`, `<SkelKpiStrip>`. Shapes mirror the real card / kpi / row primitives so the content area doesn't reflow when real data arrives.
+- **CSS** appended to [chapter.css](src/app/chapter/chapter.css): `.skel` class with a 1.8s ease-in-out shimmer keyframe driven by `linear-gradient(... var(--line-2), var(--bg-2), var(--line-2))` background-position animation. Respects `prefers-reduced-motion`.
+- **Files shipped:**
+  - [(authed)/loading.tsx](src/app/chapter/(authed)/loading.tsx) — generic dashboard skeleton (title strip + KPI strip + 2-col grid + bottom card). Covers all pages by default.
+  - [(authed)/connections/influence/loading.tsx](src/app/chapter/(authed)/connections/influence/loading.tsx) — anchor card across top + Upstream/Downstream side-by-side + self-recurrence strip. Matches the slowest dashboard page (Cross-Source Influence, 4s cold post-Sprint 1.5).
+  - [(authed)/lift/loading.tsx](src/app/chapter/(authed)/lift/loading.tsx) — tab row + 2x2 grid of channel cards. Matches the 3-tab Lift & Incrementality page.
+  - [(authed)/journeys/loading.tsx](src/app/chapter/(authed)/journeys/loading.tsx) — filter row + identity-list / detail-panel split.
+- **Other pages** (observations, overview, channels, paths, attribution, raw) fall through to the group-level skeleton — their shapes are simple enough that the generic placeholder reads correctly. Per-page overrides land if/when one needs a sharper match.
+- **Deliberately deferred — tile-level Suspense within a single page render.** Would require restructuring each page so individual tiles are their own async server components with their own fetches. Marginal value now that Sprint 3 brought the heaviest RPCs under 500ms; revisit if cold-load p95 climbs back up at higher client counts.
+
 ### Sprint 3 — Perf pass: denormalized journey-resolution snapshot (June 10, 2026)
 - **Scope:** systematic perf audit of every dashboard RPC (33 cached wrappers in `dashboard-rpc.ts`). Inventory + timings against EOS revealed two real cliffs; everything else was already sub-100ms on warm primary thanks to prior Sprint 1.5 work.
 - **Cliffs identified:**

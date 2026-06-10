@@ -1,17 +1,29 @@
 "use client";
 
 import React, { useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
-// Sits outside the chapter layout (login should not show the sidebar / chrome).
-// Route is whitelisted in middleware so unauthed users can render it.
+// Login page sits outside the (authed) layout group — no sidebar / chrome.
+// Whitelisted in middleware so unauthed visitors can render it.
+//
+// Flow:
+//   1. User types email → submit
+//   2. Server action (in _actions.ts) checks chapter_config.users for the
+//      email. If not on the allowlist, returns the same "if registered, you'll
+//      receive a link" response so the allowlist isn't leaked.
+//   3. If allowed, Supabase signInWithOtp sends a magic link to the email.
+//   4. User clicks the link → lands at /chapter/auth/callback → middleware
+//      re-verifies allowlist, links auth.users.id ↔ chapter_config.users row,
+//      redirects to the appropriate landing page based on role.
+
 function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/chapter";
+  const next = params.get("next") || undefined;
+  const errorCode = params.get("error");
 
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(errorMessageFor(errorCode));
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
@@ -19,23 +31,21 @@ function LoginForm() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/chapter-auth", {
+      const res = await fetch("/api/chapter-auth/magic-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email: email.trim(), next }),
       });
+      // Same response shape regardless of whether the email is on the allowlist —
+      // the server enforces the allowlist by simply not sending a link if not.
       if (res.status === 200) {
-        router.push(next);
-        router.refresh();
-      } else if (res.status === 401) {
-        setError("Incorrect password.");
-      } else if (res.status === 503) {
-        setError("CHAPTER_DASH_TOKEN env var not configured on the server.");
+        setSubmitted(true);
       } else {
-        setError(`Auth failed (${res.status}).`);
+        const body = await res.json().catch(() => ({}));
+        setError(body?.error || `Auth failed (${res.status}).`);
       }
-    } catch (e: any) {
-      setError(e?.message || "Network error");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Network error");
     } finally {
       setLoading(false);
     }
@@ -57,40 +67,71 @@ function LoginForm() {
             <span style={{ color: "#8A98AD", fontSize: 11, marginLeft: 6, textTransform: "uppercase", letterSpacing: ".12em", fontWeight: 400 }}>by afG</span>
           </div>
         </div>
-        <h1 style={{ fontSize: 18, fontWeight: 600, color: "#1F2D43", margin: "0 0 6px" }}>Sign in to the dashboard</h1>
-        <p style={{ fontSize: 12, color: "#5C6B82", margin: "0 0 18px", lineHeight: 1.5 }}>
-          Internal agency-operator surface. Stopgap auth until Supabase auth is wired up.
-        </p>
-        <input
-          type="password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          placeholder="Password"
-          autoFocus
-          style={{
-            width: "100%", padding: "10px 12px", borderRadius: 8,
-            border: "1px solid #E5DDC9", fontSize: 14, outline: "none",
-            background: "#FAFAF6", color: "#1F2D43",
-          }}
-        />
-        {error && (
-          <div style={{ marginTop: 10, fontSize: 12, color: "#B2452F" }}>{error}</div>
+
+        {submitted ? (
+          <>
+            <h1 style={{ fontSize: 18, fontWeight: 600, color: "#1F2D43", margin: "0 0 6px" }}>Check your inbox</h1>
+            <p style={{ fontSize: 12, color: "#5C6B82", margin: "0 0 6px", lineHeight: 1.5 }}>
+              If <strong>{email}</strong> is registered, a sign-in link is on its way.
+            </p>
+            <p style={{ fontSize: 12, color: "#5C6B82", margin: 0, lineHeight: 1.5 }}>
+              The link is valid for 60 minutes. You can close this tab.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 style={{ fontSize: 18, fontWeight: 600, color: "#1F2D43", margin: "0 0 6px" }}>Sign in to the dashboard</h1>
+            <p style={{ fontSize: 12, color: "#5C6B82", margin: "0 0 18px", lineHeight: 1.5 }}>
+              We&rsquo;ll email you a one-time sign-in link.
+            </p>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              autoFocus
+              required
+              style={{
+                width: "100%", padding: "10px 12px", borderRadius: 8,
+                border: "1px solid #E5DDC9", fontSize: 14, outline: "none",
+                background: "#FAFAF6", color: "#1F2D43",
+              }}
+            />
+            {error && (
+              <div style={{ marginTop: 10, fontSize: 12, color: "#B2452F" }}>{error}</div>
+            )}
+            <button
+              type="submit"
+              disabled={loading || !email}
+              style={{
+                marginTop: 14, width: "100%", padding: "10px 12px", borderRadius: 8,
+                background: "#E36410", color: "white", border: "none",
+                fontWeight: 600, fontSize: 14, cursor: loading || !email ? "not-allowed" : "pointer",
+                opacity: loading || !email ? 0.6 : 1,
+              }}
+            >
+              {loading ? "Sending…" : "Email me a link"}
+            </button>
+          </>
         )}
-        <button
-          type="submit"
-          disabled={loading || !password}
-          style={{
-            marginTop: 14, width: "100%", padding: "10px 12px", borderRadius: 8,
-            background: "#E36410", color: "white", border: "none",
-            fontWeight: 600, fontSize: 14, cursor: loading || !password ? "not-allowed" : "pointer",
-            opacity: loading || !password ? 0.6 : 1,
-          }}
-        >
-          {loading ? "Checking…" : "Sign in"}
-        </button>
       </form>
     </div>
   );
+}
+
+function errorMessageFor(code: string | null): string | null {
+  switch (code) {
+    case "not_allowlisted":
+      return "Your email isn't registered for the dashboard. Contact the admin.";
+    case "forbidden":
+      return "You don't have access to that page.";
+    case "no_role":
+      return "Your account has no assigned role. Contact the admin.";
+    case "callback_failed":
+      return "Sign-in link couldn't be verified. Try again.";
+    default:
+      return null;
+  }
 }
 
 export default function ChapterLoginPage() {

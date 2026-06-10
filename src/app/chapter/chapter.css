@@ -1078,3 +1078,55 @@
   }
 }
 
+
+/* ============ Skeleton primitives (Sprint 3b) ============
+ * Used in loading.tsx files and Suspense fallbacks. Mirrors card/row shapes
+ * so the layout doesn't reflow when real content arrives. */
+@keyframes chapter-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.chapter-app .skel {
+  background: linear-gradient(
+    90deg,
+    var(--line-2) 0%,
+    var(--bg-2)   50%,
+    var(--line-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: chapter-shimmer 1.8s ease-in-out infinite;
+  border-radius: 6px;
+  display: inline-block;
+}
+.chapter-app .skel.line       { height: 12px; width: 100%; }
+.chapter-app .skel.line.short { width: 40%; }
+.chapter-app .skel.line.mid   { width: 70%; }
+.chapter-app .skel.title      { height: 18px; width: 50%; }
+.chapter-app .skel.kpi-value  { height: 22px; width: 70%; }
+.chapter-app .skel.chip       { height: 20px; width: 64px; border-radius: 10px; }
+.chapter-app .skel-stack > * + * { margin-top: 8px; }
+@media (prefers-reduced-motion: reduce) {
+  .chapter-app .skel { animation: none; }
+}
+
+/* ============ Sidebar foot (Sprint 5 sign-out) ============ */
+.chapter-app .sidebar-foot {
+  margin-top: auto;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+}
+.chapter-app .sidebar-signout {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: border-color .12s ease, color .12s ease;
+}
+.chapter-app .sidebar-signout:hover {
+  color: var(--ink);
+  border-color: var(--ink-4);
+}

@@ -126,6 +126,21 @@ export function Sidebar() {
         ))}
       </div>
 
+      <div className="sidebar-foot">
+        <button
+          type="button"
+          className="sidebar-signout"
+          onClick={async () => {
+            try {
+              await fetch("/api/chapter-auth/signout", { method: "POST" });
+            } finally {
+              window.location.href = "/chapter/login";
+            }
+          }}
+        >
+          Sign out
+        </button>
+      </div>
     </aside>
     </>
   );
