@@ -269,6 +269,43 @@ if (!anonId) {
 
     window.ChapterPixel = api;
 
+  // Tier 1 redirect handoff (solution 1): if this landing has a ?chid=...
+  // param, the visitor arrived via a Chapter /r/... redirect that minted an
+  // anonymous identity on a different apex. Alias that redirect identity to
+  // this pixel's anonymous_id so events on this domain stitch back to the
+  // original click. Then strip chid+jid from the URL so it doesn't leak via
+  // share/screenshot/referrer. Runs once per page load before the page_view
+  // fires (so the page_view's referrer reflects the cleaned URL).
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var chid = params.get("chid");
+    if (chid && clientKey) {
+      var pixelAnonId = cachedAnonId || getOrCreateId(getAnonStorageKey(clientKey));
+      cachedAnonId = pixelAnonId;
+      if (chid !== pixelAnonId) {
+        fetch(identifyUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          keepalive: true,
+          body: JSON.stringify({
+            client_key: clientKey,
+            identity_key: pixelAnonId,
+            previous_identity_key: chid
+          })
+        }).catch(function () {});
+      }
+      // Clean handoff params out of the URL.
+      params.delete("chid");
+      params.delete("jid");
+      var newQs = params.toString();
+      var newUrl = window.location.pathname + (newQs ? "?" + newQs : "") + window.location.hash;
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    }
+  } catch (e) {}
+
   replayBufferedEvents();
 
   for (var i = 0; i < queue.length; i++) {

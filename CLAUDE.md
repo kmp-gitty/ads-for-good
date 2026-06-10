@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: June 9, 2026
+> Last updated: June 10, 2026
 
 ---
 
@@ -51,6 +51,13 @@ They share one repo, one Vercel deployment. Be careful not to break agency pages
 - **`src/app/api/pixel/route.ts`** — server-side ingest helper (NOT the script-serving file; CLAUDE.md previously documented this incorrectly)
 - **`src/app/api/chapter/collect/route.ts`** (or similar) — receives events server-side
 
+### Tier 1 first-party redirect (added June 10, 2026)
+- **URL shape:** `https://ads4good.com/r/<client_key>/<slug>?<query>` — visitor 302s to a destination chosen by priority-ordered rules evaluated against identity/cart/geo/device/AB/time/query/referrer context. Click is logged to `chapter_ingest.pixel_events` as `event_name='redirect_click'` so it flows through canonical_v1 as a normal session entry. Identity + journey cookies are dropped so downstream pixel events stitch to the same identity. <50ms latency target.
+- **Admin UI:** `/internal/redirect-rules` (gated by `CHAPTER_DASH_TOKEN` cookie). Create/edit/toggle/delete rules per (client_key, slug). Conditions are raw JSON (object = AND-ed predicates; empty `{}` = catch-all). Destination template supports `{q:utm_source}`, `{identity_key}`, `{client_key}`, `{country}`, `{region}`, `{city}`, `{device_type}`, `{os}`.
+- **Route handler:** `src/app/r/[client_key]/[slug]/route.ts`. Library modules in `src/app/lib/redirect/` (rules, identity, geo, device, ab, cart, segments, conditions, click-logger, template, consent).
+- **Consent gate is always-on.** `chapter_consent` cookie on the redirect apex; `opt_out` blocks the click log + cookie issuance but still 302s. No per-client toggle (matches the `/api/chapter/collect` contract). Per-client knob is the "default when cookie is absent" — v1 hardcoded `"opt_in"`.
+- **Operator guide:** `docs/tier1-redirect.md` (URL shape, all 17 condition types, template vars, example SQL, ESP wrap patterns for Mailchimp/Klaviyo/Shopify Email/Meta/Google Ads).
+
 ---
 
 ## 🗄 Supabase Schema Overview
@@ -80,7 +87,7 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 | `chapter_attribution` | Channel paths, attribution models (first/last/linear) |
 | `chapter_reporting` | Dashboard-ready outputs (generalizing per-tile; new tables drop the `eos_` prefix) |
 | `chapter_analysis` | Experimental, QA, debug objects — not production |
-| `chapter_config` | Per-client config — `clients` (PK config: storefront_domain / boundary_event_name / display_tz / email_source_patterns), `client_secrets`, `shopify_webhook_secrets`, `square_webhook_secrets` + `square_oauth_tokens` (added June 9), `email_campaigns`, `email_engagement_events`, `connections_cohorts` + `connections_cohort_members` |
+| `chapter_config` | Per-client config — `clients` (PK config: storefront_domain / boundary_event_name / display_tz / email_source_patterns), `client_secrets`, `shopify_webhook_secrets`, `square_webhook_secrets` + `square_oauth_tokens` (added June 9), `email_campaigns`, `email_engagement_events`, `connections_cohorts` + `connections_cohort_members`, `redirect_rules` + `redirect_ab_experiments` (added June 10, Tier 1 redirect) |
 | `chapter_observations` | Observations engine — `questions` catalog, `findings` state machine, `runs` audit (added June 2, 2026) |
 | `chapter_audit` | Auth-attempt + PII-view audit logs (added Fix #26 part 4) |
 
@@ -179,7 +186,48 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of June 9, 2026)
+## ✅ Completed Fixes (as of June 10, 2026)
+
+### Sprint 4 — Tier 1 first-party redirect domain (June 10, 2026)
+- **Scope:** complete intelligent routing layer at `/r/<client_key>/<slug>`. Server-side capture of every click, rule-evaluated routing against visitor context, click logged into `chapter_ingest.pixel_events` as `redirect_click` so it flows into the standard attribution chain, identity + journey cookies set so downstream pixel events stitch automatically. "Branch.io for open-web ecom" positioning. Currently hosted at `ads4good.com/r/...`; designed so swapping to a dedicated domain (`chptr.link/...`) is a cookie-Domain config change.
+- **Latency design (<50ms target):** 5-min in-process Map caches for rules + AB experiments + segments; parallel `Promise.all` for rules + AB + segments + cart lookups; fire-and-forget click logging (visitor's 302 ships before the INSERT lands); bot-class fast-path (skip rule eval, use `?to=` fallback).
+- **Schema (`chapter_config`):**
+  - `redirect_rules` — client_key, slug, rule_priority (lower wins), condition_jsonb (AND-ed), destination_template (supports `{var}` interpolation), enabled, hit_count, last_hit_at, description. Indexes: `(client_key, slug, rule_priority) WHERE enabled`; `(client_key)`.
+  - `redirect_ab_experiments` — client_key, experiment_id (UNIQUE per client), seed, buckets_jsonb (weights summing to 100), description, enabled, started_at, ended_at.
+  - RLS enabled. service_role full CRUD; chapter_app SELECT only.
+- **Library modules in `src/app/lib/redirect/`:**
+  - `rules.ts` — `fetchRules` / `fetchAbExperiments` / `clearRulesCache`, 5-min Map cache, keyed by (client_key, slug).
+  - `identity.ts` — `resolveIdentity` (reads/mints chapter_identity + chapter_journey cookies), `applyIdentityCookies` (Domain attribute scoped to apex). Identity cookie 365d, journey cookie 1d.
+  - `geo.ts` — reads `x-vercel-ip-country/region/city/lat/long` headers. Returns undefined fields on non-Vercel runtimes (test/local).
+  - `device.ts` — regex-based UA classifier returning `{device_type, os}`. Bot detection first, then OS, then form-factor.
+  - `ab.ts` — deterministic bucket assignment: `sha256(identityKey + '|' + seed)` → first 8 hex → uint32 → mod 100 → cumulative walk of sorted bucket weights. Same identity always lands in same bucket across config reloads (so long as seed is stable).
+  - `cart.ts` — `resolveCart` queries last 24h of `add_to_cart`/`view_cart` pixel_events for the identity. Returns `has_open_cart` + `hours_since_cart`.
+  - `segments.ts` — `resolveSegments` resolves canonical via `identity_canon` then parallel-fetches conversion history (canonical_v1_snapshot) + cohort tags (connections_cohort_members joined to cohorts). Anonymous identities short-circuit. 5-min cache per canonical.
+  - `conditions.ts` — `evaluateConditions(conditions, ctx)` walks all keys via REGISTRY (17 types: is_new_visitor / is_returning_visitor / has_converted_ever / has_converted_in_days / audience_tag / has_open_cart / cart_older_than_hours / day_of_week / hour_of_day / date_range / query_param / referrer_matches / country_in / region_in / device_type / os / ab_bucket). Empty object `{}` = catch-all default. Unknown types log + return false (fail-closed).
+  - `click-logger.ts` — fire-and-forget insert into `pixel_events` with `event_name='redirect_click'`. UTM params lifted out of query string into top-level columns; `partner_ids` extracted (fbclid/gclid/ttclid/msclkid); geo/device/full_query stashed in props. Doesn't throw.
+  - `template.ts` — `interpolateTemplate` replaces `{var}` URL-encoded. Vars: `{q:<key>}` (passthrough utm), `{identity_key}`, `{client_key}`, `{country}` / `{region}` / `{city}`, `{device_type}` / `{os}`. `isValidDestination` blocks non-http(s) schemes.
+- **Route handler `src/app/r/[client_key]/[slug]/route.ts`** — `dynamic = "force-dynamic"`. GET only. Bot fast-path → if `?to=` present use it, else 404. Otherwise parallel-fetch rules + AB experiments + segments + cart; walk rules in priority-ascending order, first match wins; fall back to `?to=` if no rule matches and no catch-all exists. Sets identity cookies + returns 302 with `X-Robots-Tag: noindex` and `Cache-Control: no-store`. Fire-and-forget `logRedirectClick` before the 302 returns.
+- **Click integration with attribution chain** — `redirect_click` events land in `pixel_events` with the same shape as any other pixel event (canonical identity, journey_id, utm + partner_ids extracted). The canonical_v1 session-entry classifier picks them up automatically as boundary signals when they appear at the start of a journey. No new attribution path or refresh logic needed; the redirect click IS a pixel event for all downstream purposes.
+- **Admin UI at `/internal/redirect-rules/*`** — gated by `CHAPTER_DASH_TOKEN` cookie like other agency-internal surfaces.
+  - Index page lists clients with enabled/total rule counts.
+  - `/internal/redirect-rules/[clientKey]` lists rules grouped by slug with priority, conditions (default badge for `{}`), destination template, hit_count, enabled toggle.
+  - `RuleForm` (shared between new + edit) — slug, priority, condition_jsonb (textarea, raw JSON for v1), destination_template, description, enabled. Live URL preview in the slug label.
+  - Server actions `createRule` / `updateRule` / `deleteRule` / `toggleRule` parse + validate, write, then call `clearRulesCache(client_key, slug)` + `revalidatePath()`. (Cache invalidation only fires on the lambda that handled the save — other lambdas continue serving stale rules for up to 5 min. Acceptable for marketing rule changes.)
+  - JSON-textarea is v1; structured editor on backlog.
+- **ESP wrap compatibility** — works behind Mailchimp/Klaviyo/Shopify Email/Meta/Google Ads click trackers. ESP wraps the Chapter URL → Chapter records click + 302s to destination. ~150ms total extra latency vs no-ESP-wrap. Both ESP and Chapter get their signal.
+- **Consent gate (always-on, no per-client toggle).** Route handler reads a `chapter_consent` cookie on the redirect apex. `opt_out` → skip `logRedirectClick` insert + skip `applyIdentityCookies` (no new identifiers issued; existing cookies left alone). Visitor is still 302'd to the resolved destination — routing is the service they clicked for, separate from data collection. Rule evaluation + segment lookups still run because reading existing identity context to route a visitor is not "collection." Rationale for no toggle: consent enforcement isn't a tunable behavior; it matches the same contract `/api/chapter/collect` already honors. The per-client knob is "default state when cookie is absent" (`applyConsentPolicy(state, defaultWhenUnknown)` — v1 hardcoded to `"opt_in"` = US default; EU-strict per-client override lands when first EU client onboards). **Cross-domain caveat:** the cookie lives on the redirect apex, not the destination storefront — opt-outs expressed only on the storefront don't reach the redirect until a `/api/consent-sync` endpoint is built (follow-on).
+- **Cross-domain identity stitching (two layered mechanisms; both gated by consent).** Closes the cookie-isolation gap between the redirect apex (`ads4good.com`) and the destination storefront (e.g. `eosfabrics.com`, `square.com/booking`).
+  - **Solution 1 — `?chid` handoff to destination (same-device).** `appendIdentityHandoff(url, identityKey, journeyId, allowCollection)` in [template.ts](src/app/lib/redirect/template.ts) auto-appends `?chid={identity_key}&jid={journey_id}` to every resolved destination URL (unless the rule template already set `chid`). Pixel reads `?chid` on first landing in [pixel.js/route.ts](src/app/api/chapter/pixel.js/route.ts), calls `/api/identify` with `previous_identity_key = chid`, which inserts the alias edge `R ↔ E` in `identity_aliases`. The canon trigger folds both into one canonical. Pixel then strips `chid` + `jid` from the URL via `history.replaceState` so they don't ride into screenshots / referrer / shares. Covers every same-device case including future un-redirected returns. Doesn't help when destination has no Chapter pixel OR visitor is on a different device than the click.
+  - **Solution 2 — server-side identity stitch from URL hint (cross-device).** Three optional URL hint flavors; redirect inserts an alias edge `R ↔ email_sha256:X` at click time. Precedence (most-private wins): `rh > rid > re`.
+    - `?rh=<64-hex>` — flavor #1 free: pre-hashed `email_sha256`. Zero PII in URL. Use when ESP supports hashed merge tags.
+    - `?re=<plaintext>` — flavor #2 universal: raw email, hashed server-side in [email-hint.ts](src/app/lib/redirect/email-hint.ts), never logged. Works with any ESP that has a plaintext email merge tag.
+    - `?rid=<opaque>` — flavor #3 privacy-strongest: opaque ESP per-recipient ID (Mailchimp UNIQID, Klaviyo person.id), resolved to `email_sha256` via `chapter_config.email_engagement_events.recipient_token` (column added June 10) in [recipient-lookup.ts](src/app/lib/redirect/recipient-lookup.ts). 5-min cache. Returns null gracefully when sync isn't built for that ESP yet.
+  - **Privacy contract.** All hint params stripped from forwarded URL + `props.full_query` + click-log before anything leaves the redirect server. `stripHintParams(query)` in email-hint.ts is the single source of truth for which keys are PII-bearing. Stitch is fire-and-forget; never blocks the 302; idempotent (insert ON CONFLICT DO NOTHING — repeat clicks for same recipient are safe).
+  - **What this unlocks for barbershop:** destination is Square's hosted booking domain (no Chapter pixel), so solution 1's handoff can't land. Solution 2's `?re=` or `?rid=` is load-bearing — without it, every redirect click would orphan from the appointment_booked webhook events. With it, the redirect_click and the Square webhook both stitch to `email_sha256:X` and the lifecycle chapter forms correctly.
+  - **Files (new):** [src/app/lib/redirect/email-hint.ts](src/app/lib/redirect/email-hint.ts), [recipient-lookup.ts](src/app/lib/redirect/recipient-lookup.ts), [identity-stitch.ts](src/app/lib/redirect/identity-stitch.ts). Modified: [template.ts](src/app/lib/redirect/template.ts) (`appendIdentityHandoff`), [route.ts](src/app/r/[client_key]/[slug]/route.ts) (extract hint → strip → stitch), [pixel.js/route.ts](src/app/api/chapter/pixel.js/route.ts) (chid reader + URL clean). Migration: `email_engagement_events` + `recipient_token` column + partial index.
+  - **Backlog:** extend the Mailchimp sync script (`chapter-scripts/sync-mailchimp-engagement.js`) to populate `recipient_token` from the Reports API response. Until then `?rid` no-ops silently for Mailchimp campaigns; `?re` and `?rh` are the fallbacks.
+- **Files:** `chapter-scripts/snapshots/2026-06-10-sprint-4-redirect-rules.sql` (schema); `src/app/lib/redirect/{rules,identity,geo,device,ab,cart,segments,conditions,click-logger,template}.ts` (10 modules); `src/app/r/[client_key]/[slug]/route.ts` (route handler); `src/app/internal/redirect-rules/{layout.tsx,page.tsx,_actions.ts,[clientKey]/{page.tsx,RuleRowActions.tsx,RuleForm.tsx,new/page.tsx,[ruleId]/page.tsx}}` (admin UI); `docs/tier1-redirect.md` (operator guide).
+- **Why this matters:** (a) intelligent routing per identity/cart/geo/device/A-B/time/query enables dynamic destinations the ESP can't do (cart-recovery direct to cart page only for returners with open cart; iOS gets Shop Pay deep link, others get web; A/B test landing pages without resending emails). (b) Closes the 521-missing-page-views finding from the May 22 validation (redirect owns the landing URL, can deterministically fire a server-side page_view equivalent if/when wired). (c) Strategic differentiator vs Branch.io: open-web ecom-native + integrated with the rest of the Chapter attribution stack out of the box.
 
 ### Square adapter code review fixes + Sprint 1.4 (June 9, 2026 night)
 - **Three follow-on items shipped in the same session as the Square adapter** — caught while writing the Square route + doing a focused code review of the data path before deploy.
