@@ -1,3 +1,13 @@
+// NOTE on naming (legacy): this endpoint is named /api/purchase because it
+// originally only handled Shopify ecom purchases. It now serves as the internal
+// boundary-event ingest endpoint for ALL webhook adapters (Shopify orders,
+// Square appointments, future B2B CRM events, etc.). The underlying table
+// chapter_ingest.purchase_events is similarly named for legacy reasons but
+// stores boundary events of any kind, discriminated by event_name. A future
+// rename to /api/boundary-event + chapter_ingest.boundary_events is on the
+// backlog; for now adapters call /api/purchase and pass event_name in the
+// payload (defaulting to 'purchase' for backward compat with the Shopify path).
+
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
@@ -16,8 +26,28 @@ function hmacSha256Hex(secret: string, body: string): string {
 
 function hasIdentity(p: any): boolean {
   return Boolean(
-    p.email || p.email_hash || p.customer_id || p.client_identity_key || p.anonymous_id
+    p.email || p.email_hash ||
+    p.phone || p.phone_hash ||
+    p.customer_id || p.client_identity_key || p.anonymous_id
   );
+}
+
+// Normalize a phone number to E.164 (digits-only with leading +). Default
+// country US (+1) if no country code present and number is 10 digits. Returns
+// null if input is unusable. Mirrors normalizeEmail for the phone-stitch path.
+function normalizePhone(phone: unknown): string | null {
+  if (typeof phone !== "string") return null;
+  const trimmed = phone.trim();
+  if (!trimmed) return null;
+  // Strip spaces, dashes, parens. Keep leading +.
+  const cleaned = trimmed.replace(/[\s\-().]/g, "");
+  if (cleaned.startsWith("+")) return cleaned;
+  // Bare 10-digit US number → prepend +1.
+  if (/^\d{10}$/.test(cleaned)) return `+1${cleaned}`;
+  // Bare 11-digit starting with 1 → prepend +.
+  if (/^1\d{10}$/.test(cleaned)) return `+${cleaned}`;
+  // Unknown shape → return null so downstream skips phone aliasing.
+  return null;
 }
 
 function hasDedupeId(p: any): boolean {
@@ -123,6 +153,17 @@ export async function POST(req: NextRequest) {
         ? sha256(email)
         : null;
 
+  // Phone stitching (Sprint 2.3 v2). Mirrors email_hash handling so any adapter
+  // can pass `phone` (raw) or `phone_hash` (pre-hashed). Used by the Square
+  // Appointments enrichment path; future booking platforms work the same way.
+  const phone = normalizePhone(payload.phone);
+  const phoneHash =
+    payload.phone_hash
+      ? String(payload.phone_hash).trim()
+      : phone
+        ? sha256(phone)
+        : null;
+
   const eventTs = payload.event_ts ? new Date(payload.event_ts) : new Date();
   const eventTsIso = eventTs.toISOString();
 
@@ -130,9 +171,17 @@ export async function POST(req: NextRequest) {
     (payload.client_identity_key || "").trim() ||
     (payload.anonymous_id || "").trim() ||
     (payload.customer_id || "").trim() ||
-    (emailHash ? `email_sha256:${emailHash}` : "");
+    (emailHash ? `email_sha256:${emailHash}` : "") ||
+    (phoneHash ? `phone_sha256:${phoneHash}` : "");
 
-  const lookupKey = emailHash ? `email_sha256:${emailHash}` : rootIdentityKey;
+  // Lookup key for canon resolution. Email is preferred (most stable across
+  // platforms); phone is the next-best deterministic identifier; everything
+  // else falls back to the rootIdentityKey chain.
+  const lookupKey = emailHash
+    ? `email_sha256:${emailHash}`
+    : phoneHash
+      ? `phone_sha256:${phoneHash}`
+      : rootIdentityKey;
   const purchaseCartToken = normalizeCartToken(payload?.raw?.order?.cart_token);
   let bridgedFromIdentityKey: string | null = null;
 
@@ -141,11 +190,21 @@ export async function POST(req: NextRequest) {
   // phases does NOT block the main purchase insert, and a failed identify-audit
   // pixel_events insert does NOT roll back the purchase.
 
-  // Phase 1: explicit-identify alias + canon (if we have both an anon/browser
-  // identity AND an email_hash).
+  // Phase 1: explicit-identify alias + canon (if we have email_hash AND any
+  // other deterministic identifier).
+  //
+  // Source-key precedence: client_identity_key > anonymous_id > customer_id.
+  // Including customer_id (added Jun 9 2026 for the Square Appointments flow)
+  // closes the gap where webhook adapters supply email + platform customer_id
+  // but no browser identity. Previously this case relied on the Phase 2
+  // cart-token bridge — which doesn't exist for booking platforms — so the
+  // platform customer_id would never alias to email.
   if (emailHash) {
     const emailKey = `email_sha256:${emailHash}`;
-    const fromKey = (payload.client_identity_key || "").trim() || (payload.anonymous_id || "").trim();
+    const fromKey =
+      (payload.client_identity_key || "").trim() ||
+      (payload.anonymous_id || "").trim() ||
+      (payload.customer_id || "").trim();
     if (fromKey && fromKey !== emailKey) {
       const aliasTs = new Date().toISOString();
       try {
@@ -249,10 +308,19 @@ export async function POST(req: NextRequest) {
   // Phase 3: self-canonical fallback (May 12 2026 fix for the 44-row attribution gap).
   // Guest checkouts with only email_hash hit neither phase 1 nor 2 — without this,
   // email_hash never lands in canon → purchase orphans out of attribution.
-  if (emailHash || payload.customer_id) {
+  //
+  // BUG FIX (Jun 9 2026): payload.customer_id is sent PRE-PREFIXED by adapters
+  // (Shopify route: `shopify_customer_id:7802...`, Square route: `square_customer_id:X`).
+  // The previous line re-prefixed with `shopify_customer_id:` here, producing
+  // malformed `shopify_customer_id:shopify_customer_id:X` keys in identity_canon.
+  // Confirmed 2 such entries in prod (EOS + projectagram). Trust the adapter's
+  // prefix — use payload.customer_id verbatim.
+  if (emailHash || phoneHash || payload.customer_id) {
     const detKey = emailHash
       ? `email_sha256:${emailHash}`
-      : `shopify_customer_id:${String(payload.customer_id).trim()}`;
+      : phoneHash
+        ? `phone_sha256:${phoneHash}`
+        : String(payload.customer_id).trim();
     try {
       await withClient(clientKey, async (tx) => {
         await tx`
@@ -266,6 +334,48 @@ export async function POST(req: NextRequest) {
       });
     } catch (canonErr) {
       console.error("identity_canon self-canonical upsert (purchase fallback) failed:", canonErr);
+    }
+  }
+
+  // Phase 3.5 (Sprint 2.3 v2): phone↔email alias when BOTH deterministic
+  // identifiers are present. Email is treated as canonical so phone_sha256:X
+  // → email_sha256:Y. The trg_sync_canon_from_alias trigger propagates so
+  // future events that arrive with phone-only can stitch to the same canonical
+  // as email-only events for the same person.
+  if (emailHash && phoneHash) {
+    const emailKey = `email_sha256:${emailHash}`;
+    const phoneKey = `phone_sha256:${phoneHash}`;
+    const aliasTs = new Date().toISOString();
+    try {
+      await withClient(clientKey, async (tx) => {
+        await tx`
+          INSERT INTO chapter_identity.identity_aliases
+            (client_key, ts, from_identity_key, to_identity_key, confidence, is_deterministic, reason)
+          VALUES
+            (${clientKey}, ${aliasTs}, ${phoneKey}, ${emailKey}, 100, true, 'purchase_phone_email_link')
+          ON CONFLICT (client_key, from_identity_key, to_identity_key)
+          DO UPDATE SET
+            ts = EXCLUDED.ts,
+            confidence = EXCLUDED.confidence,
+            is_deterministic = EXCLUDED.is_deterministic,
+            reason = EXCLUDED.reason
+        `;
+        // Defense in depth: trigger trg_sync_canon_from_alias also fires.
+        try {
+          await tx`
+            INSERT INTO chapter_identity.identity_canon (client_key, identity_key, canonical_identity_key, updated_at)
+            VALUES (${clientKey}, ${phoneKey}, ${emailKey}, ${aliasTs})
+            ON CONFLICT (client_key, identity_key)
+            DO UPDATE SET
+              canonical_identity_key = EXCLUDED.canonical_identity_key,
+              updated_at = EXCLUDED.updated_at
+          `;
+        } catch (canonErr) {
+          console.error("identity_canon phone→email upsert failed; trigger will still sync:", canonErr);
+        }
+      });
+    } catch (aliasErr) {
+      console.error("identity_aliases phone↔email link failed:", aliasErr);
     }
   }
 
@@ -310,7 +420,7 @@ export async function POST(req: NextRequest) {
           click_id, page_url, referrer,
           user_agent, raw
         ) VALUES (
-          ${clientKey}, 'purchase', ${eventTsIso}, ${payload.source_platform},
+          ${clientKey}, ${payload.event_name ?? 'purchase'}, ${eventTsIso}, ${payload.source_platform},
           ${payload.order_id ?? null}, ${payload.payment_id ?? null}, ${payload.event_id ?? null},
           ${payload.value}, ${payload.currency},
           ${emailHash}, ${payload.customer_id ?? null}, ${payload.client_identity_key ?? null}, ${payload.anonymous_id ?? null},
