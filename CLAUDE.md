@@ -188,6 +188,25 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of June 10, 2026)
 
+### Sprint 3 — Perf pass: denormalized journey-resolution snapshot (June 10, 2026)
+- **Scope:** systematic perf audit of every dashboard RPC (33 cached wrappers in `dashboard-rpc.ts`). Inventory + timings against EOS revealed two real cliffs; everything else was already sub-100ms on warm primary thanks to prior Sprint 1.5 work.
+- **Cliffs identified:**
+  - `channel_performance_overview` (30d) — **849ms**. 428ms on the journey-side 3-way join (`journey_bot_classification_v1` × `journey_entry_channel_v1` × `journey_entry_channel_overrides`); 419ms on the LATERAL unnest of canonical_v1 channel paths. EOS 52k+ non-bot journeys × PK lookups = 209k buffer hits.
+  - `lagged_impact_pair_series` (90d) — **989ms**. Same 3-way join scaled to 90d window, plus LEFT JOIN to bucket time-series.
+- **Root cause:** every dashboard RPC that needs "what channel did this journey enter via, was it a bot, was it overridden" was re-doing the 3-way nested loop on every call. With Vercel-replica cold buffers this would land at 2.5-3s+ — visible to operators on every page load.
+- **Architectural fix — `chapter_reporting.journey_resolved_v1` (new snapshot):** one row per (client_key, journey_id) pre-joining the 3 source MVs. Columns: `entry_ts`, `resolved_channel` (= COALESCE(override, entry)), `is_overridden`, `bot_class`, `event_count`, `snapshot_ts_hi`. Indexes:
+  - `(client_key, entry_ts) WHERE bot_class IN ('human_likely','suspect') AND event_count > 1` — the universal non-bot date-range index used by every channel-aggregation RPC.
+  - `(client_key, resolved_channel, entry_ts) WHERE bot_class IN ('human_likely','suspect') AND event_count > 1` — channel-filtered range scans (lagged_impact_pair_series uses this for the `IN (channel_a, channel_b)` filter).
+- **Loader:** `chapter_reporting.refresh_journey_resolved_v1(p_client_key, p_snapshot_ts_hi DEFAULT now())` — per-client DELETE-then-INSERT in one tx (same pattern as canonical_v1/v2 loaders). Writes a `_snapshot_runs` row for audit. Initial backfill: EOS 919,185 rows; projectagram 326; adsforgood 713.
+- **Cron wired** in `/api/internal/cron/refresh-dashboard-mvs` (04:00 UTC, after the source MVs refresh CONCURRENTLY). New `PER_CLIENT_SNAPSHOTS` registry — additions to the snapshot family just register an entry; no plumbing per snapshot. Failure surfaces in the GChat alert alongside MV failures.
+- **RPCs rewritten:**
+  - `channel_performance_overview` — journey side now one indexed scan on `journey_resolved_v1`. **849ms → 442ms (1.9×)**, identical row output across all 8 channels. Residual is the LATERAL unnest CTE; tracked as future polish but not a cliff.
+  - `lagged_impact_pair_series` — same swap. **989ms → 91ms (10.8×)** on the partial-index hit, identical numbers.
+- **Pattern established (re-locked as a Forward Rule):** any dashboard RPC that needs "non-bot journey resolution with channel" reads from `journey_resolved_v1` — never recomputes the 3-way join inline. Adding a new client = run `refresh_journey_resolved_v1(client_key)` once at provisioning + the cron handles it daily. No new clients trigger the journey-side cliff.
+- **Other channel/journey RPCs deliberately NOT yet migrated:** `correlation_channel_overview` (96ms), `contribution_overview` (23ms), `incrementality_channel_overview` (26ms), `lagged_impact_pair` (<1ms) all share the same 3-way join pattern but are fast enough today on primary. Migrating each is mechanical (~5 lines per RPC). Defer until either (a) replica cold-load complaints surface OR (b) we're touching them for an unrelated reason — touch-and-go migration to avoid churn.
+- **Bug surfaced:** `chapter_reporting.observations_history` RPC doesn't exist in DB but `cachedObservationsHistory` references it. Either fails silently or page wraps another call. Logged as INVESTIGATE.
+- **Files:** new SQL function `chapter_reporting.refresh_journey_resolved_v1`; rewritten `channel_performance_overview` + `lagged_impact_pair_series`; updated `/api/internal/cron/refresh-dashboard-mvs/route.ts` (PER_CLIENT_SNAPSHOTS registry + per-client snapshot pass + failure surfacing).
+
 ### Sprint 4 — Tier 1 first-party redirect domain (June 10, 2026)
 - **Scope:** complete intelligent routing layer at `/r/<client_key>/<slug>`. Server-side capture of every click, rule-evaluated routing against visitor context, click logged into `chapter_ingest.pixel_events` as `redirect_click` so it flows into the standard attribution chain, identity + journey cookies set so downstream pixel events stitch automatically. "Branch.io for open-web ecom" positioning. Currently hosted at `ads4good.com/r/...`; designed so swapping to a dedicated domain (`chptr.link/...`) is a cookie-Domain config change.
 - **Latency design (<50ms target):** 5-min in-process Map caches for rules + AB experiments + segments; parallel `Promise.all` for rules + AB + segments + cart lookups; fire-and-forget click logging (visitor's 302 ships before the INSERT lands); bot-class fast-path (skip rule eval, use `?to=` fallback).

@@ -99,8 +99,13 @@ export async function resolveSegments(
     days_since_last_conversion: lastBoundaryTs
       ? (Date.now() - new Date(lastBoundaryTs).getTime()) / 86_400_000
       : null,
-    audience_tags: ((cohorts ?? []) as Array<{ connections_cohorts: { name: string; kind: string } | null }>)
-      .map((r) => r.connections_cohorts?.name)
+    // Supabase nested FK joins return the joined rows as an array, not a
+    // single object — even with !inner, because the relationship cardinality
+    // isn't expressed in the schema. Each member row's connections_cohorts
+    // resolves to a 1-element array in practice; flat-map to be safe.
+    audience_tags: ((cohorts ?? []) as Array<{ connections_cohorts: Array<{ name: string; kind: string }> }>)
+      .flatMap((r) => r.connections_cohorts ?? [])
+      .map((c) => c.name)
       .filter((n): n is string => Boolean(n)),
   };
 

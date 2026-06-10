@@ -20,6 +20,21 @@ type MvResult =
   | { mv: string; ok: true; refresh_ms: number; analyze_ms: number }
   | { mv: string; ok: false; phase: "refresh" | "analyze"; error: string };
 
+type SnapshotResult =
+  | { snapshot: string; client_key: string; ok: true; refresh_ms: number; rows: number }
+  | { snapshot: string; client_key: string; ok: false; error: string };
+
+// Per-client snapshots that depend on the journey MVs above. Refreshed AFTER
+// the MV pass so they pick up the freshest source data. Sprint 3 added
+// journey_resolved_v1 (denormalized journey resolution); future per-client
+// snapshots register here.
+const PER_CLIENT_SNAPSHOTS = [
+  {
+    snapshot: "journey_resolved_v1",
+    refreshFn: "chapter_reporting.refresh_journey_resolved_v1",
+  },
+];
+
 export async function GET(req: NextRequest) {
   const unauthorized = unauthorizedIfNotCron(req);
   if (unauthorized) return unauthorized;
@@ -42,6 +57,7 @@ export async function GET(req: NextRequest) {
   });
 
   const results: MvResult[] = [];
+  const snapshotResults: SnapshotResult[] = [];
 
   try {
     await sql`SET statement_timeout = '30min'`;
@@ -77,22 +93,70 @@ export async function GET(req: NextRequest) {
 
       results.push({ mv, ok: true, refresh_ms, analyze_ms });
     }
+
+    // Per-client snapshot refresh (depends on the journey MVs above being fresh).
+    const clients = await sql<{ client_key: string }[]>`
+      SELECT client_key FROM chapter_config.client_secrets WHERE revoked_at IS NULL
+    `;
+    for (const snap of PER_CLIENT_SNAPSHOTS) {
+      for (const c of clients) {
+        const start = Date.now();
+        try {
+          const rows = await sql.unsafe(
+            `SELECT rows_written FROM ${snap.refreshFn}($1::text)`,
+            [c.client_key]
+          );
+          snapshotResults.push({
+            snapshot: snap.snapshot,
+            client_key: c.client_key,
+            ok: true,
+            refresh_ms: Date.now() - start,
+            rows: Number((rows[0] as { rows_written?: number })?.rows_written ?? 0),
+          });
+        } catch (err) {
+          snapshotResults.push({
+            snapshot: snap.snapshot,
+            client_key: c.client_key,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
   } finally {
     await sql.end({ timeout: 5 });
   }
 
-  const failures = results.filter((r): r is Extract<MvResult, { ok: false }> => !r.ok);
+  const mvFailures = results.filter((r): r is Extract<MvResult, { ok: false }> => !r.ok);
+  const snapFailures = snapshotResults.filter(
+    (r): r is Extract<SnapshotResult, { ok: false }> => !r.ok,
+  );
 
-  if (failures.length > 0) {
-    const lines = [
-      `🚨 *Dashboard MV refresh failed* (${failures.length}/${MVS.length} MVs)`,
-      "",
-      ...failures.map(
-        (f) => `• \`${f.mv}\` — failed during *${f.phase}*: ${f.error.slice(0, 200)}`
-      ),
-      "",
+  if (mvFailures.length > 0 || snapFailures.length > 0) {
+    const lines: string[] = [];
+    if (mvFailures.length > 0) {
+      lines.push(`🚨 *Dashboard MV refresh failed* (${mvFailures.length}/${MVS.length} MVs)`);
+      lines.push("");
+      lines.push(
+        ...mvFailures.map(
+          (f) => `• \`${f.mv}\` — failed during *${f.phase}*: ${f.error.slice(0, 200)}`,
+        ),
+      );
+      lines.push("");
+    }
+    if (snapFailures.length > 0) {
+      lines.push(`🚨 *Per-client snapshot refresh failed* (${snapFailures.length} entries)`);
+      lines.push("");
+      lines.push(
+        ...snapFailures.map(
+          (f) => `• \`${f.snapshot}\` / \`${f.client_key}\` — ${f.error.slice(0, 200)}`,
+        ),
+      );
+      lines.push("");
+    }
+    lines.push(
       "_Dashboard tiles will be serving stale data until next successful refresh. See `feedback_stale_mv_cache_illusion.md`._",
-    ];
+    );
     try {
       await postToGChat({ text: lines.join("\n") });
     } catch (err) {
@@ -101,8 +165,9 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    ok: failures.length === 0,
+    ok: mvFailures.length === 0 && snapFailures.length === 0,
     results,
-    failed_count: failures.length,
+    snapshot_results: snapshotResults,
+    failed_count: mvFailures.length + snapFailures.length,
   });
 }
