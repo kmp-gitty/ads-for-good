@@ -207,6 +207,7 @@ export const CLIENTS: Client[] = [
   { id: "eos_fabrics",        name: "Client A",           tier: "Mid",     color: "#E36410" },
   { id: "projectagram_reels", name: "Client B",           tier: "Mid",     color: "#5868D6" },
   { id: "adsforgood_prod",    name: "Client C",           tier: "Top",     color: "#2E7D5B" },
+  { id: "not_so_cavalier",    name: "Client D",           tier: "Starter", color: "#8E5DA8" },
 ];
 
 export const KPI: Kpi[] = [

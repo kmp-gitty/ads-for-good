@@ -17,6 +17,8 @@ export const CHAPTER_ALLOWED_ORIGINS = new Set<string>([
   "https://www.eosfabrics.com",
   "https://projectagram.com",
   "https://www.projectagram.com",
+  "https://notsocavalier.com",
+  "https://www.notsocavalier.com",
 ]);
 
 const FALLBACK_ORIGIN = "https://eosfabrics.com";

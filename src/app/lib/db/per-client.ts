@@ -71,6 +71,7 @@ const CLIENT_ROLE_MAP: Record<string, string> = {
   eos_fabrics: "client_eos_fabrics",
   projectagram_reels: "client_projectagram_reels",
   adsforgood_prod: "client_adsforgood_prod",
+  not_so_cavalier: "client_not_so_cavalier",
 };
 
 export function isKnownClient(clientKey: string): boolean {

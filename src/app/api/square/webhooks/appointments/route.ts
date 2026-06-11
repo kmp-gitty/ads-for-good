@@ -1,10 +1,17 @@
-// Square Appointments webhook adapter.
+// Square Bookings webhook adapter.
 //
-// Receives appointment.* webhook events from Square and forwards them to the
+// Receives booking.* webhook events from Square and forwards them to the
 // internal /api/purchase route as Chapter "boundary events." For a personal-
 // services client whose chapter_config.clients.boundary_event_name is
-// 'appointment_booked', each appointment creation lands as a purchase_events
+// 'appointment_booked', each booking creation lands as a purchase_events
 // row, identity-stitched via customer email_sha256 → identity_canon.
+//
+// URL path note: the route still lives at /api/square/webhooks/appointments
+// for backwards compatibility with the webhook subscription URL (Square's
+// developer dashboard requires re-saving a subscription to change the URL).
+// Square renamed the API surface from "appointments" to "bookings" — the
+// modern event types are booking.created and booking.updated (covers both
+// changes AND cancellations in one event).
 //
 // Mirrors src/app/api/shopify/webhooks/orders-create/route.ts:
 // - HMAC verification per-merchant (vs per-shop for Shopify)
@@ -14,28 +21,14 @@
 //
 // Square's webhook signature (HMAC-SHA-256, base64) covers the concatenation
 // of (notification_url + raw_body) — different from Shopify's body-only.
-// Both new + old signing keys are tried (rotation overlap).
+// Multiple non-revoked signing keys are tried (rotation overlap).
 //
 // Event types we handle:
-//   appointment.created   → boundary event, lands as purchase_events row
-//   appointment.updated   → IGNORED for v1 (would re-emit boundary; skip)
-//   appointment.canceled  → IGNORED for v1 (cancel semantics handled later
-//                            via offline_milestones if/when offline ingest
-//                            extends to cancellations)
-//
-// What this v1 needs (TODO for tomorrow's barbershop intake):
-//   - Real merchant_id ↔ client_key + signing key pair INSERTed to
-//     chapter_config.square_webhook_secrets.
-//   - Square's appointment payload does NOT include customer email by default.
-//     The customer_id in the payload references Square's Customers API.
-//     We INSERT a placeholder customer_id and either:
-//       (a) tomorrow: enrich via Square Customers API in an async post-write
-//           step (the typical pattern), or
-//       (b) accept that identity_canon stitching happens lazily when the
-//           barbershop's marketing-site pixel-tracked journey resolves via
-//           email_sha256 + a separate canon update path.
-//   - Sandbox testing: Square's webhook simulator → POST to a deployed
-//     preview URL with the signing key from sandbox.
+//   booking.created   → boundary event, lands as purchase_events row
+//   booking.updated   → IGNORED for v1 (covers reschedule + cancellation in
+//                        one event; re-emitting would double-count boundaries
+//                        and cancel semantics need a separate refund-style
+//                        path that we haven't built yet)
 
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
@@ -113,7 +106,7 @@ export async function POST(req: NextRequest) {
         type?: string;
         id?: string;
         object?: {
-          appointment?: Record<string, unknown>;
+          booking?: Record<string, unknown>;
         };
       };
     };
@@ -170,33 +163,35 @@ export async function POST(req: NextRequest) {
       ip_hash: ipHash, user_agent_snippet: ua,
     });
 
-    // Only process appointment.created in v1. Other event types ack-and-skip
-    // so Square doesn't keep retrying.
-    if (eventType !== "appointment.created") {
+    // Only process booking.created in v1. Other event types (booking.updated
+    // covers reschedule + cancellation) ack-and-skip so Square doesn't keep
+    // retrying. Cancellation/refund semantics will land in a separate path
+    // when we wire payment.updated REFUNDED handling.
+    if (eventType !== "booking.created") {
       return NextResponse.json({ ok: true, skipped: eventType }, { status: 200 });
     }
 
-    const appointment = event.data?.object?.appointment;
-    if (!appointment || typeof appointment !== "object") {
-      return NextResponse.json({ error: "missing_appointment_payload" }, { status: 400 });
+    const booking = event.data?.object?.booking;
+    if (!booking || typeof booking !== "object") {
+      return NextResponse.json({ error: "missing_booking_payload" }, { status: 400 });
     }
 
-    const appointmentId = typeof appointment.id === "string" ? appointment.id : null;
-    const customerId = typeof appointment.customer_id === "string" ? appointment.customer_id : null;
+    const bookingId = typeof booking.id === "string" ? booking.id : null;
+    const customerId = typeof booking.customer_id === "string" ? booking.customer_id : null;
 
     // event_ts must reflect when the BOOKING was made (boundary event for
     // attribution), NOT when the service is scheduled to happen. Priority:
-    //   1. appointment.created_at — when the appointment record was created
-    //   2. event.created_at        — when Square emitted the webhook (~same moment)
-    //   3. now()                   — fallback if neither present
-    // We intentionally do NOT use appointment.start_at here — that's when
-    // the service occurs (possibly hours or days later), which would put
-    // the lifecycle chapter's boundary in the future relative to the
-    // customer's actual journey.
-    const apptCreatedAt = typeof (appointment as Record<string, unknown>).created_at === "string"
-      ? ((appointment as Record<string, unknown>).created_at as string)
+    //   1. booking.created_at — when the booking record was created
+    //   2. event.created_at   — when Square emitted the webhook (~same moment)
+    //   3. now()              — fallback if neither present
+    // We intentionally do NOT use booking.start_at here — that's when the
+    // service occurs (possibly hours or days later), which would put the
+    // lifecycle chapter's boundary in the future relative to the customer's
+    // actual journey.
+    const bookingCreatedAt = typeof (booking as Record<string, unknown>).created_at === "string"
+      ? ((booking as Record<string, unknown>).created_at as string)
       : null;
-    const eventTs = apptCreatedAt || event.created_at || new Date().toISOString();
+    const eventTs = bookingCreatedAt || event.created_at || new Date().toISOString();
 
     // Sprint 2.3 v2 alt — Square Customers API enrichment.
     // Fetch Customer record in parallel with the AFG secret read so identity
@@ -217,15 +212,17 @@ export async function POST(req: NextRequest) {
 
     const purchasePayload = {
       client_key:      clientKey,
-      source_platform: "square_appointments",
-      event_id:        appointmentId ? `square_appointment_created_${appointmentId}` : null,
+      source_platform: "square_bookings",
+      event_id:        bookingId ? `square_booking_created_${bookingId}` : null,
       event_name:      "appointment_booked",      // matches chapter_config.clients.boundary_event_name
-      order_id:        appointmentId,
+      // order_id = bookingId so the downstream payment webhook can JOIN on
+      // the same key when it emits appointment_paid.
+      order_id:        bookingId,
       payment_id:      null,
       customer_id:     customerId ? `square_customer_id:${customerId}` : null,
       email:           enrichedEmail,              // Sprint 2.3 v2 alt
       phone:           enrichedPhone,              // Sprint 2.3 v2: phone-first stitching
-      value:           0,                          // appointments have no $$ amount at booking
+      value:           0,                          // bookings have no $$ amount at booking; payment.created fills in
       currency:        "USD",
       event_ts:        eventTs,
       coupon:          null,
@@ -236,7 +233,7 @@ export async function POST(req: NextRequest) {
         merchant_id: merchantId,
         topic: eventType,
         event_id: event.event_id || null,
-        appointment: sanitizeSquareAppointmentForRaw(appointment),
+        booking: sanitizeSquareAppointmentForRaw(booking),
         // Note: enrichment metadata only — actual email/phone never go into
         // `raw` (they're hashed via /api/purchase and stored in identity_canon
         // only). Just record WHETHER we got them.
@@ -253,7 +250,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "missing_purchase_identity" }, { status: 400 });
     }
     if (!purchasePayload.order_id && !purchasePayload.event_id) {
-      return NextResponse.json({ error: "missing_appointment_identifier" }, { status: 400 });
+      return NextResponse.json({ error: "missing_booking_identifier" }, { status: 400 });
     }
 
     const normalizedBody = JSON.stringify(purchasePayload);
