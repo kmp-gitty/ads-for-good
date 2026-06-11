@@ -24,7 +24,27 @@ export function TopBar({
    *  unwired pages still render something. */
   kpis?: Kpi[];
 }) {
-  const { dateRange, setDateRange, compare, setCompare, model, setModel, setSidebarOpen } = useChapter();
+  const { dateRange, setDateRange, compare, setCompare, model, setModel, setSidebarOpen, client, freshness } = useChapter();
+
+  // Sprint 3b/data-freshness: "Data as of" line under the page title. Uses
+  // the per-client snapshot freshness fetched server-side in the (authed)
+  // layout; falls back to silent if no entry (e.g. brand-new client whose
+  // first nightly run hasn't happened yet).
+  const asOf = freshness[client.id];
+  const asOfLine = asOf
+    ? (() => {
+        const d = new Date(asOf.as_of_iso);
+        const dateStr = d.toLocaleDateString("en-US", {
+          timeZone: asOf.display_tz,
+          year: "numeric", month: "short", day: "numeric",
+        });
+        const timeStr = d.toLocaleTimeString("en-US", {
+          timeZone: asOf.display_tz,
+          hour: "numeric", minute: "2-digit", timeZoneName: "short",
+        });
+        return `Data as of ${dateStr}, ${timeStr} · refreshes nightly`;
+      })()
+    : null;
 
   // Read the URL codes directly to compute date subtitles (avoids re-mapping
   // labels back to codes). These hooks update on every URL change → subtitles
@@ -54,6 +74,7 @@ export function TopBar({
         <div className="topbar-title">
           <h1>{title}</h1>
           <div className="sub">{subtitle}</div>
+          {asOfLine && <div className="topbar-asof">{asOfLine}</div>}
         </div>
         <div className="spacer"></div>
 

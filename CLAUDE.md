@@ -188,6 +188,209 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of June 10, 2026)
 
+### Sidebar reorg + Submit-a-question (Tasks 1 + 4 of June 11 work order)
+- **Reference docs:** `chapter_recommendations_spec_v1.md` (rule library + page spec) — companion to CLAUDE.md.
+- **Decisions locked at handoff:**
+  1. Lagged Impact page already exists at `/chapter/connections/lagged-impact` — added to nav, no route work needed
+  2. Anthropic API key available — Task 3 will wire `@anthropic-ai/sdk` (net-new dependency, no existing Claude integration anywhere in Chapter)
+  3. **New `chapter_recommendations` schema** (vs extending `chapter_observations`) — cleaner separation given different finding shapes (5-part card vs Observations payload), different cron, different page layout
+  4. All clients (including Starter tier) get Recommendations for now; Starter-locked is future state
+  5. Default landing changed to `/chapter/overview` (Lifecycle Overview) — will switch to `/chapter/recommendations` after that page has 2-3 weeks of real usage
+
+#### Task 1 — Sidebar restructure
+- **5 nav groups** with thin dividers replacing the old 3-group layout (Connections / Analyze / single-Observations):
+  - **Actions:** Recommendations *(new — links to `/chapter/recommendations` which 404s until Task 2 ships)*
+  - **Summary:** Lifecycle Overview
+  - **Connections:** Observations *(moved here from top)*, Cross-Source Influence, Lagged Impact
+  - **Analysis:** Lift Incrementality & Value, Attribution Models, Channel Roles
+  - **Data:** Path Patterns, Customer Journeys, Raw Performance
+- **`renderNavItem` helper** extracted from inline JSX to deduplicate the per-item Link rendering across the 5 sections.
+- **Default landing changed** from `/chapter/observations` → `/chapter/overview` in BOTH places:
+  - [src/app/chapter/auth/callback/route.ts](src/app/chapter/auth/callback/route.ts) — post-login destination
+  - [middleware.ts](middleware.ts) — `canAccessClient` fallback when client_employee hits another client's path
+  - `isActive()` in Sidebar also updated so root `/chapter` aliases to overview (was observations)
+- **CSS:** new `.nav-divider` class appended to [chapter.css](src/app/chapter/chapter.css) — `1px` line at 70% opacity using `--line-2`.
+- **Behaviors preserved:** active-route highlighting, client switcher, sign-out, lock pill on Observations for Starter tier, mobile collapse, Sprint 5c conditional rendering for client_employee.
+- **Files:** [Sidebar.tsx](src/app/chapter/_components/Sidebar.tsx), `auth/callback/route.ts`, `middleware.ts`, `chapter.css`.
+
+#### Task 4 — Submit-a-question affordance
+- **Schema:** new `chapter_observations.question_submissions` table — `(id, submitted_by_email, client_key, question_text, context_text, submitted_at, status CHECK ('pending','approved','rejected','dismissed'), reviewed_by, reviewed_at, review_notes)`. Partial index on `submitted_at DESC` filtered to `status='pending'` for fast curation queue. RLS enabled.
+- **API route:** [POST /api/internal/observations-submissions](src/app/api/internal/observations-submissions/route.ts) — accepts `{client_key, question_text, context_text?}`. Auth: Supabase session preferred (captures email), legacy `CHAPTER_DASH_TOKEN` cookie fallback (email = null). Validation: 8 ≤ question length ≤ 1000.
+- **Component:** [SubmitQuestionDrawer.tsx](src/app/chapter/_components/SubmitQuestionDrawer.tsx) — modal with question textarea + optional "Why this matters" textarea + Submit/Cancel. ESC + backdrop click + close button all dismiss (disabled while submitting). On success, swaps to confirmation state for 2 seconds then auto-closes. Focus management + ARIA dialog role + char counter on the question field.
+- **Trigger:** "+ Suggest a question" pill button in the Observations page hero, beside the "How this page works" label. Sits on the dark navy hero with a translucent white background → hovers brighter. Subtle, scannable.
+- **Wiring:** [ObservationsClient.tsx](src/app/chapter/(authed)/observations/ObservationsClient.tsx) added drawer state + mount + trigger button. Existing page behavior (filters, severity gates, popup detail) unchanged.
+- **Curation workflow out of scope** — Chapter team reviews via SQL or future admin page; status updates by `UPDATE chapter_observations.question_submissions SET status='approved', ...`.
+- **Files:** new `question_submissions` table, new API route, new `SubmitQuestionDrawer.tsx`, modified `ObservationsClient.tsx`, appended `.chapter-submit-*` + `.chapter-suggest-btn` CSS.
+
+#### Pending — Tasks 2 + 3 (next session)
+- **Task 3 — Recommendations engine** (substantial): new `chapter_recommendations` schema (rules / findings / runs), `@anthropic-ai/sdk` integration in `src/app/lib/claude/render-card.ts`, weekly cron at Mondays 06:00 UTC at `/api/internal/cron/refresh-recommendations`, per-rule evaluators in `src/app/lib/recommendations/rules/<rule_id>.ts`, dedup logic for unchanged-data scenarios. Pilot with 3-5 rules from different themes to validate end-to-end (Claude API + cron + dedup) before completing all 20.
+- **Task 2 — Recommendations page** (depends on Task 3 producing findings): 6 themed sections with "all clear" empty states, 5-part card anatomy (headline / story / evidence / action / confidence), filtering by confidence/state/action_type/theme, history view, deep-links to source pages.
+- **Deploy prerequisite for Task 3:** `ANTHROPIC_API_KEY` env var in Vercel (Production + Preview).
+
+### Observations C2 + C3 shipped (June 11, 2026)
+- **Engine now executes 15 of 27 questions** (was 13). C2 (step-level funnel drop) + C3 (high-touch-count page) implemented and producing real findings on EOS.
+- **Key discovery:** the pixel-to-chapter MV CLAUDE.md said C2/C3 depend on **was never needed** — `chapter_model.lifecycle_chapters_snapshot` already tags every pixel event with `chapter_id` (since Fix #25 Phase 0). C3 reads chapter assignment directly from that snapshot via JOIN to canonical_v1 on `(canonical_identity_key, chapter_id)`. No new MV built.
+- **No `run_engine` dispatch wiring needed.** The dispatcher loops over all `enabled=true` rows in `chapter_observations.questions` and does `EXECUTE format('SELECT chapter_observations.run_question_%s($1, $2)', q.question_id)`. Adding C2/C3 = creating the two `run_question_c2` + `run_question_c3` functions + the catalog rows already exist with `enabled=true`. Pattern is plug-and-play for future questions.
+- **C2 — Step-level funnel drop:**
+  - Funnel (event-name based): `page_view → add_to_cart → view_cart → boundary_event`
+  - For each step transition, distinct-identity count current 4w vs prior 4w → step conversion rate → drop flagged if absolute pp drop or relative % drop crosses tier.
+  - Cross-platform: step 4 reads from `chapter_ingest.purchase_events` filtered by `chapter_config.boundary_event(client_key)` — works for both `purchase` (Shopify) and `appointment_booked` (Square) clients. Non-ecom clients naturally produce zero step-2/step-3 counts and the question silently no-ops those transitions.
+  - Severity: high (≥10pp / 30% rel), med (≥5pp / 15% rel), low (≥2pp / 5% rel).
+  - **EOS finding (low):** view_cart → purchase dropped 43.1% → 38.6% (4.5pp, ~10% rel). Real signal — checkout completion fell in the last 4 weeks.
+- **C3 — High-touch-count page:**
+  - For each page (normalized: scheme/host stripped, query/fragment stripped), median chapter touch count for chapters that touched the page vs portfolio median. Touch count = `array_length(channel_path)` from canonical_v1 (same proxy C4 uses).
+  - **Perf strategy:** limit page candidates to top 50 by chapter-touched count BEFORE running per-page median computation. Avoids per-page nested aggregation across the entire page namespace (84k+ distinct pages at EOS).
+  - Severity: high (ratio ≥2.0 AND n_touched ≥20), med (≥1.6 AND ≥15), low (≥1.3 AND ≥10).
+  - **EOS findings (10 high):** `/collections/all-products` (2.9×), `/collections/back-in-stock` (2.9×), `/collections/stock-items` (3.1×), and 7 specific new-arrival product pages with ratios 2.1×-5.1×. Classic consideration-friction pattern — these are pages that appear disproportionately in deep-browser chapters.
+- **Files (DB only):** `chapter_observations.run_question_c2`, `chapter_observations.run_question_c3` — both pure SQL functions in DB; no app-side code changes needed since the engine dispatch is generic.
+- **Remaining 12 deferred questions:**
+  - **3 spend-blocked:** A5, A6, S4 (no ads API connector)
+  - **2 product-metadata-blocked:** C1, S3 (no product catalog ingest)
+  - **1 geographic-spread-blocked:** S2
+  - **1 lift-history-blocked:** M2 (no real lift tests run yet)
+  - **5 long-data-history-blocked:** M1 (12w), R2 (12w), R3 (26w), R4 (4w), R5 (26w). EOS at 10w of clean post-cookie-fix data.
+  - **R4 is the closest deployable** — no capability blocker, only needs 4w of data which EOS already has. Just needs the runner function written. Quick follow-on if needed.
+
+### Data freshness sprint (June 11, 2026)
+**Three coordinated shipments tightening the freshness contract across the dashboard.** Philosophy decided: "yesterday" is the right default for analytical surfaces — sophisticated platforms don't show real-time data either, and stable beats fresh for operator trust + cross-call consistency. Operational/audit surfaces (`/internal/*`) stay live.
+
+#### Audit (#1) — what's actually fresh today
+- **Healthy** (refreshed by today's 03:30 + 04:00 UTC crons, ~13h stale):
+  - `chapter_attribution.chapter_channel_paths_canonical_v1_snapshot` (4 clients)
+  - `chapter_attribution.chapter_channel_paths_canonical_v2_snapshot` (4 clients)
+  - `chapter_model.lifecycle_chapters_snapshot` (4 clients)
+  - `chapter_reporting.journey_resolved_v1` (3 clients; not_so_cavalier scheduled for tonight)
+  - 3 journey MVs + 3 connections MVs
+- **Just wired (will run tomorrow 04:00 UTC)** under new `GLOBAL_SNAPSHOTS` registry in [refresh-dashboard-mvs](src/app/api/internal/cron/refresh-dashboard-mvs/route.ts):
+  - `chapter_reporting.attribution_linear_chapter_v1`
+  - `chapter_reporting.purchase_channel_final_v1`
+  - **Discovery:** these two were 16 days stale because no cron ever called `refresh_attribution_tables()`. Operationally invisible until tonight — `contribution_overview` was silently understating fractional revenue/orders for all of June.
+- **Dead code dropped (15 `eos_*` snapshot tables):**
+  ```
+  eos_attribution_linear_v1, eos_channel_contribution_v1,
+  eos_channel_paths_canonical_summary_v1, eos_channel_performance_snapshot,
+  eos_engagement_quality_snapshot, eos_filtered_purchases_v1,
+  eos_identity_overlap_summary_v1, eos_purchase_base_snapshot_v1,
+  eos_purchase_channel_final_snapshot_v1, eos_purchase_fallback_snapshot_v1,
+  eos_purchase_touch_summary_snapshot_v1, eos_sessionized_universe_summary_v1,
+  eos_single_touch_chapters_v1, eos_top_paths_snapshot, eos_traffic_overview_snapshot
+  ```
+  All confirmed zero callers in DB functions AND zero references in app code. 700-1000 hours stale; superseded by multi-tenant replacements that have operated 6+ weeks without regression. CLAUDE.md flagged these for eventual drop ("future session") — this is that session. `_snapshot_runs` rows for the dropped tables also cleaned so audit signals are real.
+
+#### Daily-digest tightening (#2)
+- **Extended [daily-digest](src/app/api/internal/monitoring/daily-digest/route.ts) to surface ALL snapshot freshness, not just the original 3-stage attribution chain.**
+- Added `journey_resolved_v1` to the per-client staleness check (was already in ATTRIBUTION_CHAIN_STAGES but unnamed there).
+- Added new `*Global snapshot freshness*` section reading max(snapshot_ts) directly from `attribution_linear_chapter_v1` + `purchase_channel_final_v1` (not per-client; not tracked in `_snapshot_runs`).
+- Section renames: "Attribution chain freshness" → "Per-client snapshot freshness" since the list now includes journey_resolved_v1 (not really attribution chain). Same visual shape; clearer label.
+
+#### Per-page "Data as of" footnote (#5)
+- **New server helper** [src/app/lib/dashboard/freshness.ts](src/app/lib/dashboard/freshness.ts): `getDashboardFreshnessByClient()` returns the OLDEST `snapshot_ts_hi` across DASHBOARD_SNAPSHOTS per client (= the actual freshness floor for that client's analytical pages). Uses replica when available.
+- **`ChapterContext` extended** with `freshness: FreshnessByClient` map. [(authed)/layout.tsx](src/app/chapter/(authed)/layout.tsx) fetches it in parallel with the user lookup and passes via `<ChapterProvider user={user} freshness={freshness}>`.
+- **TopBar reads `freshness[client.id]`** and renders a small grey "Data as of June 11, 2026, 3:30 AM EDT · refreshes nightly" line below the page subtitle. Formatted in the client's `display_tz` so an Eastern-time client sees Eastern times. Gracefully renders nothing when freshness data is unavailable (e.g. brand-new client whose first nightly run hasn't happened).
+- CSS: small `.topbar-asof` class with `var(--ink-3)` (muted) + tabular numbers.
+- **Operational pages don't need this** — `/internal/*` admin surfaces are live and the contract is implicit there.
+
+#### Files (new)
+- `src/app/lib/dashboard/freshness.ts`
+
+#### Files (modified)
+- `src/app/api/internal/cron/refresh-dashboard-mvs/route.ts` — new `GLOBAL_SNAPSHOTS` registry + refresh pass + failure surfacing
+- `src/app/api/internal/monitoring/daily-digest/route.ts` — added `GLOBAL_SNAPSHOTS` + journey_resolved_v1 to per-client check
+- `src/app/chapter/_components/ChapterContext.tsx` — `freshness` on context type + provider prop
+- `src/app/chapter/(authed)/layout.tsx` — parallel fetch of user + freshness, pass through
+- `src/app/chapter/_components/TopBar.tsx` — render "Data as of …" line under subtitle
+- `src/app/chapter/chapter.css` — append `.topbar-asof` style
+
+#### Backlog item added
+- **Multi-tenant `refresh_attribution_tables`** — the loader hardcodes `boundary_event_name = 'purchase'`. Will silently produce zero rows for Not So Cavalier (`appointment_booked`). Fix: replace with `chapter_config.boundary_event(client_key)` per-client loop. Trip the wire before next non-purchase client ships.
+
+### Sprint 5c + observations_history follow-up (June 11, 2026)
+**Two quick wins shipped — closes Sprint 5a's auth story and clears a phantom bug.**
+
+#### Sprint 5c — Sidebar conditional rendering
+- **Server-side current-user resolver added:** `getCurrentChapterUser()` in [src/app/lib/auth/chapter-user.ts](src/app/lib/auth/chapter-user.ts). Reads the Supabase session → looks up the allowlist row → returns the `ChapterUser`, or null on legacy-token sessions (no throw). Pages/layouts that want role-aware UI just await this.
+- **`ChapterContext` extended** to carry `UserInfo | null` (email + role + client_key). [(authed)/layout.tsx](src/app/chapter/(authed)/layout.tsx) is now async, fetches via `getCurrentChapterUser`, passes to `<ChapterProvider user={user}>`. Falls back to null (= legacy-cookie path) gracefully.
+- **Client pinning for client_employees:** when `user.role === 'client_employee'` AND `user.client_key` is set, `ChapterContext`'s `clientId` ignores `?client=` and pins to the employee's assigned client. URL manipulation can't trick the UI into showing another client's data. This is belt-and-suspenders to the middleware enforcement from Sprint 5a.
+- **Sidebar conditional rendering** in [Sidebar.tsx](src/app/chapter/_components/Sidebar.tsx):
+  - Client employee: renders a static `<div class="client-switch-static">` (same shape as the dropdown trigger but no hover, no chevron, no menu). They see their client clearly identified, no way to switch.
+  - Agency operator: existing `<Dropdown>` with multi-client switcher unchanged.
+- **User identity in the foot:** when `user` is non-null, sidebar shows `email` (truncated with ellipsis) + role label (`Agency operator` / `Client employee`) above the sign-out button. CSS scoped to `.sidebar-user` / `.sidebar-user-email` / `.sidebar-user-role` in [chapter.css](src/app/chapter/chapter.css).
+- **Legacy cookie behavior preserved.** Operators using the `CHAPTER_DASH_TOKEN` cookie (Sprint 5a coexistence path) see `user = null` → sidebar renders agency-operator-style for them (multi-client switcher, no email/role display in foot). No regression for in-flight operators who haven't migrated yet.
+- **Files:** modified `chapter-user.ts`, `ChapterContext.tsx`, `(authed)/layout.tsx`, `Sidebar.tsx`, appended `chapter.css`.
+
+#### `observations_history` investigation — resolved (false alarm)
+- The "missing RPC" flag from the Sprint 3 audit was a false alarm caused by my audit query looking for the wrong name. The cached function `cachedObservationsHistory` calls the RPC `observations_list_history` (NOT `observations_history`), and that RPC exists in `chapter_reporting` with signature `(p_client_key text, p_lookback_days integer)`.
+- **Live-tested:** returns 104 rows for EOS with `(p_client_key='eos_fabrics', p_lookback_days=28)`. Dashboard observations page renders correctly.
+- **Lesson for future audits:** when running an RPC inventory against a known list of cached-function names, derive the RPC name FROM the cached function's source (the `.rpc("name", args)` call inside `unstable_cache`), not from the cached-function variable name. The variable name is an abbreviation; the RPC name is exact.
+
+### Option D v1 — Identity prompts: on-site engagement layer (June 11, 2026)
+- **Strategic framing:** Chapter now ships a configurable on-site engagement primitive that captures identity as a side effect. Operators configure popups (winback / cart-abandon / exit-intent / time-on-page / scroll-depth) with custom copy + optional discount code. Submit fires `/api/identify` → identity lands in `identity_canon` immediately → attribution stitches in real time. Pitch shift: "Chapter measures attribution" → "Chapter measures AND optimizes the moment identity is captured." Direct alternative to Klaviyo/Privy popups for any client using Chapter for measurement.
+- **Schema:** `chapter_config.identity_prompts(id, client_key, slug, trigger_jsonb, headline, body, button_label, success_message, offer_code, offer_description, frequency, frequency_days, enabled, hit_count, submit_count, last_hit_at, created_at, updated_at, created_by)`. `trigger_jsonb` is shape-by-type: `{type: 'click_element', selector: '...'}` / `{type: 'exit_intent'}` / `{type: 'time_on_page', delay_ms: 15000}` / `{type: 'scroll_depth', percent: 50}`. UNIQUE on `(client_key, slug)`. RLS enabled.
+- **API:** `GET /api/chapter/identity-prompts?client_key=X` returns active prompts as a minimal payload. Public read (operator-authored copy isn't sensitive); CORS-mediated via `withCors`; cached for 5 min at the CDN with `stale-while-revalidate`.
+- **Pixel-side primitive in [src/app/api/chapter/pixel.js/route.ts](src/app/api/chapter/pixel.js/route.ts):**
+  - Fetches active prompts on init via `chapterLoadIdentityPrompts()`. Cached implicitly (browser HTTP cache 5 min) so no extra invocation per page navigation.
+  - Registers triggers based on type. Click triggers intercept the element click via `preventDefault()` BEFORE showing the modal; submit still allows the underlying navigation if operator wires it that way (v1: modal blocks the click until dismiss/submit).
+  - Renders self-contained modal with injected styles scoped via class prefix `chapter-prompt-*` so it can't conflict with the host site's CSS.
+  - Hashes email server-side via `crypto.subtle.digest('SHA-256', email)` in-browser. Submits to `/api/identify` with `identity_key = email_sha256:<hex>` (existing route — no server changes).
+  - Fires `identity_prompt_shown` / `identity_prompt_submitted` / `identity_prompt_dismissed` pixel events so operators measure show → submit conversion in the dashboard.
+  - Frequency cap honored client-side: `session` → `sessionStorage`; `visitor` → `localStorage` with N-day timestamp; `every_visit` → no throttle (modal still dedupes within a single page load by virtue of triggers firing once each).
+- **Admin UI at [/internal/identity-prompts/*](src/app/internal/identity-prompts/page.tsx):**
+  - Index lists clients with prompt totals + enabled counts (`/internal/identity-prompts`).
+  - Per-client page lists existing prompts with structured trigger summary + headline + offer + conversion rate, plus an inline create form (`/internal/identity-prompts/[clientKey]`).
+  - Create form has structured fields for trigger type (CSS selector / exit intent / time / scroll) + copy + offer + frequency. No raw JSON entry — operator picks from the dropdown.
+  - `RowActions` component supports toggle (enable/disable) + delete. Edit-in-place deferred — operator currently deletes + recreates to update. Quick follow-on.
+  - Server actions in [_actions.ts](src/app/internal/identity-prompts/_actions.ts) validate slug shape + required selector when trigger type is `click_element`. Errors surface inline.
+- **Trigger types v1 (all shipped):**
+  - `click_element` — operator picks a CSS selector; pixel intercepts clicks on matching elements
+  - `exit_intent` — pixel detects mouseout to viewport top (negative `clientY` + no `relatedTarget`)
+  - `time_on_page` — `setTimeout` with operator-configured delay
+  - `scroll_depth` — scroll listener checking percent against operator threshold
+- **Offer mechanism v1:** static discount code. Operator types `WELCOME10` + optional description; modal swaps to success state showing the code in a highlighted box on submit. No per-visitor codes / unique code generation — operator uses the same code for all submitters and reconciles via their POS or checkout system. Per-visitor codes are a v2 enhancement.
+- **Files (new):**
+  - `chapter_config.identity_prompts` table (migration `option_d_identity_prompts`)
+  - [/api/chapter/identity-prompts/route.ts](src/app/api/chapter/identity-prompts/route.ts) (GET handler)
+  - [/internal/identity-prompts/layout.tsx](src/app/internal/identity-prompts/layout.tsx)
+  - [/internal/identity-prompts/page.tsx](src/app/internal/identity-prompts/page.tsx) (clients index)
+  - [/internal/identity-prompts/_actions.ts](src/app/internal/identity-prompts/_actions.ts) (create/toggle/delete)
+  - [/internal/identity-prompts/[clientKey]/page.tsx](src/app/internal/identity-prompts/[clientKey]/page.tsx) (per-client list + create form)
+  - [/internal/identity-prompts/[clientKey]/PromptForm.tsx](src/app/internal/identity-prompts/[clientKey]/PromptForm.tsx) (structured form)
+  - [/internal/identity-prompts/[clientKey]/RowActions.tsx](src/app/internal/identity-prompts/[clientKey]/RowActions.tsx) (toggle/delete buttons)
+- **Pixel modifications:** appended Option D code path at end of pixel.js IIFE; ~200 lines including modal markup + styles + trigger registration + hashing. Scoped class prefix prevents host-site collisions.
+- **Strategic implications:**
+  - **For barbershop:** the pre-click "Win 10% off — enter email" pattern on Book Now closes the cross-domain stitch BEFORE the redirect to Square. Identity captured → canonical contains email_sha256 → Square webhook arrives with same email → ONE canonical from the start. No dependence on Square's post-booking redirect (still useful but no longer load-bearing).
+  - **For EOS / Projectagram:** cart-abandonment recovery WITHOUT Klaviyo dependence. Time-on-page or exit-intent prompt with discount code on product pages.
+  - **For future clients (Yelp / agency-mode pitches):** built-in email-capture layer is a real product differentiator. Identity-capture is one of the hardest UX problems in attribution; solving it natively is differentiation vs Branch.io / Northbeam / Triple Whale.
+- **Deferred to v2:**
+  - Per-visitor unique discount codes (generated server-side from a pool, claim-once semantics)
+  - Multi-step prompts (e.g. "Pick a category, then we'll send you 15% off")
+  - A/B testing harness (operator runs two prompts targeting the same trigger; pixel randomly assigns)
+  - Edit-in-place admin UI (currently delete + recreate)
+  - Analytics dashboard tile (today: operator queries pixel_events filtered to `identity_prompt_*` events; future: dedicated tile on the dashboard)
+  - Server-side trigger evaluation for additional types (e.g. `cart_value_above`, `returning_visitor`, `geo_country`)
+
+### Square refunds webhook + Sprint 5b clean URLs (June 11, 2026)
+**Two product wins shipped tonight while paused on barbershop pixel install (waiting on operator Staff-role access to Square Appointments).**
+
+#### B — Square refunds webhook handling
+- **Problem:** Sprint 3's refund-netting was Shopify-only (per Fix #3). Any Square client (current Not So Cavalier or future) had inaccurate AOV + revenue when a refund happened. Real revenue-accuracy gap.
+- **Solution:** new route at [src/app/api/square/webhooks/refunds/route.ts](src/app/api/square/webhooks/refunds/route.ts). Handles `refund.created` + `refund.updated` events; only inserts into `chapter_ingest.refund_events` when refund status transitions to `COMPLETED`. `refund_id` stored as `square_refund_<id>` (prefixed to keep namespace separate from `shopify_refund_<id>`).
+- **Idempotent:** both events can fire for the same refund — first COMPLETED wins via `ON CONFLICT (refund_id) DO NOTHING`.
+- **PENDING / REJECTED / FAILED statuses are ack-and-skipped** — refund.updated will catch them when they settle. Don't reduce reported revenue prematurely.
+- **shop_domain is NULL** (Shopify-specific column); reused as-is for cross-platform compatibility.
+- **Zero dashboard wiring needed:** Sprint 3's refund-netting was built platform-agnostic. `purchase_overview`, `channel_performance_overview`, `dashboard_timeseries` already subtract `refund_events.amount` for matching `order_id` regardless of source. Square refunds flow into dashboards automatically the moment they hit the table.
+- **Operator action required:** add a THIRD Square webhook subscription pointing at `https://ads4good.com/api/square/webhooks/refunds`, events `refund.created` + `refund.updated`. Same `merchant_id` reused; `getActiveSquareSecrets()` returns all rows so signature verification routes correctly per subscription's notification_url.
+- **Files:** `/api/square/webhooks/refunds/route.ts` (new).
+
+#### C — Sprint 5b real: `/chapter/[client_key]/*` clean URL surface
+- **Problem:** Sprint 5a wired auth + middleware enforcement via `?client=<key>` search-param mediation. Worked for security; URLs looked like `/chapter/observations?client=eos_fabrics`. Sales-pitch URL is `/chapter/eos_fabrics/observations`.
+- **Solution:** single catch-all redirect at [src/app/chapter/[client_key]/[[...slug]]/page.tsx](src/app/chapter/[client_key]/[[...slug]]/page.tsx). Server component reads `client_key` from path + optional `slug` array + incoming searchParams → builds `/chapter/<sub-path>?client=<key>&...preserved-params` → `redirect()`.
+- **Slug default:** empty `[[...slug]]` (e.g. visiting `/chapter/eos_fabrics`) defaults to `observations` (matches the locked "first-paint default" intent).
+- **Search-param preservation:** every incoming param except `client` (which we override from the path) carries through. So `/chapter/eos_fabrics/raw?range=90d&compare=prior` correctly lands on `/chapter/raw?client=eos_fabrics&range=90d&compare=prior`.
+- **Routing precedence is locked by Next.js + the underscore convention.** Literal segments (`observations`, `overview`, `channels`, `paths`, `lift`, `attribution`, `journeys`, `raw`, `connections`) beat the dynamic `[client_key]` segment. Client keys ALWAYS contain underscores (`eos_fabrics`, `not_so_cavalier`, etc.). Defensive check at the top of the redirect page sends any no-underscore segment that somehow reaches it to home rather than building a confused URL.
+- **Middleware interaction (already correct from Sprint 5a):** the existing `clientKeyFromPath` middleware logic enforces `canAccessClient` BEFORE the catch-all page renders. Client employee trying to bookmark `/chapter/other_client/whatever` gets bounced at the middleware level; never reaches the redirect.
+- **Why redirect instead of re-render:** rendering the dashboard at the clean URL directly would require duplicating every page's data fetching + client component into a parallel tree. Redirect is the single-translation layer; the render path stays the single source of truth. URL briefly flickers to the legacy shape — acceptable for v1, "real rebrand" (canonical render at clean URL) is a Sprint 5b polish item if/when needed.
+- **Files:** `src/app/chapter/[client_key]/[[...slug]]/page.tsx` (new).
+
 ### Sprint 2.1 — Not So Cavalier (barbershop) server-side onboarding (June 10, 2026)
 - **First B2C personal-services client onboarded end-to-end on the server side.** Marketing-site pixel install + post-booking redirect stitching paused pending operator Staff-role access to Square Appointments.
 - **DB:** `chapter_config.clients` row (`storefront_domain = 'notsocavalier.com'`, `boundary_event_name = 'appointment_booked'`, `display_tz = 'America/New_York'`); `client_secrets` row with fresh HMAC secret; `square_webhook_secrets` rows for BOTH the bookings subscription + the payments subscription (each with its own notification_url + signing_key); `square_oauth_tokens` row with the production Customers API access token.

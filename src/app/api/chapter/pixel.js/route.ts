@@ -435,6 +435,245 @@ setInterval(function () {
   window.addEventListener("beforeunload", function () {
     api.track("page_exit", {});
   });
+
+  // ============ Option D — Identity prompts ============
+  // Operator-configured popups that fire on trigger conditions, capture email,
+  // and optionally display a discount code. Submit fires /api/identify (so
+  // identity lands in canon immediately) plus an analytics event so operators
+  // measure show → submit conversion in the dashboard.
+
+  function chapterHashEmail(email) {
+    if (!email || !crypto || !crypto.subtle) return Promise.resolve(null);
+    var normalized = String(email).trim().toLowerCase();
+    var data = new TextEncoder().encode(normalized);
+    return crypto.subtle.digest("SHA-256", data).then(function (buf) {
+      var arr = Array.from(new Uint8Array(buf));
+      return arr.map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+    });
+  }
+
+  function chapterFrequencyKey(slug) { return "chapter_prompt_" + slug; }
+
+  function chapterPromptShownThisSession(slug) {
+    try { return sessionStorage.getItem(chapterFrequencyKey(slug)) === "1"; } catch (e) { return false; }
+  }
+  function chapterMarkPromptShownSession(slug) {
+    try { sessionStorage.setItem(chapterFrequencyKey(slug), "1"); } catch (e) {}
+  }
+  function chapterPromptShownForVisitor(slug, days) {
+    try {
+      var raw = localStorage.getItem(chapterFrequencyKey(slug));
+      if (!raw) return false;
+      var ts = parseInt(raw, 10);
+      if (!ts) return false;
+      var ageMs = Date.now() - ts;
+      var maxAgeMs = (days || 90) * 86400000;
+      return ageMs < maxAgeMs;
+    } catch (e) { return false; }
+  }
+  function chapterMarkPromptShownVisitor(slug) {
+    try { localStorage.setItem(chapterFrequencyKey(slug), String(Date.now())); } catch (e) {}
+  }
+
+  function chapterIsPromptThrottled(prompt) {
+    if (!prompt || !prompt.slug) return false;
+    var freq = prompt.frequency || "session";
+    if (freq === "session") return chapterPromptShownThisSession(prompt.slug);
+    if (freq === "visitor") return chapterPromptShownForVisitor(prompt.slug, prompt.frequency_days);
+    return false; // every_visit
+  }
+  function chapterRecordPromptShown(prompt) {
+    if (!prompt || !prompt.slug) return;
+    var freq = prompt.frequency || "session";
+    if (freq === "session") chapterMarkPromptShownSession(prompt.slug);
+    else if (freq === "visitor") chapterMarkPromptShownVisitor(prompt.slug);
+  }
+
+  function chapterInjectPromptStyles() {
+    if (document.getElementById("chapter-prompt-styles")) return;
+    var style = document.createElement("style");
+    style.id = "chapter-prompt-styles";
+    style.textContent = [
+      ".chapter-prompt-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2147483640;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}",
+      ".chapter-prompt-card{background:#fff;border-radius:12px;padding:24px;max-width:380px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,.2);position:relative;}",
+      ".chapter-prompt-close{position:absolute;top:8px;right:12px;background:transparent;border:0;font-size:22px;cursor:pointer;color:#888;line-height:1;padding:4px 8px;}",
+      ".chapter-prompt-headline{font-size:18px;font-weight:600;margin:0 0 8px;color:#1F2D43;}",
+      ".chapter-prompt-body{font-size:14px;color:#5C6B82;margin:0 0 16px;line-height:1.5;}",
+      ".chapter-prompt-input{width:100%;padding:10px 12px;border:1px solid #E5DDC9;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;}",
+      ".chapter-prompt-input:focus{border-color:#E36410;}",
+      ".chapter-prompt-button{margin-top:12px;width:100%;padding:10px;background:#E36410;color:#fff;border:0;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;}",
+      ".chapter-prompt-button:hover{background:#C9550B;}",
+      ".chapter-prompt-button:disabled{opacity:.5;cursor:default;}",
+      ".chapter-prompt-success-msg{font-size:14px;color:#2E7D5B;margin:0 0 8px;font-weight:500;}",
+      ".chapter-prompt-offer{background:#FBE6D2;border:1px dashed #E36410;border-radius:8px;padding:12px;margin-top:8px;text-align:center;}",
+      ".chapter-prompt-offer-code{font-family:monospace;font-size:18px;font-weight:700;color:#1F2D43;letter-spacing:.05em;}",
+      ".chapter-prompt-offer-desc{font-size:12px;color:#5C6B82;margin-top:4px;}",
+    ].join("");
+    document.head.appendChild(style);
+  }
+
+  function chapterRenderPrompt(prompt) {
+    chapterInjectPromptStyles();
+    var backdrop = document.createElement("div");
+    backdrop.className = "chapter-prompt-backdrop";
+    var card = document.createElement("div");
+    card.className = "chapter-prompt-card";
+
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "chapter-prompt-close";
+    closeBtn.textContent = "×";
+    closeBtn.setAttribute("aria-label", "Close");
+
+    var headline = document.createElement("h3");
+    headline.className = "chapter-prompt-headline";
+    headline.textContent = prompt.headline || "";
+
+    var body = document.createElement("p");
+    body.className = "chapter-prompt-body";
+    body.textContent = prompt.body || "";
+
+    var input = document.createElement("input");
+    input.type = "email";
+    input.className = "chapter-prompt-input";
+    input.placeholder = "you@email.com";
+    input.required = true;
+    input.autocomplete = "email";
+
+    var button = document.createElement("button");
+    button.type = "submit";
+    button.className = "chapter-prompt-button";
+    button.textContent = prompt.button_label || "Submit";
+
+    var form = document.createElement("form");
+    form.appendChild(headline);
+    if (prompt.body) form.appendChild(body);
+    form.appendChild(input);
+    form.appendChild(button);
+
+    card.appendChild(closeBtn);
+    card.appendChild(form);
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+
+    chapterRecordPromptShown(prompt);
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug });
+
+    function dismiss(method) {
+      if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+      api.track("identity_prompt_dismissed", { prompt_slug: prompt.slug, dismiss_method: method });
+    }
+
+    closeBtn.addEventListener("click", function () { dismiss("close_button"); });
+    backdrop.addEventListener("click", function (e) { if (e.target === backdrop) dismiss("backdrop_click"); });
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var email = input.value.trim();
+      if (!email) return;
+      button.disabled = true;
+      button.textContent = "Submitting…";
+
+      chapterHashEmail(email).then(function (hash) {
+        if (hash) {
+          api.identify({
+            identity_key: "email_sha256:" + hash,
+            traits: { source: "identity_prompt", prompt_slug: prompt.slug }
+          });
+        }
+        api.track("identity_prompt_submitted", { prompt_slug: prompt.slug });
+
+        // Swap to success state — keeps the modal open so the offer is read.
+        while (card.firstChild) card.removeChild(card.firstChild);
+        card.appendChild(closeBtn);
+
+        var successMsg = document.createElement("p");
+        successMsg.className = "chapter-prompt-success-msg";
+        successMsg.textContent = prompt.success_message || "Thanks!";
+        card.appendChild(successMsg);
+
+        if (prompt.offer_code) {
+          var offer = document.createElement("div");
+          offer.className = "chapter-prompt-offer";
+          var code = document.createElement("div");
+          code.className = "chapter-prompt-offer-code";
+          code.textContent = prompt.offer_code;
+          offer.appendChild(code);
+          if (prompt.offer_description) {
+            var desc = document.createElement("div");
+            desc.className = "chapter-prompt-offer-desc";
+            desc.textContent = prompt.offer_description;
+            offer.appendChild(desc);
+          }
+          card.appendChild(offer);
+        }
+      });
+    });
+  }
+
+  function chapterRegisterClickElementTrigger(prompt) {
+    var selector = prompt.trigger_jsonb && prompt.trigger_jsonb.selector;
+    if (!selector) return;
+    document.addEventListener("click", function (e) {
+      if (chapterIsPromptThrottled(prompt)) return;
+      var hit = e.target.closest(selector);
+      if (!hit) return;
+      e.preventDefault();
+      chapterRenderPrompt(prompt);
+    });
+  }
+
+  function chapterRegisterExitIntentTrigger(prompt) {
+    document.addEventListener("mouseout", function (e) {
+      if (chapterIsPromptThrottled(prompt)) return;
+      if (e.relatedTarget) return; // mouse moved to another element, not out of viewport
+      if (e.clientY > 0) return;   // exit was sideways/below, not top
+      chapterRenderPrompt(prompt);
+    });
+  }
+
+  function chapterRegisterTimeOnPageTrigger(prompt) {
+    var delay = (prompt.trigger_jsonb && prompt.trigger_jsonb.delay_ms) || 15000;
+    setTimeout(function () {
+      if (chapterIsPromptThrottled(prompt)) return;
+      chapterRenderPrompt(prompt);
+    }, delay);
+  }
+
+  function chapterRegisterScrollDepthTrigger(prompt) {
+    var threshold = (prompt.trigger_jsonb && prompt.trigger_jsonb.percent) || 50;
+    var fired = false;
+    window.addEventListener("scroll", function () {
+      if (fired) return;
+      if (chapterIsPromptThrottled(prompt)) return;
+      var pct = getScrollPercent();
+      if (pct >= threshold) {
+        fired = true;
+        chapterRenderPrompt(prompt);
+      }
+    }, { passive: true });
+  }
+
+  function chapterLoadIdentityPrompts() {
+    if (!clientKey) return;
+    var url = new URL("/api/chapter/identity-prompts", "https://ads4good.com");
+    url.searchParams.set("client_key", clientKey);
+    fetch(url.toString(), { credentials: "omit", cache: "default" })
+      .then(function (res) { return res.ok ? res.json() : { prompts: [] }; })
+      .then(function (data) {
+        var prompts = (data && data.prompts) || [];
+        prompts.forEach(function (prompt) {
+          var trig = prompt.trigger_jsonb || {};
+          if (trig.type === "click_element") chapterRegisterClickElementTrigger(prompt);
+          else if (trig.type === "exit_intent") chapterRegisterExitIntentTrigger(prompt);
+          else if (trig.type === "time_on_page") chapterRegisterTimeOnPageTrigger(prompt);
+          else if (trig.type === "scroll_depth") chapterRegisterScrollDepthTrigger(prompt);
+        });
+      })
+      .catch(function () {});
+  }
+
+  chapterLoadIdentityPrompts();
 })();
 `.trim();
 

@@ -21,6 +21,20 @@ import {
   CLIENTS, Client, AttributionModel, Observation,
 } from "./mockdata";
 
+export type UserInfo = {
+  email: string;
+  role: "agency_operator" | "client_employee";
+  client_key: string | null;
+};
+
+// Per-client dashboard freshness — populated server-side by the (authed)
+// layout, used by TopBar to render "Data as of …" under the page title.
+// Map keyed by client_key; missing entries fall back to "live" labeling.
+export type FreshnessByClient = Record<
+  string,
+  { as_of_iso: string; display_tz: string }
+>;
+
 type Ctx = {
   client: Client;
   setClient: (c: Client) => void;
@@ -43,6 +57,15 @@ type Ctx = {
   // Mobile sidebar drawer state.
   sidebarOpen: boolean;
   setSidebarOpen: (b: boolean) => void;
+
+  // Sprint 5c — user info from server-side fetch in the (authed) layout.
+  // null when using legacy CHAPTER_DASH_TOKEN cookie (no Supabase session
+  // resolves). UI falls back to agency-operator behavior in that case.
+  user: UserInfo | null;
+
+  // Per-client freshness map — TopBar derives the "Data as of" line by
+  // looking up the current client.
+  freshness: FreshnessByClient;
 };
 
 const ChapterCtx = createContext<Ctx | null>(null);
@@ -79,7 +102,15 @@ const COMPARE_CODE_TO_LABEL: Record<string, string> = Object.fromEntries(
 
 const VALID_MODELS = new Set<AttributionModel>(["first", "last", "linear", "custom"]);
 
-export function ChapterProvider({ children }: { children: React.ReactNode }) {
+export function ChapterProvider({
+  children,
+  user = null,
+  freshness = {},
+}: {
+  children: React.ReactNode;
+  user?: UserInfo | null;
+  freshness?: FreshnessByClient;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -91,7 +122,15 @@ export function ChapterProvider({ children }: { children: React.ReactNode }) {
 
   // Derive URL-backed values from searchParams. Defaults applied here so any
   // page renders cleanly even without query params.
-  const clientId    = searchParams.get("client")  || CLIENTS[0].id;
+  // Sprint 5c: client_employee role pins clientId to their assigned client_key
+  // so the UI can't be tricked into showing a different client even if the
+  // URL is manipulated. Middleware also enforces this at the route layer; the
+  // pin is a UI-side belt + suspenders that matches what users actually see.
+  const urlClientId = searchParams.get("client") || CLIENTS[0].id;
+  const clientId =
+    user && user.role === "client_employee" && user.client_key
+      ? user.client_key
+      : urlClientId;
   const rangeCode   = searchParams.get("range")   || "30d";
   const compareCode = searchParams.get("compare") || "prior";
   const modelParam  = searchParams.get("model")   || "linear";
@@ -148,6 +187,8 @@ export function ChapterProvider({ children }: { children: React.ReactNode }) {
     pinnedObs, pinObservation,
     highlightTarget, setHighlightTarget,
     sidebarOpen, setSidebarOpen,
+    user,
+    freshness,
   }), [
     client, setClient,
     dateRange, setDateRange,
@@ -156,6 +197,8 @@ export function ChapterProvider({ children }: { children: React.ReactNode }) {
     pinnedObs, pinObservation,
     highlightTarget,
     sidebarOpen,
+    user,
+    freshness,
   ]);
 
   return <ChapterCtx.Provider value={value}>{children}</ChapterCtx.Provider>;

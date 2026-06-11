@@ -6,7 +6,7 @@
 // only proves identity (this email controls this inbox); the chapter_config
 // row is the actual allowlist + role + client_key.
 
-import { createSupabaseServiceRoleClient } from "./supabase-server";
+import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "./supabase-server";
 
 export type ChapterUser = {
   id: string;
@@ -96,4 +96,20 @@ export function canAccessClient(user: ChapterUser, clientKey: string): boolean {
 // specific client_key in path). Agency operators only.
 export function canAccessGlobal(user: ChapterUser): boolean {
   return !user.revoked_at && user.role === "agency_operator";
+}
+
+// Server-side current-user resolver. Returns the active ChapterUser when the
+// request has a valid Supabase session AND an allowlist row, otherwise null.
+// Layouts + pages use this to drive role-aware UI. Returns null silently
+// (no throw) when used on legacy-token sessions so the existing rendering
+// path stays intact during the Sprint 5a → 5d transition.
+export async function getCurrentChapterUser(): Promise<ChapterUser | null> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return null;
+    return await findChapterUserByAuthId(data.user.id);
+  } catch {
+    return null;
+  }
 }

@@ -138,8 +138,8 @@ async function gateChapter(req: NextRequest) {
         // Send them to their own; don't reveal which clients exist.
         const target = req.nextUrl.clone();
         target.pathname = chapterUser.client_key
-          ? `/chapter/${chapterUser.client_key}/observations`
-          : "/chapter/observations";
+          ? `/chapter/${chapterUser.client_key}/overview`
+          : "/chapter/overview";
         target.search = "";
         return NextResponse.redirect(target);
       }

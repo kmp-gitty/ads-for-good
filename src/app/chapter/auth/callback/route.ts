@@ -56,13 +56,17 @@ export async function GET(req: NextRequest) {
 
   // Compute landing path. Honor ?next if it's a safe same-origin path AND the
   // user is allowed there; otherwise role-appropriate default.
+  //
+  // Default landing changed June 11 — Lifecycle Overview replaces Observations
+  // as the first-paint. (Will switch to Recommendations after that page lands
+  // and has had 2-3 weeks of real usage.)
   let destination = "/chapter";
   if (chapterUser.role === "client_employee" && chapterUser.client_key) {
-    destination = `/chapter/${chapterUser.client_key}/observations`;
+    destination = `/chapter/${chapterUser.client_key}/overview`;
   } else if (chapterUser.role === "agency_operator") {
     destination = chapterUser.client_key
-      ? `/chapter/${chapterUser.client_key}/observations`
-      : "/chapter/observations";
+      ? `/chapter/${chapterUser.client_key}/overview`
+      : "/chapter/overview";
   }
   if (next && next.startsWith("/") && !next.startsWith("//")) {
     destination = next;

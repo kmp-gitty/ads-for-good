@@ -1130,3 +1130,143 @@
   color: var(--ink);
   border-color: var(--ink-4);
 }
+
+/* ============ Sidebar user identity foot (Sprint 5c) ============ */
+.chapter-app .sidebar-user {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--line);
+}
+.chapter-app .sidebar-user-email {
+  font-size: 12px;
+  color: var(--ink-2);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chapter-app .sidebar-user-role {
+  font-size: 10px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-top: 2px;
+}
+
+/* Static client display for client_employees — same shape as the dropdown
+ * trigger but no hover/cursor state, no chevron. */
+.chapter-app .client-switch-static {
+  cursor: default;
+}
+.chapter-app .client-switch-static:hover {
+  background: transparent;
+}
+
+/* ============ Topbar "Data as of" line (Data freshness sprint) ============ */
+.chapter-app .topbar-asof {
+  font-size: 10px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  letter-spacing: .02em;
+  font-feature-settings: "tnum";
+}
+
+/* ============ Sidebar 5-group dividers (June 11 reorg) ============ */
+.chapter-app .nav-divider {
+  margin: 12px 14px;
+  height: 1px;
+  background: var(--line-2);
+  opacity: .7;
+}
+
+/* ============ Submit-a-question drawer (Task 4) ============ */
+.chapter-app .chapter-submit-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(31, 45, 67, .55);
+  z-index: 2147483640;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.chapter-app .chapter-submit-card {
+  background: var(--panel);
+  border-radius: 14px;
+  padding: 26px 24px 22px;
+  max-width: 480px; width: 100%;
+  box-shadow: 0 12px 48px rgba(31,45,67,.18);
+  position: relative;
+}
+.chapter-app .chapter-submit-close {
+  position: absolute; top: 10px; right: 14px;
+  background: transparent; border: 0;
+  font-size: 22px; line-height: 1; cursor: pointer;
+  color: var(--ink-4); padding: 4px 8px;
+}
+.chapter-app .chapter-submit-close:hover { color: var(--ink-2); }
+.chapter-app .chapter-submit-title {
+  margin: 0 0 6px;
+  font-size: 17px; font-weight: 600; color: var(--ink);
+}
+.chapter-app .chapter-submit-body {
+  font-size: 13px; color: var(--ink-3); margin: 0 0 16px; line-height: 1.5;
+}
+.chapter-app .chapter-submit-label {
+  display: block;
+  font-size: 12px; font-weight: 600; color: var(--ink-2);
+  margin-bottom: 14px;
+}
+.chapter-app .chapter-submit-required { color: var(--accent); }
+.chapter-app .chapter-submit-optional { color: var(--ink-4); font-weight: 400; }
+.chapter-app .chapter-submit-input {
+  display: block; width: 100%;
+  margin-top: 6px; padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px; font-size: 13px;
+  background: var(--bg);
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+  outline: none;
+}
+.chapter-app .chapter-submit-input:focus { border-color: var(--accent); }
+.chapter-app .chapter-submit-counter {
+  font-size: 10px; color: var(--ink-4); margin-top: 4px; text-align: right;
+}
+.chapter-app .chapter-submit-error {
+  background: var(--bad-soft); color: var(--bad);
+  border-radius: 6px; padding: 8px 10px; font-size: 12px;
+  margin: -6px 0 12px;
+}
+.chapter-app .chapter-submit-actions {
+  display: flex; justify-content: flex-end; gap: 10px;
+  margin-top: 6px;
+}
+.chapter-app .chapter-submit-cancel,
+.chapter-app .chapter-submit-primary {
+  padding: 8px 16px; border-radius: 999px;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  border: 1px solid transparent;
+}
+.chapter-app .chapter-submit-cancel {
+  background: transparent; color: var(--ink-3); border-color: var(--line);
+}
+.chapter-app .chapter-submit-cancel:hover { color: var(--ink); border-color: var(--ink-4); }
+.chapter-app .chapter-submit-primary {
+  background: var(--accent); color: white;
+}
+.chapter-app .chapter-submit-primary:hover:not(:disabled) { background: var(--accent-2); }
+.chapter-app .chapter-submit-primary:disabled,
+.chapter-app .chapter-submit-cancel:disabled { opacity: .5; cursor: default; }
+
+/* Trigger button styling */
+.chapter-app .chapter-suggest-btn {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.15);
+  padding: 7px 14px; border-radius: 999px;
+  font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.chapter-app .chapter-suggest-btn:hover {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.25);
+}

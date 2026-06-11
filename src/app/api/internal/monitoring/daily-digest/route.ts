@@ -28,7 +28,29 @@ const ATTRIBUTION_CHAIN_STAGES = [
   "chapter_model.lifecycle_chapters_snapshot",
   "chapter_attribution.chapter_channel_paths_canonical_v1_snapshot",
   "chapter_attribution.chapter_channel_paths_canonical_v2_snapshot",
+  // Sprint 3 — denormalized journey resolution; refreshed by 04:00 cron.
+  "journey_resolved_v1",
 ] as const;
+
+// Global (non-per-client) snapshot tables. We check max(snapshot_ts) on the
+// table directly since they're not per-client in _snapshot_runs.
+// Format: { table, schema, ts_column }.
+const GLOBAL_SNAPSHOTS = [
+  {
+    table: "attribution_linear_chapter_v1",
+    schema: "chapter_reporting",
+    ts_column: "snapshot_ts",
+  },
+  {
+    table: "purchase_channel_final_v1",
+    schema: "chapter_reporting",
+    ts_column: "snapshot_ts",
+  },
+] as const;
+
+type GlobalSnapshotStaleness =
+  | { snapshot: string; ok: true; max_ts: string; gap_hours: number }
+  | { snapshot: string; ok: false; error: string };
 
 type MvStaleness =
   | { mv: string; ok: true; max_ts: string; gap_hours: number }
@@ -160,7 +182,34 @@ function shortStage(stage: string): string {
   if (stage.endsWith("lifecycle_chapters_snapshot")) return "lifecycle";
   if (stage.endsWith("canonical_v1_snapshot")) return "canonical_v1";
   if (stage.endsWith("canonical_v2_snapshot")) return "canonical_v2";
+  if (stage === "journey_resolved_v1") return "journey_resolved";
   return stage.split(".").pop() ?? stage;
+}
+
+// Read max(snapshot_ts) from each global snapshot table directly. These
+// aren't tracked per-client in _snapshot_runs (they're global) but they ARE
+// refreshed by the 04:00 UTC cron (Sprint 3 follow-on, June 11).
+async function checkGlobalSnapshotStaleness(): Promise<GlobalSnapshotStaleness[]> {
+  return Promise.all(
+    GLOBAL_SNAPSHOTS.map(async (snap): Promise<GlobalSnapshotStaleness> => {
+      const { data, error } = await supabase
+        .schema(snap.schema)
+        .from(snap.table)
+        .select(snap.ts_column)
+        .order(snap.ts_column, { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) {
+        return { snapshot: snap.table, ok: false, error: error.message };
+      }
+      if (!data) {
+        return { snapshot: snap.table, ok: false, error: "empty table" };
+      }
+      const maxTs = (data as Record<string, unknown>)[snap.ts_column] as string;
+      const gapHours = (Date.now() - new Date(maxTs).getTime()) / 3_600_000;
+      return { snapshot: snap.table, ok: true, max_ts: maxTs, gap_hours: gapHours };
+    }),
+  );
 }
 
 export async function GET(req: NextRequest) {
@@ -255,7 +304,7 @@ export async function GET(req: NextRequest) {
   const chainStaleness = await checkAttributionChainStaleness();
   const chainProblems = chainStaleness.filter((r) => !r.ok);
 
-  lines.push("", "*Attribution chain freshness (03:30 UTC cron):*");
+  lines.push("", "*Per-client snapshot freshness (03:30 + 04:00 UTC crons):*");
   if (chainStaleness.length === 0) {
     lines.push("  ⚠ could not read client list or `_snapshot_runs`");
   } else if (chainProblems.length === 0) {
@@ -274,6 +323,32 @@ export async function GET(req: NextRequest) {
     }
     if (chainProblems.length > 15) {
       lines.push(`  …and ${chainProblems.length - 15} more`);
+    }
+  }
+
+  const globalStaleness = await checkGlobalSnapshotStaleness();
+  const staleGlobals = globalStaleness.filter(
+    (r): r is Extract<GlobalSnapshotStaleness, { ok: true }> =>
+      r.ok && r.gap_hours > CHAIN_STALENESS_THRESHOLD_HOURS,
+  );
+  const erroredGlobals = globalStaleness.filter(
+    (r): r is Extract<GlobalSnapshotStaleness, { ok: false }> => !r.ok,
+  );
+
+  lines.push("", "*Global snapshot freshness (04:00 UTC cron):*");
+  if (staleGlobals.length === 0 && erroredGlobals.length === 0) {
+    const maxGap = Math.max(
+      ...globalStaleness
+        .filter((r): r is Extract<GlobalSnapshotStaleness, { ok: true }> => r.ok)
+        .map((r) => r.gap_hours),
+    );
+    lines.push(`  ✅ all ${GLOBAL_SNAPSHOTS.length} global snapshots within ${CHAIN_STALENESS_THRESHOLD_HOURS}h (max gap ${maxGap.toFixed(1)}h)`);
+  } else {
+    for (const r of staleGlobals) {
+      lines.push(`  ⚠ \`${r.snapshot}\` — ${r.gap_hours.toFixed(1)}h behind`);
+    }
+    for (const r of erroredGlobals) {
+      lines.push(`  ❌ \`${r.snapshot}\` — ${r.error.slice(0, 120)}`);
     }
   }
 
@@ -298,5 +373,7 @@ export async function GET(req: NextRequest) {
     mv_error_count: erroredMvs.length,
     chain_staleness: chainStaleness,
     chain_problem_count: chainProblems.length,
+    global_staleness: globalStaleness,
+    global_stale_count: staleGlobals.length + erroredGlobals.length,
   });
 }

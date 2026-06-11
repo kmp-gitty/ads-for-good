@@ -24,6 +24,10 @@ type SnapshotResult =
   | { snapshot: string; client_key: string; ok: true; refresh_ms: number; rows: number }
   | { snapshot: string; client_key: string; ok: false; error: string };
 
+type GlobalSnapshotResult =
+  | { snapshot: string; ok: true; refresh_ms: number; rows: number }
+  | { snapshot: string; ok: false; error: string };
+
 // Per-client snapshots that depend on the journey MVs above. Refreshed AFTER
 // the MV pass so they pick up the freshest source data. Sprint 3 added
 // journey_resolved_v1 (denormalized journey resolution); future per-client
@@ -32,6 +36,22 @@ const PER_CLIENT_SNAPSHOTS = [
   {
     snapshot: "journey_resolved_v1",
     refreshFn: "chapter_reporting.refresh_journey_resolved_v1",
+  },
+];
+
+// Global (not per-client) snapshot loaders. Discovered June 11:
+// attribution_linear_chapter_v1 + purchase_channel_final_v1 weren't on any
+// cron — last refresh was May 26, 16 days stale. `contribution_overview`
+// reads from these for fractional_revenue / fractional_orders; staleness
+// silently understates per-channel revenue credits.
+//
+// NOTE: refresh_attribution_tables hardcodes boundary_event_name='purchase'
+// so Not So Cavalier (appointment_booked) will be empty until the loader
+// is generalized — tracked as a backlog item.
+const GLOBAL_SNAPSHOTS = [
+  {
+    snapshot: "attribution_tables (linear_chapter + channel_final)",
+    sql: "SELECT sum(rows_written) AS rows FROM chapter_reporting.refresh_attribution_tables()",
   },
 ];
 
@@ -58,6 +78,7 @@ export async function GET(req: NextRequest) {
 
   const results: MvResult[] = [];
   const snapshotResults: SnapshotResult[] = [];
+  const globalSnapshotResults: GlobalSnapshotResult[] = [];
 
   try {
     await sql`SET statement_timeout = '30min'`;
@@ -123,6 +144,26 @@ export async function GET(req: NextRequest) {
         }
       }
     }
+
+    // Global (non per-client) snapshot loaders.
+    for (const snap of GLOBAL_SNAPSHOTS) {
+      const start = Date.now();
+      try {
+        const result = await sql.unsafe(snap.sql);
+        globalSnapshotResults.push({
+          snapshot: snap.snapshot,
+          ok: true,
+          refresh_ms: Date.now() - start,
+          rows: Number((result[0] as { rows?: number })?.rows ?? 0),
+        });
+      } catch (err) {
+        globalSnapshotResults.push({
+          snapshot: snap.snapshot,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
   } finally {
     await sql.end({ timeout: 5 });
   }
@@ -131,8 +172,11 @@ export async function GET(req: NextRequest) {
   const snapFailures = snapshotResults.filter(
     (r): r is Extract<SnapshotResult, { ok: false }> => !r.ok,
   );
+  const globalSnapFailures = globalSnapshotResults.filter(
+    (r): r is Extract<GlobalSnapshotResult, { ok: false }> => !r.ok,
+  );
 
-  if (mvFailures.length > 0 || snapFailures.length > 0) {
+  if (mvFailures.length > 0 || snapFailures.length > 0 || globalSnapFailures.length > 0) {
     const lines: string[] = [];
     if (mvFailures.length > 0) {
       lines.push(`🚨 *Dashboard MV refresh failed* (${mvFailures.length}/${MVS.length} MVs)`);
@@ -154,6 +198,16 @@ export async function GET(req: NextRequest) {
       );
       lines.push("");
     }
+    if (globalSnapFailures.length > 0) {
+      lines.push(`🚨 *Global snapshot refresh failed* (${globalSnapFailures.length} entries)`);
+      lines.push("");
+      lines.push(
+        ...globalSnapFailures.map(
+          (f) => `• \`${f.snapshot}\` — ${f.error.slice(0, 200)}`,
+        ),
+      );
+      lines.push("");
+    }
     lines.push(
       "_Dashboard tiles will be serving stale data until next successful refresh. See `feedback_stale_mv_cache_illusion.md`._",
     );
@@ -165,9 +219,10 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    ok: mvFailures.length === 0 && snapFailures.length === 0,
+    ok: mvFailures.length === 0 && snapFailures.length === 0 && globalSnapFailures.length === 0,
     results,
     snapshot_results: snapshotResults,
-    failed_count: mvFailures.length + snapFailures.length,
+    global_snapshot_results: globalSnapshotResults,
+    failed_count: mvFailures.length + snapFailures.length + globalSnapFailures.length,
   });
 }

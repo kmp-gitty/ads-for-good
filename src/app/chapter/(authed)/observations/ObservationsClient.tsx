@@ -10,6 +10,7 @@ import { TopBar } from "../../_components/TopBar";
 import { Icon } from "../../_components/Icon";
 import { Dropdown } from "../../_components/Dropdown";
 import { useChapter } from "../../_components/ChapterContext";
+import { SubmitQuestionDrawer } from "../../_components/SubmitQuestionDrawer";
 import type {
   ObservationFinding,
   ObservationHistoryRow,
@@ -82,6 +83,7 @@ export default function ObservationsClient({
   const [actionFilter, setActionFilter] = useState<"all" | "mechanical" | "analytical" | "strategic_prompting">("all");
   const [popup, setPopup] = useState<ObservationFinding | null>(null);
   const [showLow, setShowLow] = useState(false);
+  const [showSuggestDrawer, setShowSuggestDrawer] = useState(false);
 
   // Hide LOW by default (spec §6). Filter toggle reveals them.
   const filtered = findings.filter(o => {
@@ -129,8 +131,17 @@ export default function ObservationsClient({
         <div className="card" style={{ background: "var(--navy)", color: "white", border: "none", padding: "22px 26px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
             <div style={{ maxWidth: 720, flex: "1 1 320px", minWidth: 0 }}>
-              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600, marginBottom: 8 }}>
-                How this page works
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600 }}>
+                  How this page works
+                </div>
+                <button
+                  type="button"
+                  className="chapter-suggest-btn"
+                  onClick={() => setShowSuggestDrawer(true)}
+                >
+                  + Suggest a question
+                </button>
               </div>
               <div style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
                 Chapter generates observations by running a library of questions against your data continuously. Findings are sorted by severity. Each card pairs the finding with a suggested investigation — never a directive. At your current data depth, most findings land at MED/LOW confidence; statistical signal strengthens as data accumulates.
@@ -336,6 +347,11 @@ export default function ObservationsClient({
           </>
         )}
       </div>
+      <SubmitQuestionDrawer
+        open={showSuggestDrawer}
+        onClose={() => setShowSuggestDrawer(false)}
+        clientKey={clientKey}
+      />
     </>
   );
 }
