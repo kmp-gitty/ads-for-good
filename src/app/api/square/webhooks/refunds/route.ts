@@ -54,11 +54,17 @@ function verifySquareWebhook(
 
 // Sanitize the refund payload before stashing in `raw`. Strip processing fees
 // (vendor-side) and any customer-identifying scraps Square might have embedded.
-// Returns Record<string, unknown> (never the unmodified input) so callers can
-// pass directly to postgres-js's tx.json() which requires a JSONValue shape.
-function sanitizeRefundForRaw(refund: unknown): Record<string, unknown> {
+//
+// Return type is `any` to match the pattern used in the Shopify refunds-create
+// route (where `tx.json(refund)` works because the input is implicitly `any`
+// from JSON.parse). postgres-js's `tx.json()` accepts `JSONValue` which is
+// strictly typed — passing `Record<string, unknown>` trips Next.js build-time
+// type checking because TS can't prove unknown values are JSON-serializable.
+// We're working with external API blobs whose shapes vary; `any` is honest.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeRefundForRaw(refund: unknown): any {
   if (!refund || typeof refund !== "object") return {};
-  const clone = JSON.parse(JSON.stringify(refund)) as Record<string, unknown>;
+  const clone = JSON.parse(JSON.stringify(refund));
   // No known customer-PII fields on refunds today; defensive deletes in case
   // Square's payload shape evolves.
   delete clone.buyer_email_address;
