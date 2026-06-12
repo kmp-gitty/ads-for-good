@@ -54,8 +54,10 @@ function verifySquareWebhook(
 
 // Sanitize the refund payload before stashing in `raw`. Strip processing fees
 // (vendor-side) and any customer-identifying scraps Square might have embedded.
-function sanitizeRefundForRaw(refund: unknown): unknown {
-  if (!refund || typeof refund !== "object") return refund;
+// Returns Record<string, unknown> (never the unmodified input) so callers can
+// pass directly to postgres-js's tx.json() which requires a JSONValue shape.
+function sanitizeRefundForRaw(refund: unknown): Record<string, unknown> {
+  if (!refund || typeof refund !== "object") return {};
   const clone = JSON.parse(JSON.stringify(refund)) as Record<string, unknown>;
   // No known customer-PII fields on refunds today; defensive deletes in case
   // Square's payload shape evolves.
