@@ -339,8 +339,8 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - `src/app/chapter/_components/TopBar.tsx` — render "Data as of …" line under subtitle
 - `src/app/chapter/chapter.css` — append `.topbar-asof` style
 
-#### Backlog item added
-- **Multi-tenant `refresh_attribution_tables`** — the loader hardcodes `boundary_event_name = 'purchase'`. Will silently produce zero rows for Not So Cavalier (`appointment_booked`). Fix: replace with `chapter_config.boundary_event(client_key)` per-client loop. Trip the wire before next non-purchase client ships.
+#### Backlog item added — RESOLVED June 14
+- **Multi-tenant `refresh_attribution_tables`** — the loader hardcoded `boundary_event_name = 'purchase'` in 4 places (purchase_channel_final_v1's v1_chapters + v2_fallback CTEs, attribution_linear_chapter_v1's session_chapters + fallback_chapters CTEs). Would have silently produced zero rows for Not So Cavalier (`appointment_booked`) the moment their pixel went live. **Fix shipped June 14** via migration `refresh_attribution_tables_multi_tenant_boundary_event`: each literal replaced with `chapter_config.boundary_event(p.client_key)` so the filter resolves per-row at scan time. Helper is STABLE so planner folds it per client_key partition; single-pass SQL, no per-client loop needed. Regression test: EOS row counts identical pre/post (1000 rows purchase_channel_final_v1, 1507 rows attribution_linear_chapter_v1) because `boundary_event('eos_fabrics') = 'purchase'` resolves the same WHERE clause. notsocavalier has zero canonical_v1 rows today (no data yet); function will catch them automatically once data flows.
 
 ### Sprint 5c + observations_history follow-up (June 11, 2026)
 **Two quick wins shipped — closes Sprint 5a's auth story and clears a phantom bug.**
