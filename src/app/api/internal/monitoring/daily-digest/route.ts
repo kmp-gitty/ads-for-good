@@ -14,10 +14,14 @@ const WINDOW_HOURS = 24;
 const MV_STALENESS_THRESHOLD_HOURS = 24;
 const CHAIN_STALENESS_THRESHOLD_HOURS = 24;
 
+// Per-MV column spec — the digest queries `max(ts_column)` to assess freshness.
+// journey_funnel_steps_v1 has NO timestamp column (it's a per-journey rollup of
+// boolean has_* flags), so we omit it from the freshness check. Row-count
+// drift vs source is a separate signal not currently surfaced; flag for
+// follow-on if it ever matters.
 const DASHBOARD_MVS = [
-  "journey_bot_classification_v1",
-  "journey_funnel_steps_v1",
-  "journey_entry_channel_v1",
+  { name: "journey_bot_classification_v1", ts_column: "journey_start_ts" },
+  { name: "journey_entry_channel_v1", ts_column: "entry_ts" },
 ] as const;
 
 // Attribution chain stages refreshed by the 03:30 UTC cron (Sprint 1.1).
@@ -84,27 +88,28 @@ async function checkMvStaleness(): Promise<{
   const sourceMs = new Date(sourceMax).getTime();
 
   const results = await Promise.all(
-    DASHBOARD_MVS.map(async (mv): Promise<MvStaleness> => {
+    DASHBOARD_MVS.map(async ({ name, ts_column }): Promise<MvStaleness> => {
       const { data, error } = await supabase
         .schema("chapter_reporting")
-        .from(mv)
-        .select("journey_start_ts")
-        .order("journey_start_ts", { ascending: false })
+        .from(name)
+        .select(ts_column)
+        .order(ts_column, { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (error) {
-        return { mv, ok: false, error: error.message };
+        return { mv: name, ok: false, error: error.message };
       }
       if (!data) {
-        return { mv, ok: false, error: "empty MV" };
+        return { mv: name, ok: false, error: "empty MV" };
       }
-      const mvMs = new Date(data.journey_start_ts as string).getTime();
+      const tsValue = (data as Record<string, unknown>)[ts_column] as string;
+      const mvMs = new Date(tsValue).getTime();
       const gapHours = (sourceMs - mvMs) / 3_600_000;
       return {
-        mv,
+        mv: name,
         ok: true,
-        max_ts: data.journey_start_ts as string,
+        max_ts: tsValue,
         gap_hours: gapHours,
       };
     })

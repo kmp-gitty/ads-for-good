@@ -188,6 +188,15 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of June 10, 2026)
 
+### Cron freshness hotfix + digest column bug (June 14, 2026)
+- **Symptom:** `journey_resolved_v1` had not auto-refreshed since June 10 (94.9h stale); `attribution_linear_chapter_v1` + `purchase_channel_final_v1` stale 69.4h. Daily-digest GChat alert surfaced this on June 14 morning. Plus the digest itself was reporting "column does not exist" errors on 2 of 3 MVs (false alarms).
+- **Root cause #1 — Vercel function timeout in refresh-dashboard-mvs cron.** The 04:00 UTC `refresh-dashboard-mvs` cron has `maxDuration = 300` (5 minutes). MV refresh of the 6 listed MVs (largest is `journey_bot_classification_v1` at 255MB / 921k rows) + ANALYZE on each takes ~5-7 min on its own. Cron was hitting the wall AFTER MV refresh succeeded but BEFORE reaching the per-client snapshot loop OR the global snapshot loop. No `_snapshot_runs` failure records existed because the code never reached those sections — it was killed mid-flight by the platform timeout. MV freshness check confirmed MVs WERE refreshed at 03:57 UTC today; staleness was downstream-only.
+- **Root cause #2 — Daily-digest column name bug.** [daily-digest/route.ts](src/app/api/internal/monitoring/daily-digest/route.ts) had a hardcoded `journey_start_ts` column for all 3 MVs. Only `journey_bot_classification_v1` has that column. `journey_entry_channel_v1` has `entry_ts`; `journey_funnel_steps_v1` has NO timestamp column at all (it's a boolean-flag rollup).
+- **Fix #1:** bumped `maxDuration` from 300 → 800 (Vercel Pro max) in [refresh-dashboard-mvs/route.ts](src/app/api/internal/cron/refresh-dashboard-mvs/route.ts). Comment in code explains the trace + reasoning for the next person.
+- **Fix #2:** restructured `DASHBOARD_MVS` constant in daily-digest from `string[]` to `{ name, ts_column }[]`; dropped `journey_funnel_steps_v1` from the freshness check (no timestamp). Updated the freshness-query function to use the per-MV `ts_column`. Eliminates the false-alarm errors.
+- **Manual restoration:** ran `refresh_journey_resolved_v1` for all 4 clients + `refresh_attribution_tables()` to clear current staleness so dashboard data is fresh through to tonight's cron. EOS 924k rows; Not So Cavalier 0 (no pixel events yet — expected).
+- **Backlog item closed (effectively):** the previously-noted "stale-cron pattern" risk was real; better cron monitoring + budget headroom now in place.
+
 ### Task 3 — Recommendations engine v1 pilot (June 14, 2026)
 - **Scope shipped:** schema, Claude API wrapper, weekly cron, 3 pilot rule evaluators, 3 seed rules in DB. Validated end-to-end against EOS data via direct SQL (rules will fire when cron runs).
 - **Architecture (per spec):** themes are stable conceptual scaffolding; rules grow over time. Pre-written SQL queries → Claude only renders card text → never generates SQL. Per-rule confidence calculation based on evidence strength.

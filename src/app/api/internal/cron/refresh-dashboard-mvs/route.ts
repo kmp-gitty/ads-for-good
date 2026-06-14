@@ -3,7 +3,13 @@ import postgres from "postgres";
 import { postToGChat } from "@/app/lib/monitoring/gchat";
 import { unauthorizedIfNotCron } from "@/app/lib/monitoring/auth";
 
-export const maxDuration = 300;
+// Bumped from 300 → 800 (Vercel Pro max) on June 14 after observing that
+// the 04:00 UTC cron was timing out AFTER MV refresh but BEFORE per-client
+// snapshot loop. MV refresh on 6 MVs (255MB largest) + ANALYZE takes ~5-7 min;
+// the snapshot section needs the remaining budget. Symptoms before bump:
+// journey_resolved_v1 / attribution_linear_chapter_v1 / purchase_channel_final_v1
+// all going days stale despite cron firing.
+export const maxDuration = 800;
 
 const MVS = [
   "chapter_reporting.journey_bot_classification_v1",
