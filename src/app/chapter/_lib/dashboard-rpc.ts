@@ -907,6 +907,77 @@ const DEFAULT_CLIENT_CONFIG = {
   display_tz: "America/Los_Angeles",
 } as const;
 
+// ─────── Recommendations (chapter_recommendations.findings) ─────────────────
+// Direct table reads (no RPC layer); cached the same way as the rest. RLS is
+// service-role-only on chapter_recommendations.*, so the existing supabase
+// client bypasses RLS the same way it does for chapter_reporting RPCs.
+
+export type RecommendationEvidence = {
+  source: string;
+  fact: string;
+  deeplink: string;
+};
+
+export type RecommendationFinding = {
+  id:                 string;
+  rule_id:            string;
+  theme:              "data_integrity" | "channel_value" | "channel_synergy" | "lifecycle_health" | "customer_quality" | "emerging_patterns";
+  subject_key:        string | null;
+  headline:           string;
+  story:              string;
+  evidence:           RecommendationEvidence[];
+  action:             string;
+  action_type:        "mechanical" | "analytical" | "strategic_prompting";
+  confidence:         "strong" | "moderate" | "early_signal";
+  severity_weight:    "high" | "medium" | "low";
+  state:              "new" | "standing" | "changed" | "resolved";
+  render_method:      "claude" | "fallback";
+  generated_at:       string;
+  data_window_start:  string;
+  data_window_end:    string;
+};
+
+export const cachedRecommendationsCurrent = unstable_cache(
+  async (args: { clientKey: string }): Promise<RecommendationFinding[]> => {
+    const r = await supabase
+      .schema("chapter_recommendations")
+      .from("findings")
+      .select("id, rule_id, theme, subject_key, headline, story, evidence, action, action_type, confidence, severity_weight, state, render_method, generated_at, data_window_start, data_window_end")
+      .eq("client_key", args.clientKey)
+      .is("dismissed_at", null)
+      .neq("state", "resolved")
+      .order("generated_at", { ascending: false });
+    if (r.error) {
+      console.error("[dashboard-rpc] chapter_recommendations.findings (current) failed:", r.error.message);
+      return [];
+    }
+    return (r.data ?? []) as RecommendationFinding[];
+  },
+  ["dashboard-rpc:chapter_recommendations:findings_current"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:recommendations_current"] },
+);
+
+export const cachedRecommendationsHistory = unstable_cache(
+  async (args: { clientKey: string; lookbackDays: number }): Promise<RecommendationFinding[]> => {
+    // bucketedNow() keeps the cutoff stable for 5 min so cache keys hit.
+    const since = new Date(bucketedNow().getTime() - args.lookbackDays * 24 * 3600 * 1000).toISOString();
+    const r = await supabase
+      .schema("chapter_recommendations")
+      .from("findings")
+      .select("id, rule_id, theme, subject_key, headline, story, evidence, action, action_type, confidence, severity_weight, state, render_method, generated_at, data_window_start, data_window_end")
+      .eq("client_key", args.clientKey)
+      .gte("generated_at", since)
+      .order("generated_at", { ascending: false });
+    if (r.error) {
+      console.error("[dashboard-rpc] chapter_recommendations.findings (history) failed:", r.error.message);
+      return [];
+    }
+    return (r.data ?? []) as RecommendationFinding[];
+  },
+  ["dashboard-rpc:chapter_recommendations:findings_history"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:recommendations_history"] },
+);
+
 export const cachedClientConfig = unstable_cache(
   async (clientKey: string): Promise<ClientConfig> => {
     const r = await supabase

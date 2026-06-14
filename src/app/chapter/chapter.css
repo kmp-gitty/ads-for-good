@@ -1270,3 +1270,119 @@
   background: rgba(255,255,255,0.15);
   border-color: rgba(255,255,255,0.25);
 }
+
+/* ============ Recommendations ============ */
+/* Theme section (grouping per the 6-theme scaffolding). */
+.chapter-app .rec-theme-section { display: flex; flex-direction: column; gap: 10px; }
+.chapter-app .rec-theme-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 8px 4px 2px; gap: 14px; flex-wrap: wrap;
+}
+.chapter-app .rec-theme-title {
+  font-size: 15px; font-weight: 600; color: var(--ink); margin: 0;
+  letter-spacing: -.01em;
+}
+.chapter-app .rec-theme-count {
+  font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .08em;
+}
+.chapter-app .rec-theme-list { display: flex; flex-direction: column; gap: 12px; }
+.chapter-app .rec-empty {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border: 1px dashed var(--line-2); border-radius: var(--radius);
+  background: var(--bg); color: var(--ink-3); font-size: 13px;
+}
+.chapter-app .rec-empty svg { color: var(--good); }
+
+/* Card — mirrors .obs-card shape so the visual rhythm matches sibling pages. */
+.chapter-app .rec-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 20px 22px; display: flex; gap: 18px; box-shadow: var(--shadow-1);
+  position: relative; transition: border-color .15s;
+}
+.chapter-app .rec-card:hover { border-color: var(--ink-4); }
+.chapter-app .rec-body { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.chapter-app .rec-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Pills */
+.chapter-app .rec-tag {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600;
+  padding: 3px 9px; border-radius: 999px;
+  background: var(--bg-2); color: var(--ink-2);
+}
+.chapter-app .rec-tag.conf-strong       { background: var(--good-soft); color: var(--good); }
+.chapter-app .rec-tag.conf-moderate     { background: #F5EAD3; color: var(--sev-med); }
+.chapter-app .rec-tag.conf-early_signal { background: #DEE5EE; color: var(--ink-2); }
+.chapter-app .rec-tag.state-new         { background: var(--accent-soft); color: var(--accent-2); position: relative; }
+.chapter-app .rec-tag.state-new::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  display: inline-block; margin-right: 4px; vertical-align: middle;
+  animation: chapter-pulse 2s infinite;
+}
+.chapter-app .rec-tag.state-changed  { background: #F5EAD3; color: var(--sev-med); }
+.chapter-app .rec-tag.state-standing { background: var(--bg-2); color: var(--ink-2); }
+.chapter-app .rec-tag.rec-subject    { background: var(--ink-2); color: var(--bg-2); text-transform: none; letter-spacing: 0; }
+.chapter-app .rec-tag.rec-rule       { background: transparent; color: var(--ink-3); border: 1px solid var(--line-2); }
+.chapter-app .rec-tag.rec-fallback   { background: rgba(178,69,47,0.08); color: var(--bad); }
+
+.chapter-app .rec-headline {
+  font-size: 17px; font-weight: 600; letter-spacing: -.01em;
+  line-height: 1.4; color: var(--ink); margin: 0; text-wrap: pretty;
+}
+.chapter-app .rec-story {
+  font-size: 14px; line-height: 1.55; color: var(--ink-2); margin: 0;
+}
+
+/* Evidence block — list with deep-link rows */
+.chapter-app .rec-evidence {
+  background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;
+}
+.chapter-app .rec-evidence-title {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--ink-3); font-weight: 600;
+}
+.chapter-app .rec-evidence-list {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px;
+}
+.chapter-app .rec-evidence-link {
+  display: grid; grid-template-columns: 130px 1fr auto;
+  align-items: center; gap: 12px;
+  padding: 6px 8px; border-radius: 8px;
+  color: var(--ink-2); text-decoration: none;
+  transition: background .12s;
+}
+.chapter-app .rec-evidence-link:hover { background: var(--bg-2); color: var(--ink); }
+.chapter-app .rec-evidence-source {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--ink-3); font-weight: 600;
+}
+.chapter-app .rec-evidence-fact { font-size: 13px; line-height: 1.4; }
+.chapter-app .rec-evidence-chev { color: var(--ink-4); display: inline-flex; }
+
+.chapter-app .rec-action {
+  font-size: 13px; color: var(--ink-2); line-height: 1.55;
+  border-top: 1px dashed var(--line); padding-top: 12px;
+}
+.chapter-app .rec-action-kicker {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--ink-3); font-weight: 600; margin-bottom: 4px;
+}
+.chapter-app .rec-foot {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  font-size: 11px; color: var(--ink-3); padding-top: 6px; flex-wrap: wrap;
+}
+.chapter-app .rec-foot .muted { color: var(--ink-4); }
+
+/* Mobile — collapse evidence-link grid into single column */
+@media (max-width: 720px) {
+  .chapter-app .rec-card { padding: 14px 16px; gap: 12px; }
+  .chapter-app .rec-headline { font-size: 15px; }
+  .chapter-app .rec-evidence-link {
+    grid-template-columns: 1fr auto;
+  }
+  .chapter-app .rec-evidence-source {
+    grid-column: 1 / -1;
+  }
+  .chapter-app .rec-meta { row-gap: 6px; }
+  .chapter-app .rec-foot { flex-direction: column; align-items: flex-start; gap: 6px; }
+}
