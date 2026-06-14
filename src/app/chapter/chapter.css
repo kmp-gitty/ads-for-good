@@ -64,6 +64,9 @@
 }
 
 /* ============ Sidebar ============ */
+/* min-height (not fixed height) so the navy field grows when content is
+   taller than the viewport — otherwise nav items rendered below 100vh land
+   on the page's cream content background, leaving a visible color rift. */
 .chapter-app .sidebar {
   background: var(--ink);
   color: #DCE2EC;
@@ -73,7 +76,7 @@
   gap: 14px;
   position: sticky;
   top: 0;
-  height: 100vh;
+  min-height: 100vh;
 }
 .chapter-app .brand { display: flex; align-items: center; gap: 10px; padding: 0 6px; }
 .chapter-app .brand-mark {
