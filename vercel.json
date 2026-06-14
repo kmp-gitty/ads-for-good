@@ -23,6 +23,10 @@
     {
       "path": "/api/internal/cron/run-observations",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/internal/cron/refresh-recommendations",
+      "schedule": "0 6 * * 1"
     }
   ]
 }

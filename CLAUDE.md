@@ -188,6 +188,35 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of June 10, 2026)
 
+### Task 3 — Recommendations engine v1 pilot (June 14, 2026)
+- **Scope shipped:** schema, Claude API wrapper, weekly cron, 3 pilot rule evaluators, 3 seed rules in DB. Validated end-to-end against EOS data via direct SQL (rules will fire when cron runs).
+- **Architecture (per spec):** themes are stable conceptual scaffolding; rules grow over time. Pre-written SQL queries → Claude only renders card text → never generates SQL. Per-rule confidence calculation based on evidence strength.
+- **Schema (`chapter_recommendations`):**
+  - `rules` — config table. `(rule_id PK, theme CHECK IN 6 values, name, severity_weight CHECK IN 'high'/'medium'/'low', phrasing_template jsonb, action_template jsonb, action_type CHECK IN 'mechanical'/'analytical'/'strategic_prompting', enabled)`.
+  - `findings` — output. `(id, client_key, rule_id FK, theme, subject_key, headline, story, evidence jsonb, action, action_type, confidence CHECK IN 'strong'/'moderate'/'early_signal', severity_weight, state CHECK IN 'new'/'standing'/'changed'/'resolved', raw_metrics jsonb, render_method CHECK IN 'claude'/'fallback', generated_at, data_window_start, data_window_end, dismissed_at, dismissed_by)`. Three indexes for fast list/filter/dedup queries.
+  - `runs` — audit. `(id, client_key, started_at, completed_at, status, rules_evaluated, rules_fired, rules_skipped, api_calls, fallback_renders, error_message)`.
+  - RLS enabled on all 3 tables; service_role only.
+- **Claude wrapper** at [src/app/lib/claude/render-card.ts](src/app/lib/claude/render-card.ts):
+  - Uses `claude-sonnet-4-6` (interpretation-class, no full reasoning needed for templated rendering).
+  - System prompt instructs Claude to fill template precisely without invention. Voice rules baked in (no exclamation points, no emoji, no breathless language, never superlatives without numbers).
+  - Single retry on transient failure. On persistent failure: falls back to `fallbackRender()` — literal `{token}` substitution. Findings flagged `render_method='fallback'` for ops visibility.
+  - Tolerates code-fenced JSON output (`\`\`\`json ... \`\`\``).
+  - **Graceful no-key behavior:** if `ANTHROPIC_API_KEY` is missing, immediately falls back to template substitution + logs warning. Engine still runs; cards still render (just less natural-language polish).
+- **Rule registry** at [src/app/lib/recommendations/rules/index.ts](src/app/lib/recommendations/rules/index.ts) — typed `Record<rule_id, RuleEvaluator>` so adding new rules forces compile-time wiring. Cron iterates this registry, not via reflection.
+- **3 pilot rule evaluators** in `src/app/lib/recommendations/rules/`:
+  - **R1.1** ([R1_1.ts](src/app/lib/recommendations/rules/R1_1.ts)) — High bot rate with no mitigation. Theme: data_integrity. Checks bot share over current 4w + prior 8w + prior 12w via two count-only queries on `journey_resolved_v1` (Sprint-3-optimized). **Bot definition matches dashboard canonical** (`NOT (bot_class IN ('human_likely','suspect') AND event_count > 1)` — single-event journeys count as bot-like, not just `bot_class='bot_likely'`). EOS validates at 55.3% bot share — will fire HIGH confidence (sustained ≥30% across 3+ periods).
+  - **R2.3** ([R2_3.ts](src/app/lib/recommendations/rules/R2_3.ts)) — Channel weak lift despite broad presence. Theme: channel_value. Reads `contribution_overview` (presence + incremental rate) + `correlation_channel_overview` (AOV/days/touches/conv-rate differentials with-vs-without). Fires when participation_rate ≥75% AND |incremental_rate| ≤0.15 AND all 4 differentials <5%. Expected fire: Direct on EOS.
+  - **R4.1** ([R4_1.ts](src/app/lib/recommendations/rules/R4_1.ts)) — Path length growing sustainably. Theme: lifecycle_health. Computes per-2-week median touch counts over trailing 10 weeks; fires when current 2w is ≥20% above trailing 8w mean AND ≥3 consecutive 2w periods show upward trend.
+- **Cron route** at [/api/internal/cron/refresh-recommendations](src/app/api/internal/cron/refresh-recommendations/route.ts) — `GET` handler, `CRON_SECRET`-gated via existing `unauthorizedIfNotCron`. Scheduled `0 6 * * 1` (Mondays 06:00 UTC) in [vercel.json](vercel.json) — runs AFTER Observations cron (05:00 UTC) so observation findings are fresh when Recommendations synthesize.
+  - For each active client × each enabled rule: evaluate → dedup against most recent prior finding by `(client_key, rule_id, subject_key)` via stable JSON stringify of `raw_metrics` → state machine (`new` / `standing` / `changed`) → Claude render → INSERT finding.
+  - After all rules: mark prior active findings that DIDN'T fire this run as `'resolved'`.
+  - Per-rule errors caught + logged; don't kill the run. Top-level failures + per-client failures surface via existing GChat alert (`postToGChat`).
+- **Seeded 3 rules** into `chapter_recommendations.rules` with phrasing templates lifted verbatim from spec v1 Part 8. Templates use `{token}` placeholders that Claude fills.
+- **Deploy prerequisite:** `ANTHROPIC_API_KEY` in Vercel env vars (Production + Preview). Engine works without it (fallback to template substitution) but cards will be less natural. See deploy walkthrough below.
+- **Files (new):** schema migration `task_3_chapter_recommendations_schema`, [src/app/lib/claude/render-card.ts](src/app/lib/claude/render-card.ts), [src/app/lib/recommendations/types.ts](src/app/lib/recommendations/types.ts), [src/app/lib/recommendations/rules/index.ts](src/app/lib/recommendations/rules/index.ts), [src/app/lib/recommendations/rules/R1_1.ts](src/app/lib/recommendations/rules/R1_1.ts), [src/app/lib/recommendations/rules/R2_3.ts](src/app/lib/recommendations/rules/R2_3.ts), [src/app/lib/recommendations/rules/R4_1.ts](src/app/lib/recommendations/rules/R4_1.ts), [src/app/api/internal/cron/refresh-recommendations/route.ts](src/app/api/internal/cron/refresh-recommendations/route.ts).
+- **Files (modified):** [vercel.json](vercel.json) (added cron schedule), [package.json](package.json) (added `@anthropic-ai/sdk`).
+- **Next:** Task 2 (Recommendations page rendering findings from the DB). The other 17 spec rules (4 themes × 3-4 rules each) are queued for follow-on — pattern is identical, just write the evaluator + add registry entry + INSERT seed row.
+
 ### Sidebar reorg + Submit-a-question (Tasks 1 + 4 of June 11 work order)
 - **Reference docs:** `chapter_recommendations_spec_v1.md` (rule library + page spec) — companion to CLAUDE.md.
 - **Decisions locked at handoff:**
