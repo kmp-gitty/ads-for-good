@@ -241,18 +241,26 @@ async function determineState(
   clientKey: string,
   result: RuleEvaluationResult,
 ): Promise<"new" | "standing" | "changed"> {
-  const { data: prior } = await supabase
+  // Match subject_key explicitly — both nulls match, otherwise must equal.
+  // Without this, a rule firing for "Direct" one week and "Email" the next
+  // would look up Direct's prior row when classifying Email's state and
+  // wrongly mark it 'changed'. Multi-subject rules (R2.1, R3.x, R5.x, R6.1)
+  // depend on per-subject state tracking.
+  let q = supabase
     .schema("chapter_recommendations")
     .from("findings")
     .select("raw_metrics")
     .eq("client_key", clientKey)
     .eq("rule_id", result.rule_id)
-    .is("dismissed_at", null)
+    .is("dismissed_at", null);
+  q = result.subject_key === null
+    ? q.is("subject_key", null)
+    : q.eq("subject_key", result.subject_key);
+  const { data: prior } = await q
     .order("generated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  // Match subject_key explicitly — both nulls match, otherwise must equal.
   if (!prior) return "new";
 
   // Compare raw_metrics. Stringify with sorted keys for stable comparison.

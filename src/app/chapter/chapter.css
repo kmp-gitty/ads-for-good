@@ -70,7 +70,7 @@
   padding: 22px 18px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 14px;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -1172,11 +1172,12 @@
 }
 
 /* ============ Sidebar 5-group dividers (June 11 reorg) ============ */
+/* Hairline on the navy field — keeps the sidebar background uninterrupted.
+   var(--line-2) would paint a visible cream strip against the dark sidebar. */
 .chapter-app .nav-divider {
-  margin: 12px 14px;
+  margin: 2px 14px;
   height: 1px;
-  background: var(--line-2);
-  opacity: .7;
+  background: rgba(255,255,255,0.06);
 }
 
 /* ============ Submit-a-question drawer (Task 4) ============ */
