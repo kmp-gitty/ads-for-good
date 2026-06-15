@@ -17,7 +17,13 @@ import type {
   DormantQuestion,
 } from "../../_lib/dashboard-rpc";
 
-function ObservationCard({ obs, onJump }: { obs: ObservationFinding; onJump: (o: ObservationFinding) => void }) {
+function ObservationCard({
+  obs, onJump, onOverride,
+}: {
+  obs: ObservationFinding;
+  onJump:     (o: ObservationFinding) => void;
+  onOverride: (o: ObservationFinding) => void;
+}) {
   const sevLabel = obs.severity === "high" ? "High" : obs.severity === "med" ? "Medium" : "Low";
   const stateLabel = obs.current_state === "new" ? "New" : obs.current_state === "changed" ? "Changed" : "Standing";
   const stateClass = obs.current_state === "new" ? "new" : "state-inv";
@@ -30,6 +36,20 @@ function ObservationCard({ obs, onJump }: { obs: ObservationFinding; onJump: (o:
           <span className={`obs-tag sev-${obs.severity}`}>{sevLabel} severity</span>
           <span className="obs-tag">{obs.category.replace("_", " ")}</span>
           <span className={`obs-tag ${stateClass}`}>{stateLabel}</span>
+          {obs.manual_override_active && (
+            <span
+              className="obs-tag"
+              style={{ background: "rgba(31,45,67,0.10)", color: "var(--ink-2)", border: "1px dashed var(--ink-3)" }}
+              title={
+                `Overridden from ${obs.original_severity.toUpperCase()} → ${obs.severity.toUpperCase()}`
+                + (obs.manual_override_by ? ` by ${obs.manual_override_by}` : "")
+                + (obs.manual_override_at ? ` on ${new Date(obs.manual_override_at).toLocaleDateString()}` : "")
+                + (obs.manual_override_reason ? ` — ${obs.manual_override_reason}` : "")
+              }
+            >
+              Severity overridden
+            </span>
+          )}
           {obs.gating_priority_active && (
             <span className="obs-tag" style={{ background: "rgba(204,82,82,0.15)", color: "var(--bad)" }}>
               Verify before acting on other findings
@@ -58,9 +78,14 @@ function ObservationCard({ obs, onJump }: { obs: ObservationFinding; onJump: (o:
         </div>
         <div className="obs-foot">
           <span>{new Date(obs.last_fired_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
-          <button className="card-link" onClick={() => onJump(obs)}>
-            Show me where this came from → {obs.page_label}
-          </button>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <button className="card-link" onClick={() => onOverride(obs)} style={{ color: "var(--ink-3)" }}>
+              {obs.manual_override_active ? "Edit override" : "Override severity"}
+            </button>
+            <button className="card-link" onClick={() => onJump(obs)}>
+              Show me where this came from → {obs.page_label}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -84,6 +109,51 @@ export default function ObservationsClient({
   const [popup, setPopup] = useState<ObservationFinding | null>(null);
   const [showLow, setShowLow] = useState(false);
   const [showSuggestDrawer, setShowSuggestDrawer] = useState(false);
+  // Severity-override form state — reset when popup changes.
+  const [overrideSev, setOverrideSev] = useState<"high" | "med" | "low" | "">("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideSubmitting, setOverrideSubmitting] = useState(false);
+  const [overrideError, setOverrideError] = useState<string | null>(null);
+  React.useEffect(() => {
+    if (popup) {
+      setOverrideSev(popup.manual_override_active ? popup.severity : "");
+      setOverrideReason(popup.manual_override_reason ?? "");
+      setOverrideError(null);
+    }
+  }, [popup]);
+
+  async function submitOverride(action: "set" | "clear") {
+    if (!popup) return;
+    if (action === "set" && !overrideSev) {
+      setOverrideError("Choose a severity to apply.");
+      return;
+    }
+    setOverrideSubmitting(true);
+    setOverrideError(null);
+    try {
+      const r = await fetch("/api/internal/observations/severity-override", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          client_key:  clientKey,
+          question_id: popup.question_id,
+          subject_key: popup.subject_key,
+          severity:    action === "clear" ? null : overrideSev,
+          reason:      action === "clear" ? null : overrideReason || null,
+        }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({} as { error?: string }));
+        throw new Error(j.error ?? `HTTP ${r.status}`);
+      }
+      setPopup(null);
+      router.refresh();
+    } catch (err) {
+      setOverrideError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setOverrideSubmitting(false);
+    }
+  }
 
   // Hide LOW by default (spec §6). Filter toggle reveals them.
   const filtered = findings.filter(o => {
@@ -295,7 +365,7 @@ export default function ObservationsClient({
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                {filtered.map(o => <ObservationCard key={o.id} obs={o} onJump={navigateToObs} />)}
+                {filtered.map(o => <ObservationCard key={o.id} obs={o} onJump={navigateToObs} onOverride={setPopup} />)}
               </div>
             )}
 
@@ -327,21 +397,112 @@ export default function ObservationsClient({
 
         {popup && (
           <>
-            <div className="scrim" onClick={() => setPopup(null)}></div>
+            <div className="scrim" onClick={() => !overrideSubmitting && setPopup(null)}></div>
             <div className="obs-popup">
               <div className="drawer-head">
                 <div>
-                  <div className="eyebrow">Observation</div>
+                  <div className="eyebrow">Override severity</div>
                   <div className="obs-meta" style={{ marginTop: 6 }}>
-                    <span className={`obs-tag sev-${popup.severity}`}>{popup.severity === "high" ? "High" : popup.severity === "med" ? "Medium" : "Low"} severity</span>
-                    <span className="obs-tag">{popup.category.replace("_", " ")}</span>
+                    <span className={`obs-tag sev-${popup.severity}`}>
+                      Currently {popup.severity === "high" ? "High" : popup.severity === "med" ? "Medium" : "Low"}
+                    </span>
+                    {popup.manual_override_active && (
+                      <span className="obs-tag" style={{ background: "rgba(31,45,67,0.10)", color: "var(--ink-2)" }}>
+                        Engine computed: {popup.original_severity.toUpperCase()}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <button className="toolbar-btn icon-only" onClick={() => setPopup(null)}><Icon name="x" size={14}/></button>
+                <button className="toolbar-btn icon-only" onClick={() => !overrideSubmitting && setPopup(null)}><Icon name="x" size={14}/></button>
               </div>
               <div className="drawer-body">
-                <h3 className="obs-headline">{popup.headline}</h3>
-                <div className="obs-action">{popup.action}</div>
+                <h3 className="obs-headline" style={{ fontSize: 15, marginBottom: 6 }}>{popup.headline}</h3>
+
+                {popup.manual_override_active && (
+                  <div style={{ fontSize: 12, color: "var(--ink-3)", padding: "8px 10px", background: "var(--bg)", border: "1px solid var(--line-2)", borderRadius: 8 }}>
+                    Overridden{popup.manual_override_by ? ` by ${popup.manual_override_by}` : ""}
+                    {popup.manual_override_at ? ` on ${new Date(popup.manual_override_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}` : ""}
+                    {popup.manual_override_reason ? ` — “${popup.manual_override_reason}”` : ""}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--ink-3)", fontWeight: 600 }}>
+                    Set severity to
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {(["high", "med", "low"] as const).map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setOverrideSev(s)}
+                        disabled={overrideSubmitting}
+                        className={`toolbar-btn ${overrideSev === s ? "primary" : ""}`}
+                        style={{ flex: 1, justifyContent: "center" }}
+                      >
+                        {s === "high" ? "High" : s === "med" ? "Medium" : "Low"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label htmlFor="override-reason" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--ink-3)", fontWeight: 600 }}>
+                    Reason <span style={{ color: "var(--ink-4)", textTransform: "none", letterSpacing: 0 }}>(optional, audit only)</span>
+                  </label>
+                  <textarea
+                    id="override-reason"
+                    value={overrideReason}
+                    onChange={(e) => setOverrideReason(e.target.value.slice(0, 500))}
+                    placeholder="Acknowledged Black Friday spike, etc."
+                    disabled={overrideSubmitting}
+                    rows={2}
+                    style={{
+                      fontFamily: "inherit", fontSize: 13, color: "var(--ink)",
+                      padding: "8px 10px", borderRadius: 8,
+                      border: "1px solid var(--line-2)", background: "var(--bg)",
+                      resize: "vertical",
+                    }}
+                  />
+                  <div style={{ fontSize: 10, color: "var(--ink-4)", textAlign: "right" }}>
+                    {overrideReason.length} / 500
+                  </div>
+                </div>
+
+                {overrideError && (
+                  <div style={{ fontSize: 12, color: "var(--bad)", padding: "6px 10px", background: "rgba(204,82,82,0.08)", borderRadius: 6 }}>
+                    {overrideError}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
+                  {popup.manual_override_active && (
+                    <button
+                      type="button"
+                      className="toolbar-btn"
+                      onClick={() => submitOverride("clear")}
+                      disabled={overrideSubmitting}
+                    >
+                      Clear override
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="toolbar-btn"
+                    onClick={() => setPopup(null)}
+                    disabled={overrideSubmitting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="toolbar-btn primary"
+                    onClick={() => submitOverride("set")}
+                    disabled={overrideSubmitting || !overrideSev || overrideSev === popup.original_severity && !popup.manual_override_active}
+                  >
+                    {overrideSubmitting ? "Saving…" : popup.manual_override_active ? "Update override" : "Apply override"}
+                  </button>
+                </div>
               </div>
             </div>
           </>

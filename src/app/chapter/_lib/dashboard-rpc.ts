@@ -829,6 +829,14 @@ export type ObservationFinding = {
   first_fired_at:         string;
   gating_priority_active: boolean;
   is_hero:                boolean;
+  // Manual severity override fields (post-June 14 RPC update). When
+  // `manual_override_active` is true, `severity` already reflects the
+  // overridden value; `original_severity` carries what the engine computed.
+  original_severity:      "high" | "med" | "low";
+  manual_override_active: boolean;
+  manual_override_reason: string | null;
+  manual_override_by:     string | null;
+  manual_override_at:     string | null;
 };
 
 export type ObservationHistoryRow = {

@@ -56,6 +56,15 @@ type GlobalSnapshotStaleness =
   | { snapshot: string; ok: true; max_ts: string; gap_hours: number }
   | { snapshot: string; ok: false; error: string };
 
+// Square access tokens stored in chapter_config.square_oauth_tokens are
+// Personal Access Tokens — long-lived, no refresh flow. They invalidate only
+// on manual revocation by the seller (or Square-side abuse rotation). The
+// monitor here calls /v2/merchants with each non-revoked token; 401/403 means
+// the token is dead and ingest will be silently broken until rotated.
+type SquareAuthHealth =
+  | { client_key: string; merchant_id: string; ok: true }
+  | { client_key: string; merchant_id: string; ok: false; status: number | null; error: string };
+
 type MvStaleness =
   | { mv: string; ok: true; max_ts: string; gap_hours: number }
   | { mv: string; ok: false; error: string };
@@ -217,6 +226,56 @@ async function checkGlobalSnapshotStaleness(): Promise<GlobalSnapshotStaleness[]
   );
 }
 
+async function checkSquareTokenHealth(): Promise<SquareAuthHealth[]> {
+  const { data, error } = await supabase
+    .schema("chapter_config")
+    .from("square_oauth_tokens")
+    .select("client_key, merchant_id, environment, access_token")
+    .is("revoked_at", null);
+
+  if (error || !data || data.length === 0) return [];
+
+  const results = await Promise.all(
+    data.map(async (row): Promise<SquareAuthHealth> => {
+      const base = row.environment === "sandbox"
+        ? "https://connect.squareupsandbox.com"
+        : "https://connect.squareup.com";
+      try {
+        const r = await fetch(`${base}/v2/merchants`, {
+          headers: {
+            "Authorization": `Bearer ${row.access_token}`,
+            "Square-Version": "2024-01-17",
+            "Accept": "application/json",
+          },
+          // Short timeout: token health check shouldn't hang the digest.
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (r.ok) {
+          return { client_key: row.client_key, merchant_id: row.merchant_id, ok: true };
+        }
+        const text = await r.text().catch(() => "");
+        return {
+          client_key: row.client_key,
+          merchant_id: row.merchant_id,
+          ok: false,
+          status: r.status,
+          error: text.slice(0, 200) || `HTTP ${r.status}`,
+        };
+      } catch (err) {
+        return {
+          client_key: row.client_key,
+          merchant_id: row.merchant_id,
+          ok: false,
+          status: null,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }),
+  );
+
+  return results;
+}
+
 export async function GET(req: NextRequest) {
   const unauthorized = unauthorizedIfNotCron(req);
   if (unauthorized) return unauthorized;
@@ -357,6 +416,23 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const squareHealth = await checkSquareTokenHealth();
+  const squareFailures = squareHealth.filter(
+    (r): r is Extract<SquareAuthHealth, { ok: false }> => !r.ok,
+  );
+
+  if (squareHealth.length > 0) {
+    lines.push("", "*Square token health:*");
+    if (squareFailures.length === 0) {
+      lines.push(`  ✅ all ${squareHealth.length} Square token(s) authenticated against /v2/merchants`);
+    } else {
+      for (const r of squareFailures) {
+        const code = r.status === null ? "network" : `HTTP ${r.status}`;
+        lines.push(`  ❌ \`${r.client_key}\` (merchant ${r.merchant_id}) — ${code}: ${r.error.slice(0, 120)}`);
+      }
+    }
+  }
+
   try {
     await postToGChat({ text: lines.join("\n") });
   } catch (err) {
@@ -380,5 +456,7 @@ export async function GET(req: NextRequest) {
     chain_problem_count: chainProblems.length,
     global_staleness: globalStaleness,
     global_stale_count: staleGlobals.length + erroredGlobals.length,
+    square_health: squareHealth,
+    square_failure_count: squareFailures.length,
   });
 }
