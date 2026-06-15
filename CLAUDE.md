@@ -197,6 +197,16 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - **Manual restoration:** ran `refresh_journey_resolved_v1` for all 4 clients + `refresh_attribution_tables()` to clear current staleness so dashboard data is fresh through to tonight's cron. EOS 924k rows; Not So Cavalier 0 (no pixel events yet — expected).
 - **Backlog item closed (effectively):** the previously-noted "stale-cron pattern" risk was real; better cron monitoring + budget headroom now in place.
 
+### Cron split: dashboard-mvs ÷ derived-snapshots (June 15, 2026)
+- **Symptom:** even with the June 14 bump to `maxDuration = 800` (Vercel Pro max), the bundled `refresh-dashboard-mvs` cron timed out AGAIN on the Monday June 15 03:00 EDT run. MV refresh completed (MV ts through ~04:01 UTC) but the per-client + global snapshot loops never reached completion. Same downstream-stale outcome.
+- **Root cause:** `REFRESH MATERIALIZED VIEW CONCURRENTLY` scans the source query to compute its diff EVEN WHEN there are zero new rows. On a live cron run captured at 14:00 UTC, the 3rd MV (`journey_entry_channel_v1`, 159 MB) was at 3:34 elapsed in `wait_event=DataFileRead` — cold disk I/O. Total MV-section runtime on cold buffers measured ~13+ min, leaving no budget for the snapshot loops. 800s ceiling is hard at Vercel's max plan tier; can't grow it further.
+- **Fix shipped June 15** — SPLIT the cron into two routes:
+  - `/api/internal/cron/refresh-dashboard-mvs` (existing) — now MVs only. `maxDuration = 800`. Schedule unchanged: **04:00 UTC**.
+  - `/api/internal/cron/refresh-derived-snapshots` (NEW) — per-client `journey_resolved_v1` + global `refresh_attribution_tables()`. `maxDuration = 300`. Schedule: **04:25 UTC** (25 min after MV cron starts, giving MV refresh time to complete before derived snapshots read the refreshed source).
+- **Why split rather than push to longer maxDuration:** Vercel Pro caps at 800. Hobby caps at 60. Splitting is the only path. Bonus: derived snapshots now have their own failure surfacing in GChat (separate alert from MV failures); easier to diagnose.
+- **Schedule chain through 05:30 UTC:** 03:30 attribution-chain → 04:00 dashboard-mvs → 04:25 derived-snapshots → 04:30 system-cohorts → 05:00 run-observations → (Mondays) 06:00 refresh-recommendations. Buffer windows assume each cron typically completes well within its allocated slot.
+- **Manual restoration June 15:** ran `refresh_journey_resolved_v1` for all 4 clients + `refresh_attribution_tables()` to bring today's data current ahead of tomorrow's split-cron run.
+
 ### Task 3 — Recommendations engine v1 pilot (June 14, 2026)
 - **Scope shipped:** schema, Claude API wrapper, weekly cron, 3 pilot rule evaluators, 3 seed rules in DB. Validated end-to-end against EOS data via direct SQL (rules will fire when cron runs).
 - **Architecture (per spec):** themes are stable conceptual scaffolding; rules grow over time. Pre-written SQL queries → Claude only renders card text → never generates SQL. Per-rule confidence calculation based on evidence strength.
@@ -1103,7 +1113,10 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - **Wired into 4 HMAC-protected endpoints:** `/api/purchase`, `/api/conversion`, `/api/shopify/webhooks/orders-create`, `/api/shopify/webhooks/orders-cancelled`. Each logs success + every failure path with the specific `failure_reason` (`missing_client_key` / `unknown_client` / `missing_signature` / `invalid_signature` / `missing_shopify_secret` / `missing_shopify_hmac` / `invalid_shopify_hmac`).
 - **Not wired:** pixel `/api/chapter/collect` — would log one row per pixel event (~50k/day). Pixel uses CORS-only auth (no HMAC), different security model.
 - **Verified post-deploy** with a deliberate `unknown_client` curl test against production; row appeared in `chapter_audit.api_auth_attempts` correctly.
-- **Watch out:** new schemas must be added to PostgREST's "Exposed schemas" list in Supabase Dashboard (Settings → API). Without this, `supabase.schema("chapter_audit")` calls silently fail. `chapter_audit` and `chapter_config` added on May 12.
+- **Watch out — schema creation requires TWO follow-up steps** (both bit the Recommendations cron on June 15, post-mortem below):
+  1. **Add to PostgREST exposed schemas** — Supabase Dashboard → Settings → API → "Exposed schemas". Without this, `supabase.schema("<new_schema>")` returns PGRST106 "Only the following schemas are exposed". Silent failure if errors aren't surfaced.
+  2. **Grant service_role privileges on the schema** — `GRANT USAGE ON SCHEMA <s> TO service_role` + table/sequence/function grants + `ALTER DEFAULT PRIVILEGES` for future objects. Without this, PostgREST surfaces 42501 "permission denied for schema". Migration template at `chapter-scripts/snapshots/2026-06-15-grant_service_role_chapter_recommendations.sql` (apply when adding any new chapter_* schema).
+  - **Past additions and when each was fixed:** `chapter_audit` + `chapter_config` added on May 12 (both steps done same day). `chapter_recommendations` added June 14 — **both steps missed**, caused Monday 06:00 UTC cron to fail with PGRST106 then 42501. Fixed June 15. Same gotcha will apply to `chapter_engagement` when Moment Identity v2 ships — pair schema-creation migration with grants migration in the same PR.
 
 ### Fix #26 Part 3 — Per-client API keys (DB-backed secrets) (May 12, 2026)
 - **Replaced `AFG_CLIENT_SECRETS_JSON` env var** (one dict, single rotation unit) with `chapter_config.client_secrets` table supporting per-client independent rotation/revocation + overlap-window rotation (new + old both active until old is hard-revoked).
