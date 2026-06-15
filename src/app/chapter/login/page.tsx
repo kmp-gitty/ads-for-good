@@ -39,6 +39,13 @@ function LoginForm() {
       // Same response shape regardless of whether the email is on the allowlist —
       // the server enforces the allowlist by simply not sending a link if not.
       if (res.status === 200) {
+        const body = await res.json().catch(() => ({}));
+        // Agency-staff bypass — @ads4good.com addresses get the legacy cookie
+        // set directly and skip the magic-link email round-trip.
+        if (body?.bypass && typeof body.redirect === "string") {
+          window.location.href = body.redirect;
+          return;
+        }
         setSubmitted(true);
       } else {
         const body = await res.json().catch(() => ({}));

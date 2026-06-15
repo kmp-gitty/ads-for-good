@@ -28,6 +28,36 @@ export async function POST(req: NextRequest) {
 
   const chapterUser = await findChapterUserByEmail(email);
 
+  // Agency-staff bypass (June 15, 2026): @ads4good.com addresses on the
+  // allowlist skip magic-link entirely and get the legacy CHAPTER_DASH_TOKEN
+  // cookie set directly. Rationale: the agency owns the domain, only agency
+  // staff can claim those addresses, and SMTP rate limits on Supabase's free
+  // tier were blocking active dev work. Security model is "trust the agency
+  // domain + allowlist membership" — same circle of trust as the original
+  // shared-token cookie (Sprint 5 predecessor) that this bypass restores.
+  if (chapterUser && email.endsWith("@ads4good.com")) {
+    const expectedToken = process.env.CHAPTER_DASH_TOKEN;
+    if (expectedToken) {
+      const res = NextResponse.json({
+        ok: true,
+        bypass: true,
+        redirect: nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
+          ? nextPath
+          : "/chapter",
+      });
+      res.cookies.set("chapter_auth", expectedToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 14, // 14 days
+      });
+      return res;
+    }
+    // CHAPTER_DASH_TOKEN unset → fall through to magic link path (won't 503
+    // the user, just makes them go through email).
+  }
+
   if (chapterUser) {
     const supabase = createSupabaseServiceRoleClient();
     // Build the redirect URL for the magic link. Must point at our callback
