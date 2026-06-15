@@ -398,13 +398,7 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
   - **For barbershop:** the pre-click "Win 10% off — enter email" pattern on Book Now closes the cross-domain stitch BEFORE the redirect to Square. Identity captured → canonical contains email_sha256 → Square webhook arrives with same email → ONE canonical from the start. No dependence on Square's post-booking redirect (still useful but no longer load-bearing).
   - **For EOS / Projectagram:** cart-abandonment recovery WITHOUT Klaviyo dependence. Time-on-page or exit-intent prompt with discount code on product pages.
   - **For future clients (Yelp / agency-mode pitches):** built-in email-capture layer is a real product differentiator. Identity-capture is one of the hardest UX problems in attribution; solving it natively is differentiation vs Branch.io / Northbeam / Triple Whale.
-- **Deferred to v2:**
-  - Per-visitor unique discount codes (generated server-side from a pool, claim-once semantics)
-  - Multi-step prompts (e.g. "Pick a category, then we'll send you 15% off")
-  - A/B testing harness (operator runs two prompts targeting the same trigger; pixel randomly assigns)
-  - Edit-in-place admin UI (currently delete + recreate)
-  - Analytics dashboard tile (today: operator queries pixel_events filtered to `identity_prompt_*` events; future: dedicated tile on the dashboard)
-  - Server-side trigger evaluation for additional types (e.g. `cart_value_above`, `returning_visitor`, `geo_country`)
+- **v2 build queued (June 15, 2026)** — **Moment Identity v2: composable 6-preset primitive.** Expands the single email-capture modal into a configurable engagement layer: Email Exchange (= v1 default), Custom Form (multi-field + multi-page + conditional branching), Custom Notification (corner-bubble), Make an Offer (bid-based cart recovery, Shopify only for auto-codes), Phone Call (CTA-only, no identity capture), Remind Me (price/stock subscriptions with hourly cron). Cross-cutting subsystems: ESP-trigger (Klaviyo / Mailchimp) vs Direct-send (Resend) email config with per-prompt overrides, unified recovery flow subsystem, A/B variant tooling, offer-threshold hierarchy (product → collection → global), subscription monitor with auto-cancel on purchase, edit-in-place admin UI. New schema needed: `chapter_engagement.prompt_responses`, `subscriptions`, `offers`, `offer_thresholds`, `email_sends`. Multi-session work. Operator playbook: `chapter_capture_setup_playbook_v2.md`. Engineering spec: `moment_identity_v2_handoff.md`. Folds the prior "Deferred to v2" bullets below (multi-step prompts, A/B harness, edit-in-place, server-side trigger types, per-visitor unique codes via offer codes) into the v2 build.
 
 ### Square refunds webhook + Sprint 5b clean URLs (June 11, 2026)
 **Two product wins shipped tonight while paused on barbershop pixel install (waiting on operator Staff-role access to Square Appointments).**
