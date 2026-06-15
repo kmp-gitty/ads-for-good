@@ -15,23 +15,41 @@ import {
   linkChapterUserToAuthId,
   touchLastLogin,
 } from "@/app/lib/auth/chapter-user";
+import type { EmailOtpType } from "@supabase/supabase-js";
 
 export async function GET(req: NextRequest) {
+  // Magic-link flow uses `?token_hash=&type=magiclink` (OTP) because the
+  // magic-link endpoint uses createSupabaseServiceRoleClient (no PKCE
+  // cookie-verifier path). OAuth providers and email-confirmation flows
+  // would use `?code=` (PKCE). Handle both.
   const code = req.nextUrl.searchParams.get("code");
+  const tokenHash = req.nextUrl.searchParams.get("token_hash");
+  const type = req.nextUrl.searchParams.get("type") as EmailOtpType | null;
   const next = req.nextUrl.searchParams.get("next") || "";
 
-  if (!code) {
+  if (!code && !(tokenHash && type)) {
     return NextResponse.redirect(new URL("/chapter/login?error=callback_failed", req.url));
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error || !data.session) {
-    console.warn("[auth-callback] exchangeCodeForSession failed:", error?.message);
-    return NextResponse.redirect(new URL("/chapter/login?error=callback_failed", req.url));
+
+  let authUser;
+  if (code) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error || !data.session) {
+      console.warn("[auth-callback] exchangeCodeForSession failed:", error?.message);
+      return NextResponse.redirect(new URL("/chapter/login?error=callback_failed", req.url));
+    }
+    authUser = data.session.user;
+  } else {
+    const { data, error } = await supabase.auth.verifyOtp({ type: type!, token_hash: tokenHash! });
+    if (error || !data.session) {
+      console.warn("[auth-callback] verifyOtp failed:", error?.message);
+      return NextResponse.redirect(new URL("/chapter/login?error=callback_failed", req.url));
+    }
+    authUser = data.session.user;
   }
 
-  const authUser = data.session.user;
   const email = (authUser.email || "").toLowerCase();
   if (!email) {
     await supabase.auth.signOut();
