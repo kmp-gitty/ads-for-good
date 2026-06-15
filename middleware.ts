@@ -224,22 +224,39 @@ async function gateChapter(req: NextRequest) {
   return NextResponse.redirect(loginUrl);
 }
 
-// ---------- /internal/* cookie auth ----------
-// Agency-internal admin surfaces (e.g. /internal/client-portal-config). Same
-// CHAPTER_DASH_TOKEN cookie as /chapter — anyone authenticated for the Chapter
-// dashboard can also use the admin surfaces. Redirect to /chapter/login on
+// ---------- /internal/* auth ----------
+// Agency-internal admin surfaces (e.g. /internal/client-portal-config,
+// /internal/tasks). Accepts EITHER:
+//   1. Supabase session as agency_operator (primary post-Sprint-5a). The
+//      login page is magic-link-only now and only issues a Supabase session,
+//      so this is the only path that works for operators who migrated.
+//   2. Legacy CHAPTER_DASH_TOKEN cookie (coexistence path; will be removed
+//      in Sprint 5d).
+// Client employees do NOT get internal access — these surfaces are agency-
+// only by design (operator-side admin work). Redirect to /chapter/login on
 // miss so we have a single login flow.
-function gateInternal(req: NextRequest) {
-  const expectedToken = process.env.CHAPTER_DASH_TOKEN;
-  if (!expectedToken) {
-    return new NextResponse(
-      "CHAPTER_DASH_TOKEN not configured. Set it in Vercel + .env.local.",
-      { status: 503 },
-    );
+async function gateInternal(req: NextRequest) {
+  // 1. Supabase session (primary).
+  const { supabase, getResponse } = createSupabaseMiddlewareClient(req);
+  const { data: { user: supaUser } } = await supabase.auth.getUser();
+  if (supaUser) {
+    const chapterUser = await findChapterUserByAuthId(supaUser.id);
+    if (chapterUser && canAccessGlobal(chapterUser)) {
+      return getResponse();
+    }
+    // Authenticated but not agency_operator (or revoked) — deny.
   }
-  if (req.cookies.get(CHAPTER_AUTH_COOKIE)?.value === expectedToken) {
+
+  // 2. Legacy cookie (coexistence path).
+  const expectedToken = process.env.CHAPTER_DASH_TOKEN;
+  if (
+    expectedToken &&
+    req.cookies.get(CHAPTER_AUTH_COOKIE)?.value === expectedToken
+  ) {
     return NextResponse.next();
   }
+
+  // 3. No auth — bounce to login preserving destination.
   const fullPath = req.nextUrl.pathname + req.nextUrl.search;
   const loginUrl = req.nextUrl.clone();
   loginUrl.pathname = "/chapter/login";
