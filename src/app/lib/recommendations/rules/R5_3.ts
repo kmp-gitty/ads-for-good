@@ -13,6 +13,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
+import { chapterUrl } from "@/app/chapter/_lib/urls";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -90,17 +91,17 @@ export const R5_3: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
       {
         source: "Channel Roles",
         fact: `${titleCase(best.channel)}: ${repPct}% of repeat-purchase chapters vs ${fpPct}% of first-purchase chapters`,
-        deeplink: "/chapter/channels",
+        deeplink: chapterUrl(ctx.client_key, "channels"),
       },
       {
         source: "Customer Journeys",
         fact: `${best.repeat_chapters} repeat-customer chapters touched this period`,
-        deeplink: "/chapter/journeys",
+        deeplink: chapterUrl(ctx.client_key, "journeys"),
       },
       {
         source: "Path Patterns",
         fact: `${best.multiplier.toFixed(1)}x concentration in returning-customer activity`,
-        deeplink: "/chapter/paths",
+        deeplink: chapterUrl(ctx.client_key, "paths"),
       },
     ],
     confidence,

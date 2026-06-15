@@ -46,12 +46,23 @@ export function Sidebar() {
   // Default landing is /chapter/overview (Lifecycle Overview) per the
   // June 11 work order. Root /chapter aliases to Overview so navigation
   // without a slug still works.
-  const isActive = (key: string) => pathname === `/chapter/${key}` || (key === "overview" && pathname === "/chapter");
+  //
+  // Sprint 5b real (June 14, 2026): sidebar links use the canonical client-
+  // scoped form `/chapter/<client_key>/<slug>`. Middleware rewrites this
+  // internally to the legacy `?client=` form so the existing page tree
+  // renders unchanged. `isActive` recognises BOTH forms because in-app
+  // navigation outside the sidebar (recommendation deep-links, pinned
+  // observation router.push) still emits the legacy form pending step 4
+  // backlog cleanup.
+  const isActive = (key: string) =>
+    pathname === `/chapter/${client.id}/${key}` ||
+    pathname === `/chapter/${key}` ||
+    (key === "overview" && (pathname === "/chapter" || pathname === `/chapter/${client.id}`));
 
   const renderNavItem = (it: NavItem) => (
     <Link
       key={it.key}
-      href={`/chapter/${it.key}`}
+      href={`/chapter/${client.id}/${it.key}`}
       className={`nav-item ${isActive(it.key) ? "active" : ""} ${it.locked ? "locked" : ""}`}
     >
       <span className="icon"><Icon name={it.icon} size={16}/></span>

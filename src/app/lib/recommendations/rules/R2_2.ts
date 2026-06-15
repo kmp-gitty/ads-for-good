@@ -13,6 +13,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
+import { chapterUrl } from "@/app/chapter/_lib/urls";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -102,17 +103,17 @@ export const R2_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
       {
         source: "Attribution Models",
         fact: `${titleCase(best.channel)} opens ${ftPct}% of paths but only closes ${ltPct}% under last-touch`,
-        deeplink: "/chapter/attribution",
+        deeplink: chapterUrl(ctx.client_key, "attribution"),
       },
       {
         source: "Lift, Incrementality & Value",
         fact: `Incremental rate ${best.lift_score.toFixed(2)} (clear positive signal)`,
-        deeplink: "/chapter/lift",
+        deeplink: chapterUrl(ctx.client_key, "lift"),
       },
       {
         source: "Channel Roles",
         fact: `Present in ${presencePct}% of converting chapters`,
-        deeplink: "/chapter/channels",
+        deeplink: chapterUrl(ctx.client_key, "channels"),
       },
     ],
     confidence,

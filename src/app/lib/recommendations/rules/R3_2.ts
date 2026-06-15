@@ -14,6 +14,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
+import { chapterUrl } from "@/app/chapter/_lib/urls";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -95,12 +96,12 @@ export const R3_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
       {
         source: "Lagged Impact",
         fact: `${titleCase(best.channel_a)} → ${titleCase(best.channel_b)}: ${best.correlation.toFixed(2)} correlation at ${best.lag_days}-day lag`,
-        deeplink: "/chapter/connections/lagged-impact",
+        deeplink: chapterUrl(ctx.client_key, "connections/lagged-impact"),
       },
       {
         source: "Cross-Source Influence",
         fact: `${titleCase(best.channel_a)} activity precedes ${titleCase(best.channel_b)} conversions with consistent offset`,
-        deeplink: "/chapter/connections/influence",
+        deeplink: chapterUrl(ctx.client_key, "connections/influence"),
       },
     ],
     confidence,

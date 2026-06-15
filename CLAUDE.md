@@ -740,7 +740,7 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 #### Connections #2 — Lagged Impact page (`/chapter/connections/lagged-impact`)
 - **Per `connections_2_lagged_impact_spec.md`.** Different angle than #1: rather than "who is upstream/downstream of this anchor," asks "how long does it take for a channel touch to convert?" Tabular: channel × lag bucket (0-1d / 2-7d / 8-14d / 15-30d / 30d+) × conversion rate + revenue.
 - **Single RPC `chapter_reporting.lagged_impact_panel(client_key, start, end, channel_filter, cohort_filter)`** powers the table. Cohort filter shares the cohort resolver from Connections #1.
-- **Heavyweight tier (statistical lift across lag buckets) DEFERRED** — depends on the shared matched-lift engine refactor (Open Fix List). v1 ships as descriptive table only.
+- **Heavyweight tier (statistical lift across lag buckets) DEFERRED** — v1 ships as descriptive table only. The shared matched-lift engine is now available (`chapter_reporting.matched_lift_bucket_stats`, shipped June 14) so the heavyweight build calls into it instead of forking the math a third time.
 - **Header copy lessons from #1 applied:** anchor concept renamed "channel" here since there's no per-anchor pivot — just one table.
 
 #### Cohorts — system pre-bake + uploaded + privacy-first hashing (May 27 – June 1, 2026)
@@ -828,7 +828,7 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - **Channel Value Matrix** (inline SVG, no chart library): x-axis "Incrementality (matched-cohort)" -30%→+50%, y-axis "Contribution Index" 0-100. Dashed median-split lines; quadrant backgrounds shaded (orange tint on connective-tissue corner per spec §4). Channel chips colored to channel taxonomy.
 - **Live EOS narrative** (90d): Direct (69% participation, 80% recurrence, ~0% incremental) and Email (43% participation, 43% recurrence, ~5% incremental within noise) both land in **Connective Tissue** — exactly the cohort a ROAS-only tool would wrongly cut. This is the highest-value sales narrative the L&I feature produces.
 - **Sidebar nav renamed** "Lift & Incrementality" → "**Lift, Incrementality & Value**" in [src/app/chapter/_components/Sidebar.tsx](src/app/chapter/_components/Sidebar.tsx). Route stays `/chapter/lift`; page header TopBar stays "Lift & Incrementality" (the page header is the analytical-frame label; the nav label sells the user-facing benefit).
-- **Deferred for v2:** (a) shared matched-lift engine refactor between Incrementality and Contribution (spec §9 — both RPCs currently inline the matched-lift math), (b) modeling where substituting buyers redistribute (which channel absorbs them; spec §2 — dies at EOS's n), (c) Causation mock data + types are now unused but not yet cleaned out of `mockdata.ts`.
+- **Deferred for v2:** (a) ~~shared matched-lift engine refactor~~ SHIPPED June 14, 2026 — `chapter_reporting.matched_lift_bucket_stats(client, start, end, cohort_axis)` extracts the identity-level bucket math (nonbot → identity_channels → cohort bucketing → ids_with/without × conv_with/without per channel × bucket). Both `contribution_overview` and `incrementality_channel_overview` now call it; EOS 30d regression byte-for-byte identical on subscriber axis (12 of 12 rows match). Function is `STABLE SQL`, accepts `subscriber` | `location` | other axes (value_band returns zero rows, since chapter-level bucketing belongs to the caller). (b) modeling where substituting buyers redistribute (which channel absorbs them; spec §2 — dies at EOS's n), (c) Causation mock data + types are now unused but not yet cleaned out of `mockdata.ts`.
 
 #### Cumulative wiring scorecard (end of May 26, 2026)
 - **7 of 8 pages fully live-wired:** Raw Performance, Lifecycle Overview, Channel Roles, Path Patterns, Attribution Models, Customer Journeys, Lift / Incrementality / Value (all 3 tabs).
@@ -1362,7 +1362,8 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 - **5a SHIPPED June 10** — Per-user auth via Supabase magic links + allowlist (`chapter_config.users`). Middleware gates `/chapter/*` for both Supabase session and legacy `CHAPTER_DASH_TOKEN` cookie (coexistence).
 - **5b SHIPPED June 11** — `/chapter/[client_key]/*` clean URL surface via catch-all redirect shim → legacy `?client=<key>` path.
 - **5c SHIPPED June 11** — Sidebar conditional rendering for client_employees (static client label, no switcher, email + role in foot).
-- **5b real REMAINING** — Canonical render at clean `/chapter/[client_key]/*` URL (no redirect flicker). Polish; only matters once sales demo requires it.
+- **5b real SHIPPED June 14, 2026** — Canonical render at clean `/chapter/[client_key]/*` URL via **middleware rewrite** (not the page-tree duplication CLAUDE.md originally flagged as "sizable"). When the path matches the underscore convention, middleware rewrites internally to `/chapter/<slug>?client=<key>` so the existing page tree renders unchanged; browser URL stays clean, no redirect round-trip. Sidebar links emit clean URLs; `isActive()` recognises both forms. Catch-all `[client_key]/[[...slug]]/page.tsx` shim removed (dead code under the rewrite). Auth path unchanged: middleware's `canAccessClient` enforces *before* the rewrite; cookies on the auth response are carried forward onto the rewrite response so refreshed Supabase sessions survive.
+  - **Step 4 SHIPPED June 14** — every in-app URL emitter goes through the new `chapterUrl(clientKey, slug, query?)` helper at [src/app/chapter/_lib/urls.ts](src/app/chapter/_lib/urls.ts) so the codebase can never accidentally emit a legacy `/chapter/<slug>` URL again. Updated: 4 `<Link href>` calls in `OverviewClient.tsx`, 43 deeplinks across 18 Recommendations rule files. Server-side authoritative URLs untouched (auth callback redirects, root default landing, sign-out, audit log `page` fields — these don't have a client_key context). Convention going forward: grep for `['"]/chapter/` should match ONLY server-side intent (login redirect / root default); every render-time URL flows through the helper.
 - **5d REMAINING — Remove `CHAPTER_DASH_TOKEN` cookie path** after every operator has logged in via Supabase at least once.
 
 #### Sprint 6 SHIPPED June 10 — Offline attribution: community event CSV ingest
@@ -1371,7 +1372,7 @@ Pipeline of clients on the horizon: 300-location school, 2K-location national de
 
 #### Cross-cutting nice-to-haves (can land in any sprint without blocking)
 - **Daily-digest chain-freshness check** — extend 14:00 UTC digest with `MAX(snapshot_ts_hi) WHERE status='ok'` per client per stage vs. `now() - 24h`. Catches silently-failed crons.
-- **Shared matched-lift engine refactor** — L&I Incrementality + Contribution + the deferred Connections #2 heavyweight tier all want this. Build before a third consumer appears.
+- ~~**Shared matched-lift engine refactor**~~ — SHIPPED June 14, 2026. See L&I Contribution tab "Deferred for v2" entry above. Function: `chapter_reporting.matched_lift_bucket_stats`. When Connections #2 heavyweight tier ships, it imports this function instead of forking the math.
 - **Observations severity override UI + popup polish** — operators may want to override computed severity per finding (Black Friday spike → acknowledged). Schema slot exists; UI doesn't.
 
 #### Observations engine — deferred questions (14 of 27, blocked on data)

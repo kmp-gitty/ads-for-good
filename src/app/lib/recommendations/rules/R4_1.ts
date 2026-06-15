@@ -12,6 +12,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
+import { chapterUrl } from "@/app/chapter/_lib/urls";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -82,12 +83,12 @@ export const R4_1: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
       {
         source: "Lifecycle Overview",
         fact: `Median touches to close: ${current.toFixed(1)} (current 2w) vs ${trailingMean.toFixed(1)} (prior 8w)`,
-        deeplink: "/chapter/overview",
+        deeplink: chapterUrl(ctx.client_key, "overview"),
       },
       {
         source: "Observations",
         fact: `Consistent upward trend across ${consistentRises + 1} of the last ${periodMedians.length} periods`,
-        deeplink: "/chapter/observations",
+        deeplink: chapterUrl(ctx.client_key, "observations"),
       },
     ],
     confidence,

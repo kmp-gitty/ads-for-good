@@ -98,6 +98,38 @@ function clientKeyFromPath(pathname: string): string | null {
   return seg.includes("_") ? seg : null;
 }
 
+// Sprint 5b real (June 14, 2026): when the URL is the canonical client-scoped
+// form `/chapter/<client_key>/<slug>`, rewrite internally to the legacy form
+// `/chapter/<slug>?client=<client_key>` so the existing page tree (which
+// reads `?client=` from search params) renders without the round-trip
+// redirect flicker the prior catch-all caused. Browser URL stays clean;
+// only Next.js routing sees the rewritten form.
+//
+// `clientKey` is non-null only when the path matched the underscore
+// convention — guaranteed by `clientKeyFromPath` upstream. Cookies on the
+// upstream auth response (Supabase refreshed sessions etc.) are carried
+// forward onto the rewrite response so auth survives the round-trip.
+function rewriteIfClientScoped(
+  req: NextRequest,
+  baseRes: NextResponse,
+  clientKey: string | null,
+): NextResponse {
+  if (!clientKey) return baseRes;
+
+  const url = req.nextUrl.clone();
+  // pathname → ["", "chapter", "<clientKey>", ...slugParts]
+  const slugParts = url.pathname.split("/").filter(Boolean).slice(2);
+  const slugPath = slugParts.length > 0 ? slugParts.join("/") : "overview";
+  url.pathname = `/chapter/${slugPath}`;
+  url.searchParams.set("client", clientKey);
+
+  const rewriteRes = NextResponse.rewrite(url);
+  for (const cookie of baseRes.cookies.getAll()) {
+    rewriteRes.cookies.set(cookie);
+  }
+  return rewriteRes;
+}
+
 async function gateChapter(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -143,7 +175,7 @@ async function gateChapter(req: NextRequest) {
         target.search = "";
         return NextResponse.redirect(target);
       }
-      return getResponse();
+      return rewriteIfClientScoped(req, getResponse(), clientKey);
     }
 
     // Global /chapter/* without client_key segment.
@@ -180,7 +212,7 @@ async function gateChapter(req: NextRequest) {
     expectedToken &&
     req.cookies.get(CHAPTER_AUTH_COOKIE)?.value === expectedToken
   ) {
-    return NextResponse.next();
+    return rewriteIfClientScoped(req, NextResponse.next(), clientKey);
   }
 
   // 3. No auth — preserve target URL so bookmarks survive the round-trip.

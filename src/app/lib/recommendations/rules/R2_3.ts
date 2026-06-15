@@ -15,6 +15,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
+import { chapterUrl } from "@/app/chapter/_lib/urls";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -121,17 +122,17 @@ export const R2_3: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
         {
           source: "Channel Roles",
           fact: `${titleCase(c.channel)} appears in ${presencePct}% of converting chapters`,
-          deeplink: "/chapter/channels",
+          deeplink: chapterUrl(ctx.client_key, "channels"),
         },
         {
           source: "Lift, Incrementality & Value",
           fact: `Incremental rate ${incremental.toFixed(2)} (below 0.15 floor)`,
-          deeplink: "/chapter/lift",
+          deeplink: chapterUrl(ctx.client_key, "lift"),
         },
         {
           source: "Path Patterns",
           fact: `Chapters with vs without ${titleCase(c.channel)} differ by <${DIFFERENTIAL_THRESHOLD * 100}% on conversion, AOV, and time-to-close`,
-          deeplink: "/chapter/paths",
+          deeplink: chapterUrl(ctx.client_key, "paths"),
         },
       ],
       confidence,

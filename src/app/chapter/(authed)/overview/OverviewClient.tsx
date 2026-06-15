@@ -18,6 +18,7 @@ import type {
   LifecycleOverviewRow, PathLengthTrendRow,
   ChannelRoleRow, PathCombinationRow, PathMode,
 } from "../../_lib/dashboard-rpc";
+import { chapterUrl } from "../../_lib/urls";
 import type { TrendWindow } from "./page";
 
 const CHANNEL_FALLBACK = { name: "Unknown", color: "#9CA0A8", short: "—" };
@@ -417,7 +418,7 @@ export default function OverviewClient({
                 <h3 className="card-title">Chapter observations this week</h3>
                 <div className="card-sub" style={{ color: "var(--ink-4)" }}>Mock preview — question-library engine not built yet</div>
               </div>
-              <Link className="card-link" href="/chapter/observations">View all <Icon name="chevR" size={12}/></Link>
+              <Link className="card-link" href={chapterUrl(client.id, "observations")}>View all <Icon name="chevR" size={12}/></Link>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {OBSERVATIONS.slice(0, 3).map(o => {
@@ -457,7 +458,7 @@ export default function OverviewClient({
                   {" distribution"}
                 </div>
               </div>
-              <Link className="card-link" href="/chapter/channels">View all channel roles <Icon name="chevR" size={12}/></Link>
+              <Link className="card-link" href={chapterUrl(client.id, "channels")}>View all channel roles <Icon name="chevR" size={12}/></Link>
             </div>
             <div className="row-list">
               {topChannels.map(r => {
@@ -520,7 +521,7 @@ export default function OverviewClient({
                   <span>· ranked by revenue</span>
                 </div>
               </div>
-              <Link className="card-link" href="/chapter/paths">View all path patterns <Icon name="chevR" size={12}/></Link>
+              <Link className="card-link" href={chapterUrl(client.id, "paths")}>View all path patterns <Icon name="chevR" size={12}/></Link>
             </div>
             <div className="row-list">
               <div className="lrow head" style={{ gridTemplateColumns: "1fr 70px 90px" }}>
@@ -529,7 +530,7 @@ export default function OverviewClient({
                 <div style={{ textAlign: "right" }}>Revenue</div>
               </div>
               {topCombos.map((c, i) => (
-                <Link href="/chapter/paths" key={i} className="lrow click" style={{ gridTemplateColumns: "1fr 70px 90px", textDecoration: "none", color: "inherit" }}>
+                <Link href={chapterUrl(client.id, "paths")} key={i} className="lrow click" style={{ gridTemplateColumns: "1fr 70px 90px", textDecoration: "none", color: "inherit" }}>
                   <div>
                     <PathRender channels={c.channels as ChannelKey[]} mode={comboMode} gaps={c.gaps ?? undefined} />
                   </div>

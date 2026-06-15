@@ -11,6 +11,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
+import { chapterUrl } from "@/app/chapter/_lib/urls";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -89,17 +90,17 @@ export const R6_1: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
       {
         source: "Channel Roles",
         fact: `${titleCase(best.channel)}: ${currentPct}% of converting chapters this period (was ${priorPct}% trailing)`,
-        deeplink: "/chapter/channels",
+        deeplink: chapterUrl(ctx.client_key, "channels"),
       },
       {
         source: "Path Patterns",
         fact: `${best.current_chapters} converting chapters touched by ${titleCase(best.channel)} this period`,
-        deeplink: "/chapter/paths",
+        deeplink: chapterUrl(ctx.client_key, "paths"),
       },
       {
         source: "Observations",
         fact: `Emerging presence — no prior matching findings in trailing window`,
-        deeplink: "/chapter/observations",
+        deeplink: chapterUrl(ctx.client_key, "observations"),
       },
     ],
     confidence,

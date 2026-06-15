@@ -13,6 +13,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
+import { chapterUrl } from "@/app/chapter/_lib/urls";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -129,12 +130,12 @@ export const R6_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
       {
         source: "Lifecycle Overview",
         fact: `${metricLabel}: ${best.trend_start_value.toFixed(2)} → ${best.current_value.toFixed(2)} over ${best.consecutive} consecutive periods`,
-        deeplink: "/chapter/overview",
+        deeplink: chapterUrl(ctx.client_key, "overview"),
       },
       {
         source: "Observations",
         fact: `Cumulative ${pctChange}% shift, sustained direction`,
-        deeplink: "/chapter/observations",
+        deeplink: chapterUrl(ctx.client_key, "observations"),
       },
     ],
     confidence,

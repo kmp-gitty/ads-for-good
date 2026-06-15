@@ -11,6 +11,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
+import { chapterUrl } from "@/app/chapter/_lib/urls";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -64,12 +65,12 @@ export const R1_1: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
       {
         source: "Raw Performance",
         fact: `Bot share: ${Math.round(currentShare * 100)}% over the trailing 4 weeks`,
-        deeplink: "/chapter/raw",
+        deeplink: chapterUrl(ctx.client_key, "raw"),
       },
       {
         source: "Observations",
         fact: `Bot mitigation status: not flagged in client config`,
-        deeplink: "/chapter/observations",
+        deeplink: chapterUrl(ctx.client_key, "observations"),
       },
     ],
     confidence,

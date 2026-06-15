@@ -14,6 +14,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
+import { chapterUrl } from "@/app/chapter/_lib/urls";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -90,12 +91,12 @@ export const R3_3: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
       {
         source: "Path Patterns",
         fact: `${channelSetLabel} produced ${best.currentChapters} converting chapters this period`,
-        deeplink: "/chapter/paths",
+        deeplink: chapterUrl(ctx.client_key, "paths"),
       },
       {
         source: "Cross-Source Influence",
         fact: `Combination appeared ${best.priorTotal} times across prior 3 same-length windows`,
-        deeplink: "/chapter/connections/influence",
+        deeplink: chapterUrl(ctx.client_key, "connections/influence"),
       },
     ],
     confidence,
