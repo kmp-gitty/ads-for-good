@@ -83,8 +83,15 @@ export async function GET(req: NextRequest) {
       summaries.push(await runForClient(clientKey, ruleConfigs));
     }
   } catch (err) {
-    topLevelError = err instanceof Error ? err.message : String(err);
-    console.error("[refresh-recommendations] top-level error:", topLevelError);
+    // Supabase errors are plain objects (not Error instances), so `String(err)`
+    // gives "[object Object]". JSON-stringify when the err isn't an Error to
+    // surface the actual `code`/`details`/`hint`/`message`. Always log the raw
+    // value too — Vercel's logger expands objects so the trace is intact.
+    topLevelError = err instanceof Error
+      ? err.message
+      : (err && typeof err === "object" ? safeStringify(err) : String(err));
+    console.error("[refresh-recommendations] top-level error (raw):", err);
+    console.error("[refresh-recommendations] top-level error (str):", topLevelError);
   }
 
   // GChat alert on any failure.
@@ -218,7 +225,10 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
       api_calls: apiCalls, fallback_renders: fallbacks,
     };
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = err instanceof Error
+      ? err.message
+      : (err && typeof err === "object" ? safeStringify(err) : String(err));
+    console.error(`[refresh-recommendations] per-client error for ${clientKey} (raw):`, err);
     await supabase
       .schema("chapter_recommendations")
       .from("runs")
@@ -292,6 +302,15 @@ async function markStaleAsResolved(clientKey: string, firedKeys: Set<string>): P
     .from("findings")
     .update({ state: "resolved" })
     .in("id", toResolve.map((f) => (f as { id: string }).id));
+}
+
+// JSON.stringify with a tolerant fallback for circular refs or BigInts.
+function safeStringify(v: unknown): string {
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
 }
 
 function stableStringify(v: unknown): string {
