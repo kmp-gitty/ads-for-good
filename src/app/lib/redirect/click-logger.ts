@@ -56,6 +56,53 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
     full_query: row.query,
   };
 
+  // Journey upsert FIRST — pixel_events has FK constraint on journey_id, and
+  // the redirect mints a fresh journey id via resolveIdentity but never wrote
+  // it to chapter_journey.journeys (that's normally /api/pixel's job, but the
+  // redirect's click log bypasses /api/pixel). Without this insert, the FK
+  // constraint rejects the pixel_events INSERT with 23503.
+  //
+  // ignoreDuplicates: true → equivalent to ON CONFLICT (id) DO NOTHING. We
+  // don't overwrite first_seen / last_seen on a returning-visitor click here;
+  // the /api/pixel collect handler updates last_seen on the next event.
+  try {
+    const { error: journeyError } = await supabase
+      .schema("chapter_journey")
+      .from("journeys")
+      .upsert(
+        {
+          id: row.journey_id,
+          client_key: row.client_key,
+          first_seen: ts,
+          last_seen: ts,
+          last_identity_key: row.identity_key,
+          // user_agent is null on initial journey row — gets backfilled by the
+          // first /api/pixel event after landing (its journey UPSERT updates
+          // last_seen + last_touch but doesn't touch user_agent on conflict;
+          // we'd need a follow-up to wire user_agent through if it matters).
+          user_agent: null,
+          country: row.geo.country ?? null,
+          region: row.geo.region ?? null,
+          city: row.geo.city ?? null,
+          last_touch: {
+            source: "redirect_click",
+            slug: row.slug,
+            utm,
+            partner_ids,
+            referrer: row.referrer,
+          },
+        },
+        { onConflict: "id", ignoreDuplicates: true },
+      );
+    if (journeyError) {
+      console.error("[redirect-click-logger] journey upsert failed:", journeyError);
+      return;
+    }
+  } catch (err) {
+    console.error("[redirect-click-logger] journey upsert threw:", err);
+    return;
+  }
+
   try {
     const { error } = await supabase
       .schema("chapter_ingest")
