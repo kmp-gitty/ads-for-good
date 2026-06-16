@@ -219,7 +219,16 @@ export async function POST(req: NextRequest) {
           last_seen = EXCLUDED.last_seen,
           last_touch = EXCLUDED.last_touch,
           vertical = COALESCE(EXCLUDED.vertical, chapter_journey.journeys.vertical),
-          last_identity_key = EXCLUDED.last_identity_key
+          last_identity_key = EXCLUDED.last_identity_key,
+          -- COALESCE-update UA + geo: backfills if the row was created with
+          -- nulls (e.g. by the Tier 1 redirect click logger), but doesn't
+          -- overwrite if a previous pixel event already set them. Matters for
+          -- bot classification + device reporting on redirect-originated
+          -- journeys whose first event was the server-side redirect_click.
+          user_agent = COALESCE(chapter_journey.journeys.user_agent, EXCLUDED.user_agent),
+          country = COALESCE(chapter_journey.journeys.country, EXCLUDED.country),
+          region = COALESCE(chapter_journey.journeys.region, EXCLUDED.region),
+          city = COALESCE(chapter_journey.journeys.city, EXCLUDED.city)
       `;
 
       // identity_links upsert (matches Phase 4 of /api/identify).

@@ -32,6 +32,7 @@ export type RedirectClickRow = {
   referrer: string | null;
   geo: GeoContext;
   device: DeviceContext;
+  user_agent: string | null;
 };
 
 export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
@@ -76,11 +77,12 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
           first_seen: ts,
           last_seen: ts,
           last_identity_key: row.identity_key,
-          // user_agent is null on initial journey row — gets backfilled by the
-          // first /api/pixel event after landing (its journey UPSERT updates
-          // last_seen + last_touch but doesn't touch user_agent on conflict;
-          // we'd need a follow-up to wire user_agent through if it matters).
-          user_agent: null,
+          // user_agent captured from the redirect request so bot classification
+          // + device reporting work for redirect-originated journeys. The
+          // matching /api/pixel collect path UPSERT now COALESCE-updates UA on
+          // conflict so any pre-existing journey row with null UA gets backfilled
+          // when its first real pixel event lands.
+          user_agent: row.user_agent,
           country: row.geo.country ?? null,
           region: row.geo.region ?? null,
           city: row.geo.city ?? null,

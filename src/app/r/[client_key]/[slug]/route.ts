@@ -172,16 +172,15 @@ export async function GET(
     });
   }
 
-  // Click log — awaited BEFORE the 302 ships. Adds ~50-100ms to the redirect
-  // latency but guarantees the insert lands. The fire-and-forget pattern
-  // (via after() or void IIFE) is more aggressive but failed to land any
-  // rows in initial NSC testing — likely the serverless runtime kills the
-  // pending I/O on response. Revisit after()/waitUntil() once we've proven
-  // the code path works and want to claw back the latency budget.
-  // Skipped entirely when consent gate denies collection.
+  // Click log via after() — runs after the 302 ships so it doesn't add
+  // latency. Earlier this looked broken (zero rows landing), but the real
+  // bug was the click logger throwing FK 23503 because the journey row
+  // didn't exist (now fixed by the journey upsert inside logRedirectClick).
+  // With that resolved, after() works cleanly and saves ~50-100ms on the
+  // critical path. Skipped entirely when consent gate denies collection.
   if (consent.allowCollection) {
-    try {
-      await logRedirectClick({
+    after(() =>
+      logRedirectClick({
         client_key,
         identity_key: identity.identityKey,
         journey_id: identity.journeyId,
@@ -192,20 +191,15 @@ export async function GET(
         referrer,
         geo,
         device,
-      });
-    } catch (err) {
-      console.error("[redirect] logRedirectClick failed:", err);
-    }
+        user_agent: req.headers.get("user-agent"),
+      }),
+    );
   }
 
-  // Increment hit_count on the matched rule. Skipped on no-rule paths
-  // (default-destination via ?to= isn't tied to a stored rule).
+  // Increment hit_count on the matched rule via after() too. Skipped on
+  // no-rule paths (default-destination via ?to= isn't tied to a stored rule).
   if (matchedRuleId) {
-    try {
-      await incrementRuleHitCount(matchedRuleId);
-    } catch (err) {
-      console.error("[redirect] hit_count update failed:", err);
-    }
+    after(() => incrementRuleHitCount(matchedRuleId));
   }
 
   const hostname = req.nextUrl.hostname;
