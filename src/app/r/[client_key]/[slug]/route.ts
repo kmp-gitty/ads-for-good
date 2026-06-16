@@ -25,7 +25,7 @@
 //   - Rate limiting: handled at the Vercel edge level
 
 import { NextRequest, NextResponse, after } from "next/server";
-import { fetchRules, fetchAbExperiments } from "@/app/lib/redirect/rules";
+import { fetchRules, fetchAbExperiments, incrementRuleHitCount } from "@/app/lib/redirect/rules";
 import { resolveIdentity, applyIdentityCookies } from "@/app/lib/redirect/identity";
 import { resolveGeo } from "@/app/lib/redirect/geo";
 import { classifyUA } from "@/app/lib/redirect/device";
