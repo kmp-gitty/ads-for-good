@@ -198,11 +198,15 @@ export async function GET(
     }
   }
 
-  // Increment hit_count on the matched rule asynchronously. Skipped on no-rule
-  // (default-destination via ?to=) paths.
-  // Doing this in JS instead of an UPDATE on the route's critical path keeps
-  // the redirect under budget; the audit info still lands within a few seconds.
-  // (Intentionally not awaited.)
+  // Increment hit_count on the matched rule. Skipped on no-rule paths
+  // (default-destination via ?to= isn't tied to a stored rule).
+  if (matchedRuleId) {
+    try {
+      await incrementRuleHitCount(matchedRuleId);
+    } catch (err) {
+      console.error("[redirect] hit_count update failed:", err);
+    }
+  }
 
   const hostname = req.nextUrl.hostname;
   const res = NextResponse.redirect(destination, { status: 302 });

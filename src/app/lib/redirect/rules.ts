@@ -126,3 +126,18 @@ export function clearAbExperimentsCache(client_key?: string): void {
   if (client_key) abCache.delete(client_key);
   else abCache.clear();
 }
+
+// Atomic increment of hit_count + bump of last_hit_at on a matched rule.
+// Called once per redirect after the click is logged. Uses a Postgres function
+// call (`chapter_config.increment_redirect_rule_hit(uuid)`) so the read-modify-write
+// happens server-side — avoids race conditions if two clicks land in the same ms.
+// The function exists in DB; created by migration 2026-06-16-redirect-rule-hit-counter.
+export async function incrementRuleHitCount(ruleId: string): Promise<void> {
+  const { error } = await supabase
+    .schema("chapter_config")
+    .rpc("increment_redirect_rule_hit", { p_rule_id: ruleId });
+  if (error) {
+    console.error("[rules] hit_count increment failed:", error);
+    throw error;
+  }
+}
