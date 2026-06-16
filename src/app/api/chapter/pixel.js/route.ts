@@ -30,16 +30,32 @@ export async function GET(_req: NextRequest) {
   return attr || null;
 }
 
+  // Resolve the API origin from the script's own src so 1P installs (pixel served
+  // from a client subdomain like chapter.notsocavalier.com) and 3P installs
+  // (pixel served from ads4good.com) both work without per-tag config. Falls
+  // back to "" (= page-relative) only if the script src can't be parsed.
+  function getApiOrigin() {
+    try {
+      var s = getCurrentScript();
+      var src = s && s.src;
+      if (!src) return "";
+      var u = new URL(src, window.location.href);
+      return u.origin;
+    } catch (e) { return ""; }
+  }
+
   function getCollectUrl() {
     var s = getCurrentScript();
     var attr = s && s.getAttribute("data-collect-url");
-    return attr || "/api/chapter/collect";
+    if (attr) return attr;
+    return (getApiOrigin() || "") + "/api/chapter/collect";
   }
 
    function getIdentifyUrl() {
     var s = getCurrentScript();
     var attr = s && s.getAttribute("data-identify-url");
-    return attr || "/api/identify";
+    if (attr) return attr;
+    return (getApiOrigin() || "") + "/api/identify";
   }
 
     function getBufferKey(clientKey) {
@@ -656,7 +672,11 @@ setInterval(function () {
 
   function chapterLoadIdentityPrompts() {
     if (!clientKey) return;
-    var url = new URL("/api/chapter/identity-prompts", "https://ads4good.com");
+    // Derive origin from script src so 1P installs hit the client's own
+    // subdomain (chapter.<client>.com) instead of ads4good.com (which would
+    // CORS-reject any cross-origin call from the client storefront).
+    var apiOrigin = getApiOrigin() || "https://ads4good.com";
+    var url = new URL("/api/chapter/identity-prompts", apiOrigin);
     url.searchParams.set("client_key", clientKey);
     fetch(url.toString(), { credentials: "omit", cache: "default" })
       .then(function (res) { return res.ok ? res.json() : { prompts: [] }; })
