@@ -30,7 +30,15 @@ export function interpolateTemplate(
 ): string {
   return template.replace(/\{([^}]+)\}/g, (_match, key) => {
     if (key.startsWith("q:")) {
-      return encodeURIComponent(ctx.query[key.slice(2)] ?? "");
+      const val = ctx.query[key.slice(2)] ?? "";
+      // Don't URL-encode values that are already URLs — they're being used as
+      // the destination base, not as a query parameter value. The Google Ads
+      // pattern {q:to}?gclid={q:gclid}... relies on this: encoding the URL
+      // would produce https%3A%2F%2F... which isn't a valid destination, and
+      // the route would silently fall back to the bare ?to= URL, dropping
+      // every other interpolated param along with it.
+      if (/^https?:\/\//i.test(val)) return val;
+      return encodeURIComponent(val);
     }
     switch (key) {
       case "identity_key": return encodeURIComponent(ctx.identityKey);
