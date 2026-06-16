@@ -172,14 +172,16 @@ export async function GET(
     });
   }
 
-  // Fire-and-forget click log via after() so the insert continues after the
-  // 302 ships — without after(), the serverless runtime kills the pending I/O
-  // as soon as the response is returned (this was a silent bug from June 10
-  // through June 16, 2026: zero redirect_click rows ever landed in pixel_events).
+  // Click log — awaited BEFORE the 302 ships. Adds ~50-100ms to the redirect
+  // latency but guarantees the insert lands. The fire-and-forget pattern
+  // (via after() or void IIFE) is more aggressive but failed to land any
+  // rows in initial NSC testing — likely the serverless runtime kills the
+  // pending I/O on response. Revisit after()/waitUntil() once we've proven
+  // the code path works and want to claw back the latency budget.
   // Skipped entirely when consent gate denies collection.
   if (consent.allowCollection) {
-    after(() =>
-      logRedirectClick({
+    try {
+      await logRedirectClick({
         client_key,
         identity_key: identity.identityKey,
         journey_id: identity.journeyId,
@@ -190,8 +192,10 @@ export async function GET(
         referrer,
         geo,
         device,
-      })
-    );
+      });
+    } catch (err) {
+      console.error("[redirect] logRedirectClick failed:", err);
+    }
   }
 
   // Increment hit_count on the matched rule asynchronously. Skipped on no-rule
