@@ -24,7 +24,7 @@
 //     request comes from a browser following a link
 //   - Rate limiting: handled at the Vercel edge level
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { fetchRules, fetchAbExperiments } from "@/app/lib/redirect/rules";
 import { resolveIdentity, applyIdentityCookies } from "@/app/lib/redirect/identity";
 import { resolveGeo } from "@/app/lib/redirect/geo";
@@ -139,9 +139,11 @@ export async function GET(
   // click time via one of three URL hint flavors (?rh / ?re / ?rid). Closes
   // the cross-device gap that solution 1's pixel handoff can't cover when
   // the visitor never identifies on the redirect-clicking device.
-  // Fire-and-forget; never blocks the 302. Skipped under opt-out.
+  // Uses after() so the work continues past the 302 — without it the runtime
+  // would kill the pending async on response and no stitch row would land.
+  // Skipped under opt-out.
   if (consent.allowCollection && emailHint) {
-    void (async () => {
+    after(async () => {
       try {
         let email_sha256: string | null = null;
         let reason: "redirect_email_prehashed" | "redirect_email_plaintext" | "redirect_recipient_token" | null = null;
@@ -167,24 +169,29 @@ export async function GET(
       } catch (err) {
         console.warn("[redirect] solution-2 stitch failed:", err);
       }
-    })();
+    });
   }
 
-  // Fire-and-forget click log. Do NOT await — the visitor's 302 ships first.
+  // Fire-and-forget click log via after() so the insert continues after the
+  // 302 ships — without after(), the serverless runtime kills the pending I/O
+  // as soon as the response is returned (this was a silent bug from June 10
+  // through June 16, 2026: zero redirect_click rows ever landed in pixel_events).
   // Skipped entirely when consent gate denies collection.
   if (consent.allowCollection) {
-    void logRedirectClick({
-      client_key,
-      identity_key: identity.identityKey,
-      journey_id: identity.journeyId,
-      slug,
-      destination,
-      matched_rule_id: matchedRuleId,
-      query,
-      referrer,
-      geo,
-      device,
-    });
+    after(() =>
+      logRedirectClick({
+        client_key,
+        identity_key: identity.identityKey,
+        journey_id: identity.journeyId,
+        slug,
+        destination,
+        matched_rule_id: matchedRuleId,
+        query,
+        referrer,
+        geo,
+        device,
+      })
+    );
   }
 
   // Increment hit_count on the matched rule asynchronously. Skipped on no-rule
