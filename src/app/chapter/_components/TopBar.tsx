@@ -1,11 +1,12 @@
 "use client";
 
-import React from "react";
-import { useSearchParams } from "next/navigation";
+import React, { useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Icon } from "./Icon";
 import { Dropdown } from "./Dropdown";
 import { useChapter } from "./ChapterContext";
 import { KpiStrip } from "./KpiStrip";
+import { SubmitInquiryDrawer } from "./SubmitInquiryDrawer";
 import {
   DATE_RANGES, COMPARISONS,
   ATTRIBUTION_MODELS, ATTRIBUTION_MODEL_LABELS, AttributionModel,
@@ -25,6 +26,8 @@ export function TopBar({
   kpis?: Kpi[];
 }) {
   const { dateRange, setDateRange, compare, setCompare, model, setModel, setSidebarOpen, client, freshness } = useChapter();
+  const pathname = usePathname();
+  const [inquiryOpen, setInquiryOpen] = useState(false);
 
   // Sprint 3b/data-freshness: "Data as of" line under the page title. Uses
   // the per-client snapshot freshness fetched server-side in the (authed)
@@ -77,6 +80,18 @@ export function TopBar({
           {asOfLine && <div className="topbar-asof">{asOfLine}</div>}
         </div>
         <div className="spacer"></div>
+
+        {/* Inquiry trigger — global "ask Chapter staff a question" entry point. */}
+        <button
+          type="button"
+          className="toolbar-btn topbar-inquiry-btn"
+          onClick={() => setInquiryOpen(true)}
+          aria-label="Send inquiry"
+          title="Send an inquiry to Chapter staff"
+        >
+          <Icon name="observations" size={14} />
+          <span className="topbar-inquiry-label">Send inquiry</span>
+        </button>
 
         {showModel && (
           <Dropdown align="right" width={260} trigger={
@@ -171,6 +186,13 @@ export function TopBar({
       </div>
 
       <KpiStrip kpis={kpis} />
+
+      <SubmitInquiryDrawer
+        open={inquiryOpen}
+        onClose={() => setInquiryOpen(false)}
+        clientKey={client.id}
+        pagePath={pathname ?? null}
+      />
     </div>
   );
 }

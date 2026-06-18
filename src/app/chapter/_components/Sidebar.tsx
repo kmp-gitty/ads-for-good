@@ -58,6 +58,12 @@ export function Sidebar() {
     { key: "journeys", label: "Customer Journeys", icon: "journeys" },
     { key: "raw",      label: "Raw Performance",   icon: "raw" },
   ];
+  // Support nav — Inbox lands under the data section as a separate group so
+  // it's never confused with analytics. Visible for every role; the page
+  // itself shows the read-only state for agency_operator.
+  const support: NavItem[] = [
+    { key: "inbox", label: "Inbox", icon: "observations" },
+  ];
 
   // Default landing is /chapter/overview (Lifecycle Overview) per the
   // June 11 work order. Root /chapter aliases to Overview so navigation
@@ -179,6 +185,12 @@ export function Sidebar() {
       <div className="nav-section">
         <div className="nav-section-label">Data</div>
         {data.map(renderNavItem)}
+      </div>
+      <div className="nav-divider" />
+
+      <div className="nav-section">
+        <div className="nav-section-label">Support</div>
+        {support.map(renderNavItem)}
       </div>
 
       <div className="sidebar-foot">

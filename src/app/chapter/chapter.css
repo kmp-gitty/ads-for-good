@@ -1261,6 +1261,16 @@
 .chapter-app .chapter-submit-primary:disabled,
 .chapter-app .chapter-submit-cancel:disabled { opacity: .5; cursor: default; }
 
+/* Topbar "Send inquiry" trigger button — reuses .toolbar-btn but adds an
+   icon+label layout and a smaller hidden-label breakpoint for narrow screens. */
+.chapter-app .topbar-inquiry-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.chapter-app .topbar-inquiry-label { font-weight: 500; }
+@media (max-width: 768px) {
+  .chapter-app .topbar-inquiry-label { display: none; }
+}
+
 /* Trigger button styling */
 .chapter-app .chapter-suggest-btn {
   background: rgba(255,255,255,0.08);
