@@ -15,7 +15,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import {
-  getCurrentChapterUser,
+  getCurrentChapterUserOrLegacy,
   listAccessibleClientKeys,
   type ChapterUser,
 } from "@/app/lib/auth/chapter-user";
@@ -105,7 +105,7 @@ export async function submitInquiry(input: {
   page_url?: string | null;
   attachment_paths?: string[];
 }): Promise<ActionResult<{ thread_id: string }>> {
-  const user = await getCurrentChapterUser();
+  const user = await getCurrentChapterUserOrLegacy();
   if (!user) return { ok: false, message: "Not signed in" };
 
   const visible = await clientKeysVisibleTo(user);
@@ -180,7 +180,7 @@ export async function replyToInquiry(input: {
   body: string;
   attachment_paths?: string[];
 }): Promise<ActionResult> {
-  const user = await getCurrentChapterUser();
+  const user = await getCurrentChapterUserOrLegacy();
   if (!user) return { ok: false, message: "Not signed in" };
 
   const thread = await fetchThreadInternal(input.thread_id);
@@ -227,7 +227,7 @@ export async function setInquiryStatus(
   thread_id: string,
   status: InquiryStatus,
 ): Promise<ActionResult> {
-  const user = await getCurrentChapterUser();
+  const user = await getCurrentChapterUserOrLegacy();
   if (!user) return { ok: false, message: "Not signed in" };
   if (user.role !== "chapter_staff") {
     return { ok: false, message: "Only Chapter staff can change inquiry status" };
@@ -258,7 +258,7 @@ export async function listInboxThreads(filter?: {
   client_key?: string;
   limit?: number;
 }): Promise<ActionResult<InquiryThread[]>> {
-  const user = await getCurrentChapterUser();
+  const user = await getCurrentChapterUserOrLegacy();
   if (!user) return { ok: false, message: "Not signed in" };
 
   const visible = await clientKeysVisibleTo(user);
@@ -286,7 +286,7 @@ export async function listInboxThreads(filter?: {
 export async function getInquiryThread(thread_id: string): Promise<
   ActionResult<{ thread: InquiryThread; messages: InquiryMessage[] }>
 > {
-  const user = await getCurrentChapterUser();
+  const user = await getCurrentChapterUserOrLegacy();
   if (!user) return { ok: false, message: "Not signed in" };
 
   const thread = await fetchThreadInternal(thread_id);
@@ -333,7 +333,7 @@ const ATTACHMENT_BUCKET = "inquiry-attachments";
 export async function uploadInquiryAttachment(
   formData: FormData,
 ): Promise<ActionResult<{ path: string }>> {
-  const user = await getCurrentChapterUser();
+  const user = await getCurrentChapterUserOrLegacy();
   if (!user) return { ok: false, message: "Not signed in" };
 
   const file = formData.get("file");
@@ -368,7 +368,7 @@ export async function uploadInquiryAttachment(
 const SIGNED_URL_TTL_SECONDS = 3600;
 
 export async function getInquiryAttachmentUrl(path: string): Promise<ActionResult<string>> {
-  const user = await getCurrentChapterUser();
+  const user = await getCurrentChapterUserOrLegacy();
   if (!user) return { ok: false, message: "Not signed in" };
 
   const { data, error } = await supabase.storage

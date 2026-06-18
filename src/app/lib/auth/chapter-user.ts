@@ -287,3 +287,37 @@ export async function getCurrentChapterUser(): Promise<ChapterUser | null> {
     return null;
   }
 }
+
+// Variant of getCurrentChapterUser that ALSO accepts the legacy
+// CHAPTER_DASH_TOKEN cookie path. Used by server actions that mutate data
+// (inquiries, future feature flags, etc.) where rejecting legacy-cookie
+// callers would break the UX for any operator still using the
+// `@ads4good.com` bypass.
+//
+// The legacy cookie is a shared agency-staff token — it doesn't carry an
+// identity. We resolve to a canonical agency-staff user row (configurable
+// via CHAPTER_LEGACY_STAFF_EMAIL, defaulting to katoa@ads4good.com today)
+// so any DB write that needs a real `created_by_email` value gets one.
+//
+// This helper is removed in Sprint 5d alongside the cookie path itself.
+export async function getCurrentChapterUserOrLegacy(): Promise<ChapterUser | null> {
+  const user = await getCurrentChapterUser();
+  if (user) return user;
+
+  const expectedToken = process.env.CHAPTER_DASH_TOKEN;
+  if (!expectedToken) return null;
+
+  try {
+    // Dynamic import so this doesn't get bundled into non-server code paths
+    // that also import from chapter-user.ts.
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    const cookieToken = cookieStore.get("chapter_auth")?.value;
+    if (cookieToken !== expectedToken) return null;
+  } catch {
+    return null;
+  }
+
+  const legacyEmail = process.env.CHAPTER_LEGACY_STAFF_EMAIL || "katoa@ads4good.com";
+  return await findChapterUserByEmail(legacyEmail);
+}
