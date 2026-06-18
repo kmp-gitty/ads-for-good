@@ -131,13 +131,29 @@ export function ChapterProvider({
   const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Derive URL-backed values from searchParams. Defaults applied here so any
-  // page renders cleanly even without query params.
+  // Derive URL-backed values from searchParams + pathname.
+  //
+  // Sprint 5b real (June 14, 2026) made the canonical URL form
+  // `/chapter/<client_key>/<slug>`. Middleware rewrites that internally to
+  // `/chapter/<slug>?client=<key>` for the page tree, but the BROWSER URL
+  // stays in path form — so useSearchParams() sees no `client` param. We
+  // resolve clientId in this priority order:
+  //   1. Path segment (if /chapter/<X>/... and X contains an underscore →
+  //      it's a client_key, per the locked naming convention).
+  //   2. ?client= query param (legacy form, still emitted by setClient on
+  //      non-client-scoped paths).
+  //   3. CLIENTS[0].id default.
+  //
   // Sprint 5c: client_employee role pins clientId to their assigned client_key
-  // so the UI can't be tricked into showing a different client even if the
-  // URL is manipulated. Middleware also enforces this at the route layer; the
-  // pin is a UI-side belt + suspenders that matches what users actually see.
-  const urlClientId = searchParams.get("client") || CLIENTS[0].id;
+  // regardless of URL so the UI can't be tricked into showing a different
+  // client even if the URL is manipulated. Middleware enforces at the route
+  // layer too; this is UI-side belt + suspenders.
+  const pathSegments = pathname.split("/").filter(Boolean);
+  const pathClientId =
+    pathSegments[0] === "chapter" && pathSegments[1]?.includes("_")
+      ? pathSegments[1]
+      : null;
+  const urlClientId = pathClientId || searchParams.get("client") || CLIENTS[0].id;
   const clientId =
     user && user.role === "client_employee" && user.client_key
       ? user.client_key
@@ -165,7 +181,21 @@ export function ChapterProvider({
     router.replace(qs ? `${pathname}?${qs}` : pathname);
   }, [pathname, router, searchParams]);
 
-  const setClient    = useCallback((c: Client)            => updateUrl({ client: c.id }), [updateUrl]);
+  // setClient: if we're on a /chapter/<old_key>/<slug>... path, swap the
+  // client_key segment in place. Otherwise (e.g. legacy `/chapter/<slug>?client=`
+  // URL or non-client-scoped path), fall back to setting the ?client= query
+  // param. Keeps the URL canonical post-Sprint-5b-real on every nav.
+  const setClient = useCallback((c: Client) => {
+    const parts = pathname.split("/").filter(Boolean);
+    if (parts[0] === "chapter" && parts[1]?.includes("_")) {
+      parts[1] = c.id;
+      const newPath = "/" + parts.join("/");
+      const qs = searchParams.toString();
+      router.replace(qs ? `${newPath}?${qs}` : newPath);
+    } else {
+      updateUrl({ client: c.id });
+    }
+  }, [pathname, router, searchParams, updateUrl]);
   const setDateRange = useCallback((label: string)         => updateUrl({ range:   DATE_RANGE_LABEL_TO_CODE[label] ?? "30d" }), [updateUrl]);
   const setCompare   = useCallback((label: string)         => updateUrl({ compare: COMPARE_LABEL_TO_CODE[label]    ?? "prior" }), [updateUrl]);
   const setModel     = useCallback((m: AttributionModel)   => updateUrl({ model: m }), [updateUrl]);
