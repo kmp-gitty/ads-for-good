@@ -26,7 +26,7 @@ export default async function ChapterInboxPage({ searchParams }: PageProps) {
   ]);
 
   const threads = threadsRes.ok ? threadsRes.data ?? [] : [];
-  const detail = threadDetail && threadDetail.ok ? threadDetail.data : null;
+  const detail = threadDetail && threadDetail.ok ? threadDetail.data ?? null : null;
   const threadsError = threadsRes.ok ? null : threadsRes.message;
   const detailError = threadDetail && !threadDetail.ok ? threadDetail.message : null;
 
