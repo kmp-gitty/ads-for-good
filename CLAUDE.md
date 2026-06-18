@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: June 18, 2026
+> Last updated: June 19, 2026
 
 ---
 
@@ -91,7 +91,8 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 | `chapter_observations` | Observations engine — `questions` catalog, `findings` state machine, `runs` audit (added June 2, 2026) |
 | `chapter_audit` | Auth-attempt + PII-view audit logs (added Fix #26 part 4) |
 | `chapter_recommendations` | Recommendations engine — `rules` config, `findings` state machine, `runs` audit (added June 14, 2026) |
-| `crm` | Internal CRM — `prospects`, `communications` (manual touchpoints + n8n-synced emails/meetings), `interactions` (observed signals — site visits / GBP / Yelp / inquiry / review / referral), `clients` (converted prospects → paying clients). RLS enabled, service_role full grants (June 18 added INSERT/UPDATE/DELETE on prospects/communications/interactions which were SELECT-only). `/internal/crm` page operates over this schema. |
+| `chapter_inquiries` | Sprint 8 inquiries — `threads` + `messages` + auto-bump trigger. Per-client inquiry threads; chapter_staff reply via `/internal/inbox`; clients/agencies see status updates via `/chapter/<key>/inbox`. Gchat webhook on new thread + client reply (chapter_staff suppressed). Storage bucket `inquiry-attachments` (private, 10MB cap, image-only). RLS-on-no-policies; access enforced server-side. |
+| `crm` | Internal CRM — `prospects`, `communications` (manual touchpoints + n8n-synced emails/meetings), `interactions` (observed signals — site visits / GBP / Yelp / inquiry / review / referral), `clients` (converted prospects → paying clients). RLS enabled, service_role full grants (June 18 added INSERT/UPDATE/DELETE on prospects/communications/interactions which were SELECT-only). `/internal/crm` page operates over this schema. See "Agency dogfood" entry under Completed Fixes for the full CRM↔Chapter integration architecture. |
 | `tasks` | n8n-driven internal task tracker — `task_batches` (per-email batches from outgoing project updates), `tasks` (individual action items per batch). `/internal/tasks` admin UI. |
 
 ### Critical Tables
@@ -189,7 +190,66 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of June 18, 2026)
+## ✅ Completed Fixes (as of June 19, 2026)
+
+### Sprint 8 — Inquiries Shape B (June 18-19, 2026)
+- **Per-client inquiry threads + messages**, three-surface UX: global submit drawer from any dashboard page, chapter_staff inbox at `/internal/inbox`, client/agency read-only inbox at `/chapter/<client_key>/inbox`. Gchat notification on new threads + client replies (chapter_staff suppressed to avoid self-noise).
+- **Schema in new `chapter_inquiries` schema:**
+  - `threads (id, client_key, subject, category CHECK IN ('data_question','bug_report','feature_request','billing','other'), status CHECK IN ('open','in_progress','resolved'), created_by_email, created_by_role, cc_emails[], page_url, created_at, last_message_at, resolved_at)` + 3 indexes (client+recent, active-only partial, creator lookup)
+  - `messages (id, thread_id FK, sender_email, sender_role, body, attachment_paths[], created_at)` + chrono index
+  - Trigger `bump_thread_last_message_at` updates `threads.last_message_at` on every new message — keeps inbox list sortable by recency without explicit thread updates on every reply
+- **Supabase Storage bucket** `inquiry-attachments` (private, 10MB cap per file, PNG/JPEG/GIF/WEBP only). Service-role uploads; reads via 1-hour signed URLs generated on view.
+- **Access model enforced at API layer (not RLS):** RLS-on-no-policies = deny-all; service_role bypasses; every server action calls `getCurrentChapterUserOrLegacy()` first + checks visibility. chapter_staff sees all; client_employee sees only their client's threads + can reply; agency_operator sees their agency's clients' threads but is read-only in v1. Same role-aware visibility on `getInquiryThread` returns "Thread not found" rather than "Forbidden" so existence isn't leaked.
+- **Server actions module** [src/app/lib/inquiries/actions.ts](src/app/lib/inquiries/actions.ts): `submitInquiry`, `replyToInquiry`, `setInquiryStatus` (chapter_staff only), `listInboxThreads` (visibility-scoped), `getInquiryThread`, `uploadInquiryAttachment` (FormData server action), `getInquiryAttachmentUrl` (signed-URL generator).
+- **Drawer + UI:** [SubmitInquiryDrawer.tsx](src/app/chapter/_components/SubmitInquiryDrawer.tsx) reuses `chapter-submit-*` CSS family from the existing SubmitQuestionDrawer (one visual family for all modal submit forms). TopBar trigger button (`.topbar-inquiry-btn`) mounted globally so it's accessible from every dashboard page. New "Support" nav section in sidebar with Inbox link.
+- **Gchat webhook routing — split from operational alerts.** New env var `CHAPTER_INQUIRIES_GCHAT_WEBHOOK_URL` routes inquiry notifications to a dedicated Gchat space (Katoa's "Chapter Inquiries" space). Operational alerts (stuck-runs, daily-digest, MV freshness) still go to the original `CHAPTER_GCHAT_WEBHOOK_URL`. Falls back to the operational URL if the inquiries-specific one isn't set, so deploys before env-var update don't crash. Refactored helper [gchat.ts](src/app/lib/monitoring/gchat.ts) into `postToGChatUrl(url, payload)` (low-level, takes URL) + `postToGChat(payload)` (uses default operational URL).
+- **Legacy CHAPTER_DASH_TOKEN cookie fallback** added via `getCurrentChapterUserOrLegacy()` in [chapter-user.ts](src/app/lib/auth/chapter-user.ts) — wraps `getCurrentChapterUser()` and falls back to looking up the canonical agency-staff row (default `katoa@ads4good.com`, override via `CHAPTER_LEGACY_STAFF_EMAIL` env var) when the legacy cookie is the only authentication present. Unblocks all server actions for operators using the `@ads4good.com` bypass without forcing them to do real magic-link login. Self-removes when Sprint 5d drops the cookie path.
+- **3-step schema gotcha (UPDATED June 19, 2026)** — same trap that hit chapter_recommendations on June 15 hit chapter_inquiries on June 19. Creating a new schema now requires **THREE** steps:
+  1. GRANTs on tables / sequences / functions (in migration)
+  2. **`GRANT USAGE ON SCHEMA <s> TO service_role, authenticated, anon`** (in migration) — silently missed in initial pattern; without this, PostgREST returns "permission denied for schema" even with table grants. Reference fix: `chapter-scripts/snapshots/2026-06-19-grant_usage_chapter_inquiries.sql`.
+  3. Add to PostgREST exposed schemas in Supabase Dashboard → Settings → API → "Exposed schemas"
+- **Inquiries verified end-to-end:** Katoa submitted test inquiry → landed in DB → visible in `/internal/inbox` → reply + status change worked. Gchat notification suppressed for chapter_staff-opened thread (by design); first real client submission will validate the notification path.
+- **Backward compat preserved:** zero changes to existing routes / schemas / RLS / migrations. Sprint 8 is purely additive.
+
+### Sprint 7 follow-up — Path-aware client switching (June 18, 2026)
+- **Bug surfaced post-Sprint-7:** Sprint 5b real (June 14) made `/chapter/<client_key>/<slug>` the canonical browser URL form, with middleware rewriting it internally to the `?client=` legacy form for the page tree. But ChapterContext was reading `searchParams.get("client")` — which returns null when the canonical path-form URL is used because the rewrite happens server-side only. Result: sidebar selector showed the URL's path-form client_key as the wrong one (always fell back to `CLIENTS[0].id`). And `setClient` (dropdown) appended `?client=` to the existing path, leaving the path's client_key segment unchanged so middleware just overrode the user's intent.
+- **Fix in [ChapterContext.tsx](src/app/chapter/_components/ChapterContext.tsx):**
+  - `clientId` resolution priority: (1) URL path segment if path matches `/chapter/<X>/...` where X contains an underscore (per the client_key naming convention), (2) `?client=` query param, (3) `CLIENTS[0].id` default
+  - `setClient`: when path is in client-scoped form, swap segment 1 in place + preserve query string; otherwise fall through to `?client=` (existing behavior for non-client-scoped paths)
+- **Underscore-detection heuristic is the locked convention** — client_keys always contain underscore (eos_fabrics, projectagram_reels, not_so_cavalier), static slugs never do (overview, observations, channels). Safe to detect for routing purposes.
+
+### Agency dogfood — CRM↔Chapter integration architecture (June 18-19, 2026)
+- **Built as a dogfood of the same CRM↔Chapter integration a paying client would get.** Prospects live in Supabase (`crm` schema), n8n syncs identities + touchpoints into Chapter's ingest layer, internal page handles the manual steps. Stack: `crm.*` tables (Supabase) + 5 n8n workflows (personal project `jsUmqGPs3Sw6HvL0` in `ads4good.app.n8n.cloud`) + `/internal/crm` Next.js page.
+- **Agency client_key:** `adsforgood_prod` — the agency's own Chapter tenant. **Prospects are identities WITHIN this tenant, not their own tenants.** A prospect only gets its own `client_key` if it converts to a paying client (see `crm.prospects.converted_client_id → crm.clients`).
+- **Three-legged mirror:**
+  1. **Identity** — prospect emails (hashed) seeded into `chapter_ingest.offline_identity_seeds` so behavior stitches to a known person.
+  2. **Offline touchpoints** — completed meetings + manual calls/texts/LinkedIn/etc. pushed into `chapter_ingest.offline_milestones`.
+  3. **Online behavior** — pixel + 1P redirect → `chapter_ingest.pixel_events`, stitched to the same seeded identity. *(prospect_keys 1P redirect wiring is queued — see Open Fix List.)*
+- **Universal join key across all three:** `identity_key = sha256(lower(trim(email)))`, `identity_type='email'`, `is_hashed=true`. Matches the email_sha256 hashing used everywhere else in Chapter.
+- **`crm` schema tables (existed before this session, documented here for completeness):**
+  - `crm.prospects` — connected-CRM identity source. `prospect_key` (text UNIQUE) is the stable slug + future-prospect-token analogue to `clients.client_key`. `chapter_seeded` bool gets flipped true once seeded. `stage` CHECK constrained to lead-funnel values. `consent_mode` default 'opt_in' (only opt_in seeds). RLS on, no policies.
+  - `crm.communications` — touchpoint log. `channel` CHECK IN email/text/phone/meeting/note/linkedin/in_person/other. `chapter_synced` bool. Meeting status convention: scheduled → completed/no_show/canceled. Calendar response stored in `metadata.response_status` (n8n companion change June 18).
+  - `crm.interactions` — observed signals (GBP/Yelp/site/inquiry). Producer NOT YET FED. Future bridge to offline_milestones / conversion_events.
+  - `crm.clients` — converted prospects → paying clients. Already had full service_role grants pre-Sprint-8; the other three got INSERT/UPDATE/DELETE grants June 18 alongside `/internal/crm` build (was a silent gap that bit the e2e test).
+- **5 n8n workflows (personal project `jsUmqGPs3Sw6HvL0`):**
+  1. **Chapter Identity Seed → Prospects** (`RdmnqaPJFX5Fa3vI`) — manual + daily 6AM. Hashes opt_in + chapter_seeded=false prospects, inserts into offline_identity_seeds, flips chapter_seeded. Idempotent.
+  2. **CRM Comms Logger → Gmail and Prospects** (`ii3Q8RVtV9xKHLUP`) — daily 6AM. Reads Gmail sent + inbox (`newer_than:2d`), parses counterparty from From/To headers, matches to crm.prospects, logs both directions to crm.communications with `provider=gmail`. Dedup on Gmail message-id.
+  3. **CRM Meeting Logger → Calendar and Prospects** (`cgKz2V7MluRQC0H3`) — daily 6AM. Reads primary calendar (-2d to +60d), finds events with a prospect guest, logs `channel=meeting`, `status=scheduled`, `provider=google_calendar`, `metadata.response_status` (June 18 companion change for the accepted→no-show funnel on `/internal/crm`). Dedup on event_id + prospect.
+  4. **n8n Error Alerts to Google Chat** (`r13K1hzulsd6Jgq7`) — Error Trigger → Code → HTTP POST to a Google Chat incoming webhook. Set as the Error workflow on all others.
+  5. **CRM to Chapter — Offline Milestones Bridge** (`Y7rHvMWTz8WrZAc9`) — manual + daily 7AM. Pushes `chapter_synced=false` rows that are completed meetings OR manual phone/text/linkedin/in_person/other into offline_milestones (hashed identity), flips chapter_synced. **Excludes** `email` (online/click-tracked) and `note` (internal). Idempotent.
+- **Chapter ingest targets in use by this pipeline:**
+  - `chapter_ingest.offline_identity_seeds` — written by Identity Seed workflow with `client_key=adsforgood_prod`, `source_type=crm_prospect`, `source_id=coalesce(prospect_key,id)`, `identity_key=sha256(email)`, `identity_type=email`, `is_hashed=true`.
+  - `chapter_ingest.offline_milestones` — written by Offline Bridge with `client_key=adsforgood_prod`, `identity_key=sha256(email)`, `milestone_name` (meeting/call/text/linkedin/in_person/other), `milestone_ts=occurred_at`, `source_type=crm_communication`, `source_id=communication.id`.
+  - `chapter_ingest.pixel_events` (in progress) — `redirect_click` via `ads4good.com/r/adsforgood_prod/<slug>` carrying prospect token. **Queued: 1P redirect + prospect_keys backfill on ~75 existing prospects.**
+- **`/internal/crm` Next.js page (built June 18):** Gated by `/internal/*` auth. All DB work server-side with Supabase service role. 4 sections: Add Prospect (insert with auto-domain, auto-prospect_key, dedup-on-email, required source dropdown — 9 values: contact_tool/inbound/referral/linkedin/event/podcast/webinar/cold_email/cold_call); Log Touchpoint (manual crm.communications rows w/ provider=manual; debounced typeahead search across business/contact/email); Meeting Confirmation Queue (past status=scheduled meetings + Completed/No-show/Canceled buttons; merges metadata.confirmed_at via read-then-write); Funnel Snapshot (Pending/Completed/No-show + No-show rate + Accepted + Accepted→No-show rate gated on responseStatus presence).
+- **Key conventions & invariants (locked):**
+  - Identity hashing is the universal join. Never seed a raw email.
+  - Idempotency via boolean flags (`prospects.chapter_seeded`, `communications.chapter_synced`). Workflows select `=false`, act, flip true. Safe to re-run.
+  - `adsforgood_prod` is THE tenant for all agency-prospect seeds/milestones.
+  - n8n uses direct Postgres connection (not PostgREST) → unaffected by exposed-schema settings. Next.js app uses service role; the `crm` schema is exposed in Supabase API settings (verified June 18 during /internal/crm build).
+  - Channel routing to Chapter: offline (meeting/call/text/linkedin/in_person/other) → `offline_milestones`. Online (email) → clicks/pixel. `note` → never pushed.
+- **Verification status (per handoff doc):** Seed 75/75 prospects (0 hash mismatches). Comms logger validated outbound + inbound for test prospect; non-prospect mail skipped. Meeting logger captured test event w/ prospect guest, skipped non-prospect. Offline bridge pushed test meeting to offline_milestones w/ hash verified. Error alerts armed (fires only on failure).
+- **Open items (queued):** (a) 1P redirect + prospect_keys backfill — wrap outreach links + per-prospect token so clicks stitch to seeded identities. (b) `crm.interactions` producer — GBP/Yelp/site signals bridge to offline_milestones / conversion_events. (c) Decide if `adsforgood_prod.boundary_event_name = 'purchase'` should be `meeting_booked` or `became_client` for prospect attribution. (d) Calendar acceptance emails double-log (as inbound email + as meeting) — acceptable for now, optional subject-prefix filter if undesired.
 
 ### Sprint 7 — Role rename + agency hierarchy + domain allowlist + unanonymize (June 18, 2026)
 - **Three-role auth model locked.** Renamed `agency_operator` → `chapter_staff` (Ads for Good / Chapter team, global access). Repurposed `agency_operator` for agency partners (scoped to an `agency_key`). `client_employee` unchanged. Tri-partite DB CHECK constraint enforces scope alignment: chapter_staff has NEITHER agency_key NOR client_key; agency_operator REQUIRES agency_key, forbidden client_key; client_employee REQUIRES client_key, forbidden agency_key. Katoa's row migrated automatically.
