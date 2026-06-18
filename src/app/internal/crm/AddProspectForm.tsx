@@ -15,6 +15,18 @@ const STAGES = [
   "dormant",
 ];
 
+const SOURCES: { value: string; label: string }[] = [
+  { value: "contact_tool", label: "Contact tool (n8n outreach)" },
+  { value: "inbound", label: "Inbound (they reached out)" },
+  { value: "referral", label: "Referral" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "event", label: "Event / conference" },
+  { value: "podcast", label: "Podcast" },
+  { value: "webinar", label: "Webinar" },
+  { value: "cold_email", label: "Cold email" },
+  { value: "cold_call", label: "Cold call" },
+];
+
 export default function AddProspectForm() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +38,7 @@ export default function AddProspectForm() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [stage, setStage] = useState("new");
-  const [source, setSource] = useState("internal_page");
+  const [source, setSource] = useState(""); // required dropdown, no default
   const [notes, setNotes] = useState("");
 
   const reset = () => {
@@ -35,7 +47,7 @@ export default function AddProspectForm() {
     setEmail("");
     setPhone("");
     setStage("new");
-    setSource("internal_page");
+    setSource("");
     setNotes("");
   };
 
@@ -122,14 +134,22 @@ export default function AddProspectForm() {
         </select>
       </Field>
 
-      <Field label="Source">
-        <input
-          type="text"
+      <Field label="Source" required>
+        <select
+          required
           value={source}
           onChange={(e) => setSource(e.target.value)}
           className={inputCls}
-          placeholder="internal_page"
-        />
+        >
+          <option value="" disabled>
+            Select source…
+          </option>
+          {SOURCES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
       </Field>
 
       <Field label="Notes" colSpanFull>
@@ -149,7 +169,7 @@ export default function AddProspectForm() {
         </div>
         <button
           type="submit"
-          disabled={pending || !businessName.trim()}
+          disabled={pending || !businessName.trim() || !source}
           className="rounded-md bg-orange-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending ? "Adding…" : "Add prospect"}

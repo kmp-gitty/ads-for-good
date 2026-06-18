@@ -80,7 +80,8 @@ export async function addProspect(
   const email = input.email?.trim().toLowerCase() || null;
   const phone_number = input.phone_number?.trim() || null;
   const stage = (input.stage?.trim() || "new").toLowerCase();
-  const source = input.source?.trim() || "internal_page";
+  const source = input.source?.trim() || null;
+  if (!source) return { ok: false, message: "Source is required" };
   const notes = input.notes?.trim() || null;
   const domain = deriveDomain(email);
 
