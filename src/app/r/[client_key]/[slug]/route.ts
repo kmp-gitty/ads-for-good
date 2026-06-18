@@ -136,6 +136,21 @@ export async function GET(
     consent.allowCollection,
   );
 
+  // Tracking-ignore suppression. Two layers:
+  //   1. UA substring match → skip ALL writes (click log + email-hint stitch).
+  //      Lets operators mute known bot UAs (e.g. GoogleHypersonic) or QA tools
+  //      without affecting the visitor's 302.
+  //   2. Email-hint match — handled inside the after() block at the resolution
+  //      point (token-flavored hints aren't resolved synchronously here).
+  // Visitor still gets routed to their destination; we just don't persist them.
+  const userAgent = req.headers.get("user-agent");
+  const uaIgnored = await isUaIgnored(client_key, userAgent);
+  const hintEmailIgnored =
+    emailHint && emailHint.source !== "token"
+      ? await isEmailIgnored(client_key, emailHint.email_sha256)
+      : false;
+  const suppressed = uaIgnored || hintEmailIgnored;
+
   // Solution 2: stitch the redirect's identity to a known email_sha256 at
   // click time via one of three URL hint flavors (?rh / ?re / ?rid). Closes
   // the cross-device gap that solution 1's pixel handoff can't cover when
@@ -177,21 +192,6 @@ export async function GET(
       }
     });
   }
-
-  // Tracking-ignore suppression. Two layers:
-  //   1. UA substring match → skip ALL writes (click log + email-hint stitch).
-  //      Lets operators mute known bot UAs (e.g. GoogleHypersonic) or QA tools
-  //      without affecting the visitor's 302.
-  //   2. Email-hint match — handled inside the after() block at the resolution
-  //      point (token-flavored hints aren't resolved synchronously here).
-  // Visitor still gets routed to their destination; we just don't persist them.
-  const userAgent = req.headers.get("user-agent");
-  const uaIgnored = await isUaIgnored(client_key, userAgent);
-  const hintEmailIgnored =
-    emailHint && emailHint.source !== "token"
-      ? await isEmailIgnored(client_key, emailHint.email_sha256)
-      : false;
-  const suppressed = uaIgnored || hintEmailIgnored;
 
   // Click log via after() — runs after the 302 ships so it doesn't add
   // latency. Earlier this looked broken (zero rows landing), but the real
