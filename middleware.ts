@@ -5,6 +5,7 @@ import {
   findChapterUserByAuthId,
   canAccessClient,
   canAccessGlobal,
+  listAccessibleClientKeys,
 } from "./src/app/lib/auth/chapter-user";
 
 // Routes gated by this middleware:
@@ -165,9 +166,12 @@ async function gateChapter(req: NextRequest) {
     }
 
     if (clientKey) {
-      if (!canAccessClient(chapterUser, clientKey)) {
-        // Client employee trying to access another client's route group.
-        // Send them to their own; don't reveal which clients exist.
+      // canAccessClient is async (agency_operator needs the client's agency_key
+      // resolved via cached DB lookup). Awaited here on the critical path.
+      if (!(await canAccessClient(chapterUser, clientKey))) {
+        // Out-of-scope client access (client_employee → other client, or
+        // agency_operator → client outside their agency). Redirect to a safe
+        // landing within their scope; don't reveal which clients exist.
         const target = req.nextUrl.clone();
         target.pathname = chapterUser.client_key
           ? `/chapter/${chapterUser.client_key}/overview`
@@ -186,7 +190,7 @@ async function gateChapter(req: NextRequest) {
     // so the existing pages (which read client from search params) cannot
     // be tricked into rendering another client's data. Redirect only when
     // the query param is missing or wrong; otherwise pass through.
-    if (chapterUser.client_key) {
+    if (chapterUser.role === "client_employee" && chapterUser.client_key) {
       const queryClient = req.nextUrl.searchParams.get("client");
       if (queryClient !== chapterUser.client_key) {
         const target = req.nextUrl.clone();
@@ -195,8 +199,27 @@ async function gateChapter(req: NextRequest) {
       }
       return getResponse();
     }
-    // Edge case: agency_operator role but somehow can't access global.
-    // canAccessGlobal already covers this; reach here only if data is bad.
+    // Agency operator on a global route — they don't have global access (only
+    // chapter_staff does), but they may legitimately be loading /chapter/overview
+    // with no ?client= picked yet. Resolve their first accessible client and
+    // bounce there. If they have zero accessible clients (agency_key set but
+    // no clients tagged to that agency), force a no_clients_yet error to login.
+    if (chapterUser.role === "agency_operator") {
+      const accessible = await listAccessibleClientKeys(chapterUser);
+      if (accessible.length > 0) {
+        const target = req.nextUrl.clone();
+        target.pathname = `/chapter/${accessible[0]}/overview`;
+        target.search = "";
+        return NextResponse.redirect(target);
+      }
+      await supabase.auth.signOut();
+      const loginUrl = req.nextUrl.clone();
+      loginUrl.pathname = "/chapter/login";
+      loginUrl.search = "";
+      loginUrl.searchParams.set("error", "no_clients_yet");
+      return NextResponse.redirect(loginUrl);
+    }
+    // Edge case: role didn't match any expected value (data corruption).
     await supabase.auth.signOut();
     const loginUrl = req.nextUrl.clone();
     loginUrl.pathname = "/chapter/login";
@@ -225,16 +248,15 @@ async function gateChapter(req: NextRequest) {
 }
 
 // ---------- /internal/* auth ----------
-// Agency-internal admin surfaces (e.g. /internal/client-portal-config,
-// /internal/tasks). Accepts EITHER:
-//   1. Supabase session as agency_operator (primary post-Sprint-5a). The
-//      login page is magic-link-only now and only issues a Supabase session,
-//      so this is the only path that works for operators who migrated.
-//   2. Legacy CHAPTER_DASH_TOKEN cookie (coexistence path; will be removed
-//      in Sprint 5d).
-// Client employees do NOT get internal access — these surfaces are agency-
-// only by design (operator-side admin work). Redirect to /chapter/login on
-// miss so we have a single login flow.
+// Chapter-internal admin surfaces (e.g. /internal/client-portal-config,
+// /internal/tasks, /internal/crm). Accepts EITHER:
+//   1. Supabase session as chapter_staff (post-Sprint-7 role naming). The
+//      login page is magic-link-only and issues only a Supabase session;
+//      this is the load-bearing path going forward.
+//   2. Legacy CHAPTER_DASH_TOKEN cookie (coexistence path; removed in Sprint 5d).
+// Agency operators + client employees do NOT get internal access — these
+// surfaces are Chapter-staff-only by design (Kato/Chapter team admin work).
+// Redirect to /chapter/login on miss so we have a single login flow.
 async function gateInternal(req: NextRequest) {
   // 1. Supabase session (primary).
   const { supabase, getResponse } = createSupabaseMiddlewareClient(req);
@@ -244,7 +266,7 @@ async function gateInternal(req: NextRequest) {
     if (chapterUser && canAccessGlobal(chapterUser)) {
       return getResponse();
     }
-    // Authenticated but not agency_operator (or revoked) — deny.
+    // Authenticated but not chapter_staff (or revoked) — deny.
   }
 
   // 2. Legacy cookie (coexistence path).

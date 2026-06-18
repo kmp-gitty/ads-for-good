@@ -134,6 +134,8 @@ function errorMessageFor(code: string | null): string | null {
       return "You don't have access to that page.";
     case "no_role":
       return "Your account has no assigned role. Contact the admin.";
+    case "no_clients_yet":
+      return "Your agency has no clients assigned yet. Contact the Chapter team.";
     case "callback_failed":
       return "Sign-in link couldn't be verified. Try again.";
     default:

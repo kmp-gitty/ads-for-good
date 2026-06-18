@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@/app/lib/auth/supabase-server";
-import { findChapterUserByEmail } from "@/app/lib/auth/chapter-user";
+import { findChapterUserByEmail, findAllowedDomainForEmail } from "@/app/lib/auth/chapter-user";
 
 export async function POST(req: NextRequest) {
   let body: { email?: string; next?: string };
@@ -27,6 +27,14 @@ export async function POST(req: NextRequest) {
   }
 
   const chapterUser = await findChapterUserByEmail(email);
+
+  // Sprint 7 — domain allowlist. If no exact-match users row exists, check
+  // whether the email's domain is auto-provisionable. The actual provision
+  // happens in the callback (after Supabase confirms the visitor controls
+  // the inbox), but we let the magic link send here so first-time
+  // auto-provision users can complete the round-trip.
+  const domainRule = chapterUser ? null : await findAllowedDomainForEmail(email);
+  const isAuthorized = chapterUser !== null || domainRule !== null;
 
   // Agency-staff bypass (June 15, 2026): @ads4good.com addresses on the
   // allowlist skip magic-link entirely and get the legacy CHAPTER_DASH_TOKEN
@@ -58,7 +66,7 @@ export async function POST(req: NextRequest) {
     // the user, just makes them go through email).
   }
 
-  if (chapterUser) {
+  if (isAuthorized) {
     const supabase = createSupabaseServiceRoleClient();
     // Build the redirect URL for the magic link. Must point at our callback
     // route, which finishes the OAuth-style code exchange + verifies allowlist.

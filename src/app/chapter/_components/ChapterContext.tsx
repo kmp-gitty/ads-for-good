@@ -23,8 +23,9 @@ import {
 
 export type UserInfo = {
   email: string;
-  role: "agency_operator" | "client_employee";
+  role: "chapter_staff" | "agency_operator" | "client_employee";
   client_key: string | null;
+  agency_key: string | null;
 };
 
 // Per-client dashboard freshness — populated server-side by the (authed)
@@ -60,8 +61,16 @@ type Ctx = {
 
   // Sprint 5c — user info from server-side fetch in the (authed) layout.
   // null when using legacy CHAPTER_DASH_TOKEN cookie (no Supabase session
-  // resolves). UI falls back to agency-operator behavior in that case.
+  // resolves). UI falls back to chapter-staff behavior (full multi-client
+  // dropdown) in that case so legacy operators keep their old experience.
   user: UserInfo | null;
+
+  // Sprint 7 — accessible client_keys for this user. chapter_staff = all
+  // CLIENTS; agency_operator = only their agency's clients; client_employee
+  // = their single client. Sidebar filters the multi-client dropdown by this.
+  // Empty array when populated (vs. null = use all): an agency_operator with
+  // no clients assigned should see an empty dropdown, not all clients.
+  accessibleClientKeys: string[] | null;
 
   // Per-client freshness map — TopBar derives the "Data as of" line by
   // looking up the current client.
@@ -105,10 +114,12 @@ const VALID_MODELS = new Set<AttributionModel>(["first", "last", "linear", "cust
 export function ChapterProvider({
   children,
   user = null,
+  accessibleClientKeys = null,
   freshness = {},
 }: {
   children: React.ReactNode;
   user?: UserInfo | null;
+  accessibleClientKeys?: string[] | null;
   freshness?: FreshnessByClient;
 }) {
   const pathname = usePathname();
@@ -188,6 +199,7 @@ export function ChapterProvider({
     highlightTarget, setHighlightTarget,
     sidebarOpen, setSidebarOpen,
     user,
+    accessibleClientKeys,
     freshness,
   }), [
     client, setClient,
@@ -198,6 +210,7 @@ export function ChapterProvider({
     highlightTarget,
     sidebarOpen,
     user,
+    accessibleClientKeys,
     freshness,
   ]);
 

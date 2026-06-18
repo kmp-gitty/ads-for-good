@@ -4,18 +4,33 @@
 //
 // "Chapter user" = a row in chapter_config.users. The Supabase auth.users row
 // only proves identity (this email controls this inbox); the chapter_config
-// row is the actual allowlist + role + client_key.
+// row is the actual allowlist + role + (client_key | agency_key).
+//
+// Three roles after Sprint 7:
+//   - chapter_staff    — Ads for Good / Chapter team. Global access.
+//   - agency_operator  — Agency partner. Scoped to their agency_key.
+//   - client_employee  — Direct Chapter client employee. Scoped to client_key.
+//
+// The DB-level users_role_scope_check enforces:
+//   chapter_staff    → agency_key IS NULL AND client_key IS NULL
+//   agency_operator  → agency_key IS NOT NULL AND client_key IS NULL
+//   client_employee  → client_key IS NOT NULL (agency_key NULL)
 
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "./supabase-server";
+
+export type ChapterUserRole = "chapter_staff" | "agency_operator" | "client_employee";
 
 export type ChapterUser = {
   id: string;
   user_id: string | null;
   email: string;
-  role: "agency_operator" | "client_employee";
+  role: ChapterUserRole;
   client_key: string | null;
+  agency_key: string | null;
   revoked_at: string | null;
 };
+
+const USER_SELECT = "id, user_id, email, role, client_key, agency_key, revoked_at";
 
 // Lookup by email. Used at login time, BEFORE the user has a Supabase session.
 // Lowercased server-side; the unique index on lower(email) handles equality.
@@ -24,7 +39,7 @@ export async function findChapterUserByEmail(email: string): Promise<ChapterUser
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("users")
-    .select("id, user_id, email, role, client_key, revoked_at")
+    .select(USER_SELECT)
     .ilike("email", email.trim())
     .is("revoked_at", null)
     .maybeSingle();
@@ -42,7 +57,7 @@ export async function findChapterUserByAuthId(authUserId: string): Promise<Chapt
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("users")
-    .select("id, user_id, email, role, client_key, revoked_at")
+    .select(USER_SELECT)
     .eq("user_id", authUserId)
     .is("revoked_at", null)
     .maybeSingle();
@@ -82,20 +97,179 @@ export async function touchLastLogin(chapterUserId: string): Promise<void> {
     .eq("id", chapterUserId);
 }
 
-// Returns true if a Chapter user is allowed to access a route group scoped to
-// the given client_key. Agency operators get global access. Client employees
-// are scoped to their own client_key only.
-export function canAccessClient(user: ChapterUser, clientKey: string): boolean {
+// ─── Client → agency_key resolver (cached) ──────────────────────────────────
+//
+// canAccessClient needs to know a client's agency_key to scope agency_operator
+// access. We cache the (client_key → agency_key) map for 5 min so the
+// middleware doesn't fire a DB query per authenticated request. The cache is
+// per-lambda; agency_key changes propagate within 5 min, which is acceptable
+// for an admin-frequency operation.
+
+type ClientAgencyEntry = { agency_key: string | null; fetched_at: number };
+const CLIENT_AGENCY_TTL_MS = 5 * 60 * 1000;
+const clientAgencyCache = new Map<string, ClientAgencyEntry>();
+
+export async function getClientAgencyKey(client_key: string): Promise<string | null> {
+  const cached = clientAgencyCache.get(client_key);
+  const now = Date.now();
+  if (cached && now - cached.fetched_at < CLIENT_AGENCY_TTL_MS) {
+    return cached.agency_key;
+  }
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .schema("chapter_config")
+    .from("clients")
+    .select("agency_key")
+    .eq("client_key", client_key)
+    .maybeSingle();
+  if (error) {
+    console.warn("[chapter-user] getClientAgencyKey failed:", error.message);
+    return null;
+  }
+  const agency_key = (data?.agency_key as string | null) ?? null;
+  clientAgencyCache.set(client_key, { agency_key, fetched_at: now });
+  return agency_key;
+}
+
+// ─── Access predicates ──────────────────────────────────────────────────────
+
+// Returns true if a Chapter user is allowed to access a route group scoped
+// to the given client_key.
+//   chapter_staff    → always (global access)
+//   client_employee  → only their own client_key
+//   agency_operator  → only clients whose agency_key matches theirs
+// Async because the agency_operator branch may need a DB lookup for the
+// client's agency_key (cached).
+export async function canAccessClient(user: ChapterUser, clientKey: string): Promise<boolean> {
   if (user.revoked_at) return false;
-  if (user.role === "agency_operator") return true;
+  if (user.role === "chapter_staff") return true;
   if (user.role === "client_employee") return user.client_key === clientKey;
+  if (user.role === "agency_operator") {
+    if (!user.agency_key) return false; // DB CHECK prevents this, but belt-and-suspenders
+    const clientAgencyKey = await getClientAgencyKey(clientKey);
+    return clientAgencyKey !== null && clientAgencyKey === user.agency_key;
+  }
   return false;
 }
 
 // Returns true if the user can access the global /chapter/* surface (no
-// specific client_key in path). Agency operators only.
+// specific client_key in path). Chapter staff only — agency operators are
+// scoped to their agency's clients, not the global dashboard.
 export function canAccessGlobal(user: ChapterUser): boolean {
-  return !user.revoked_at && user.role === "agency_operator";
+  return !user.revoked_at && user.role === "chapter_staff";
+}
+
+// ─── Accessible-clients list (for sidebar scoping) ──────────────────────────
+//
+// Returns the list of client_keys this user can access. Used by the sidebar
+// client switcher to filter the dropdown for agency_operator.
+export async function listAccessibleClientKeys(user: ChapterUser): Promise<string[]> {
+  if (user.revoked_at) return [];
+  if (user.role === "chapter_staff") {
+    // Returns ALL client_keys. Cached at this layer would be premature; the
+    // (authed) layout fetches once per request which is fine.
+    const supabase = createSupabaseServiceRoleClient();
+    const { data, error } = await supabase
+      .schema("chapter_config")
+      .from("clients")
+      .select("client_key");
+    if (error) {
+      console.warn("[chapter-user] listAccessibleClientKeys (staff) failed:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r: { client_key: string }) => r.client_key);
+  }
+  if (user.role === "client_employee") {
+    return user.client_key ? [user.client_key] : [];
+  }
+  if (user.role === "agency_operator") {
+    if (!user.agency_key) return [];
+    const supabase = createSupabaseServiceRoleClient();
+    const { data, error } = await supabase
+      .schema("chapter_config")
+      .from("clients")
+      .select("client_key")
+      .eq("agency_key", user.agency_key);
+    if (error) {
+      console.warn("[chapter-user] listAccessibleClientKeys (agency) failed:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r: { client_key: string }) => r.client_key);
+  }
+  return [];
+}
+
+// ─── Domain allowlist (auto-provisioning) ──────────────────────────────────
+//
+// findAllowedDomainForEmail looks up an active row in
+// chapter_config.allowed_email_domains for the email's domain. Returns the
+// "first" matching row (lowest priority wins ties; ORDER BY created_at ASC).
+// In practice one domain rarely has more than one rule.
+
+export type AllowedDomainRule = {
+  id: string;
+  domain: string;
+  role: "agency_operator" | "client_employee";
+  agency_key: string | null;
+  client_key: string | null;
+};
+
+export async function findAllowedDomainForEmail(
+  email: string,
+): Promise<AllowedDomainRule | null> {
+  const at = email.lastIndexOf("@");
+  if (at <= 0 || at === email.length - 1) return null;
+  const domain = email.slice(at + 1).toLowerCase();
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .schema("chapter_config")
+    .from("allowed_email_domains")
+    .select("id, domain, role, agency_key, client_key")
+    .eq("domain", domain)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn("[chapter-user] findAllowedDomainForEmail failed:", error.message);
+    return null;
+  }
+  return (data as AllowedDomainRule) ?? null;
+}
+
+// Provisions a chapter_config.users row from a matching domain rule. Called
+// from the magic-link callback when an authenticated email has no exact-match
+// users row but its domain is allowlisted.
+//
+// Returns the newly-created ChapterUser, or null if no domain rule matched
+// (caller should sign the user out + redirect with not_allowlisted).
+export async function provisionFromDomainIfAllowed(
+  email: string,
+  authUserId: string,
+): Promise<ChapterUser | null> {
+  const rule = await findAllowedDomainForEmail(email);
+  if (!rule) return null;
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .schema("chapter_config")
+    .from("users")
+    .insert({
+      email: email.trim(),
+      user_id: authUserId,
+      role: rule.role,
+      agency_key: rule.agency_key,
+      client_key: rule.client_key,
+      last_login_at: new Date().toISOString(),
+    })
+    .select(USER_SELECT)
+    .single();
+
+  if (error) {
+    console.error("[chapter-user] provisionFromDomain failed:", error.message);
+    return null;
+  }
+  return data as ChapterUser;
 }
 
 // Server-side current-user resolver. Returns the active ChapterUser when the

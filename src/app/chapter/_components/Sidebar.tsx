@@ -11,9 +11,25 @@ import { CLIENTS } from "./mockdata";
 type NavItem = { key: string; label: string; icon: IconName; badge?: string; locked?: boolean };
 
 export function Sidebar() {
-  const { client, setClient, sidebarOpen, setSidebarOpen, user } = useChapter();
+  const { client, setClient, sidebarOpen, setSidebarOpen, user, accessibleClientKeys } = useChapter();
   const pathname = usePathname();
   const isClientEmployee = user?.role === "client_employee";
+
+  // Filter the dropdown list to clients the user can access. When
+  // accessibleClientKeys is null (legacy CHAPTER_DASH_TOKEN cookie session, no
+  // Supabase user resolved), fall through to all CLIENTS — matches old
+  // chapter-staff-equivalent behavior so legacy operators aren't broken.
+  const visibleClients = accessibleClientKeys
+    ? CLIENTS.filter((c) => accessibleClientKeys.includes(c.id))
+    : CLIENTS;
+
+  // Three-role label. Falls back to "Chapter staff" if user is null so legacy
+  // sessions show something sensible (rather than blank).
+  const roleLabel =
+    user?.role === "chapter_staff"     ? "Chapter staff" :
+    user?.role === "agency_operator"   ? "Agency operator" :
+    user?.role === "client_employee"   ? "Client employee" :
+    "Chapter staff";
 
   // 5-group nav per the June 11 reorg work order.
   //   Actions     — Recommendations (top-of-mind synthesis, theme-grouped)
@@ -108,7 +124,12 @@ export function Sidebar() {
           {(close) => (
             <>
               <div className="dd-label">Switch client</div>
-              {CLIENTS.map(c => (
+              {visibleClients.length === 0 && (
+                <div className="dd-empty" style={{ padding: "10px 12px", fontSize: 12, color: "var(--ink-3)" }}>
+                  No clients assigned yet.
+                </div>
+              )}
+              {visibleClients.map(c => (
                 <button key={c.id} className={`dd-item ${c.id === client.id ? "active" : ""}`} onClick={() => { setClient(c); close(); }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span className="client-dot" style={{ background: c.color }}></span>
@@ -164,9 +185,7 @@ export function Sidebar() {
         {user && (
           <div className="sidebar-user">
             <div className="sidebar-user-email" title={user.email}>{user.email}</div>
-            <div className="sidebar-user-role">
-              {user.role === "agency_operator" ? "Agency operator" : "Client employee"}
-            </div>
+            <div className="sidebar-user-role">{roleLabel}</div>
           </div>
         )}
         <button

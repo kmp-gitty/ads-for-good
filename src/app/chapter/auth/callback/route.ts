@@ -14,6 +14,7 @@ import {
   findChapterUserByEmail,
   linkChapterUserToAuthId,
   touchLastLogin,
+  provisionFromDomainIfAllowed,
 } from "@/app/lib/auth/chapter-user";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
@@ -59,14 +60,21 @@ export async function GET(req: NextRequest) {
   // Defense in depth: even if Supabase auth succeeded, re-check allowlist.
   // (Someone could have been on the allowlist when they requested the link,
   // then been revoked before they clicked it.)
-  const chapterUser = await findChapterUserByEmail(email);
+  //
+  // Sprint 7: if no direct chapter_config.users row exists, attempt domain
+  // allowlist auto-provision. provisionFromDomainIfAllowed inserts a fresh
+  // row when the email's domain has an active allowed_email_domains rule.
+  // Returns null if no rule matches → bounce to login.
+  let chapterUser = await findChapterUserByEmail(email);
   if (!chapterUser) {
-    await supabase.auth.signOut();
-    return NextResponse.redirect(new URL("/chapter/login?error=not_allowlisted", req.url));
-  }
-
-  // First login: link the IDs so future middleware can lookup by user_id.
-  if (!chapterUser.user_id) {
+    chapterUser = await provisionFromDomainIfAllowed(email, authUser.id);
+    if (!chapterUser) {
+      await supabase.auth.signOut();
+      return NextResponse.redirect(new URL("/chapter/login?error=not_allowlisted", req.url));
+    }
+    // Domain-provisioned rows already have user_id set, so no linkChapterUserToAuthId.
+  } else if (!chapterUser.user_id) {
+    // First login on an existing email-allowlist row.
     await linkChapterUserToAuthId(chapterUser.id, authUser.id);
   } else {
     await touchLastLogin(chapterUser.id);
@@ -75,16 +83,20 @@ export async function GET(req: NextRequest) {
   // Compute landing path. Honor ?next if it's a safe same-origin path AND the
   // user is allowed there; otherwise role-appropriate default.
   //
-  // Default landing changed June 11 — Lifecycle Overview replaces Observations
-  // as the first-paint. (Will switch to Recommendations after that page lands
-  // and has had 2-3 weeks of real usage.)
+  // Three roles after Sprint 7:
+  //   - chapter_staff   → /chapter (global, no client scoping)
+  //   - agency_operator → first accessible client's overview (or /chapter if none)
+  //   - client_employee → their client's overview
   let destination = "/chapter";
   if (chapterUser.role === "client_employee" && chapterUser.client_key) {
     destination = `/chapter/${chapterUser.client_key}/overview`;
   } else if (chapterUser.role === "agency_operator") {
-    destination = chapterUser.client_key
-      ? `/chapter/${chapterUser.client_key}/overview`
-      : "/chapter/overview";
+    // No client_key on the user row directly; middleware resolves first
+    // accessible client for global routes. Land them at /chapter and let
+    // middleware bounce to the right place.
+    destination = "/chapter";
+  } else if (chapterUser.role === "chapter_staff") {
+    destination = "/chapter";
   }
   if (next && next.startsWith("/") && !next.startsWith("//")) {
     destination = next;
