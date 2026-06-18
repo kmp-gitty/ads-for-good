@@ -34,6 +34,7 @@ import { resolveCart } from "@/app/lib/redirect/cart";
 import { evaluateConditions, EvalContext } from "@/app/lib/redirect/conditions";
 import { interpolateTemplate, isValidDestination, appendIdentityHandoff } from "@/app/lib/redirect/template";
 import { logRedirectClick } from "@/app/lib/redirect/click-logger";
+import { isEmailIgnored, isUaIgnored } from "@/app/lib/auth/tracking-ignore";
 import { readConsentState, applyConsentPolicy } from "@/app/lib/redirect/consent";
 import { extractEmailHint, stripHintParams } from "@/app/lib/redirect/email-hint";
 import { resolveRecipientToken } from "@/app/lib/redirect/recipient-lookup";
@@ -142,7 +143,7 @@ export async function GET(
   // Uses after() so the work continues past the 302 — without it the runtime
   // would kill the pending async on response and no stitch row would land.
   // Skipped under opt-out.
-  if (consent.allowCollection && emailHint) {
+  if (consent.allowCollection && emailHint && !suppressed) {
     after(async () => {
       try {
         let email_sha256: string | null = null;
@@ -156,6 +157,11 @@ export async function GET(
         } else if (emailHint.source === "token") {
           email_sha256 = await resolveRecipientToken(client_key, emailHint.token);
           reason = "redirect_recipient_token";
+        }
+        // Re-check at resolution time — token-flavored hints couldn't be checked
+        // upfront. If the token resolves to an ignored email, skip the stitch.
+        if (email_sha256 && (await isEmailIgnored(client_key, email_sha256))) {
+          return;
         }
         if (email_sha256 && reason) {
           await stitchIdentity(
@@ -172,13 +178,29 @@ export async function GET(
     });
   }
 
+  // Tracking-ignore suppression. Two layers:
+  //   1. UA substring match → skip ALL writes (click log + email-hint stitch).
+  //      Lets operators mute known bot UAs (e.g. GoogleHypersonic) or QA tools
+  //      without affecting the visitor's 302.
+  //   2. Email-hint match — handled inside the after() block at the resolution
+  //      point (token-flavored hints aren't resolved synchronously here).
+  // Visitor still gets routed to their destination; we just don't persist them.
+  const userAgent = req.headers.get("user-agent");
+  const uaIgnored = await isUaIgnored(client_key, userAgent);
+  const hintEmailIgnored =
+    emailHint && emailHint.source !== "token"
+      ? await isEmailIgnored(client_key, emailHint.email_sha256)
+      : false;
+  const suppressed = uaIgnored || hintEmailIgnored;
+
   // Click log via after() — runs after the 302 ships so it doesn't add
   // latency. Earlier this looked broken (zero rows landing), but the real
   // bug was the click logger throwing FK 23503 because the journey row
   // didn't exist (now fixed by the journey upsert inside logRedirectClick).
   // With that resolved, after() works cleanly and saves ~50-100ms on the
-  // critical path. Skipped entirely when consent gate denies collection.
-  if (consent.allowCollection) {
+  // critical path. Skipped when consent gate denies collection OR when the
+  // visitor's UA / hinted email is on the tracking ignore list.
+  if (consent.allowCollection && !suppressed) {
     after(() =>
       logRedirectClick({
         client_key,

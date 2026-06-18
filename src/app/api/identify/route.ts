@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { withClient, isKnownClient } from "@/app/lib/db/per-client";
 import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
+import { isEmailIgnored } from "@/app/lib/auth/tracking-ignore";
 
 function safeString(v: any): string | null {
   if (v === null || v === undefined) return null;
@@ -33,6 +34,21 @@ export async function POST(req: NextRequest) {
   }
   if (!isKnownClient(client_key)) {
     return withCors(req, NextResponse.json({ error: "unknown_client" }, { status: 400 }));
+  }
+
+  // Suppression check: when the identity being attached is an email_sha256 on
+  // the tracking ignore list (per-client or global), ack without writing. Also
+  // covers the previous_identity_key path so the redirect's chid handoff can't
+  // sneak an ignored identity into canon.
+  const emailMatch = /^email_sha256:([0-9a-f]{64})$/i.exec(identity_key);
+  if (emailMatch && (await isEmailIgnored(client_key, emailMatch[1].toLowerCase()))) {
+    return withCors(req, NextResponse.json({ ok: true, suppressed: "tracking_ignore" }));
+  }
+  const prevEmailMatch = previous_identity_key
+    ? /^email_sha256:([0-9a-f]{64})$/i.exec(previous_identity_key)
+    : null;
+  if (prevEmailMatch && (await isEmailIgnored(client_key, prevEmailMatch[1].toLowerCase()))) {
+    return withCors(req, NextResponse.json({ ok: true, suppressed: "tracking_ignore" }));
   }
 
   // If previous_identity_key isn't provided, fall back to anon cookie (set by /api/pixel)

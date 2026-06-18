@@ -12,6 +12,7 @@ import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
 import { getActiveSecrets } from "@/app/lib/auth/client-secrets";
+import { isEmailIgnored } from "@/app/lib/auth/tracking-ignore";
 import { withClient, isKnownClient } from "@/app/lib/db/per-client";
 
 const ENDPOINT = "/api/purchase";
@@ -163,6 +164,13 @@ export async function POST(req: NextRequest) {
       : phone
         ? sha256(phone)
         : null;
+
+  // Suppression check: drop the row entirely (but ack 200 so the webhook
+  // doesn't retry) if this email is on the tracking ignore list for this
+  // client OR globally (agency-staff blanket block).
+  if (await isEmailIgnored(clientKey, emailHash)) {
+    return NextResponse.json({ ok: true, suppressed: "tracking_ignore" });
+  }
 
   const eventTs = payload.event_ts ? new Date(payload.event_ts) : new Date();
   const eventTsIso = eventTs.toISOString();
