@@ -625,8 +625,76 @@ export type ConnectionsPanelRow = {
   outcome_rate:          number | null;
 };
 
+// Sprint 9 Phase 1A — Snapshot-first lookup.
+//
+// connections_panel is a 3-7s SQL call. Sprint 9 pre-computes it nightly into
+// chapter_reporting.connections_panel_snapshot_v1 for the top-N anchors of
+// each type, default 30d/30d window. This wrapper checks the snapshot first;
+// hit returns in ~50ms, miss falls back to the live RPC (which keeps prior
+// behavior for non-default windows + non-top anchors).
+//
+// Snapshot hit conditions (all must match):
+//   - p_window_days = 30 AND p_outcome_window_days = 30
+//   - anchor_key is extractable from p_anchor_payload AND has a snapshot row
+//
+// Exclude args are applied client-side after snapshot read so a snapshot row
+// can satisfy any exclude combination.
+function extractAnchorKey(
+  anchor_type: string,
+  payload: Record<string, unknown>,
+): string | null {
+  if (anchor_type === "channel") return typeof payload.channel === "string" ? payload.channel : null;
+  if (anchor_type === "page") return typeof payload.page_path === "string" ? payload.page_path : null;
+  if (anchor_type === "campaign") return typeof payload.campaign_id === "string" ? payload.campaign_id : null;
+  if (anchor_type === "cohort") return typeof payload.cohort_id === "string" ? payload.cohort_id : null;
+  return null;
+}
+
+async function snapshotLookup(args: ConnectionsPanelArgs): Promise<ConnectionsPanelRow[] | null> {
+  // Only attempt snapshot for the default window combo.
+  if (args.p_window_days !== 30 || (args.p_outcome_window_days ?? 30) !== 30) return null;
+
+  const anchorKey = extractAnchorKey(args.p_anchor_type, args.p_anchor_payload as Record<string, unknown>);
+  if (!anchorKey) return null;
+
+  const r = await supabase
+    .schema("chapter_reporting")
+    .from("connections_panel_snapshot_v1")
+    .select("rows")
+    .eq("client_key", args.p_client_key)
+    .eq("anchor_type", args.p_anchor_type)
+    .eq("anchor_key", anchorKey)
+    .eq("direction", args.p_direction)
+    .eq("connection_type", args.p_connection_type ?? "channel")
+    .eq("window_days", 30)
+    .eq("outcome_window_days", 30)
+    .maybeSingle();
+
+  if (r.error || !r.data) return null;
+  let rows = (r.data.rows as ConnectionsPanelRow[]) ?? [];
+
+  // Apply exclude args client-side. Cheap (~30 rows max per snapshot) and
+  // lets one snapshot row serve any exclude combination.
+  const excludeChannels = args.p_exclude_channels ?? [];
+  const excludePages = args.p_exclude_pages ?? [];
+  if (excludeChannels.length > 0 || excludePages.length > 0) {
+    rows = rows.filter((row) => {
+      if (row.connected_thing_type === "channel" && excludeChannels.includes(row.connected_thing_id)) return false;
+      if (row.connected_thing_type === "page" && excludePages.includes(row.connected_thing_id)) return false;
+      return true;
+    });
+  }
+  return rows;
+}
+
 export const cachedConnectionsPanel = unstable_cache(
   async (args: ConnectionsPanelArgs): Promise<ConnectionsPanelRow[]> => {
+    // 1) Snapshot-first lookup (Sprint 9 Phase 1A — ~50ms hit, ~0ms miss to detect).
+    const snap = await snapshotLookup(args);
+    if (snap !== null) return snap;
+
+    // 2) Fall back to live RPC for non-snapshot params (non-default window,
+    //    anchor outside top-N, or snapshot not yet built for this client).
     const r = await supabase
       .schema("chapter_reporting")
       .rpc("connections_panel", args);
@@ -636,10 +704,11 @@ export const cachedConnectionsPanel = unstable_cache(
     }
     return (Array.isArray(r.data) ? r.data : []) as ConnectionsPanelRow[];
   },
-  // v5 — busts cached empty results that may have been served while the
-  // system-cohort panel branches were being shaken out. Args shape unchanged.
-  ["dashboard-rpc:chapter_reporting:connections_panel:v5"],
-  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_panel:v5"] },
+  // v6 — snapshot-first lookup added. Args shape unchanged but cache must
+  // bust so any stale empty entries (from pre-snapshot-enabled cold cache)
+  // get re-resolved.
+  ["dashboard-rpc:chapter_reporting:connections_panel:v6"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_panel:v6"] },
 );
 
 export type ConnectionsPageOption = { page_path: string; views: number };
