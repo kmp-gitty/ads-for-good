@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { createRule, updateRule, type RuleFormInput } from "../_actions";
+import ConditionBuilder from "./ConditionBuilder";
 
 export type RuleFormProps = {
   client_key: string;
@@ -25,6 +26,12 @@ const DESTINATION_PRESETS: { label: string; description: string; template: strin
     description: "Land them at the URL passed in `?to=`, preserving UTM params. Used by outreach + Google Ads tracking template.",
     template:
       "{q:to}?utm_source={q:utm_source}&utm_medium={q:utm_medium}&utm_campaign={q:utm_campaign}&utm_content={q:utm_content}&utm_term={q:utm_term}",
+  },
+  {
+    label: "Fixed URL + UTM passthrough",
+    description: "Always land at a specific URL (override) but preserve the marketing UTM params from the inbound link. Use this for rules that override a catch-all but still want attribution.",
+    template:
+      "https://ads4good.com/landing?utm_source={q:utm_source}&utm_medium={q:utm_medium}&utm_campaign={q:utm_campaign}&utm_content={q:utm_content}&utm_term={q:utm_term}",
   },
   {
     label: "Fixed URL",
@@ -187,20 +194,13 @@ export default function RuleForm({ client_key, initial }: RuleFormProps) {
           </label>
         </div>
 
-        <label className="block text-sm">
-          <span className="block font-semibold text-neutral-800">Conditions (JSON object)</span>
-          <span className="block text-xs text-neutral-500">
-            Empty <code>{"{}"}</code> = catch-all (always matches). Otherwise an object whose keys are
-            condition types, AND-ed together. Example: <code className="rounded bg-neutral-100 px-1 py-0.5">{`{"country_in": ["US", "CA"], "device_type": "mobile"}`}</code>
-          </span>
-          <textarea
-            value={conditions}
-            onChange={(e) => setConditions(e.target.value)}
-            rows={5}
-            className="mt-2 w-full rounded-md border border-neutral-300 px-3 py-2 font-mono text-xs"
-            placeholder='{}'
-          />
-        </label>
+        <div>
+          <div className="text-sm font-semibold text-neutral-800">Conditions</div>
+          <div className="mb-2 text-xs text-neutral-500">
+            Pick the visitor / time / context filters that must ALL match for this rule to fire. No conditions = catch-all (always matches).
+          </div>
+          <ConditionBuilder jsonValue={conditions} onChange={setConditions} />
+        </div>
 
         {/* Destination preset chips */}
         <div className="space-y-2">
