@@ -85,28 +85,52 @@ const SCRIPT = `(function () {
     lastHl = null;
   }
 
-  // Selector generation: prefer #id, then tag.class combinations, then
-  // data-* attributes, then a :nth-of-type path. Always check uniqueness.
+  // Classes the picker adds for its own highlight UI. Must be excluded
+  // from generated selectors — otherwise the picker fools its own
+  // uniqueness check (only the currently-hovered element has -hl).
+  var PICKER_CLASSES = {
+    "chapter-picker-hl": 1,
+    "chapter-picker-locked": 1,
+    "chapter-picker-panel": 1,
+  };
+
+  // Selector generation strategy in priority order:
+  //   1. #id (if unique)
+  //   2. tag.class.class... (excluding picker's own classes)
+  //   3. .class.class... alone
+  //   4. a[href="..."] for anchors (semantic, differentiates buttons that share Tailwind utilities)
+  //   5. tag[data-*/name/role/aria-label="..."]
+  //   6. :nth-of-type path up to nearest ID ancestor
+  // Always uniqueness-tested via querySelectorAll before returning.
   function genSelector(el) {
     if (!el || el.nodeType !== 1) return "";
     if (el.id && safeQuery("#" + cssEscape(el.id)).length === 1) {
       return "#" + el.id;
     }
-    if (el.classList && el.classList.length > 0) {
-      var classes = Array.from(el.classList).map(cssEscape);
-      // Try tag+classes first, then classes alone
+    var realClasses = el.classList
+      ? Array.from(el.classList).filter(function (c) { return !PICKER_CLASSES[c]; })
+      : [];
+    if (realClasses.length > 0) {
+      var classes = realClasses.map(cssEscape);
       var tagCls = el.tagName.toLowerCase() + "." + classes.join(".");
       if (safeQuery(tagCls).length === 1) return tagCls;
       var clsOnly = "." + classes.join(".");
       if (safeQuery(clsOnly).length === 1) return clsOnly;
     }
-    // data-* attributes (and a few stable ones like name, role, aria-label)
+    // Anchor href: most reliable disambiguator for nav/CTA buttons that share utility classes
+    if (el.tagName === "A") {
+      var href = el.getAttribute("href");
+      if (href) {
+        var sel = 'a[href="' + href.replace(/"/g, '\\\\"') + '"]';
+        if (safeQuery(sel).length === 1) return sel;
+      }
+    }
     var attrs = ["data-id","data-test","data-testid","data-cy","data-action","name","role","aria-label"];
     for (var i = 0; i < attrs.length; i++) {
       var v = el.getAttribute(attrs[i]);
       if (v) {
-        var sel = el.tagName.toLowerCase() + "[" + attrs[i] + '="' + v.replace(/"/g, '\\\\"') + '"]';
-        if (safeQuery(sel).length === 1) return sel;
+        var attrSel = el.tagName.toLowerCase() + "[" + attrs[i] + '="' + v.replace(/"/g, '\\\\"') + '"]';
+        if (safeQuery(attrSel).length === 1) return attrSel;
       }
     }
     // Fallback: :nth-of-type path up to nearest ID ancestor (or body)
