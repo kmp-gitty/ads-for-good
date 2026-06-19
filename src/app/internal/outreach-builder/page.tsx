@@ -38,7 +38,7 @@ async function fetchClients(): Promise<ClientOption[]> {
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("clients")
-    .select("client_key, storefront_domain")
+    .select("client_key, storefront_domain, redirect_host")
     .order("client_key");
   if (error) {
     console.error("[outreach-builder] fetchClients failed:", error);

@@ -9,6 +9,10 @@ import {
 export type ClientOption = {
   client_key: string;
   storefront_domain: string | null;
+  // Per-client 1P redirect host. NULL falls back to the global redirectOrigin
+  // (NEXT_PUBLIC_APP_URL / ads4good.com). Set when a client has 1P pixel
+  // installed at a dedicated subdomain (e.g. NSC at chapter.notsocavalier.com).
+  redirect_host: string | null;
 };
 
 const UTM_SOURCES = [
@@ -54,6 +58,11 @@ export default function UrlBuilder({
 }) {
   const [clientKey, setClientKey] = useState(defaultClientKey);
   const availableSlugs = slugsByClient[clientKey] ?? [];
+  const currentClient = clients.find(c => c.client_key === clientKey);
+  // Use the per-client redirect_host when set (e.g. NSC's chapter.notsocavalier.com
+  // — required for cookies to land on the right eTLD+1). Falls back to the
+  // global origin for adsforgood_prod, which IS the Chapter deployment apex.
+  const effectiveOrigin = currentClient?.redirect_host || redirectOrigin;
   // "" means generic 1P link — no slug-rule matching, just identity + UTM tracking.
   const [slug, setSlug] = useState<string>("");
   const [query, setQuery] = useState("");
@@ -103,8 +112,8 @@ export default function UrlBuilder({
     if (utmCampaign.trim()) params.set("utm_campaign", utmCampaign.trim());
     if (utmContent.trim()) params.set("utm_content", utmContent.trim());
     const qs = params.toString();
-    return `${redirectOrigin}/r/${clientKey}/${effectiveSlug}${qs ? `?${qs}` : ""}`;
-  }, [slug, destination, prospect, utmSource, utmCampaign, utmContent, clientKey, redirectOrigin]);
+    return `${effectiveOrigin}/r/${clientKey}/${effectiveSlug}${qs ? `?${qs}` : ""}`;
+  }, [slug, destination, prospect, utmSource, utmCampaign, utmContent, clientKey, effectiveOrigin]);
 
   async function copyUrl() {
     try {
