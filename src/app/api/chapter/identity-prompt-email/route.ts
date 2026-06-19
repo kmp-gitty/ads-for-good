@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   const { data: prompt, error: lookupErr } = await supabase
     .schema("chapter_config")
     .from("identity_prompts")
-    .select("post_submit_action, offer_code, offer_description, enabled")
+    .select("post_submit_action, offer_code, offer_description, email_subject, email_body, enabled")
     .eq("client_key", clientKey)
     .eq("slug", slug)
     .maybeSingle();
@@ -83,15 +83,18 @@ export async function POST(req: NextRequest) {
   const resend = new Resend(RESEND_API_KEY);
   const offerCode = prompt.offer_code;
   const offerDescription = prompt.offer_description || "";
+  const subjectTemplate = (prompt.email_subject || "Your code: {offer_code}").trim();
+  const subject = subjectTemplate.replace(/\{offer_code\}/g, offerCode);
+  const bodyText = (prompt.email_body || "Thanks for signing up — here's your code:").trim();
 
   try {
     const result = await resend.emails.send({
       from: `${SENDER_NAME} <${FROM_EMAIL}>`,
       to: recipient,
       replyTo: REPLY_TO,
-      subject: `Your code: ${offerCode}`,
-      html: buildHtmlBody(offerCode, offerDescription),
-      text: buildTextBody(offerCode, offerDescription),
+      subject,
+      html: buildHtmlBody(bodyText, offerCode, offerDescription),
+      text: buildTextBody(bodyText, offerCode, offerDescription),
     });
     if (result.error) {
       console.warn("[identity-prompt-email] Resend error:", result.error.message);
@@ -105,21 +108,27 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function buildHtmlBody(code: string, description: string): string {
+function buildHtmlBody(bodyText: string, code: string, description: string): string {
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Operator's body is plain text. Split on blank lines into paragraphs;
+  // single newlines become <br/> within a paragraph.
+  const paragraphs = bodyText
+    .split(/\n{2,}/)
+    .map(p => `<p style="font-size: 14px; line-height: 1.5; margin: 0 0 12px;">${esc(p).replace(/\n/g, "<br/>")}</p>`)
+    .join("");
   return `<!DOCTYPE html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1F2D43; padding: 24px; max-width: 560px; margin: 0 auto;">
-  <p style="font-size: 14px;">Thanks for signing up — here's your code:</p>
-  <p style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 28px; font-weight: 700; letter-spacing: 0.08em; padding: 16px 24px; background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 12px; display: inline-block; color: #C2410C;">${esc(code)}</p>
+  ${paragraphs}
+  <p style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 28px; font-weight: 700; letter-spacing: 0.08em; padding: 16px 24px; background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 12px; display: inline-block; color: #C2410C; margin: 8px 0;">${esc(code)}</p>
   ${description ? `<p style="font-size: 14px; color: #5C6B82;">${esc(description)}</p>` : ""}
   <p style="font-size: 12px; color: #9CA3AF; margin-top: 32px;">— ${esc(SENDER_NAME)}</p>
 </body></html>`;
 }
 
-function buildTextBody(code: string, description: string): string {
+function buildTextBody(bodyText: string, code: string, description: string): string {
   return [
-    `Thanks for signing up — here's your code:`,
+    bodyText,
     ``,
     `  ${code}`,
     ``,

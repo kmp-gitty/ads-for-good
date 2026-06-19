@@ -25,6 +25,8 @@ export type ExistingPrompt = {
   post_submit_action: string;
   post_submit_url: string | null;
   post_submit_button_label: string | null;
+  email_subject: string | null;
+  email_body: string | null;
   frequency: string;
   frequency_days: number | null;
   enabled: boolean;
@@ -72,6 +74,8 @@ export default function PromptForm({
   const [postSubmitButtonLabel, setPostSubmitButtonLabel] = useState(
     prompt?.post_submit_button_label ?? "Claim it",
   );
+  const [emailSubject, setEmailSubject] = useState(prompt?.email_subject ?? "");
+  const [emailBody, setEmailBody] = useState(prompt?.email_body ?? "");
   const [frequency, setFrequency] = useState<Frequency>(
     (prompt?.frequency as Frequency) || "session",
   );
@@ -101,6 +105,8 @@ export default function PromptForm({
       post_submit_action: postSubmitAction,
       post_submit_url: postSubmitUrl,
       post_submit_button_label: postSubmitButtonLabel,
+      email_subject: emailSubject,
+      email_body: emailBody,
       frequency,
       frequency_days: parseInt(frequencyDays, 10),
       enabled,
@@ -384,9 +390,33 @@ export default function PromptForm({
         )}
 
         {postSubmitAction === "email" && (
-          <p className="mt-3 text-xs text-neutral-600">
-            Sends a transactional email to the submitted address via Resend. From: <strong>ads for Good</strong>, reply-to: <code className="rounded bg-white px-1">katoa@ads4good.com</code>. The email contains the offer code and description above.
-          </p>
+          <div className="mt-4 space-y-3">
+            <p className="text-xs text-neutral-600">
+              Sent via Resend. From <strong>ads for Good</strong>, reply-to <code className="rounded bg-white px-1">katoa@ads4good.com</code>. The offer code (above) renders in a styled box below your body text — leave the fields below empty to use defaults.
+            </p>
+            <label className="block text-sm">
+              <span className="block font-semibold text-neutral-800">Email subject</span>
+              <span className="block text-xs text-neutral-500">Use <code className="rounded bg-white px-1">{`{offer_code}`}</code> to insert the code. Default: <code className="rounded bg-white px-1">{`Your code: {offer_code}`}</code>.</span>
+              <input
+                type="text"
+                value={emailSubject}
+                onChange={e => setEmailSubject(e.target.value)}
+                placeholder="Your code: {offer_code}"
+                className={inputCls}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="block font-semibold text-neutral-800">Email body</span>
+              <span className="block text-xs text-neutral-500">Plain text. Newlines become paragraph breaks. The offer code + description render in a styled box below your body.</span>
+              <textarea
+                value={emailBody}
+                onChange={e => setEmailBody(e.target.value)}
+                rows={6}
+                placeholder={"Thanks for signing up — here's your code:"}
+                className={inputCls}
+              />
+            </label>
+          </div>
         )}
       </div>
 

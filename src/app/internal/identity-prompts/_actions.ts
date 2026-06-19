@@ -28,6 +28,8 @@ export type PromptFormInput = {
   post_submit_action: "message" | "button" | "redirect" | "email";
   post_submit_url: string;
   post_submit_button_label: string;
+  email_subject: string;
+  email_body: string;
   frequency: "session" | "visitor" | "every_visit";
   frequency_days: number;
   enabled: boolean;
@@ -88,6 +90,8 @@ function shapePayload(input: PromptFormInput) {
     post_submit_action: input.post_submit_action,
     post_submit_url: input.post_submit_url.trim() || null,
     post_submit_button_label: input.post_submit_button_label.trim() || "Claim it",
+    email_subject: input.email_subject.trim() || null,
+    email_body: input.email_body.trim() || null,
     frequency: input.frequency,
     frequency_days: input.frequency === "visitor" ? input.frequency_days : null,
     enabled: input.enabled,
