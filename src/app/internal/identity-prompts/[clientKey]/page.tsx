@@ -17,10 +17,13 @@ type PromptRow = {
   trigger_jsonb: { type?: string; selector?: string; delay_ms?: number; percent?: number };
   headline: string;
   body: string | null;
+  input_mode: string;
   button_label: string;
   success_message: string | null;
   offer_code: string | null;
   offer_description: string | null;
+  post_submit_action: string;
+  post_submit_url: string | null;
   frequency: string;
   frequency_days: number | null;
   enabled: boolean;
@@ -54,7 +57,7 @@ export default async function ClientPromptsPage({
     .schema("chapter_config")
     .from("identity_prompts")
     .select(
-      "id, slug, trigger_jsonb, headline, body, button_label, success_message, offer_code, offer_description, frequency, frequency_days, enabled, hit_count, submit_count, last_hit_at",
+      "id, slug, trigger_jsonb, headline, body, input_mode, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, frequency, frequency_days, enabled, hit_count, submit_count, last_hit_at",
     )
     .eq("client_key", clientKey)
     .order("created_at", { ascending: false });
@@ -99,6 +102,12 @@ export default async function ClientPromptsPage({
                       <span className="font-mono text-sm font-semibold">{p.slug}</span>
                       <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
                         {describeTrigger(p.trigger_jsonb)}
+                      </span>
+                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
+                        collect: {p.input_mode}
+                      </span>
+                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
+                        post-submit: {p.post_submit_action}
                       </span>
                       <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
                         freq: {p.frequency}

@@ -18,11 +18,16 @@ export type PromptFormInput = {
   trigger_percent?: number;
   headline: string;
   body: string;
-  input_placeholder: string;
+  input_mode: "email" | "phone" | "either";
+  email_placeholder: string;
+  phone_placeholder: string;
   button_label: string;
   success_message: string;
   offer_code: string;
   offer_description: string;
+  post_submit_action: "message" | "button" | "redirect" | "email";
+  post_submit_url: string;
+  post_submit_button_label: string;
   frequency: "session" | "visitor" | "every_visit";
   frequency_days: number;
   enabled: boolean;
@@ -50,7 +55,43 @@ function validate(input: PromptFormInput): string | null {
   if (input.trigger_type === "click_element" && !input.trigger_selector?.trim()) {
     return "click_element trigger requires a CSS selector";
   }
+  if (input.post_submit_action === "button" || input.post_submit_action === "redirect") {
+    if (!input.post_submit_url.trim()) {
+      return `${input.post_submit_action} post-submit action requires a URL`;
+    }
+    if (!/^https?:\/\//i.test(input.post_submit_url.trim())) {
+      return "post-submit URL must start with http:// or https://";
+    }
+  }
+  if (input.post_submit_action === "email" && input.input_mode === "phone") {
+    return "email post-submit action requires the prompt to collect email (input mode must be Email or Either)";
+  }
+  if (input.post_submit_action === "email" && !input.offer_code.trim()) {
+    return "email post-submit action requires an offer code (it's what the email contains)";
+  }
   return null;
+}
+
+function shapePayload(input: PromptFormInput) {
+  return {
+    slug: input.slug,
+    trigger_jsonb: buildTriggerJsonb(input),
+    headline: input.headline.trim(),
+    body: input.body.trim() || null,
+    input_mode: input.input_mode,
+    email_placeholder: input.email_placeholder.trim() || "you@email.com",
+    phone_placeholder: input.phone_placeholder.trim() || "(555) 555-5555",
+    button_label: input.button_label.trim() || "Submit",
+    success_message: input.success_message.trim() || "Thanks!",
+    offer_code: input.offer_code.trim() || null,
+    offer_description: input.offer_description.trim() || null,
+    post_submit_action: input.post_submit_action,
+    post_submit_url: input.post_submit_url.trim() || null,
+    post_submit_button_label: input.post_submit_button_label.trim() || "Claim it",
+    frequency: input.frequency,
+    frequency_days: input.frequency === "visitor" ? input.frequency_days : null,
+    enabled: input.enabled,
+  };
 }
 
 export async function createPrompt(input: PromptFormInput): Promise<Result> {
@@ -60,21 +101,7 @@ export async function createPrompt(input: PromptFormInput): Promise<Result> {
   const { error } = await supabase
     .schema("chapter_config")
     .from("identity_prompts")
-    .insert({
-      client_key: input.client_key,
-      slug: input.slug,
-      trigger_jsonb: buildTriggerJsonb(input),
-      headline: input.headline.trim(),
-      body: input.body.trim() || null,
-      input_placeholder: input.input_placeholder.trim() || "you@email.com",
-      button_label: input.button_label.trim() || "Submit",
-      success_message: input.success_message.trim() || "Thanks!",
-      offer_code: input.offer_code.trim() || null,
-      offer_description: input.offer_description.trim() || null,
-      frequency: input.frequency,
-      frequency_days: input.frequency === "visitor" ? input.frequency_days : null,
-      enabled: input.enabled,
-    });
+    .insert({ client_key: input.client_key, ...shapePayload(input) });
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/internal/identity-prompts/${input.client_key}`);
@@ -89,21 +116,7 @@ export async function updatePrompt(id: string, input: PromptFormInput): Promise<
   const { error } = await supabase
     .schema("chapter_config")
     .from("identity_prompts")
-    .update({
-      slug: input.slug,
-      trigger_jsonb: buildTriggerJsonb(input),
-      headline: input.headline.trim(),
-      body: input.body.trim() || null,
-      input_placeholder: input.input_placeholder.trim() || "you@email.com",
-      button_label: input.button_label.trim() || "Submit",
-      success_message: input.success_message.trim() || "Thanks!",
-      offer_code: input.offer_code.trim() || null,
-      offer_description: input.offer_description.trim() || null,
-      frequency: input.frequency,
-      frequency_days: input.frequency === "visitor" ? input.frequency_days : null,
-      enabled: input.enabled,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ ...shapePayload(input), updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
 

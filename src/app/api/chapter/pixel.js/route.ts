@@ -468,6 +468,32 @@ setInterval(function () {
     });
   }
 
+  // E.164 normalization: strip non-digits, default to +1 for 10-digit US numbers.
+  function chapterNormalizePhone(raw) {
+    if (!raw) return null;
+    var digits = String(raw).replace(/[^0-9]/g, "");
+    if (!digits) return null;
+    if (digits.length === 10) return "+1" + digits;
+    if (digits.length === 11 && digits[0] === "1") return "+" + digits;
+    if (digits.length >= 10 && digits.length <= 15) return "+" + digits;
+    return null;
+  }
+
+  function chapterValidEmail(email) {
+    return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(email).trim());
+  }
+
+  function chapterHashPhone(phone) {
+    if (!phone || !crypto || !crypto.subtle) return Promise.resolve(null);
+    var normalized = chapterNormalizePhone(phone);
+    if (!normalized) return Promise.resolve(null);
+    var data = new TextEncoder().encode(normalized);
+    return crypto.subtle.digest("SHA-256", data).then(function (buf) {
+      var arr = Array.from(new Uint8Array(buf));
+      return arr.map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+    });
+  }
+
   function chapterFrequencyKey(slug) { return "chapter_prompt_" + slug; }
 
   function chapterPromptShownThisSession(slug) {
@@ -515,8 +541,13 @@ setInterval(function () {
       ".chapter-prompt-close{position:absolute;top:8px;right:12px;background:transparent;border:0;font-size:22px;cursor:pointer;color:#888;line-height:1;padding:4px 8px;}",
       ".chapter-prompt-headline{font-size:18px;font-weight:600;margin:0 0 8px;color:#1F2D43;}",
       ".chapter-prompt-body{font-size:14px;color:#5C6B82;margin:0 0 16px;line-height:1.5;}",
-      ".chapter-prompt-input{width:100%;padding:10px 12px;border:1px solid #E5DDC9;border-radius:8px;font-size:14px;box-sizing:border-box;outline:none;}",
+      ".chapter-prompt-field-label{display:block;font-size:11px;font-weight:600;color:#5C6B82;margin:0 0 4px;text-transform:uppercase;letter-spacing:0.04em;}",
+      ".chapter-prompt-input{width:100%;padding:10px 12px;border:1px solid #C7BFAA;border-radius:8px;font-size:14px;color:#1F2D43;background:#fff;box-sizing:border-box;outline:none;margin-bottom:10px;}",
+      ".chapter-prompt-input::placeholder{color:#8B95A6;opacity:1;}",
       ".chapter-prompt-input:focus{border-color:#E36410;}",
+      ".chapter-prompt-error{font-size:12px;color:#B91C1C;margin:-4px 0 8px;}",
+      ".chapter-prompt-link-btn{display:inline-block;margin-top:12px;padding:10px 16px;background:#E36410;color:#fff;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;text-align:center;}",
+      ".chapter-prompt-link-btn:hover{background:#C9550B;}",
       ".chapter-prompt-button{margin-top:12px;width:100%;padding:10px;background:#E36410;color:#fff;border:0;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;}",
       ".chapter-prompt-button:hover{background:#C9550B;}",
       ".chapter-prompt-button:disabled{opacity:.5;cursor:default;}",
@@ -530,6 +561,9 @@ setInterval(function () {
 
   function chapterRenderPrompt(prompt) {
     chapterInjectPromptStyles();
+    var inputMode = prompt.input_mode || "email";
+    var postAction = prompt.post_submit_action || "message";
+
     var backdrop = document.createElement("div");
     backdrop.className = "chapter-prompt-backdrop";
     var card = document.createElement("div");
@@ -549,12 +583,53 @@ setInterval(function () {
     body.className = "chapter-prompt-body";
     body.textContent = prompt.body || "";
 
-    var input = document.createElement("input");
-    input.type = "email";
-    input.className = "chapter-prompt-input";
-    input.placeholder = prompt.input_placeholder || "you@email.com";
-    input.required = true;
-    input.autocomplete = "email";
+    var emailInput = null, phoneInput = null;
+    if (inputMode === "email" || inputMode === "either") {
+      if (inputMode === "either") {
+        var emailLabel = document.createElement("label");
+        emailLabel.className = "chapter-prompt-field-label";
+        emailLabel.textContent = "Email";
+        var emailWrap = document.createElement("div");
+        emailWrap.appendChild(emailLabel);
+        emailInput = document.createElement("input");
+        emailInput.type = "email";
+        emailInput.className = "chapter-prompt-input";
+        emailInput.placeholder = prompt.email_placeholder || "you@email.com";
+        emailInput.autocomplete = "email";
+        emailWrap.appendChild(emailInput);
+      } else {
+        emailInput = document.createElement("input");
+        emailInput.type = "email";
+        emailInput.className = "chapter-prompt-input";
+        emailInput.placeholder = prompt.email_placeholder || "you@email.com";
+        emailInput.autocomplete = "email";
+      }
+    }
+    if (inputMode === "phone" || inputMode === "either") {
+      if (inputMode === "either") {
+        var phoneLabel = document.createElement("label");
+        phoneLabel.className = "chapter-prompt-field-label";
+        phoneLabel.textContent = "Phone";
+        var phoneWrap = document.createElement("div");
+        phoneWrap.appendChild(phoneLabel);
+        phoneInput = document.createElement("input");
+        phoneInput.type = "tel";
+        phoneInput.className = "chapter-prompt-input";
+        phoneInput.placeholder = prompt.phone_placeholder || "(555) 555-5555";
+        phoneInput.autocomplete = "tel";
+        phoneWrap.appendChild(phoneInput);
+      } else {
+        phoneInput = document.createElement("input");
+        phoneInput.type = "tel";
+        phoneInput.className = "chapter-prompt-input";
+        phoneInput.placeholder = prompt.phone_placeholder || "(555) 555-5555";
+        phoneInput.autocomplete = "tel";
+      }
+    }
+
+    var errorEl = document.createElement("p");
+    errorEl.className = "chapter-prompt-error";
+    errorEl.style.display = "none";
 
     var button = document.createElement("button");
     button.type = "submit";
@@ -564,7 +639,14 @@ setInterval(function () {
     var form = document.createElement("form");
     form.appendChild(headline);
     if (prompt.body) form.appendChild(body);
-    form.appendChild(input);
+    if (inputMode === "either") {
+      if (emailWrap) form.appendChild(emailWrap);
+      if (phoneWrap) form.appendChild(phoneWrap);
+    } else {
+      if (emailInput) form.appendChild(emailInput);
+      if (phoneInput) form.appendChild(phoneInput);
+    }
+    form.appendChild(errorEl);
     form.appendChild(button);
 
     card.appendChild(closeBtn);
@@ -583,48 +665,127 @@ setInterval(function () {
     closeBtn.addEventListener("click", function () { dismiss("close_button"); });
     backdrop.addEventListener("click", function (e) { if (e.target === backdrop) dismiss("backdrop_click"); });
 
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.display = "block";
+    }
+
     form.addEventListener("submit", function (e) {
       e.preventDefault();
-      var email = input.value.trim();
-      if (!email) return;
+      var emailVal = emailInput ? emailInput.value.trim() : "";
+      var phoneVal = phoneInput ? phoneInput.value.trim() : "";
+
+      var hasEmail = emailVal && chapterValidEmail(emailVal);
+      var hasPhone = phoneVal && chapterNormalizePhone(phoneVal);
+
+      if (inputMode === "email" && !hasEmail) return showError("Please enter a valid email.");
+      if (inputMode === "phone" && !hasPhone) return showError("Please enter a valid phone number.");
+      if (inputMode === "either" && !hasEmail && !hasPhone) {
+        return showError("Please enter an email or phone number.");
+      }
+      if (inputMode === "either" && emailVal && !hasEmail) return showError("That email doesn't look right.");
+      if (inputMode === "either" && phoneVal && !hasPhone) return showError("That phone number doesn't look right.");
+
+      // Email-send post-action requires an email address.
+      if (postAction === "email" && !hasEmail) {
+        return showError("This prompt sends a code to your email — please enter an email address.");
+      }
+
+      errorEl.style.display = "none";
       button.disabled = true;
       button.textContent = "Submitting…";
 
-      chapterHashEmail(email).then(function (hash) {
-        if (hash) {
+      var hashTasks = [];
+      if (hasEmail) hashTasks.push(chapterHashEmail(emailVal).then(function (h) { return { type: "email", hash: h }; }));
+      if (hasPhone) hashTasks.push(chapterHashPhone(phoneVal).then(function (h) { return { type: "phone", hash: h }; }));
+
+      Promise.all(hashTasks).then(function (results) {
+        // Identity stitch: email_sha256 preferred (more stable cross-platform).
+        // Phone identity also fires when present so /api/purchase Phase 3.5 can
+        // alias them later.
+        results.forEach(function (r) {
+          if (!r.hash) return;
+          var key = r.type === "email" ? "email_sha256:" + r.hash : "phone_sha256:" + r.hash;
           api.identify({
-            identity_key: "email_sha256:" + hash,
+            identity_key: key,
             traits: { source: "identity_prompt", prompt_slug: prompt.slug }
           });
-        }
+        });
         api.track("identity_prompt_submitted", { prompt_slug: prompt.slug });
 
-        // Swap to success state — keeps the modal open so the offer is read.
-        while (card.firstChild) card.removeChild(card.firstChild);
-        card.appendChild(closeBtn);
-
-        var successMsg = document.createElement("p");
-        successMsg.className = "chapter-prompt-success-msg";
-        successMsg.textContent = prompt.success_message || "Thanks!";
-        card.appendChild(successMsg);
-
-        if (prompt.offer_code) {
-          var offer = document.createElement("div");
-          offer.className = "chapter-prompt-offer";
-          var code = document.createElement("div");
-          code.className = "chapter-prompt-offer-code";
-          code.textContent = prompt.offer_code;
-          offer.appendChild(code);
-          if (prompt.offer_description) {
-            var desc = document.createElement("div");
-            desc.className = "chapter-prompt-offer-desc";
-            desc.textContent = prompt.offer_description;
-            offer.appendChild(desc);
+        // Dispatch post-submit action.
+        if (postAction === "redirect") {
+          var url = prompt.post_submit_url;
+          if (url) {
+            window.location.href = url;
+            return;
           }
-          card.appendChild(offer);
         }
+
+        if (postAction === "email" && hasEmail) {
+          chapterSendPromptEmail(prompt.slug, emailVal);
+          // Fall through to success state so user sees confirmation.
+        }
+
+        renderSuccessState(prompt, postAction);
       });
     });
+
+    function renderSuccessState(prompt, action) {
+      while (card.firstChild) card.removeChild(card.firstChild);
+      card.appendChild(closeBtn);
+
+      var successMsg = document.createElement("p");
+      successMsg.className = "chapter-prompt-success-msg";
+      successMsg.textContent = prompt.success_message || "Thanks!";
+      card.appendChild(successMsg);
+
+      // 'button' action: show CTA linking to the configured URL.
+      if (action === "button" && prompt.post_submit_url) {
+        var linkBtn = document.createElement("a");
+        linkBtn.href = prompt.post_submit_url;
+        linkBtn.className = "chapter-prompt-link-btn";
+        linkBtn.textContent = prompt.post_submit_button_label || "Claim it";
+        // Honor target=_self by default so it replaces the current page.
+        card.appendChild(linkBtn);
+        return;
+      }
+
+      // 'message' action (or fallback): show the offer in the modal.
+      // 'email' action: also show the offer here as confirmation of what was sent.
+      if (prompt.offer_code) {
+        var offer = document.createElement("div");
+        offer.className = "chapter-prompt-offer";
+        var code = document.createElement("div");
+        code.className = "chapter-prompt-offer-code";
+        code.textContent = prompt.offer_code;
+        offer.appendChild(code);
+        if (prompt.offer_description) {
+          var desc = document.createElement("div");
+          desc.className = "chapter-prompt-offer-desc";
+          desc.textContent = prompt.offer_description;
+          offer.appendChild(desc);
+        }
+        card.appendChild(offer);
+      }
+    }
+  }
+
+  function chapterSendPromptEmail(slug, recipient) {
+    var apiOrigin = getApiOrigin() || "https://ads4good.com";
+    var url = new URL("/api/chapter/identity-prompt-email", apiOrigin);
+    try {
+      fetch(url.toString(), {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_key: clientKey,
+          prompt_slug: slug,
+          recipient: recipient,
+        }),
+      }).catch(function () { /* fire-and-forget */ });
+    } catch (e) { /* noop */ }
   }
 
   function chapterRegisterClickElementTrigger(prompt) {

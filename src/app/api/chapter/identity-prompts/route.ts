@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("identity_prompts")
-    .select("id, slug, trigger_jsonb, headline, body, input_placeholder, button_label, success_message, offer_code, offer_description, frequency, frequency_days")
+    .select("id, slug, trigger_jsonb, headline, body, input_mode, email_placeholder, phone_placeholder, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, post_submit_button_label, frequency, frequency_days")
     .eq("client_key", clientKey)
     .eq("enabled", true);
 
