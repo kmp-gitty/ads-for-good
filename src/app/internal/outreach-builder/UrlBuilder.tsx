@@ -6,6 +6,11 @@ import {
   type ProspectOption,
 } from "./_actions";
 
+export type ClientOption = {
+  client_key: string;
+  storefront_domain: string | null;
+};
+
 const UTM_SOURCES = [
   { value: "cold_email", label: "Cold email" },
   { value: "linkedin", label: "LinkedIn" },
@@ -31,16 +36,26 @@ const QUICK_DESTINATIONS = [
   { value: "https://ads4good.com/contact", label: "Contact" },
 ];
 
+// Slug used when the operator wants a generic 1P link without a configured
+// redirect rule. The redirect handler falls back to ?to= when no rule matches
+// this slug, so identity stitching + click logging still work without rule setup.
+const GENERIC_SLUG = "go";
+
 export default function UrlBuilder({
-  slugs,
-  clientKey,
+  clients,
+  slugsByClient,
+  defaultClientKey,
   redirectOrigin,
 }: {
-  slugs: { slug: string; description: string | null }[];
-  clientKey: string;
+  clients: ClientOption[];
+  slugsByClient: Record<string, { slug: string; description: string | null }[]>;
+  defaultClientKey: string;
   redirectOrigin: string;
 }) {
-  const [slug, setSlug] = useState(slugs[0]?.slug || "outreach");
+  const [clientKey, setClientKey] = useState(defaultClientKey);
+  const availableSlugs = slugsByClient[clientKey] ?? [];
+  // "" means generic 1P link — no slug-rule matching, just identity + UTM tracking.
+  const [slug, setSlug] = useState<string>("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ProspectOption[]>([]);
   const [searching, setSearching] = useState(false);
@@ -51,6 +66,11 @@ export default function UrlBuilder({
   const [utmContent, setUtmContent] = useState("");
   const [copied, setCopied] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // When the client switches, reset the slug to generic (since rules don't carry across clients)
+  useEffect(() => {
+    setSlug("");
+  }, [clientKey]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -70,8 +90,12 @@ export default function UrlBuilder({
   }, [query, prospect]);
 
   // Build the final URL. Encoding the `to` param keeps query strings inside
-  // the destination URL from breaking the redirect's own parser.
+  // the destination URL from breaking the redirect's own parser. Generic links
+  // use the GENERIC_SLUG fallback — the redirect handler treats unknown slugs
+  // as catch-all (no rule match → use ?to= directly), so identity stitching +
+  // click logging still work.
   const finalUrl = useMemo(() => {
+    const effectiveSlug = slug.trim() || GENERIC_SLUG;
     const params = new URLSearchParams();
     if (destination) params.set("to", destination);
     if (prospect?.prospect_key) params.set("rid", prospect.prospect_key);
@@ -79,7 +103,7 @@ export default function UrlBuilder({
     if (utmCampaign.trim()) params.set("utm_campaign", utmCampaign.trim());
     if (utmContent.trim()) params.set("utm_content", utmContent.trim());
     const qs = params.toString();
-    return `${redirectOrigin}/r/${clientKey}/${slug}${qs ? `?${qs}` : ""}`;
+    return `${redirectOrigin}/r/${clientKey}/${effectiveSlug}${qs ? `?${qs}` : ""}`;
   }, [slug, destination, prospect, utmSource, utmCampaign, utmContent, clientKey, redirectOrigin]);
 
   async function copyUrl() {
@@ -104,22 +128,41 @@ export default function UrlBuilder({
         </p>
 
         <div className="mt-6 grid gap-5">
-          <Field label="Slug" hint="Which redirect rule to fire">
+          <Field label="Client" required hint="Which client's 1P redirect domain to use">
+            <select
+              value={clientKey}
+              onChange={(e) => setClientKey(e.target.value)}
+              className={inputCls}
+            >
+              {clients.map((c) => (
+                <option key={c.client_key} value={c.client_key}>
+                  {c.client_key}
+                  {c.storefront_domain ? ` — ${c.storefront_domain}` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field
+            label="Slug"
+            hint={
+              availableSlugs.length === 0
+                ? `No redirect rules configured — generic 1P link will be used (slug: ${GENERIC_SLUG})`
+                : "Pick a configured rule, or leave on Generic for no rule matching"
+            }
+          >
             <select
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               className={inputCls}
             >
-              {slugs.length === 0 ? (
-                <option value="outreach">outreach (no rules configured)</option>
-              ) : (
-                slugs.map((s) => (
-                  <option key={s.slug} value={s.slug}>
-                    {s.slug}
-                    {s.description ? ` — ${s.description.slice(0, 60)}` : ""}
-                  </option>
-                ))
-              )}
+              <option value="">— Generic 1P link (no rule, slug: {GENERIC_SLUG}) —</option>
+              {availableSlugs.map((s) => (
+                <option key={s.slug} value={s.slug}>
+                  {s.slug}
+                  {s.description ? ` — ${s.description.slice(0, 60)}` : ""}
+                </option>
+              ))}
             </select>
           </Field>
 

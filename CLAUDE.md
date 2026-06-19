@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: June 19, 2026 (end of day — Sprint 9 Phase 1A shipped)
+> Last updated: June 19, 2026 (late evening — Sprint 9 Phase 1B + Phase 2 + Sprint 10 tenants admin + security audit + Moment Identity v1.5 + 3-layer prompt defenses + attack alert + CRM producer v1 + inquiry email-back)
 
 ---
 
@@ -191,6 +191,149 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ---
 
 ## ✅ Completed Fixes (as of June 19, 2026)
+
+### Outreach URL Builder — generic 1P link + multi-client picker (June 19, 2026 late evening)
+- **Two ergonomic upgrades** to `/internal/outreach-builder` driven by the v2 CRM-interactions roadmap (wrapping external CTAs in 1P redirect URLs becomes the default workflow):
+  1. **Client picker** at the top of the form. Pulls from `chapter_config.clients` (all of them, with storefront_domain in the option label for clarity). Default = `adsforgood_prod` (the agency tenant). Switching client rebuilds the slug dropdown from that client's `redirect_rules`. Operator can build outreach URLs for any tenant's 1P redirect — not hardcoded to adsforgood anymore.
+  2. **Generic 1P link option** in the slug dropdown — `— Generic 1P link (no rule, slug: go) —`. When picked (or when no rules exist for the selected client), the builder uses a hardcoded fallback slug (`go`) that doesn't need a configured rule. The redirect route falls back to `?to=` when no rule matches, so identity stitching + click logging still work without rule setup. **Pattern enables wrapping any URL in a 1P link with full UTM + prospect_key tracking, even without going through `/internal/redirect-rules` first.**
+- **Files:** modified [page.tsx](src/app/internal/outreach-builder/page.tsx) (fetch all clients + slugs grouped by client), [UrlBuilder.tsx](src/app/internal/outreach-builder/UrlBuilder.tsx) (client dropdown + generic-slug option, client-switch resets slug to generic).
+
+### crm.interactions producer v1 — site visits + inquiries (June 19, 2026 late evening)
+- **Closes the producer-not-yet-fed gap** noted in the CRM↔Chapter integration architecture (June 18). `crm.interactions` table existed since the CRM schema was defined; nothing wrote to it until now.
+- **New cron at `/api/internal/cron/crm-interactions-producer`** scheduled 06:30 UTC nightly (after observations at 05:00, connections-snapshots at 05:30). Two producers in one route, each idempotent + LIMIT 500 per source per run:
+  1. **Site visits.** Joins `crm.prospects.email_sha256` → `chapter_identity.identity_links.identity_key` (matches `email_sha256:<hash>` canonical) → `chapter_journey.journeys`. One interaction per (prospect, journey). `type='site_visit'`, `source='chapter_pixel'`. Summary derived from `first_touch->>'utm_source'` → `first_touch->>'referrer'` → "Direct visit" fallback. Metadata blob carries `journey_id`, `first_touch`, `country`, `city`.
+  2. **Inquiry submissions.** Joins `crm.prospects.email` (lowercased) → `chapter_inquiries.threads.created_by_email`. One interaction per (prospect, thread). `type='inquiry_submitted'`, `source='chapter_inquiry'`. Metadata: `thread_id`, `client_key`, `category`.
+- **Dedup architecture:** partial UNIQUE indexes on `crm.interactions` over `(prospect_id, metadata->>'journey_id')` and `(prospect_id, metadata->>'thread_id')`. `ON CONFLICT ... WHERE` clauses echo the index WHERE filters so Postgres can find them (the gotcha: partial indexes require matching WHERE on the ON CONFLICT).
+- **Schema column gotcha caught + locked again:** the journey table doesn't have a top-level `utm` or `first_referrer` column — those live inside the `first_touch jsonb`. Initially guessed the columns wrong; got an immediate 42703. **Same "never guess columns" rule that's bit us multiple times now.** Reference: `feedback_never_guess_external_identifiers.md`.
+- **Backfill ran during ship:** 1 site visit landed for the test prospect (katoa.ahau@gmail.com → ads4good.com/for-businesses visit from April 2). Confirms the cross-schema join works end-to-end. Future signals flow via the nightly cron.
+- **v2 roadmap (locked during this session):**
+  - **Direct API connection** to GBP / Yelp / review platforms — gives aggregate metrics (impressions, profile views, calls) but no per-visitor identity.
+  - **1P redirect wrapping** on external CTAs (`ads4good.com/r/adsforgood_prod/gbp-call`, etc.) — wraps every external link so each click is captured with device + geo + referrer + identity cookie set at click time. For known-prospect contexts (outreach emails/SMS/LinkedIn DMs) include `?rid=<prospect_key>` for identity stitching BEFORE landing. For anonymous discovery (GBP click via Google), no identity at click but historical session attribution can stitch retroactively if the visitor later identifies. This slots into the existing Tier 1 redirect infrastructure (Sprint 4) — same rule engine, no new architecture.
+
+### Identity-prompt email attack alert + dedicated Gchat space (June 19, 2026 late evening)
+- **Closes the warning-system gap on the 3-layer defenses.** Defenses already write rejections to `chapter_audit.api_auth_attempts`; this turns that data into actionable Gchat pings.
+- **New cron at `/api/internal/monitoring/prompt-attack-alert`** scheduled `*/15 * * * *` in vercel.json. Queries last 15 min of audit table; filters to attack-shaped failure reasons (`honeypot_filled`, `session_*`, `rate_limited`, `invalid_json`); ignores legit user errors (`invalid_email`, `missing_required_fields`) so typo-prone humans don't trigger.
+- **Threshold-based** — fires when attack-shaped rejection count crosses `CHAPTER_ATTACK_ALERT_THRESHOLD` (default 10). Below-threshold runs return 200 silently, so healthy state never spams the channel.
+- **Routing:** `CHAPTER_SECURITY_GCHAT_WEBHOOK_URL` env var points at the dedicated "Chapter Attack Alerts" Gchat space (Katoa created during this session). Falls back to operational webhook if not set so the alert ships safely on first deploy.
+- **Alert message includes:** count + window + threshold (header), breakdown by `failure_reason` (which defense is firing), top 5 targeted client_keys (which tenants are being probed), top 5 offending IP hashes (truncated to 12 chars + ellipsis — correlate but don't fully identify), investigation SQL query for the audit table.
+- **E2E validated:** inserted 15 synthetic test rows into `api_auth_attempts` (13 attack-shaped, 2 legit user errors) → curled the cron route → JSON returned `attack_count: 13, total_rejections: 15, alerted: true` → Gchat ping landed in the Chapter Attack Alerts space → cleanup query removed all 15 test rows. Validation marker on test rows was `user_agent_snippet='CHAPTER_TEST_ROW_REMOVE_ME'`.
+- **Operator setup (one-time):** add `CHAPTER_SECURITY_GCHAT_WEBHOOK_URL` to Vercel env vars (Production + Preview). Optionally tune `CHAPTER_ATTACK_ALERT_THRESHOLD` for sensitivity (default 10).
+- **Vercel cost is negligible** — 96 invocations/day × ~100ms × 128MB = 0.011 GB-hours/month against 1,000 included on Pro. Fractions of a penny.
+
+### Identity-prompt email 3-layer defenses (June 19, 2026 late evening)
+- **Closes the spam-amplification surface** that previously let any caller POST to `/api/chapter/identity-prompt-email` with any recipient and trigger an outbound branded email. Designed for 20-100 client scale, not just current small surface.
+- **Layer 1 — Honeypot field.** Invisible `<input name="hp_field">` in the modal form (off-screen via `position:-9999px` + `aria-hidden` + `tabindex=-1`). Real humans never see or fill it. Server rejects on non-empty value, no DB hit. Catches dumb bots that fill every input.
+- **Layer 2 — HMAC session token.** New helper at [src/app/lib/auth/prompt-session.ts](src/app/lib/auth/prompt-session.ts) with `signPromptSession(client_key)` + `verifyPromptSession(token, expected_client_key)`. Format: `base64url(payload).base64url(hmac)` where payload = `{client_key, exp}`. TTL 30 min. Constant-time signature comparison via `timingSafeEqual`. Minted by `/api/chapter/identity-prompts` (GET) — pixel stores in module-level var, includes in email-send POST body. Direct-POST attackers without token (or with forged) → 401 `invalid_session`. **Fail-closed** if `CHAPTER_PROMPT_SECRET` env var missing (returns 503 `service_misconfigured` — no sneaking past via missing-config).
+- **Layer 3 — Per-IP rate limit.** In-memory `Map<ip, {count, reset_at}>` in route module. 10 sends per IP per hour. Hourly reset per IP. Bounded to 5000 IPs max with periodic eviction to prevent unbounded memory growth on long-running instances. At multi-Vercel-instance scale this becomes per-instance (still useful as bulk attackers would have to spray across instances); upgrade to Upstash KV when first instance-spray abuse appears.
+- **Every rejection writes to `chapter_audit.api_auth_attempts`** via the existing `logAuthAttempt` helper. `failure_reason` field carries the specific defense that blocked: `honeypot_filled` / `session_malformed` / `session_bad_signature` / `session_expired` / `session_wrong_client_key` / `session_missing_secret` / `rate_limited` / `invalid_json`. Successful sends also log so the alert system has baseline. This is the structured data the attack alert queries.
+- **HMAC explicitly rejected as a 4th layer** for v1: to be load-bearing, HMAC needs a secret the attacker can't trivially extract. Per-visitor secrets minted server-side → basically just fancier cookie binding. Per-client secrets embedded in pixel → attacker reads the script. The {honeypot + cookie binding + rate limit} combo covers 99% of the real attack space without HMAC's per-client secret distribution complexity.
+- **Cookie binding swapped for token-in-body** during build — sidesteps the cross-origin `SameSite=None` + `credentials: include` CORS dance entirely. Token rides in the JSON response from `/api/chapter/identity-prompts` and goes back in the email-send POST body. Works identically on 1P and 3P installs.
+- **Pixel modifications:** honeypot input added to modal form (CSS-hidden), `chapterPromptSessionToken` module-level var captures token from prompts response, `chapterSendPromptEmail` POST body includes `session_token` + `hp_field`.
+- **Operator deploy prereq (one-time):** `CHAPTER_PROMPT_SECRET` env var in Vercel (Production + Preview). Generate via `openssl rand -hex 32 | tr -d '\n' | pbcopy` (clean copy avoids the newline-embedding trap that's bit us repeatedly with `pbcopy` from Vercel UI).
+- **Files:** new [src/app/lib/auth/prompt-session.ts](src/app/lib/auth/prompt-session.ts); modified [/api/chapter/identity-prompts/route.ts](src/app/api/chapter/identity-prompts/route.ts) (mint token, drop CDN cache to no-store because token per-request); modified [/api/chapter/identity-prompt-email/route.ts](src/app/api/chapter/identity-prompt-email/route.ts) (all 3 defenses + audit logging via `reject()` helper); modified [pixel.js](src/app/api/chapter/pixel.js/route.ts) (honeypot input + token capture + token in POST).
+
+### Inquiry staff-reply email notification (June 19, 2026 late evening)
+- **Closes the inquiry loop** in the opposite direction from the existing Gchat pings. Previously: clients/agencies who submitted inquiries had to manually poll `/chapter/<key>/inbox` to discover Katoa's replies. Now: they get an email within seconds of the chapter_staff reply landing.
+- **Trigger:** in `replyToInquiry` server action ([src/app/lib/inquiries/actions.ts](src/app/lib/inquiries/actions.ts)), when `user.role === 'chapter_staff'`, fire-and-forget `notifyClientOfStaffReply` after the DB insert succeeds.
+- **Email shape (Resend, mirrors `/api/inquiry` contact-form auto-reply):**
+  - From: `ads for Good <${FROM_EMAIL}>`
+  - **Reply-to: `katoa@ads4good.com`** so client hitting reply lands in operator inbox, not into some void/staff-role address
+  - Subject: `Chapter team replied: <thread.subject>`
+  - Body: short header + reply preview (up to 600 chars) + CTA button linking back to `/chapter/<client_key>/inbox?thread=<id>`
+  - Cc: thread's `cc_emails` array (if any)
+- **Suppressions (by design):**
+  - Chapter_staff opening their own thread → no self-notify (handled by the outer `if user.role === 'chapter_staff'` guard)
+  - Chapter_staff replying on a thread they themselves created → defensive check on `replier_email === created_by_email` (catches the edge case where chapter_staff opened a test thread)
+  - Client replies don't trigger this path (existing Gchat ping covers operator notification)
+- **Fire-and-forget contract preserved:** Resend latency or failure never blocks the reply action. Graceful no-op + warn log if `RESEND_API_KEY` or `FROM_EMAIL` missing.
+
+### chapter_config security audit + default privileges (June 19, 2026 late evening)
+- **Defensive sweep** across `chapter_config.*` + adjacent schemas after the gap-pattern bit us 3 times (crm June 18, identity_prompts earlier today, users + clients during Sprint 10 build today). Goal: prevent the next bite by closing remaining gaps AND setting default privileges so future tables inherit correct grants automatically.
+- **6 chapter_config grant fixes applied (would have failed Sprint 10 if shipped without):**
+  - `chapter_config.users` — SELECT-only → full CRUD. Revoke/unrevoke actions in `/internal/tenants` would have hit permission denied.
+  - `chapter_config.clients` — SELECT-only → full CRUD. `assignClientToAgency` action would have hit permission denied.
+  - `chapter_config.email_campaigns` / `email_engagement_events` — SELECT-only → full CRUD (defensive; no current UI write path, but the scripts pattern already exists).
+  - `chapter_config.square_oauth_tokens` / `square_webhook_secrets` — SELECT-only → full CRUD (defensive; for future onboarding UI).
+- **Default privileges set on 3 schemas** so the bite-pattern can't repeat:
+  - `chapter_config` — `ALTER DEFAULT PRIVILEGES IN SCHEMA chapter_config GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO service_role` + sequences. Any new table added auto-gets full CRUD.
+  - `chapter_observations` — same. Schema had NO default privileges set at all; new observations engine extensions would have silently SELECT-only.
+  - `chapter_audit` — `ALTER DEFAULT PRIVILEGES ... GRANT SELECT, INSERT ON TABLES`. Append-only by design — audit logs shouldn't be editable. New audit tables auto-inherit append-only semantics.
+- **Intentionally NOT changed:**
+  - `chapter_audit.*` existing tables stay SELECT+INSERT (append-only correct).
+  - `chapter_reporting.*` snapshots stay SELECT-only via service_role; cron writes via direct postgres-js connection (postgres role) so service_role write grants would be unused.
+  - `chapter_config.client_secrets` / `shopify_webhook_secrets` / `tracking_ignore_list` — partial (no DELETE) but these are revoke-via-column tables. We never delete. Correct as-is.
+  - RLS-disabled tables stay RLS-disabled. Only service_role + chapter_app + per-client roles access them via API; per-client roles only have grants on `chapter_ingest/identity/journey` (which DO have enforced RLS policies via Fix #26 Part 2). Belt-on-suspenders RLS without enforcement adds no security.
+- **Architectural lock-in:** for the 3 schemas where defaults are set, new tables created in DDL migrations automatically inherit service_role write grants. The pattern that bit us 3 times (crm.* June 18, identity_prompts June 19 morning, users+clients June 19 afternoon during Sprint 10) is now closed at the default-privilege level. Should be added to `chapter_reporting` only if/when we have UI write paths for it (currently none).
+
+### Sprint 10 — Tenant admin UI at `/internal/tenants` (June 19, 2026 late evening)
+- **Replaces operator-driven SQL** for `chapter_config.{agencies, allowed_email_domains, users, clients.agency_key}`. CLAUDE.md had flagged this as Sprint 7 backlog since June 18 — operator-driven SQL was good enough for zero agencies, less so as the system scales.
+- **Single-page admin** with 4 sections (server + client component split):
+  1. **Agencies** — create form + table with client-count per agency
+  2. **Allowed login domains** — create form with role-scoped validation (mirrors the chapter_config.users CHECK constraint client-side: chapter_staff has neither scope, agency_operator requires agency_key + forbids client_key, client_employee requires client_key + forbids agency_key). Table with active/revoked filter + revoke action.
+  3. **Client → agency assignment** — dropdown per client row, inline save via `assignClientToAgency` server action.
+  4. **Users** — list with email + role + scope + last_login + status. Revoke + unrevoke actions. Show-revoked filter.
+- **Gated by `CHAPTER_DASH_TOKEN` cookie** (same middleware gate as other `/internal/*` admin surfaces). Doesn't depend on the Supabase auth path so still works for legacy-cookie operators.
+- **Auto-provisioning behavior unchanged.** This is purely a management surface — existing magic-link auto-provisioning via allowed_email_domains still works the same way. Sprint 10 just gives you a UI to set those rows instead of writing SQL.
+- **Onboarding a first EOS / agency client_employee now reduces to:** visit `/internal/tenants` → Allowed login domains section → enter domain → pick role `client_employee` → pick client from dropdown → Create rule. Any @eosfabrics.com email magic-link then auto-provisions a client_employee row scoped to eos_fabrics.
+- **Files (new):** [src/app/internal/tenants/layout.tsx](src/app/internal/tenants/layout.tsx), [page.tsx](src/app/internal/tenants/page.tsx), [TenantsBoard.tsx](src/app/internal/tenants/TenantsBoard.tsx), [_actions.ts](src/app/internal/tenants/_actions.ts).
+- **Backlog spun out of Sprint 10:** edit-in-place for existing rows (today you revoke + recreate to change a rule). Quick follow-on if needed.
+
+### Sprint 9 Phase 2 — 3 dashboard RPC snapshots > 1s (June 19, 2026 late evening)
+- **Heaviest RPCs identified via timing survey** at the start of Phase 2 (using the chained CTE clock_timestamp() pattern):
+  - `incrementality_channel_overview` — **7,768ms** cold on EOS (Lift page, Incrementality tab)
+  - `contribution_overview` — **2,580ms** (Lift page, Contribution tab)
+  - `journeys_overview_list` — **1,618ms** (Customer Journeys page, identity list)
+  - Everything else under 100ms. Other channel/journey RPCs (correlation, contribution under 30ms) intentionally left untouched per Sprint 3's "fast enough on primary" call.
+- **3 new snapshot tables** in `chapter_reporting` keyed on (client_key, default-args):
+  - `incrementality_snapshot_v1 (client_key, cohort_axis, window_days)` — 90d, cohort_axis='subscriber' default
+  - `contribution_snapshot_v1 (client_key, window_days)` — 90d default
+  - `journeys_overview_list_snapshot_v1 (client_key, window_days)` — 30d default, null filters, limit 50
+- **Tolerant window matching** in wrappers — `matchesDefaultWindow()` helper accepts the snapshot when (a) window length matches ±1 day, (b) end_ts is within last 24h. Snapshot built at 04:25 UTC; dashboard query at 14:00 UTC still hits — fresh-enough analytics windows shouldn't reject the snapshot over a few hours' age.
+- **Non-default args fall back to live RPC** unchanged. Custom date ranges, non-default cohort_axis, filtered journey queries (action/outcome filters) all bypass snapshot and hit the original RPC.
+- **Wrappers refactored:** `cachedContributionOverview` was using the `makeCachedRpc<>` factory — replaced with custom `unstable_cache` wrapper to inject snapshot-first lookup. `cachedIncrementalityChannelOverview` + `cachedJourneysList` got the same snapshot-first treatment. Cache keys bumped to `:v2` to bust stale entries from before snapshot-enabled.
+- **Refresh wired into existing `refresh-derived-snapshots` cron** at 04:25 UTC (per-client). Same route also refreshes journey_resolved_v1 + the global `refresh_attribution_tables()`. Per-client × per-snapshot loop calls `sql.unsafe(template, [client_key])` — each template upserts via `INSERT ... ON CONFLICT DO UPDATE`.
+- **Backfill via cron tonight at 04:25 UTC** (or manual curl `/api/internal/cron/refresh-derived-snapshots` with `Bearer $CRON_SECRET` to populate earlier). Until snapshots populate, the wrappers fall back to live RPC = unchanged perf.
+- **Files:** schema migration `sprint_9_phase_2_snapshots` (3 tables); modified [src/app/api/internal/cron/refresh-derived-snapshots/route.ts](src/app/api/internal/cron/refresh-derived-snapshots/route.ts) (DASHBOARD_RPC_SNAPSHOTS array + per-client loop); modified [src/app/chapter/_lib/dashboard-rpc.ts](src/app/chapter/_lib/dashboard-rpc.ts) (3 new snapshotLookup helpers + `matchesDefaultWindow` + 3 wrapper rewrites).
+- **Expected impact after backfill:** Lift page (cold) ~10s → ~1s. Customer Journeys page (cold) ~3s → ~1s. All for the default-args case the dashboard fires on first paint.
+
+### Sprint 9 Phase 1B — anchor_meta snapshot (June 19, 2026 late evening)
+- **Closes the remaining slow RPCs on the Cross-Source Influence page** that Phase 1A didn't cover. After Phase 1A: `connections_panel` was snapshot-fast but the page's 4 per-anchor RPCs still hit live RPCs for `anchor_resolve` (314ms cold) + `self_recurrence` (90ms cold). Multiply by 4 anchors loaded for the page = real ~1-2s delay on first paint.
+- **Pattern: extend snapshot architecture from panel data to anchor metadata.** Same Phase 1A philosophy: snapshot-first lookup → fall back to live RPC for non-top anchors.
+- **New table `chapter_reporting.connections_anchor_meta_snapshot_v1`** keyed on `(client_key, anchor_type, anchor_key)` with `anchor_resolve jsonb` + `self_recurrence jsonb` columns. One row per anchor per client (de-duped across direction × connection_type since meta is direction-independent).
+- **Refresh wired into existing `refresh-connections-snapshots` cron** at 05:30 UTC. After the panel-snapshot worker pool finishes, a second worker pool iterates unique anchors (extracted from the combo set with `${anchor_type}|${anchor_key}` de-dup key) and computes anchor_resolve + self_recurrence in parallel per anchor. Stores both jsonb blobs in one upsert.
+- **Snapshot-first lookup in 2 wrappers** ([dashboard-rpc.ts](src/app/chapter/_lib/dashboard-rpc.ts)): `cachedConnectionsAnchorResolve` (cache key v3 → v4) + `cachedConnectionsSelfRecurrence` (v1 → v2). Both use `extractAnchorKey()` shared helper from Phase 1A. Hit → ~30ms; miss → live RPC fallback.
+- **postgres-js type gotcha** (caught during ship): `Record<string,unknown>` returned by `to_jsonb(t)` didn't satisfy postgres-js's `JSONValue` type for `sql.json()`. Workaround: cast jsonb to text in SQL with `(to_jsonb(t))::text`, then re-cast to jsonb in the INSERT statement. Bypasses the JS-side type check while preserving the round-trip shape.
+- **MCP execute_sql timeout for backfill** — even small batches of anchor_resolve + self_recurrence calls (10 anchors) timed out at the ~30s PostgREST execute_sql ceiling. Cron route has 800s headroom and proper worker-pool parallelism so backfill flows correctly there. **Backfill awaits next nightly run at 05:30 UTC** (or operator curl on the cron route). Until populated, wrappers fall back to live RPC = unchanged perf.
+- **Files:** schema migration `sprint_9_1b_anchor_meta_snapshot`; modified [src/app/api/internal/cron/refresh-connections-snapshots/route.ts](src/app/api/internal/cron/refresh-connections-snapshots/route.ts) (Anchor type + refreshOneAnchorMeta function + second worker pool); modified [src/app/chapter/_lib/dashboard-rpc.ts](src/app/chapter/_lib/dashboard-rpc.ts) (anchorResolveSnapshotLookup + selfRecurrenceSnapshotLookup + wrapper rewrites + cache key bumps).
+
+### Moment Identity v1.5 — phone field + 5 post-submit actions + editable email + edit-in-place + selector picker (June 19, 2026, multi-feature session)
+- **Builds on Option D v1 (June 11) into a v1.5 polished primitive.** Multiple shipped iterations consolidated:
+  - **Custom email field placeholder** (column `email_placeholder`, renamed from `input_placeholder`; new `phone_placeholder` for phone-mode prompts)
+  - **Phone-or-email input mode** — operator picks `email` / `phone` / `either` chip; client-side E.164 normalization (strip non-digits, default +1 for US 10-digit, allow international 10-15 digits); SHA-256 hash via `chapterHashPhone` mirroring existing email hash path; identity stitch via `phone_sha256:<hex>` which Phase 3.5 of `/api/purchase` already supports
+  - **5 post-submit actions** (was 1: just "display message"):
+    1. `message` — display offer in modal (existing v1)
+    2. `email` — Resend email with offer code; requires offer_code; renders styled offer box in modal post-submit + in email
+    3. `email_message` — Resend email without offer (subject + body only); requires email_body; offer box suppressed everywhere
+    4. `button` — show CTA button linking to URL after submit
+    5. `redirect` — immediate `window.location.href` redirect to URL
+  - **Operator-customizable email subject + body** with `{offer_code}` token substitution in subject. Subject default `Your code: {offer_code}` for `email` action / `A message for you` for `email_message`. Body default "Thanks for signing up — here's your code:" / "Thanks for signing up!". Email HTML auto-wraps paragraphs on blank lines, `<br/>` on single newlines.
+  - **Resend integration via existing `FROM_EMAIL` env var pattern** (matches `/api/inquiry` contact-form auto-reply shape). From: `ads for Good <${FROM_EMAIL}>`, reply-to: `katoa@ads4good.com` so client hitting reply lands in operator inbox. Required: `RESEND_API_KEY` (already set from contact form work).
+  - **Edit-in-place** — new edit page at `/internal/identity-prompts/[clientKey]/[promptId]/edit`. `PromptForm.tsx` accepts optional `prompt?: ExistingPrompt` prop; all useState initializers read from prompt if provided; submit calls `updatePrompt(prompt.id, input)` vs `createPrompt(input)`. Edit link in `RowActions` next to Disable/Delete.
+  - **Dashboard copy clarifies offer code timing** — offer code/description block moved into orange callout box with helper text "Shown post-submit, depending on action below" so operators understand the offer renders AFTER submit (was confusing in v1 because the offer is rendered as success-state, not pre-submit).
+  - **Modal CSS contrast improvements** — `input` got explicit `color:#1F2D43` (was pale browser default), `::placeholder` got `color:#8B95A6` (was super faint).
+- **CDN cache lowered** on `/api/chapter/identity-prompts` from `s-maxage=300` to `s-maxage=30, stale-while-revalidate=60`. Pixel fetch changed to `cache: "no-store"`. After 3-layer defenses landed: cache dropped to `no-store` entirely on the GET (each request mints a fresh session token).
+- **CSS selector picker bookmarklet** — operator drag-target at `/internal/identity-prompts`. Bookmarklet is a 3-line `javascript:...` shim that injects `<script src="/api/internal/picker.js?t=<timestamp>">` (cache-buster so updates land without re-dragging). Picker hovers highlight elements with orange dashed outline + floating panel top-right shows the generated CSS selector. Click locks selection (Shift+hover to ignore while moving to Copy). Selector generation priority: `#id` (if unique) → `tag.class.class...` → `.class.class...` alone → `a[href="..."]` for anchors → `tag[data-*/name/role/aria-label="..."]` → `:nth-of-type()` path up to nearest ID ancestor. Always uniqueness-tested via `querySelectorAll`.
+- **React 19 bookmarklet `javascript:` sanitization gotcha** (caught during ship): React 19 silently strips `javascript:` URLs in `href` (both JSX prop AND `setAttribute` paths). Drag-to-bookmarks-bar got the React-sanitized "throw" URL instead of the real bookmarklet. **Fix:** render the `<a href>` via `dangerouslySetInnerHTML` so the browser's HTML parser writes the attribute directly (browsers don't sanitize `javascript:` in href when parsing HTML, only React does). Plus fallback details/summary with the bookmarklet URL in a textarea + Copy button + manual create-bookmark instructions, for browsers that block drag-to-bookmark for `javascript:` URLs.
+- **Picker class-collision bug** (caught during ship): picker was including its OWN `chapter-picker-hl` class in generated selectors, fooling the uniqueness check (only currently-hovered element has -hl). Fix: filter out picker classes (`chapter-picker-hl`, `chapter-picker-locked`, `chapter-picker-panel`) before generating + testing. Plus added `a[href="..."]` strategy for Tailwind-heavy sites where utility classes alone don't disambiguate.
+- **Schema additions** to `chapter_config.identity_prompts`:
+  - `input_mode text NOT NULL DEFAULT 'email' CHECK IN ('email','phone','either')`
+  - `email_placeholder text` (renamed from `input_placeholder`)
+  - `phone_placeholder text DEFAULT '(555) 555-5555'`
+  - `post_submit_action text NOT NULL DEFAULT 'message' CHECK IN ('message','button','redirect','email','email_message')`
+  - `post_submit_url text` / `post_submit_button_label text DEFAULT 'Claim it'`
+  - `email_subject text` / `email_body text`
+- **Files (new):** [/api/chapter/identity-prompt-email/route.ts](src/app/api/chapter/identity-prompt-email/route.ts) (Resend send + the 3 defenses); [/api/internal/picker.js/route.ts](src/app/api/internal/picker.js/route.ts) (CSS selector picker script); [PickerBookmarklet.tsx](src/app/internal/identity-prompts/PickerBookmarklet.tsx) (`'use client'` drag-target wrapper); [/internal/identity-prompts/[clientKey]/[promptId]/edit/page.tsx](src/app/internal/identity-prompts/[clientKey]/[promptId]/edit/page.tsx) (edit page).
+- **Files (modified):** [pixel.js](src/app/api/chapter/pixel.js/route.ts) (phone input + post-submit branching + honeypot + token in POST + Mac CSS contrast tuning); [PromptForm.tsx](src/app/internal/identity-prompts/[clientKey]/PromptForm.tsx) (5 chips + conditional fields + edit/create dual mode + helper text); [_actions.ts](src/app/internal/identity-prompts/_actions.ts) (updatePrompt action + validation expanded); [RowActions.tsx](src/app/internal/identity-prompts/[clientKey]/RowActions.tsx) (Edit link).
 
 ### Sprint 9 Phase 1A — Cross-Source Influence panel snapshot (June 19, 2026)
 - **New table `chapter_reporting.connections_panel_snapshot_v1`** pre-computes `connections_panel` results for top-N anchors of each type per client, both directions × both connection_types, for the DEFAULT 30d/30d window combo. PK on `(client_key, anchor_type, anchor_key, direction, connection_type, window_days, outcome_window_days)`. App reads snapshot first; falls back to live RPC for non-snapshot params.
