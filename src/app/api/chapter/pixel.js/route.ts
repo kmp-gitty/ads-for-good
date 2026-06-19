@@ -686,9 +686,9 @@ setInterval(function () {
       if (inputMode === "either" && emailVal && !hasEmail) return showError("That email doesn't look right.");
       if (inputMode === "either" && phoneVal && !hasPhone) return showError("That phone number doesn't look right.");
 
-      // Email-send post-action requires an email address.
-      if (postAction === "email" && !hasEmail) {
-        return showError("This prompt sends a code to your email — please enter an email address.");
+      // Email-send post-actions require an email address.
+      if ((postAction === "email" || postAction === "email_message") && !hasEmail) {
+        return showError("This prompt sends an email — please enter a valid email address.");
       }
 
       errorEl.style.display = "none";
@@ -722,7 +722,7 @@ setInterval(function () {
           }
         }
 
-        if (postAction === "email" && hasEmail) {
+        if ((postAction === "email" || postAction === "email_message") && hasEmail) {
           chapterSendPromptEmail(prompt.slug, emailVal);
           // Fall through to success state so user sees confirmation.
         }
@@ -750,6 +750,10 @@ setInterval(function () {
         card.appendChild(linkBtn);
         return;
       }
+
+      // 'email_message' action: just the success message, no offer box
+      // (operator's email content stands alone).
+      if (action === "email_message") return;
 
       // 'message' action (or fallback): show the offer in the modal.
       // 'email' action: also show the offer here as confirmation of what was sent.

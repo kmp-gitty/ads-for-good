@@ -68,11 +68,15 @@ export async function POST(req: NextRequest) {
   if (!prompt.enabled) {
     return withCors(req, NextResponse.json({ error: "prompt_disabled" }, { status: 400 }));
   }
-  if (prompt.post_submit_action !== "email") {
+  const action = prompt.post_submit_action;
+  if (action !== "email" && action !== "email_message") {
     return withCors(req, NextResponse.json({ error: "wrong_action" }, { status: 400 }));
   }
-  if (!prompt.offer_code) {
+  if (action === "email" && !prompt.offer_code) {
     return withCors(req, NextResponse.json({ error: "no_offer_code" }, { status: 400 }));
+  }
+  if (action === "email_message" && !prompt.email_body) {
+    return withCors(req, NextResponse.json({ error: "no_body" }, { status: 400 }));
   }
 
   if (!RESEND_API_KEY || !FROM_EMAIL) {
@@ -81,11 +85,16 @@ export async function POST(req: NextRequest) {
   }
 
   const resend = new Resend(RESEND_API_KEY);
-  const offerCode = prompt.offer_code;
+  const offerCode = prompt.offer_code || "";
   const offerDescription = prompt.offer_description || "";
-  const subjectTemplate = (prompt.email_subject || "Your code: {offer_code}").trim();
+  const subjectDefault = action === "email" ? "Your code: {offer_code}" : "A message for you";
+  const subjectTemplate = (prompt.email_subject || subjectDefault).trim();
   const subject = subjectTemplate.replace(/\{offer_code\}/g, offerCode);
-  const bodyText = (prompt.email_body || "Thanks for signing up — here's your code:").trim();
+  const bodyDefault = action === "email"
+    ? "Thanks for signing up — here's your code:"
+    : "Thanks for signing up!";
+  const bodyText = (prompt.email_body || bodyDefault).trim();
+  const showOfferBox = action === "email";
 
   try {
     const result = await resend.emails.send({
@@ -93,8 +102,8 @@ export async function POST(req: NextRequest) {
       to: recipient,
       replyTo: REPLY_TO,
       subject,
-      html: buildHtmlBody(bodyText, offerCode, offerDescription),
-      text: buildTextBody(bodyText, offerCode, offerDescription),
+      html: buildHtmlBody(bodyText, showOfferBox ? offerCode : "", showOfferBox ? offerDescription : ""),
+      text: buildTextBody(bodyText, showOfferBox ? offerCode : "", showOfferBox ? offerDescription : ""),
     });
     if (result.error) {
       console.warn("[identity-prompt-email] Resend error:", result.error.message);
@@ -117,25 +126,23 @@ function buildHtmlBody(bodyText: string, code: string, description: string): str
     .split(/\n{2,}/)
     .map(p => `<p style="font-size: 14px; line-height: 1.5; margin: 0 0 12px;">${esc(p).replace(/\n/g, "<br/>")}</p>`)
     .join("");
+  const offerBlock = code
+    ? `<p style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 28px; font-weight: 700; letter-spacing: 0.08em; padding: 16px 24px; background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 12px; display: inline-block; color: #C2410C; margin: 8px 0;">${esc(code)}</p>${description ? `<p style="font-size: 14px; color: #5C6B82;">${esc(description)}</p>` : ""}`
+    : "";
   return `<!DOCTYPE html>
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1F2D43; padding: 24px; max-width: 560px; margin: 0 auto;">
   ${paragraphs}
-  <p style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 28px; font-weight: 700; letter-spacing: 0.08em; padding: 16px 24px; background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 12px; display: inline-block; color: #C2410C; margin: 8px 0;">${esc(code)}</p>
-  ${description ? `<p style="font-size: 14px; color: #5C6B82;">${esc(description)}</p>` : ""}
+  ${offerBlock}
   <p style="font-size: 12px; color: #9CA3AF; margin-top: 32px;">— ${esc(SENDER_NAME)}</p>
 </body></html>`;
 }
 
 function buildTextBody(bodyText: string, code: string, description: string): string {
-  return [
-    bodyText,
-    ``,
-    `  ${code}`,
-    ``,
-    description,
-    ``,
-    `— ${SENDER_NAME}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const lines: string[] = [bodyText];
+  if (code) {
+    lines.push("", `  ${code}`);
+    if (description) lines.push("", description);
+  }
+  lines.push("", `— ${SENDER_NAME}`);
+  return lines.join("\n");
 }

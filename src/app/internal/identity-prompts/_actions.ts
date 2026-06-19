@@ -25,7 +25,7 @@ export type PromptFormInput = {
   success_message: string;
   offer_code: string;
   offer_description: string;
-  post_submit_action: "message" | "button" | "redirect" | "email";
+  post_submit_action: "message" | "button" | "redirect" | "email" | "email_message";
   post_submit_url: string;
   post_submit_button_label: string;
   email_subject: string;
@@ -65,11 +65,14 @@ function validate(input: PromptFormInput): string | null {
       return "post-submit URL must start with http:// or https://";
     }
   }
-  if (input.post_submit_action === "email" && input.input_mode === "phone") {
-    return "email post-submit action requires the prompt to collect email (input mode must be Email or Either)";
+  if ((input.post_submit_action === "email" || input.post_submit_action === "email_message") && input.input_mode === "phone") {
+    return "email post-submit actions require the prompt to collect email (input mode must be Email or Either)";
   }
   if (input.post_submit_action === "email" && !input.offer_code.trim()) {
-    return "email post-submit action requires an offer code (it's what the email contains)";
+    return "'Send email with offer' requires an offer code. Use 'Send email message' if you don't want an offer.";
+  }
+  if (input.post_submit_action === "email_message" && !input.email_body.trim()) {
+    return "'Send email message' requires an email body";
   }
   return null;
 }

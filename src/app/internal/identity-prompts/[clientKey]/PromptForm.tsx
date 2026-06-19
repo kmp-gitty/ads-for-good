@@ -344,6 +344,7 @@ export default function PromptForm({
           {([
             { v: "message", label: "Display message + offer" },
             { v: "email", label: "Send email with offer" },
+            { v: "email_message", label: "Send email message" },
             { v: "button", label: "Show a button" },
             { v: "redirect", label: "Redirect immediately" },
           ] as { v: PostSubmitAction; label: string }[]).map(opt => (
@@ -389,25 +390,35 @@ export default function PromptForm({
           </div>
         )}
 
-        {postSubmitAction === "email" && (
+        {(postSubmitAction === "email" || postSubmitAction === "email_message") && (
           <div className="mt-4 space-y-3">
             <p className="text-xs text-neutral-600">
-              Sent via Resend. From <strong>ads for Good</strong>, reply-to <code className="rounded bg-white px-1">katoa@ads4good.com</code>. The offer code (above) renders in a styled box below your body text — leave the fields below empty to use defaults.
+              Sent via Resend. From <strong>ads for Good</strong>, reply-to <code className="rounded bg-white px-1">katoa@ads4good.com</code>.
+              {postSubmitAction === "email" && " The offer code (above) renders in a styled box below your body text."}
+              {postSubmitAction === "email_message" && " No offer code required — just send your subject + body. (Any offer code set above is ignored for this action.)"}
             </p>
             <label className="block text-sm">
-              <span className="block font-semibold text-neutral-800">Email subject</span>
-              <span className="block text-xs text-neutral-500">Use <code className="rounded bg-white px-1">{`{offer_code}`}</code> to insert the code. Default: <code className="rounded bg-white px-1">{`Your code: {offer_code}`}</code>.</span>
+              <span className="block font-semibold text-neutral-800">Email subject{postSubmitAction === "email_message" ? <span className="ml-1 text-orange-500">*</span> : null}</span>
+              <span className="block text-xs text-neutral-500">
+                {postSubmitAction === "email"
+                  ? <>Use <code className="rounded bg-white px-1">{`{offer_code}`}</code> to insert the code. Default: <code className="rounded bg-white px-1">{`Your code: {offer_code}`}</code>.</>
+                  : <>Plain text subject line.</>}
+              </span>
               <input
                 type="text"
                 value={emailSubject}
                 onChange={e => setEmailSubject(e.target.value)}
-                placeholder="Your code: {offer_code}"
+                placeholder={postSubmitAction === "email" ? "Your code: {offer_code}" : "Thanks for reaching out"}
                 className={inputCls}
               />
             </label>
             <label className="block text-sm">
-              <span className="block font-semibold text-neutral-800">Email body</span>
-              <span className="block text-xs text-neutral-500">Plain text. Newlines become paragraph breaks. The offer code + description render in a styled box below your body.</span>
+              <span className="block font-semibold text-neutral-800">Email body{postSubmitAction === "email_message" ? <span className="ml-1 text-orange-500">*</span> : null}</span>
+              <span className="block text-xs text-neutral-500">
+                {postSubmitAction === "email"
+                  ? "Plain text. Newlines become paragraph breaks. The offer code + description render in a styled box below your body."
+                  : "Plain text. Newlines become paragraph breaks. Required for this action."}
+              </span>
               <textarea
                 value={emailBody}
                 onChange={e => setEmailBody(e.target.value)}
