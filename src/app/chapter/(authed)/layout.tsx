@@ -5,6 +5,7 @@ import { Sidebar } from "../_components/Sidebar";
 import { PinnedObservation } from "../_components/PinnedObservation";
 import { getCurrentChapterUser, listAccessibleClientKeys } from "@/app/lib/auth/chapter-user";
 import { getDashboardFreshnessByClient } from "@/app/lib/dashboard/freshness";
+import { getInquiryUnreadCount } from "@/app/lib/inquiries/actions";
 
 export const metadata = {
   title: "Chapter — Dashboard",
@@ -15,9 +16,10 @@ export default async function ChapterAuthedLayout({ children }: { children: Reac
   // Server-side user resolve. Returns null when the request is using the
   // legacy CHAPTER_DASH_TOKEN cookie gate (no Supabase session); UI falls
   // back to chapter_staff behavior in that case (Sprint 5a coexistence).
-  const [chapterUser, freshness] = await Promise.all([
+  const [chapterUser, freshness, inquiryUnread] = await Promise.all([
     getCurrentChapterUser(),
     getDashboardFreshnessByClient(),
+    getInquiryUnreadCount(),
   ]);
   const user: UserInfo | null = chapterUser
     ? {
@@ -44,7 +46,7 @@ export default async function ChapterAuthedLayout({ children }: { children: Reac
       <Suspense fallback={null}>
         <ChapterProvider user={user} accessibleClientKeys={accessibleClientKeys} freshness={freshness}>
           <div className="app">
-            <Sidebar />
+            <Sidebar inquiryUnreadCount={inquiryUnread} />
             <div className="main">
               {children}
             </div>

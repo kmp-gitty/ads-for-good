@@ -10,7 +10,7 @@ import { CLIENTS } from "./mockdata";
 
 type NavItem = { key: string; label: string; icon: IconName; badge?: string; locked?: boolean };
 
-export function Sidebar() {
+export function Sidebar({ inquiryUnreadCount = 0 }: { inquiryUnreadCount?: number } = {}) {
   const { client, setClient, sidebarOpen, setSidebarOpen, user, accessibleClientKeys } = useChapter();
   const pathname = usePathname();
   const isClientEmployee = user?.role === "client_employee";
@@ -62,7 +62,15 @@ export function Sidebar() {
   // it's never confused with analytics. Visible for every role; the page
   // itself shows the read-only state for agency_operator.
   const support: NavItem[] = [
-    { key: "inbox", label: "Inbox", icon: "observations" },
+    {
+      key: "inbox",
+      label: "Inbox",
+      icon: "observations",
+      // Badge shows count of threads where Chapter team replied + client/agency
+      // hasn't responded back. chapter_staff never sees this (count is 0 server-
+      // side by design — they have the Gchat ping for their direction).
+      badge: inquiryUnreadCount > 0 ? String(inquiryUnreadCount) : undefined,
+    },
   ];
 
   // Default landing is /chapter/overview (Lifecycle Overview) per the

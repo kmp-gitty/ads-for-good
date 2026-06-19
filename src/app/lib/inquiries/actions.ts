@@ -295,6 +295,69 @@ export async function listInboxThreads(filter?: {
   return { ok: true, data: (data ?? []) as InquiryThread[] };
 }
 
+// Returns the count of "unread" threads for the current user — defined as
+// threads visible to them where (a) status != 'resolved' AND (b) the most
+// recent message was sent by chapter_staff. For client/agency viewers this
+// means "the Chapter team responded and you haven't replied yet."
+//
+// For chapter_staff this returns 0 by design — they have the Gchat ping flow
+// for their direction, no sidebar badge needed.
+//
+// Used by the sidebar to render an unread count badge on the Inbox nav link.
+export async function getInquiryUnreadCount(client_key?: string): Promise<number> {
+  const user = await getCurrentChapterUserOrLegacy();
+  if (!user) return 0;
+  if (user.role === "chapter_staff") return 0;
+
+  const visible = await clientKeysVisibleTo(user);
+
+  // Fetch open/in_progress threads in scope. Cap at 200 since this is just
+  // for a badge count — beyond that the operator has bigger problems.
+  let q = supabase
+    .schema("chapter_inquiries")
+    .from("threads")
+    .select("id, client_key")
+    .neq("status", "resolved")
+    .limit(200);
+
+  if (visible !== "ALL") {
+    if (visible.length === 0) return 0;
+    q = q.in("client_key", visible);
+  }
+  if (client_key) q = q.eq("client_key", client_key);
+
+  const { data: threads, error } = await q;
+  if (error || !threads || threads.length === 0) return 0;
+
+  // For each thread, check whether the latest message is from chapter_staff.
+  // Single round-trip via DISTINCT ON would be cleanest, but supabase-js
+  // doesn't expose DISTINCT ON; loop with batched query instead.
+  const threadIds = threads.map((t) => t.id);
+  const { data: lastMessages } = await supabase
+    .schema("chapter_inquiries")
+    .from("messages")
+    .select("thread_id, sender_role, created_at")
+    .in("thread_id", threadIds)
+    .order("created_at", { ascending: false });
+
+  if (!lastMessages) return 0;
+
+  // Reduce to map of thread_id → latest sender_role
+  const latestByThread = new Map<string, string>();
+  for (const m of lastMessages) {
+    if (!latestByThread.has(m.thread_id)) {
+      latestByThread.set(m.thread_id, m.sender_role);
+    }
+  }
+
+  // Unread = thread whose latest message sender was chapter_staff
+  let count = 0;
+  for (const t of threads) {
+    if (latestByThread.get(t.id) === "chapter_staff") count++;
+  }
+  return count;
+}
+
 export async function getInquiryThread(thread_id: string): Promise<
   ActionResult<{ thread: InquiryThread; messages: InquiryMessage[] }>
 > {
