@@ -14,6 +14,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import { Resend } from "resend";
 import {
   getCurrentChapterUserOrLegacy,
   listAccessibleClientKeys,
@@ -213,6 +214,17 @@ export async function replyToInquiry(input: {
       subject: thread.subject,
       body,
       sender_email: user.email,
+    });
+  }
+
+  // Email the client when chapter_staff replies. Closes the loop so the
+  // client doesn't have to manually poll /chapter/<key>/inbox to see we
+  // responded. Skip when the client themselves replies (they already know).
+  if (user.role === "chapter_staff") {
+    void notifyClientOfStaffReply({
+      thread,
+      reply_body: body,
+      replier_email: user.email,
     });
   }
 
@@ -430,4 +442,90 @@ async function notifyGchatClientReply(args: {
   } catch (err) {
     console.warn("[inquiries] notifyGchat (reply) failed:", err);
   }
+}
+
+// ─── Email notification: chapter_staff → client/agency ──────────────────────
+//
+// Closes the loop after Katoa (or another chapter_staff) replies in
+// /internal/inbox. Without this, the client has to manually poll
+// /chapter/<key>/inbox to discover the reply. Sent via Resend with the same
+// sender shape as the contact-form auto-reply: from "ads for Good", reply-to
+// katoa@ads4good.com so hitting reply goes to the operator inbox.
+//
+// Fire-and-forget — never blocks replyToInquiry on Resend latency or failure.
+async function notifyClientOfStaffReply(args: {
+  thread: InquiryThread;
+  reply_body: string;
+  replier_email: string;
+}): Promise<void> {
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+  const FROM_EMAIL = process.env.FROM_EMAIL;
+  if (!RESEND_API_KEY || !FROM_EMAIL) {
+    console.warn("[inquiries] RESEND_API_KEY or FROM_EMAIL missing; staff-reply email not sent");
+    return;
+  }
+
+  const to = args.thread.created_by_email;
+  const cc = (args.thread.cc_emails ?? []).filter(e => e && e !== to);
+
+  // Defensive: don't email the replier themselves (e.g. chapter_staff replying
+  // on a thread they accidentally opened).
+  if (to === args.replier_email) return;
+
+  const base = process.env.NEXT_PUBLIC_APP_URL || "https://ads4good.com";
+  const link = `${base}/chapter/${args.thread.client_key}/inbox?thread=${args.thread.id}`;
+  const subject = `Chapter team replied: ${args.thread.subject}`;
+  const preview = args.reply_body.length > 600 ? args.reply_body.slice(0, 600) + "…" : args.reply_body;
+  const html = buildStaffReplyEmailHtml({ subject: args.thread.subject, preview, link });
+  const text = buildStaffReplyEmailText({ subject: args.thread.subject, preview, link });
+
+  try {
+    const resend = new Resend(RESEND_API_KEY);
+    const result = await resend.emails.send({
+      from: `ads for Good <${FROM_EMAIL}>`,
+      to,
+      cc: cc.length > 0 ? cc : undefined,
+      replyTo: "katoa@ads4good.com",
+      subject,
+      html,
+      text,
+    });
+    if (result.error) {
+      console.warn("[inquiries] staff-reply email Resend error:", result.error.message);
+    }
+  } catch (err) {
+    console.warn("[inquiries] staff-reply email threw:", err);
+  }
+}
+
+function buildStaffReplyEmailHtml(args: { subject: string; preview: string; link: string }): string {
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const paragraphs = args.preview
+    .split(/\n{2,}/)
+    .map(p => `<p style="font-size: 14px; line-height: 1.5; margin: 0 0 12px; color: #1F2D43;">${esc(p).replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+  return `<!DOCTYPE html>
+<html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1F2D43; padding: 24px; max-width: 560px; margin: 0 auto;">
+  <p style="font-size: 12px; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px;">Chapter inquiry update</p>
+  <h2 style="font-size: 18px; margin: 0 0 16px;">${esc(args.subject)}</h2>
+  ${paragraphs}
+  <p style="font-size: 14px; margin: 24px 0 0;">
+    <a href="${esc(args.link)}" style="display: inline-block; padding: 10px 16px; background: #E36410; color: #fff; border-radius: 8px; text-decoration: none; font-weight: 600;">View full thread</a>
+  </p>
+  <p style="font-size: 12px; color: #9CA3AF; margin-top: 32px;">— Chapter team · ads for Good</p>
+</body></html>`;
+}
+
+function buildStaffReplyEmailText(args: { subject: string; preview: string; link: string }): string {
+  return [
+    `Chapter inquiry update`,
+    `Re: ${args.subject}`,
+    ``,
+    args.preview,
+    ``,
+    `View the full thread: ${args.link}`,
+    ``,
+    `— Chapter team · ads for Good`,
+  ].join("\n");
 }
