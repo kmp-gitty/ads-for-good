@@ -41,6 +41,28 @@ export async function createAgency(input: {
   return { ok: true };
 }
 
+export async function updateAgency(input: {
+  agency_key: string;
+  display_name: string;
+  contact_email: string;
+  notes: string;
+}): Promise<Result> {
+  if (!input.display_name.trim()) return { ok: false, error: "display_name required" };
+  const { error } = await supabase
+    .schema("chapter_config")
+    .from("agencies")
+    .update({
+      display_name: input.display_name.trim(),
+      contact_email: input.contact_email.trim() || null,
+      notes: input.notes.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("agency_key", input.agency_key);
+  if (error) return { ok: false, error: error.message };
+  bump();
+  return { ok: true };
+}
+
 // ─── Allowed email domains ──────────────────────────────────────────────────
 
 export async function createAllowedDomain(input: {
@@ -81,6 +103,17 @@ export async function createAllowedDomain(input: {
   return { ok: true };
 }
 
+export async function updateAllowedDomainNotes(id: string, notes: string): Promise<Result> {
+  const { error } = await supabase
+    .schema("chapter_config")
+    .from("allowed_email_domains")
+    .update({ notes: notes.trim() || null })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  bump();
+  return { ok: true };
+}
+
 export async function revokeAllowedDomain(id: string): Promise<Result> {
   const { error } = await supabase
     .schema("chapter_config")
@@ -100,6 +133,40 @@ export async function revokeUser(id: string): Promise<Result> {
     .from("users")
     .update({ revoked_at: new Date().toISOString() })
     .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  bump();
+  return { ok: true };
+}
+
+export async function updateUserRole(input: {
+  id: string;
+  role: "chapter_staff" | "agency_operator" | "client_employee";
+  agency_key: string;
+  client_key: string;
+}): Promise<Result> {
+  // Mirror the chapter_config.users CHECK constraint client-side so the
+  // operator gets a useful error before hitting the DB.
+  if (input.role === "chapter_staff") {
+    if (input.agency_key || input.client_key) {
+      return { ok: false, error: "chapter_staff role: leave agency_key and client_key empty" };
+    }
+  } else if (input.role === "agency_operator") {
+    if (!input.agency_key) return { ok: false, error: "agency_operator role requires agency_key" };
+    if (input.client_key) return { ok: false, error: "agency_operator role: leave client_key empty" };
+  } else if (input.role === "client_employee") {
+    if (!input.client_key) return { ok: false, error: "client_employee role requires client_key" };
+    if (input.agency_key) return { ok: false, error: "client_employee role: leave agency_key empty" };
+  }
+
+  const { error } = await supabase
+    .schema("chapter_config")
+    .from("users")
+    .update({
+      role: input.role,
+      agency_key: input.agency_key.trim() || null,
+      client_key: input.client_key.trim() || null,
+    })
+    .eq("id", input.id);
   if (error) return { ok: false, error: error.message };
   bump();
   return { ok: true };

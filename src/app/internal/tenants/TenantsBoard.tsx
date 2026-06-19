@@ -4,10 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createAgency,
+  updateAgency,
   createAllowedDomain,
+  updateAllowedDomainNotes,
   revokeAllowedDomain,
   revokeUser,
   unrevokeUser,
+  updateUserRole,
   assignClientToAgency,
 } from "./_actions";
 import type { Agency, AllowedDomain, User, Client } from "./page";
@@ -46,7 +49,7 @@ export default function TenantsBoard({
         pending={pending}
       />
       <ClientAssignSection clients={clients} agencies={agencies} onSuccess={refresh} pending={pending} />
-      <UserSection users={users} onSuccess={refresh} pending={pending} />
+      <UserSection users={users} agencies={agencies} clients={clients} onSuccess={refresh} pending={pending} />
     </div>
   );
 }
@@ -169,29 +172,145 @@ function AgencySection({
               <th className="px-4 py-3 text-left">Display name</th>
               <th className="px-4 py-3 text-left">Contact</th>
               <th className="px-4 py-3 text-right">Clients</th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {agencies.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-sm text-neutral-500">
+                <td colSpan={5} className="px-4 py-6 text-center text-sm text-neutral-500">
                   No agencies yet.
                 </td>
               </tr>
             ) : (
               agencies.map(a => (
-                <tr key={a.agency_key} className="border-b border-neutral-100 last:border-0">
-                  <td className="px-4 py-3 font-mono">{a.agency_key}</td>
-                  <td className="px-4 py-3">{a.display_name}</td>
-                  <td className="px-4 py-3 text-xs text-neutral-600">{a.contact_email ?? "—"}</td>
-                  <td className="px-4 py-3 text-right font-mono">{clientCount(a.agency_key)}</td>
-                </tr>
+                <AgencyRow
+                  key={a.agency_key}
+                  agency={a}
+                  clientCount={clientCount(a.agency_key)}
+                  onSuccess={onSuccess}
+                  pending={pending}
+                />
               ))
             )}
           </tbody>
         </table>
       </div>
     </section>
+  );
+}
+
+function AgencyRow({
+  agency,
+  clientCount,
+  onSuccess,
+  pending,
+}: {
+  agency: Agency;
+  clientCount: number;
+  onSuccess: () => void;
+  pending: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [displayName, setDisplayName] = useState(agency.display_name);
+  const [contactEmail, setContactEmail] = useState(agency.contact_email ?? "");
+  const [notes, setNotes] = useState(agency.notes ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, startSave] = useTransition();
+
+  function onCancel() {
+    setDisplayName(agency.display_name);
+    setContactEmail(agency.contact_email ?? "");
+    setNotes(agency.notes ?? "");
+    setError(null);
+    setEditing(false);
+  }
+
+  function onSave() {
+    setError(null);
+    startSave(async () => {
+      const res = await updateAgency({
+        agency_key: agency.agency_key,
+        display_name: displayName,
+        contact_email: contactEmail,
+        notes,
+      });
+      if (!res.ok) return setError(res.error);
+      setEditing(false);
+      onSuccess();
+    });
+  }
+
+  if (!editing) {
+    return (
+      <tr className="border-b border-neutral-100 last:border-0">
+        <td className="px-4 py-3 font-mono">{agency.agency_key}</td>
+        <td className="px-4 py-3">{agency.display_name}</td>
+        <td className="px-4 py-3 text-xs text-neutral-600">{agency.contact_email ?? "—"}</td>
+        <td className="px-4 py-3 text-right font-mono">{clientCount}</td>
+        <td className="px-4 py-3 text-right">
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            disabled={pending}
+            className="text-xs text-orange-700 hover:text-orange-900 disabled:opacity-50"
+          >
+            Edit
+          </button>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr className="border-b border-neutral-100 last:border-0 bg-orange-50/30">
+      <td className="px-4 py-3 font-mono align-top">{agency.agency_key}</td>
+      <td className="px-4 py-3">
+        <input
+          type="text"
+          value={displayName}
+          onChange={e => setDisplayName(e.target.value)}
+          className={inputCls + " text-sm"}
+        />
+      </td>
+      <td className="px-4 py-3" colSpan={2}>
+        <input
+          type="email"
+          value={contactEmail}
+          onChange={e => setContactEmail(e.target.value)}
+          placeholder="Contact email"
+          className={inputCls + " text-sm mb-2"}
+        />
+        <input
+          type="text"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder="Notes"
+          className={inputCls + " text-sm"}
+        />
+        {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+      </td>
+      <td className="px-4 py-3 text-right align-top">
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving || pending}
+            className="text-xs font-semibold text-orange-700 hover:text-orange-900 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving || pending}
+            className="text-xs text-neutral-500 hover:text-neutral-700 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -368,38 +487,117 @@ function DomainSection({
               </tr>
             ) : (
               visibleDomains.map(d => (
-                <tr key={d.id} className="border-b border-neutral-100 last:border-0">
-                  <td className="px-4 py-3 font-mono">{d.domain}</td>
-                  <td className="px-4 py-3 text-xs">{d.role}</td>
-                  <td className="px-4 py-3 text-xs font-mono">
-                    {d.agency_key ? `agency:${d.agency_key}` : d.client_key ? `client:${d.client_key}` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {d.revoked_at ? (
-                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-600">revoked</span>
-                    ) : (
-                      <span className="rounded bg-green-100 px-2 py-0.5 text-green-800">active</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {!d.revoked_at && (
-                      <button
-                        type="button"
-                        onClick={() => onRevoke(d.id)}
-                        disabled={submitting || pending}
-                        className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
-                      >
-                        Revoke
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                <DomainRow
+                  key={d.id}
+                  domain={d}
+                  onRevoke={onRevoke}
+                  onSuccess={onSuccess}
+                  pending={pending || submitting}
+                />
               ))
             )}
           </tbody>
         </table>
       </div>
     </section>
+  );
+}
+
+function DomainRow({
+  domain,
+  onRevoke,
+  onSuccess,
+  pending,
+}: {
+  domain: AllowedDomain;
+  onRevoke: (id: string) => void;
+  onSuccess: () => void;
+  pending: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [notes, setNotes] = useState(domain.notes ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, startSave] = useTransition();
+
+  function onSave() {
+    setError(null);
+    startSave(async () => {
+      const res = await updateAllowedDomainNotes(domain.id, notes);
+      if (!res.ok) return setError(res.error);
+      setEditing(false);
+      onSuccess();
+    });
+  }
+
+  return (
+    <tr className={`border-b border-neutral-100 last:border-0 ${editing ? "bg-orange-50/30" : ""}`}>
+      <td className="px-4 py-3 font-mono">{domain.domain}</td>
+      <td className="px-4 py-3 text-xs">{domain.role}</td>
+      <td className="px-4 py-3 text-xs font-mono">
+        {domain.agency_key ? `agency:${domain.agency_key}` : domain.client_key ? `client:${domain.client_key}` : "—"}
+      </td>
+      <td className="px-4 py-3 text-xs">
+        {editing ? (
+          <>
+            <input
+              type="text"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Notes"
+              className={inputCls + " text-xs"}
+            />
+            {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
+          </>
+        ) : domain.revoked_at ? (
+          <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-600">revoked</span>
+        ) : (
+          <span className="rounded bg-green-100 px-2 py-0.5 text-green-800">active</span>
+        )}
+      </td>
+      <td className="px-4 py-3 text-right">
+        {editing ? (
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving || pending}
+              className="text-xs font-semibold text-orange-700 hover:text-orange-900 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setNotes(domain.notes ?? ""); setError(null); setEditing(false); }}
+              disabled={saving || pending}
+              className="text-xs text-neutral-500 hover:text-neutral-700 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              disabled={pending}
+              className="text-xs text-orange-700 hover:text-orange-900 disabled:opacity-50"
+            >
+              Edit notes
+            </button>
+            {!domain.revoked_at && (
+              <button
+                type="button"
+                onClick={() => onRevoke(domain.id)}
+                disabled={pending}
+                className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+              >
+                Revoke
+              </button>
+            )}
+          </div>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -476,10 +674,14 @@ function ClientAssignSection({
 
 function UserSection({
   users,
+  agencies,
+  clients,
   onSuccess,
   pending,
 }: {
   users: User[];
+  agencies: Agency[];
+  clients: Client[];
   onSuccess: () => void;
   pending: boolean;
 }) {
@@ -544,49 +746,188 @@ function UserSection({
               </tr>
             ) : (
               visibleUsers.map(u => (
-                <tr key={u.id} className="border-b border-neutral-100 last:border-0">
-                  <td className="px-4 py-3 font-mono text-xs">{u.email}</td>
-                  <td className="px-4 py-3 text-xs">{u.role}</td>
-                  <td className="px-4 py-3 text-xs font-mono">
-                    {u.agency_key ? `agency:${u.agency_key}` : u.client_key ? `client:${u.client_key}` : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-neutral-600">
-                    {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : "never"}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {u.revoked_at ? (
-                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-600">revoked</span>
-                    ) : (
-                      <span className="rounded bg-green-100 px-2 py-0.5 text-green-800">active</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {u.revoked_at ? (
-                      <button
-                        type="button"
-                        onClick={() => onUnrevoke(u.id)}
-                        disabled={submitting || pending}
-                        className="text-xs text-orange-700 hover:text-orange-900 disabled:opacity-50"
-                      >
-                        Unrevoke
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => onRevoke(u.id)}
-                        disabled={submitting || pending}
-                        className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
-                      >
-                        Revoke
-                      </button>
-                    )}
-                  </td>
-                </tr>
+                <UserRow
+                  key={u.id}
+                  user={u}
+                  agencies={agencies}
+                  clients={clients}
+                  onRevoke={onRevoke}
+                  onUnrevoke={onUnrevoke}
+                  onSuccess={onSuccess}
+                  pending={pending || submitting}
+                />
               ))
             )}
           </tbody>
         </table>
       </div>
     </section>
+  );
+}
+
+
+function UserRow({
+  user,
+  agencies,
+  clients,
+  onRevoke,
+  onUnrevoke,
+  onSuccess,
+  pending,
+}: {
+  user: User;
+  agencies: Agency[];
+  clients: Client[];
+  onRevoke: (id: string) => void;
+  onUnrevoke: (id: string) => void;
+  onSuccess: () => void;
+  pending: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [role, setRole] = useState<"chapter_staff" | "agency_operator" | "client_employee">(
+    (user.role as "chapter_staff" | "agency_operator" | "client_employee") || "chapter_staff",
+  );
+  const [agencyKey, setAgencyKey] = useState(user.agency_key ?? "");
+  const [clientKey, setClientKey] = useState(user.client_key ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, startSave] = useTransition();
+
+  // When role changes, clear the incompatible scope so the operator can pick the right one.
+  function onRoleChange(next: "chapter_staff" | "agency_operator" | "client_employee") {
+    setRole(next);
+    if (next === "chapter_staff") {
+      setAgencyKey("");
+      setClientKey("");
+    } else if (next === "agency_operator") {
+      setClientKey("");
+    } else if (next === "client_employee") {
+      setAgencyKey("");
+    }
+  }
+
+  function onCancel() {
+    setRole((user.role as "chapter_staff" | "agency_operator" | "client_employee") || "chapter_staff");
+    setAgencyKey(user.agency_key ?? "");
+    setClientKey(user.client_key ?? "");
+    setError(null);
+    setEditing(false);
+  }
+
+  function onSave() {
+    setError(null);
+    startSave(async () => {
+      const res = await updateUserRole({ id: user.id, role, agency_key: agencyKey, client_key: clientKey });
+      if (!res.ok) return setError(res.error);
+      setEditing(false);
+      onSuccess();
+    });
+  }
+
+  if (!editing) {
+    return (
+      <tr className="border-b border-neutral-100 last:border-0">
+        <td className="px-4 py-3 font-mono text-xs">{user.email}</td>
+        <td className="px-4 py-3 text-xs">{user.role}</td>
+        <td className="px-4 py-3 text-xs font-mono">
+          {user.agency_key ? `agency:${user.agency_key}` : user.client_key ? `client:${user.client_key}` : "—"}
+        </td>
+        <td className="px-4 py-3 text-xs text-neutral-600">
+          {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : "never"}
+        </td>
+        <td className="px-4 py-3 text-xs">
+          {user.revoked_at ? (
+            <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-600">revoked</span>
+          ) : (
+            <span className="rounded bg-green-100 px-2 py-0.5 text-green-800">active</span>
+          )}
+        </td>
+        <td className="px-4 py-3 text-right">
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              disabled={pending}
+              className="text-xs text-orange-700 hover:text-orange-900 disabled:opacity-50"
+            >
+              Edit
+            </button>
+            {user.revoked_at ? (
+              <button
+                type="button"
+                onClick={() => onUnrevoke(user.id)}
+                disabled={pending}
+                className="text-xs text-orange-700 hover:text-orange-900 disabled:opacity-50"
+              >
+                Unrevoke
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onRevoke(user.id)}
+                disabled={pending}
+                className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+              >
+                Revoke
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr className="border-b border-neutral-100 last:border-0 bg-orange-50/30">
+      <td className="px-4 py-3 font-mono text-xs align-top">{user.email}</td>
+      <td className="px-4 py-3">
+        <select value={role} onChange={e => onRoleChange(e.target.value as typeof role)} className={inputCls + " text-xs"}>
+          <option value="chapter_staff">chapter_staff</option>
+          <option value="agency_operator">agency_operator</option>
+          <option value="client_employee">client_employee</option>
+        </select>
+      </td>
+      <td className="px-4 py-3" colSpan={3}>
+        {role === "agency_operator" && (
+          <select value={agencyKey} onChange={e => setAgencyKey(e.target.value)} className={inputCls + " text-xs"}>
+            <option value="">— pick agency —</option>
+            {agencies.map(a => (
+              <option key={a.agency_key} value={a.agency_key}>{a.display_name} ({a.agency_key})</option>
+            ))}
+          </select>
+        )}
+        {role === "client_employee" && (
+          <select value={clientKey} onChange={e => setClientKey(e.target.value)} className={inputCls + " text-xs"}>
+            <option value="">— pick client —</option>
+            {clients.map(c => (
+              <option key={c.client_key} value={c.client_key}>{c.client_key}</option>
+            ))}
+          </select>
+        )}
+        {role === "chapter_staff" && (
+          <p className="text-xs text-neutral-500">No scope — chapter_staff has global access.</p>
+        )}
+        {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+      </td>
+      <td className="px-4 py-3 text-right align-top">
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving || pending}
+            className="text-xs font-semibold text-orange-700 hover:text-orange-900 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={saving || pending}
+            className="text-xs text-neutral-500 hover:text-neutral-700 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
