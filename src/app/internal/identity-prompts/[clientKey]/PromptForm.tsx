@@ -166,7 +166,9 @@ export default function PromptForm({
       {triggerType === "click_element" && (
         <label className="block text-sm">
           <span className="block font-semibold text-neutral-800">CSS selector</span>
-          <span className="block text-xs text-neutral-500">Any element matching this selector. Click is intercepted; prompt fires.</span>
+          <span className="block text-xs text-neutral-500">
+            Any element matching this selector. Click is intercepted; prompt fires. Don&apos;t know the selector? Use the <a href="/internal/identity-prompts" className="text-orange-700 underline">Chapter picker bookmarklet</a> to capture one from any storefront.
+          </span>
           <input
             type="text"
             value={triggerSelector}
