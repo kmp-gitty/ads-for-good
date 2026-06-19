@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: June 19, 2026
+> Last updated: June 19, 2026 (end of day — Sprint 9 Phase 1A shipped)
 
 ---
 
@@ -191,6 +191,52 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ---
 
 ## ✅ Completed Fixes (as of June 19, 2026)
+
+### Sprint 9 Phase 1A — Cross-Source Influence panel snapshot (June 19, 2026)
+- **New table `chapter_reporting.connections_panel_snapshot_v1`** pre-computes `connections_panel` results for top-N anchors of each type per client, both directions × both connection_types, for the DEFAULT 30d/30d window combo. PK on `(client_key, anchor_type, anchor_key, direction, connection_type, window_days, outcome_window_days)`. App reads snapshot first; falls back to live RPC for non-snapshot params.
+- **Refresh route** at `/api/internal/cron/refresh-connections-snapshots` with bounded-parallel workers. Initial CONCURRENCY=8 was reduced to **3** mid-session because cold-replica buffer cache thrashing made 8 parallel connections_panel calls each take 2-8 min on EOS (each holds journeys/canonical pages in DataFileRead wait). Lower concurrency means earlier queries warm cache for later ones AND individual queries don't compete for buffer slots. Net: serial-warm beats parallel-cold for this workload.
+- **Two query params on the route:**
+  - `?client=<key>` — process just one client (lets us run backfills one client at a time when network stability is iffy; each run short enough to finish reliably)
+  - `?skip_existing=true` — filter combos to only those NOT already snapshotted for this client (for retries after partial failure). Default false so the nightly cron does a full rebuild.
+- **Cron schedule:** 05:30 UTC nightly in vercel.json (after derived-snapshots 04:25, system-cohorts 04:30, observations 05:00 — so this reads fresh canonical data).
+- **App-side wrapper:** `cachedConnectionsPanel` in [dashboard-rpc.ts](src/app/chapter/_lib/dashboard-rpc.ts) updated to (1) try snapshot lookup first via `snapshotLookup()` helper, (2) fall back to live RPC if no match. Snapshot-hit conditions: default 30/30 window AND extractable anchor_key. Exclude args applied client-side after snapshot read so one row can serve any exclude combination. Cache version bumped to v6.
+- **Math + verification per client:**
+  - adsforgood_prod: 116 combos (10 channels + 15 pages + 0 campaigns + 4 cohorts × 4 variants), built in 5s
+  - not_so_cavalier: 56 combos (no real data — fast), built in 3s
+  - projectagram_reels: 116 combos, built in 4.5s
+  - **eos_fabrics: 176 combos** (10 channels + 15 pages + 15 campaigns + 4 cohorts × 4 variants), built across multiple curl attempts with `skip_existing=true` retries. 1,791 actual connection rows captured.
+  - **All 464 snapshot rows populated end of session.**
+- **One DB column bug fixed during build:** my refresh route guessed `cohort_id` column on `chapter_config.connections_cohorts` — actual column is `id`. Caused 500 on first run. **Lesson re-locked:** never guess column names when Supabase MCP `information_schema.columns` lookup is available. Memory rule already existed (`feedback_never_guess_external_identifiers.md`); broke it, cost a deploy cycle.
+- **Observability lesson:** the manual backfill curl threw `HTTP/2 framing layer` errors at ~5-6 min mark, but the Vercel function kept running to completion on the server. CLIENT-side curl giving up ≠ SERVER-side function failure. Going forward, **check DB state via Supabase MCP for cron-style routes; don't trust curl exit status alone**. Saved significant debugging time once we figured this out.
+- **Realistic perf delivered:**
+  - **Anchor switch on a cached arg combination (Next.js `unstable_cache` warm):** sub-200ms ✓
+  - **First-ever anchor switch in a session (cold Next.js cache):** still slow because the page does 5-7 other RPCs beyond `connections_panel` (anchor_resolve, self_recurrence, anchor option lists). Snapshot only sped up the heaviest one.
+- **Phase 1A enables Phase 1B but doesn't deliver the full UX win on its own.** Phase 1B (fat envelope + client-side anchor filter) is the truly-instant UX; Phase 1A's snapshot is the prerequisite that makes the envelope construction fast enough to be feasible on the server. Phase 1B queued for next session.
+- **Files:** new schema migration `sprint_9_connections_panel_snapshot` + bug-fix migration. New cron route [refresh-connections-snapshots/route.ts](src/app/api/internal/cron/refresh-connections-snapshots/route.ts). Updated [dashboard-rpc.ts](src/app/chapter/_lib/dashboard-rpc.ts) and [vercel.json](vercel.json).
+
+### Redirect rules form UX overhaul (June 19, 2026)
+- **`/internal/redirect-rules/[clientKey]` edit form rebuilt** to remove confusion around the destination-template DSL + condition JSON. Five additions:
+  1. **Plain-language primer** at the top of the new-rule form ("How a rule works") with slug / priority / conditions / destination explained in one bullet each.
+  2. **Destination preset chips** above the destination input: Pass-through with UTM tracking · **Fixed URL + UTM passthrough (NEW)** · Fixed URL · Personalized by identity · Geo-targeted (country) · Mobile vs desktop. Click → fills the field.
+  3. **Live token explainer** under the destination input — as you type, every `{...}` token in the template gets explained in English (e.g. `{q:utm_source}` → "Pulled from the inbound URL's `?utm_source=…` param").
+  4. **URL tester** — type a sample inbound URL, see the resolved destination URL as the rule would 302 to it. Simulates the runtime substitution (q-params, geo placeholders, identity placeholder, client_key).
+  5. **Structured `ConditionBuilder` component** ([file](src/app/internal/redirect-rules/[clientKey]/ConditionBuilder.tsx)) replaces the JSON textarea: "Add condition…" dropdown lists all 17 condition types in English; each condition gets a type-appropriate input (Yes/No for booleans, day-of-week chip strip, hour-of-day from/to, geo CSV input, etc.). Raw JSON view available via toggle for power-users. Generated JSON syncs both ways.
+
+### `/internal/outreach-builder` admin page (June 19, 2026)
+- **New URL builder for manual outreach** at `/internal/outreach-builder`. Solves the "I don't want to remember the URL syntax for chapter links" problem. Single-form page with:
+  - Slug dropdown (auto-loaded from active `redirect_rules` for `adsforgood_prod` — today just `outreach`)
+  - Prospect typeahead search (over `crm.prospects` business_name / contact_name / email / prospect_key)
+  - Destination URL with 8 quick-pick chips for ads4good.com pages + free-form input
+  - UTM source dropdown (cold_email / linkedin / event / podcast / webinar / referral / sms / phone_followup / newsletter / other — matches the prospect `source` vocabulary)
+  - UTM campaign + UTM content optional inputs
+  - **Live URL preview** with one-click Copy button; submit disabled until a prospect is picked so identity-stitching always happens
+
+### 1P redirect for adsforgood_prod (June 19, 2026)
+- **`outreach` rule created** for `adsforgood_prod` with destination template `{q:to}?utm_source={q:utm_source}&...all-5-utm-params...`. Generic catch-all (no conditions, priority 10).
+- **76 prospect_keys backfilled** on `crm.prospects` via single UPDATE — slug = lowercase business_name + `-` + first 6 hex chars of id. All 76 distinct after backfill; only 2 had keys pre-fix.
+- **`recipient-lookup.ts` extended** to fall through to `crm.prospects.prospect_key → email → email_sha256` (via shared `hashEmail()` helper) when the existing `email_engagement_events.recipient_token` lookup misses. Adsforgood_prod-only branch for now — only tenant with a CRM. Falls back to the existing ESP token resolution path for all other clients.
+- **End-to-end flow:** outreach-builder generates URL `ads4good.com/r/adsforgood_prod/outreach?to=<landing>&rid=<prospect_key>&utm_source=cold_email` → prospect clicks → redirect handler stitches identity via `crm.prospects.prospect_key` lookup → click logged to `pixel_events` as `redirect_click` → cookies set on `.ads4good.com` apex (no cross-domain `?chid=` handoff needed because apex=destination) → 302 to landing with utm intact → landing-page pixel events stitch to same canonical identity automatically.
+- **Architectural note locked:** for adsforgood (where ads4good.com IS the Chapter deployment), no separate `chapter.subdomain` is needed (vs NSC where `chapter.notsocavalier.com` was set up because Lovable hosts the storefront). All Chapter routes (`/r/...`, `/api/chapter/pixel.js`, `/api/chapter/collect`, `/api/identify`) are first-party on `ads4good.com` apex. Cookies set on `.ads4good.com` flow through every page → no `?chid=` URL handoff required.
 
 ### Sprint 8 — Inquiries Shape B (June 18-19, 2026)
 - **Per-client inquiry threads + messages**, three-surface UX: global submit drawer from any dashboard page, chapter_staff inbox at `/internal/inbox`, client/agency read-only inbox at `/chapter/<client_key>/inbox`. Gchat notification on new threads + client replies (chapter_staff suppressed to avoid self-noise).
