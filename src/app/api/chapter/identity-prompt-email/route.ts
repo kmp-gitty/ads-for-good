@@ -207,7 +207,6 @@ export async function POST(req: NextRequest) {
       endpoint: "/api/chapter/identity-prompt-email",
       client_key: clientKey,
       success: true,
-      failure_reason: null,
       ip_hash: hashIp(getClientIp(req)),
       user_agent_snippet: req.headers.get("user-agent")?.slice(0, 200) ?? null,
       request_id: req.headers.get("x-vercel-id") ?? null,
