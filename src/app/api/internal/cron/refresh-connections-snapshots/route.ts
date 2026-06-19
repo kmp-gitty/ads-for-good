@@ -392,30 +392,33 @@ async function refreshOneAnchorMeta(
       ? { campaign_id: anchor.anchor_key, start_ts: startTs.toISOString(), end_ts: endTs.toISOString() }
       : { cohort_id: anchor.anchor_key, start_ts: startTs.toISOString(), end_ts: endTs.toISOString() };
 
-  // Two parallel RPC calls then upsert in one statement.
-  const [resolveRows, recurrenceRows] = await Promise.all([
-    sql<{ row: Record<string, unknown> | null }[]>`
-      SELECT to_jsonb(t) AS row
-      FROM chapter_reporting.connections_anchor_resolve(
-        ${client_key},
-        ${anchor.anchor_type},
-        ${sql.json(anchorPayload)}::jsonb
-      ) t
-      LIMIT 1
-    `,
-    sql<{ row: Record<string, unknown> | null }[]>`
-      SELECT to_jsonb(t) AS row
-      FROM chapter_reporting.connections_self_recurrence(
-        ${client_key},
-        ${anchor.anchor_type},
-        ${sql.json(anchorPayload)}::jsonb
-      ) t
-      LIMIT 1
-    `,
-  ]);
+  // Two parallel RPC calls then upsert in one statement. Use jsonb_build_object
+  // construction at SQL time to dodge postgres-js's JSONValue type narrowing —
+  // we pass the payload as a raw jsonb literal via sql.json on the input only.
+  const payloadJson = sql.json(anchorPayload);
 
-  const resolveJson = resolveRows[0]?.row ?? null;
-  const recurrenceJson = recurrenceRows[0]?.row ?? null;
+  const resolveSql = sql<{ row_text: string | null }[]>`
+    SELECT (to_jsonb(t))::text AS row_text
+    FROM chapter_reporting.connections_anchor_resolve(
+      ${client_key},
+      ${anchor.anchor_type},
+      ${payloadJson}::jsonb
+    ) t
+    LIMIT 1
+  `;
+  const recurrenceSql = sql<{ row_text: string | null }[]>`
+    SELECT (to_jsonb(t))::text AS row_text
+    FROM chapter_reporting.connections_self_recurrence(
+      ${client_key},
+      ${anchor.anchor_type},
+      ${payloadJson}::jsonb
+    ) t
+    LIMIT 1
+  `;
+  const [resolveRows, recurrenceRows] = await Promise.all([resolveSql, recurrenceSql]);
+
+  const resolveText = resolveRows[0]?.row_text ?? null;
+  const recurrenceText = recurrenceRows[0]?.row_text ?? null;
 
   await sql`
     INSERT INTO chapter_reporting.connections_anchor_meta_snapshot_v1 (
@@ -425,8 +428,8 @@ async function refreshOneAnchorMeta(
       ${client_key},
       ${anchor.anchor_type},
       ${anchor.anchor_key},
-      ${resolveJson ? sql.json(resolveJson) : null}::jsonb,
-      ${recurrenceJson ? sql.json(recurrenceJson) : null}::jsonb
+      ${resolveText}::jsonb,
+      ${recurrenceText}::jsonb
     )
     ON CONFLICT (client_key, anchor_type, anchor_key)
     DO UPDATE SET
