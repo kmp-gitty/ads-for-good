@@ -583,8 +583,33 @@ export type ConnectionsAnchorResolveRow = {
   anchor_end_ts:   string;
 };
 
+// Sprint 9 Phase 1B — snapshot-first lookup for anchor_resolve. Mirrors the
+// Phase 1A pattern: read from connections_anchor_meta_snapshot_v1 first
+// (~30ms), fall back to live RPC for anchors not in the snapshot.
+async function anchorResolveSnapshotLookup(
+  args: ConnectionsAnchorResolveArgs,
+): Promise<ConnectionsAnchorResolveRow[] | null> {
+  const anchorKey = extractAnchorKey(args.p_anchor_type, args.p_anchor_payload as Record<string, unknown>);
+  if (!anchorKey) return null;
+
+  const r = await supabase
+    .schema("chapter_reporting")
+    .from("connections_anchor_meta_snapshot_v1")
+    .select("anchor_resolve")
+    .eq("client_key", args.p_client_key)
+    .eq("anchor_type", args.p_anchor_type)
+    .eq("anchor_key", anchorKey)
+    .maybeSingle();
+
+  if (r.error || !r.data || !r.data.anchor_resolve) return null;
+  return [r.data.anchor_resolve as ConnectionsAnchorResolveRow];
+}
+
 export const cachedConnectionsAnchorResolve = unstable_cache(
   async (args: ConnectionsAnchorResolveArgs): Promise<ConnectionsAnchorResolveRow[]> => {
+    const snap = await anchorResolveSnapshotLookup(args);
+    if (snap !== null) return snap;
+
     const r = await supabase
       .schema("chapter_reporting")
       .rpc("connections_anchor_resolve", args);
@@ -594,10 +619,10 @@ export const cachedConnectionsAnchorResolve = unstable_cache(
     }
     return (Array.isArray(r.data) ? r.data : []) as ConnectionsAnchorResolveRow[];
   },
-  // v3 — busts cached empty results from when system cohorts were being
-  // wired up. Args shape unchanged.
-  ["dashboard-rpc:chapter_reporting:connections_anchor_resolve:v3"],
-  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_anchor_resolve:v3"] },
+  // v4 — Phase 1B snapshot-first lookup added; bust cache so stale empties
+  // get re-resolved through the snapshot path.
+  ["dashboard-rpc:chapter_reporting:connections_anchor_resolve:v4"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_anchor_resolve:v4"] },
 );
 
 export type ConnectionsConnectionType = "channel" | "page";
@@ -721,8 +746,31 @@ export type ConnectionsSelfRecurrenceRow = {
   revenue_recurrent:      number | null;
 };
 
+// Sprint 9 Phase 1B — snapshot-first lookup for self_recurrence.
+async function selfRecurrenceSnapshotLookup(
+  args: ConnectionsAnchorResolveArgs,
+): Promise<ConnectionsSelfRecurrenceRow[] | null> {
+  const anchorKey = extractAnchorKey(args.p_anchor_type, args.p_anchor_payload as Record<string, unknown>);
+  if (!anchorKey) return null;
+
+  const r = await supabase
+    .schema("chapter_reporting")
+    .from("connections_anchor_meta_snapshot_v1")
+    .select("self_recurrence")
+    .eq("client_key", args.p_client_key)
+    .eq("anchor_type", args.p_anchor_type)
+    .eq("anchor_key", anchorKey)
+    .maybeSingle();
+
+  if (r.error || !r.data || !r.data.self_recurrence) return null;
+  return [r.data.self_recurrence as ConnectionsSelfRecurrenceRow];
+}
+
 export const cachedConnectionsSelfRecurrence = unstable_cache(
   async (args: ConnectionsAnchorResolveArgs): Promise<ConnectionsSelfRecurrenceRow[]> => {
+    const snap = await selfRecurrenceSnapshotLookup(args);
+    if (snap !== null) return snap;
+
     const r = await supabase.schema("chapter_reporting").rpc("connections_self_recurrence", args);
     if (r.error) {
       console.error("[dashboard-rpc] connections_self_recurrence failed:", { ...r.error });
@@ -730,8 +778,9 @@ export const cachedConnectionsSelfRecurrence = unstable_cache(
     }
     return (Array.isArray(r.data) ? r.data : []) as ConnectionsSelfRecurrenceRow[];
   },
-  ["dashboard-rpc:chapter_reporting:connections_self_recurrence"],
-  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_self_recurrence"] },
+  // v2 — Phase 1B snapshot-first lookup added.
+  ["dashboard-rpc:chapter_reporting:connections_self_recurrence:v2"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_self_recurrence:v2"] },
 );
 
 export type ConnectionsCampaignOption = {

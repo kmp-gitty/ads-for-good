@@ -53,6 +53,11 @@ type WorkerResult =
   | { ok: true; client_key: string; combo: Combo; ms: number; row_count: number }
   | { ok: false; client_key: string; combo: Combo; error: string };
 
+type Anchor = {
+  anchor_type: "channel" | "page" | "campaign" | "cohort";
+  anchor_key: string;
+};
+
 export async function GET(req: NextRequest) {
   const unauthorized = unauthorizedIfNotCron(req);
   if (unauthorized) return unauthorized;
@@ -243,7 +248,7 @@ async function refreshClient(
   const startTs = new Date(snapshotTsHi.getTime() - 90 * 24 * 3600 * 1000); // wide default range
   const endTs = snapshotTsHi;
 
-  // Worker pool.
+  // Worker pool — panel snapshot combos.
   const queue = [...combos];
   const results: WorkerResult[] = [];
 
@@ -263,6 +268,38 @@ async function refreshClient(
             combo,
             error: err instanceof Error ? err.message : String(err),
           });
+        }
+      }
+    }),
+  );
+
+  // Phase 1B — also refresh anchor_meta (anchor_resolve + self_recurrence)
+  // for every unique anchor in this client's combo set. Anchor metadata is
+  // direction- and connection_type-independent so we dedupe by (type, key).
+  const anchorSet = new Set<string>();
+  const uniqueAnchors: Anchor[] = [];
+  for (const c of combos) {
+    const k = `${c.anchor_type}|${c.anchor_key}`;
+    if (anchorSet.has(k)) continue;
+    anchorSet.add(k);
+    uniqueAnchors.push({ anchor_type: c.anchor_type, anchor_key: c.anchor_key });
+  }
+
+  const metaQueue = [...uniqueAnchors];
+  await Promise.all(
+    Array.from({ length: CONCURRENCY }).map(async () => {
+      while (true) {
+        const anchor = metaQueue.shift();
+        if (!anchor) break;
+        try {
+          await refreshOneAnchorMeta(sql, client_key, anchor, startTs, endTs);
+        } catch (err) {
+          // Non-fatal: anchor_meta is a perf optimization; the page falls back
+          // to the live RPC if the snapshot row is missing. Log + continue.
+          console.error(
+            `[refresh-connections-snapshots] anchor_meta failed: ${client_key} ${anchor.anchor_type}:${anchor.anchor_key} →`,
+            err instanceof Error ? err.message : err,
+          );
         }
       }
     }),
@@ -331,4 +368,70 @@ async function refreshOne(
   `;
 
   return Number(result[0]?.row_count ?? 0);
+}
+
+// ─── single anchor meta refresh (Phase 1B) ──────────────────────────────────
+//
+// Pre-computes connections_anchor_resolve + connections_self_recurrence for
+// one anchor and upserts a single row into connections_anchor_meta_snapshot_v1.
+// Each value is stored as jsonb so the wrapper can return the row payload
+// verbatim from a single DB read.
+async function refreshOneAnchorMeta(
+  sql: postgres.Sql,
+  client_key: string,
+  anchor: Anchor,
+  startTs: Date,
+  endTs: Date,
+): Promise<void> {
+  const anchorPayload =
+    anchor.anchor_type === "channel"
+      ? { channel: anchor.anchor_key, start_ts: startTs.toISOString(), end_ts: endTs.toISOString() }
+    : anchor.anchor_type === "page"
+      ? { page_path: anchor.anchor_key, start_ts: startTs.toISOString(), end_ts: endTs.toISOString() }
+    : anchor.anchor_type === "campaign"
+      ? { campaign_id: anchor.anchor_key, start_ts: startTs.toISOString(), end_ts: endTs.toISOString() }
+      : { cohort_id: anchor.anchor_key, start_ts: startTs.toISOString(), end_ts: endTs.toISOString() };
+
+  // Two parallel RPC calls then upsert in one statement.
+  const [resolveRows, recurrenceRows] = await Promise.all([
+    sql<{ row: Record<string, unknown> | null }[]>`
+      SELECT to_jsonb(t) AS row
+      FROM chapter_reporting.connections_anchor_resolve(
+        ${client_key},
+        ${anchor.anchor_type},
+        ${sql.json(anchorPayload)}::jsonb
+      ) t
+      LIMIT 1
+    `,
+    sql<{ row: Record<string, unknown> | null }[]>`
+      SELECT to_jsonb(t) AS row
+      FROM chapter_reporting.connections_self_recurrence(
+        ${client_key},
+        ${anchor.anchor_type},
+        ${sql.json(anchorPayload)}::jsonb
+      ) t
+      LIMIT 1
+    `,
+  ]);
+
+  const resolveJson = resolveRows[0]?.row ?? null;
+  const recurrenceJson = recurrenceRows[0]?.row ?? null;
+
+  await sql`
+    INSERT INTO chapter_reporting.connections_anchor_meta_snapshot_v1 (
+      client_key, anchor_type, anchor_key, anchor_resolve, self_recurrence
+    )
+    VALUES (
+      ${client_key},
+      ${anchor.anchor_type},
+      ${anchor.anchor_key},
+      ${resolveJson ? sql.json(resolveJson) : null}::jsonb,
+      ${recurrenceJson ? sql.json(recurrenceJson) : null}::jsonb
+    )
+    ON CONFLICT (client_key, anchor_type, anchor_key)
+    DO UPDATE SET
+      anchor_resolve = EXCLUDED.anchor_resolve,
+      self_recurrence = EXCLUDED.self_recurrence,
+      built_at = now()
+  `;
 }
