@@ -75,9 +75,20 @@ export async function GET(req: NextRequest) {
   try {
     await sql`SET statement_timeout = '15min'`;
 
-    const clients = await sql<{ client_key: string }[]>`
-      SELECT client_key FROM chapter_config.client_secrets WHERE revoked_at IS NULL
-    `;
+    // Optional ?client=<key> param — process just one client. Lets us run
+    // backfills one client at a time when network stability is iffy (each
+    // run is short enough to finish reliably). Without the param: full set.
+    const url = new URL(req.url);
+    const onlyClient = url.searchParams.get("client")?.trim();
+
+    let clients: { client_key: string }[];
+    if (onlyClient) {
+      clients = [{ client_key: onlyClient }];
+    } else {
+      clients = await sql<{ client_key: string }[]>`
+        SELECT client_key FROM chapter_config.client_secrets WHERE revoked_at IS NULL
+      `;
+    }
 
     for (const c of clients) {
       const clientResults = await refreshClient(sql, c.client_key);
