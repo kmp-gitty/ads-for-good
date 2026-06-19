@@ -153,8 +153,8 @@ async function refreshClient(
       ORDER BY rank ASC
       LIMIT ${TOP_N_CAMPAIGNS}
     `,
-    sql<{ cohort_id: string }[]>`
-      SELECT cohort_id
+    sql<{ id: string }[]>`
+      SELECT id
       FROM chapter_config.connections_cohorts
       WHERE client_key = ${client_key}
       ORDER BY created_at DESC
@@ -182,7 +182,7 @@ async function refreshClient(
   }
   for (const co of cohortRows) {
     for (const d of directions) for (const ct of connTypes) {
-      combos.push({ anchor_type: "cohort", anchor_key: co.cohort_id, direction: d, connection_type: ct });
+      combos.push({ anchor_type: "cohort", anchor_key: co.id, direction: d, connection_type: ct });
     }
   }
 
