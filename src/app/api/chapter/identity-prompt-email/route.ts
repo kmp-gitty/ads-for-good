@@ -138,8 +138,10 @@ export async function POST(req: NextRequest) {
   }
 
   // Defense 3 — per-IP rate limit. 10 sends per IP per hour. Catches anyone
-  // who got past defenses 1 and 2.
-  const ip = getClientIp(req);
+  // who got past defenses 1 and 2. Fall back to a shared "unknown" bucket
+  // when no IP is resolvable (local dev / proxy stripping) — still rate-
+  // limits, just collides legit and attacker traffic in that bucket.
+  const ip = getClientIp(req) ?? "unknown";
   maybeEvictOldest();
   const rate = checkRateLimit(ip);
   if (!rate.allowed) {
