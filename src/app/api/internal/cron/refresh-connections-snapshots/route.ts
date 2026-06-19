@@ -24,7 +24,13 @@ export const maxDuration = 800;
 
 const WINDOW_DAYS = 30;
 const OUTCOME_WINDOW_DAYS = 30;
-const CONCURRENCY = 8;
+// Concurrency was 8; lowered to 3 (June 19) because cold-replica buffer
+// cache thrashing was making 8 parallel connections_panel calls each take
+// 2-8 min on EOS (each holds journeys/canonical pages in I/O wait). With
+// lower concurrency, earlier queries warm the cache for later ones AND
+// individual queries don't compete for buffer slots. Net: serial-warm
+// beats parallel-cold for this workload.
+const CONCURRENCY = 3;
 const TOP_N_PAGES = 15;
 const TOP_N_CAMPAIGNS = 15;
 
@@ -78,8 +84,14 @@ export async function GET(req: NextRequest) {
     // Optional ?client=<key> param — process just one client. Lets us run
     // backfills one client at a time when network stability is iffy (each
     // run is short enough to finish reliably). Without the param: full set.
+    //
+    // Optional ?skip_existing=true param — for retries after a crash. Filters
+    // out (anchor_type, anchor_key, direction, connection_type) combos that
+    // already have a row in the snapshot for this client. Default false so
+    // the nightly cron does a full rebuild (snapshots go stale otherwise).
     const url = new URL(req.url);
     const onlyClient = url.searchParams.get("client")?.trim();
+    const skipExisting = url.searchParams.get("skip_existing") === "true";
 
     let clients: { client_key: string }[];
     if (onlyClient) {
@@ -91,7 +103,7 @@ export async function GET(req: NextRequest) {
     }
 
     for (const c of clients) {
-      const clientResults = await refreshClient(sql, c.client_key);
+      const clientResults = await refreshClient(sql, c.client_key, skipExisting);
       allResults.push(...clientResults);
     }
   } finally {
@@ -146,6 +158,7 @@ export async function GET(req: NextRequest) {
 async function refreshClient(
   sql: postgres.Sql,
   client_key: string,
+  skipExisting: boolean = false,
 ): Promise<WorkerResult[]> {
   // Pull anchor lists. Channels are hardcoded; pages/campaigns/cohorts come
   // from existing reporting views/MVs.
@@ -172,7 +185,7 @@ async function refreshClient(
     `,
   ]);
 
-  const combos: Combo[] = [];
+  let combos: Combo[] = [];
   const directions: Combo["direction"][] = ["upstream", "downstream"];
   const connTypes: Combo["connection_type"][] = ["channel", "page"];
 
@@ -195,6 +208,32 @@ async function refreshClient(
     for (const d of directions) for (const ct of connTypes) {
       combos.push({ anchor_type: "cohort", anchor_key: co.id, direction: d, connection_type: ct });
     }
+  }
+
+  // Skip combos already in the snapshot for this client when requested
+  // (retries after partial failure). Filter as one set lookup.
+  if (skipExisting) {
+    const existing = await sql<{
+      anchor_type: string;
+      anchor_key: string;
+      direction: string;
+      connection_type: string;
+    }[]>`
+      SELECT anchor_type, anchor_key, direction, connection_type
+      FROM chapter_reporting.connections_panel_snapshot_v1
+      WHERE client_key = ${client_key}
+    `;
+    const seen = new Set(
+      existing.map((r) => `${r.anchor_type}|${r.anchor_key}|${r.direction}|${r.connection_type}`),
+    );
+    const before = combos.length;
+    const filtered = combos.filter(
+      (c) => !seen.has(`${c.anchor_type}|${c.anchor_key}|${c.direction}|${c.connection_type}`),
+    );
+    console.log(
+      `[refresh-connections-snapshots] ${client_key}: skip_existing filtered ${before} → ${filtered.length} combos`,
+    );
+    combos = filtered;
   }
 
   // Anchor windows use the current default 30d range. We freeze the time
