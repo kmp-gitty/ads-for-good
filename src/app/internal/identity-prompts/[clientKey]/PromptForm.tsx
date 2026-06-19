@@ -385,7 +385,7 @@ export default function PromptForm({
 
         {postSubmitAction === "email" && (
           <p className="mt-3 text-xs text-neutral-600">
-            Sends a transactional email to the submitted address via Resend. Requires <code className="rounded bg-white px-1">RESEND_API_KEY</code> + verified sending domain. The email contains the offer code and description above.
+            Sends a transactional email to the submitted address via Resend. From: <strong>ads for Good</strong>, reply-to: <code className="rounded bg-white px-1">katoa@ads4good.com</code>. The email contains the offer code and description above.
           </p>
         )}
       </div>

@@ -27,8 +27,9 @@ const supabase = createClient(
 );
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const SENDER_EMAIL = process.env.CHAPTER_PROMPT_SENDER_EMAIL || "noreply@ads4good.com";
-const SENDER_NAME = process.env.CHAPTER_PROMPT_SENDER_NAME || "ads for Good";
+const FROM_EMAIL = process.env.FROM_EMAIL;
+const SENDER_NAME = "ads for Good";
+const REPLY_TO = "katoa@ads4good.com";
 
 export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsPreflightHeaders(req) });
@@ -74,8 +75,8 @@ export async function POST(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "no_offer_code" }, { status: 400 }));
   }
 
-  if (!RESEND_API_KEY) {
-    console.warn("[identity-prompt-email] RESEND_API_KEY not set; email not sent");
+  if (!RESEND_API_KEY || !FROM_EMAIL) {
+    console.warn("[identity-prompt-email] RESEND_API_KEY or FROM_EMAIL not set; email not sent");
     return withCors(req, NextResponse.json({ sent: false, reason: "not_configured" }, { status: 200 }));
   }
 
@@ -85,8 +86,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await resend.emails.send({
-      from: `${SENDER_NAME} <${SENDER_EMAIL}>`,
+      from: `${SENDER_NAME} <${FROM_EMAIL}>`,
       to: recipient,
+      replyTo: REPLY_TO,
       subject: `Your code: ${offerCode}`,
       html: buildHtmlBody(offerCode, offerDescription),
       text: buildTextBody(offerCode, offerDescription),
