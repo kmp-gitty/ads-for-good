@@ -552,7 +552,7 @@ setInterval(function () {
     var input = document.createElement("input");
     input.type = "email";
     input.className = "chapter-prompt-input";
-    input.placeholder = "you@email.com";
+    input.placeholder = prompt.input_placeholder || "you@email.com";
     input.required = true;
     input.autocomplete = "email";
 
@@ -678,7 +678,7 @@ setInterval(function () {
     var apiOrigin = getApiOrigin() || "https://ads4good.com";
     var url = new URL("/api/chapter/identity-prompts", apiOrigin);
     url.searchParams.set("client_key", clientKey);
-    fetch(url.toString(), { credentials: "omit", cache: "default" })
+    fetch(url.toString(), { credentials: "omit", cache: "no-store" })
       .then(function (res) { return res.ok ? res.json() : { prompts: [] }; })
       .then(function (data) {
         var prompts = (data && data.prompts) || [];

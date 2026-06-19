@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("identity_prompts")
-    .select("id, slug, trigger_jsonb, headline, body, button_label, success_message, offer_code, offer_description, frequency, frequency_days")
+    .select("id, slug, trigger_jsonb, headline, body, input_placeholder, button_label, success_message, offer_code, offer_description, frequency, frequency_days")
     .eq("client_key", clientKey)
     .eq("enabled", true);
 
@@ -43,6 +43,6 @@ export async function GET(req: NextRequest) {
   }
 
   const res = NextResponse.json({ prompts: data ?? [] }, { status: 200 });
-  res.headers.set("Cache-Control", "public, s-maxage=300, stale-while-revalidate=600");
+  res.headers.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
   return withCors(req, res);
 }

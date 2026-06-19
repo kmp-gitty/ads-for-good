@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { togglePrompt, deletePrompt } from "../_actions";
 
 export default function RowActions({
@@ -29,6 +30,13 @@ export default function RowActions({
 
   return (
     <div className="flex items-center gap-2 text-xs">
+      <Link
+        href={`/internal/identity-prompts/${client_key}/${id}/edit`}
+        className="text-orange-700 hover:text-orange-900"
+      >
+        Edit
+      </Link>
+      <span className="text-neutral-300">·</span>
       <button
         type="button"
         onClick={onToggle}

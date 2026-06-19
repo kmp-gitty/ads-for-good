@@ -18,6 +18,7 @@ export type PromptFormInput = {
   trigger_percent?: number;
   headline: string;
   body: string;
+  input_placeholder: string;
   button_label: string;
   success_message: string;
   offer_code: string;
@@ -65,6 +66,7 @@ export async function createPrompt(input: PromptFormInput): Promise<Result> {
       trigger_jsonb: buildTriggerJsonb(input),
       headline: input.headline.trim(),
       body: input.body.trim() || null,
+      input_placeholder: input.input_placeholder.trim() || "you@email.com",
       button_label: input.button_label.trim() || "Submit",
       success_message: input.success_message.trim() || "Thanks!",
       offer_code: input.offer_code.trim() || null,
@@ -73,6 +75,36 @@ export async function createPrompt(input: PromptFormInput): Promise<Result> {
       frequency_days: input.frequency === "visitor" ? input.frequency_days : null,
       enabled: input.enabled,
     });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/internal/identity-prompts/${input.client_key}`);
+  revalidatePath("/internal/identity-prompts");
+  return { ok: true };
+}
+
+export async function updatePrompt(id: string, input: PromptFormInput): Promise<Result> {
+  const err = validate(input);
+  if (err) return { ok: false, error: err };
+
+  const { error } = await supabase
+    .schema("chapter_config")
+    .from("identity_prompts")
+    .update({
+      slug: input.slug,
+      trigger_jsonb: buildTriggerJsonb(input),
+      headline: input.headline.trim(),
+      body: input.body.trim() || null,
+      input_placeholder: input.input_placeholder.trim() || "you@email.com",
+      button_label: input.button_label.trim() || "Submit",
+      success_message: input.success_message.trim() || "Thanks!",
+      offer_code: input.offer_code.trim() || null,
+      offer_description: input.offer_description.trim() || null,
+      frequency: input.frequency,
+      frequency_days: input.frequency === "visitor" ? input.frequency_days : null,
+      enabled: input.enabled,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/internal/identity-prompts/${input.client_key}`);
