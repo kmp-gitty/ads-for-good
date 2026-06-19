@@ -335,8 +335,30 @@ export const cachedJourneysStats = unstable_cache(
   { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_stats"] },
 );
 
+// Sprint 9 Phase 2 — snapshot-first lookup for journeys_overview_list.
+// Snapshot covers (client_key, 30d window, NULL action, NULL outcome, limit=50)
+// — the dashboard's first-paint default for the Customer Journeys page.
+async function journeysListSnapshotLookup(args: JourneysFilterArgs): Promise<JourneysListRow[] | null> {
+  if (args.p_action != null) return null;
+  if (args.p_outcome != null) return null;
+  if (args.p_limit !== undefined && args.p_limit !== 50) return null;
+  if (!matchesDefaultWindow(args, 30)) return null;
+
+  const r = await supabase
+    .schema("chapter_reporting")
+    .from("journeys_overview_list_snapshot_v1")
+    .select("rows")
+    .eq("client_key", args.p_client_key)
+    .eq("window_days", 30)
+    .maybeSingle();
+  if (r.error || !r.data) return null;
+  return (r.data.rows as JourneysListRow[]) ?? [];
+}
+
 export const cachedJourneysList = unstable_cache(
   async (args: JourneysFilterArgs): Promise<JourneysListRow[]> => {
+    const snap = await journeysListSnapshotLookup(args);
+    if (snap !== null) return snap;
     const r = await supabase.schema("chapter_reporting").rpc("journeys_overview_list", args);
     if (r.error) {
       console.error("[dashboard-rpc] journeys_overview_list failed:", { ...r.error });
@@ -344,8 +366,8 @@ export const cachedJourneysList = unstable_cache(
     }
     return (Array.isArray(r.data) ? r.data : []) as JourneysListRow[];
   },
-  ["dashboard-rpc:chapter_reporting:journeys_overview_list"],
-  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_list"] },
+  ["dashboard-rpc:chapter_reporting:journeys_overview_list:v2"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_list:v2"] },
 );
 
 // ── Detail RPCs (per identity, lifetime) ────────────────────────────────────
@@ -523,10 +545,71 @@ export type ContributionChannelRow = {
   cohort_axis_used:           string;
 };
 
-export const cachedContributionOverview = makeCachedRpc<ContributionChannelRow>("contribution_overview");
+// Sprint 9 Phase 2 — snapshot-first lookups for Lift & Journeys pages.
+//
+// Tolerant window matching: snapshot is built nightly for a "now − N days
+// to now" window; user may load the dashboard hours later. Accept the
+// snapshot when (a) window length matches ±1 day, (b) end_ts is within
+// last 24h. Custom date ranges or non-default cohort_axis fall back to
+// live RPC.
+function matchesDefaultWindow(args: { p_start_ts: string; p_end_ts: string }, expectedDays: number): boolean {
+  const startMs = new Date(args.p_start_ts).getTime();
+  const endMs = new Date(args.p_end_ts).getTime();
+  if (!isFinite(startMs) || !isFinite(endMs)) return false;
+  const rangeDays = (endMs - startMs) / 86400000;
+  if (Math.abs(rangeDays - expectedDays) > 1) return false;
+  const endAgeHours = (Date.now() - endMs) / 3600000;
+  if (endAgeHours < -1 || endAgeHours > 24) return false;
+  return true;
+}
+
+async function contributionSnapshotLookup(args: RpcArgs): Promise<ContributionChannelRow[] | null> {
+  if (!matchesDefaultWindow(args, 90)) return null;
+  const r = await supabase
+    .schema("chapter_reporting")
+    .from("contribution_snapshot_v1")
+    .select("rows")
+    .eq("client_key", args.p_client_key)
+    .eq("window_days", 90)
+    .maybeSingle();
+  if (r.error || !r.data) return null;
+  return (r.data.rows as ContributionChannelRow[]) ?? [];
+}
+
+export const cachedContributionOverview = unstable_cache(
+  async (args: RpcArgs): Promise<ContributionChannelRow[]> => {
+    const snap = await contributionSnapshotLookup(args);
+    if (snap !== null) return snap;
+    const r = await supabase.schema("chapter_reporting").rpc("contribution_overview", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] contribution_overview failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as ContributionChannelRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:contribution_overview:v2"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:contribution_overview:v2"] },
+);
+
+async function incrementalitySnapshotLookup(args: IncrementalityArgs): Promise<IncrementalityRow[] | null> {
+  if (args.p_cohort_axis !== "subscriber") return null;
+  if (!matchesDefaultWindow(args, 90)) return null;
+  const r = await supabase
+    .schema("chapter_reporting")
+    .from("incrementality_snapshot_v1")
+    .select("rows")
+    .eq("client_key", args.p_client_key)
+    .eq("cohort_axis", "subscriber")
+    .eq("window_days", 90)
+    .maybeSingle();
+  if (r.error || !r.data) return null;
+  return (r.data.rows as IncrementalityRow[]) ?? [];
+}
 
 export const cachedIncrementalityChannelOverview = unstable_cache(
   async (args: IncrementalityArgs): Promise<IncrementalityRow[]> => {
+    const snap = await incrementalitySnapshotLookup(args);
+    if (snap !== null) return snap;
     const r = await supabase
       .schema("chapter_reporting")
       .rpc("incrementality_channel_overview", args);
@@ -536,8 +619,8 @@ export const cachedIncrementalityChannelOverview = unstable_cache(
     }
     return (Array.isArray(r.data) ? r.data : []) as IncrementalityRow[];
   },
-  ["dashboard-rpc:chapter_reporting:incrementality_channel_overview"],
-  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:incrementality_channel_overview"] },
+  ["dashboard-rpc:chapter_reporting:incrementality_channel_overview:v2"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:incrementality_channel_overview:v2"] },
 );
 
 export const cachedPathCombinationsOverview = unstable_cache(

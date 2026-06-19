@@ -35,6 +35,71 @@ const PER_CLIENT_SNAPSHOTS = [
   },
 ];
 
+// Sprint 9 Phase 2 — snapshot the 3 dashboard RPCs measured >1s on EOS.
+// Each entry pre-aggregates the RPC's default-arg result into a jsonb blob.
+// Page wrappers do snapshot-first lookup; non-default-arg calls fall back
+// to the live RPC.
+const DASHBOARD_RPC_SNAPSHOTS = [
+  {
+    snapshot: "incrementality_snapshot_v1 (90d subscriber)",
+    sqlTemplate: `
+      INSERT INTO chapter_reporting.incrementality_snapshot_v1
+        (client_key, cohort_axis, window_days, rows, snapshot_ts_hi)
+      SELECT $1::text, 'subscriber', 90,
+             COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb), now()
+      FROM chapter_reporting.incrementality_channel_overview(
+        $1::text,
+        (now() - interval '90 days')::timestamptz,
+        now(),
+        'subscriber'
+      ) t
+      ON CONFLICT (client_key, cohort_axis, window_days) DO UPDATE SET
+        rows = EXCLUDED.rows,
+        snapshot_ts_hi = EXCLUDED.snapshot_ts_hi,
+        built_at = now()
+    `,
+  },
+  {
+    snapshot: "contribution_snapshot_v1 (90d)",
+    sqlTemplate: `
+      INSERT INTO chapter_reporting.contribution_snapshot_v1
+        (client_key, window_days, rows, snapshot_ts_hi)
+      SELECT $1::text, 90,
+             COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb), now()
+      FROM chapter_reporting.contribution_overview(
+        $1::text,
+        (now() - interval '90 days')::timestamptz,
+        now()
+      ) t
+      ON CONFLICT (client_key, window_days) DO UPDATE SET
+        rows = EXCLUDED.rows,
+        snapshot_ts_hi = EXCLUDED.snapshot_ts_hi,
+        built_at = now()
+    `,
+  },
+  {
+    snapshot: "journeys_overview_list_snapshot_v1 (30d, default filters)",
+    sqlTemplate: `
+      INSERT INTO chapter_reporting.journeys_overview_list_snapshot_v1
+        (client_key, window_days, rows, snapshot_ts_hi)
+      SELECT $1::text, 30,
+             COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb), now()
+      FROM chapter_reporting.journeys_overview_list(
+        $1::text,
+        (now() - interval '30 days')::timestamptz,
+        now(),
+        NULL,
+        NULL,
+        50
+      ) t
+      ON CONFLICT (client_key, window_days) DO UPDATE SET
+        rows = EXCLUDED.rows,
+        snapshot_ts_hi = EXCLUDED.snapshot_ts_hi,
+        built_at = now()
+    `,
+  },
+];
+
 // Global (non per-client) snapshot loaders.
 // NOTE: refresh_attribution_tables hardcodes boundary_event_name='purchase'
 // so Not So Cavalier (appointment_booked) will be empty until the loader
@@ -91,6 +156,30 @@ export async function GET(req: NextRequest) {
             ok: true,
             refresh_ms: Date.now() - start,
             rows: Number((rows[0] as { rows_written?: number })?.rows_written ?? 0),
+          });
+        } catch (err) {
+          snapshotResults.push({
+            snapshot: snap.snapshot,
+            client_key: c.client_key,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+
+    // Sprint 9 Phase 2 — dashboard RPC snapshots (per-client)
+    for (const snap of DASHBOARD_RPC_SNAPSHOTS) {
+      for (const c of clients) {
+        const start = Date.now();
+        try {
+          await sql.unsafe(snap.sqlTemplate, [c.client_key]);
+          snapshotResults.push({
+            snapshot: snap.snapshot,
+            client_key: c.client_key,
+            ok: true,
+            refresh_ms: Date.now() - start,
+            rows: 0, // upsert; row count not tracked here
           });
         } catch (err) {
           snapshotResults.push({
