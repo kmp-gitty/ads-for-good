@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
+import PickerBookmarklet from "./PickerBookmarklet";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -40,12 +41,6 @@ export default async function IdentityPromptsIndex() {
     );
   }
 
-  // Bookmarklet: drops a <script> tag pointing at /api/internal/picker.js
-  // into the current page. Cache-buster query string forces re-fetch so
-  // operators always get the latest picker code without re-dragging.
-  const bookmarklet =
-    "javascript:(function(){var s=document.createElement('script');s.src='https://ads4good.com/api/internal/picker.js?t='+Date.now();document.body.appendChild(s);})();";
-
   return (
     <div className="space-y-8">
       <section className="rounded-2xl border border-orange-200 bg-orange-50/50 p-5">
@@ -58,15 +53,7 @@ export default async function IdentityPromptsIndex() {
           to capture its CSS selector. Press Esc to exit.
         </p>
         <div className="mt-4 flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a
-            href={bookmarklet}
-            className="inline-block rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-600"
-            onClick={e => e.preventDefault()}
-            draggable
-          >
-            ⌖ Chapter picker
-          </a>
+          <PickerBookmarklet />
           <span className="text-xs text-neutral-500">
             ↑ drag this to your bookmarks bar
           </span>
