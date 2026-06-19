@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
+import { verifyPromptSession } from "@/app/lib/auth/prompt-session";
+import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -31,27 +33,117 @@ const FROM_EMAIL = process.env.FROM_EMAIL;
 const SENDER_NAME = "ads for Good";
 const REPLY_TO = "katoa@ads4good.com";
 
+// In-memory IP rate limit. Map<ip, {count, reset_at}>. Reset hourly per IP.
+// Limit: 10 sends per IP per hour. At scale across multiple Vercel
+// instances, this becomes per-instance — still useful, since a bulk
+// attacker would have to spray traffic across instances. Upgrade to
+// Upstash/Vercel KV when we see actual instance-spray abuse.
+const RATE_LIMIT_PER_HOUR = 10;
+const RATE_WINDOW_MS = 60 * 60 * 1000;
+const rateLimitMap = new Map<string, { count: number; reset_at: number }>();
+
+function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.reset_at) {
+    rateLimitMap.set(ip, { count: 1, reset_at: now + RATE_WINDOW_MS });
+    return { allowed: true, remaining: RATE_LIMIT_PER_HOUR - 1 };
+  }
+  if (entry.count >= RATE_LIMIT_PER_HOUR) {
+    return { allowed: false, remaining: 0 };
+  }
+  entry.count += 1;
+  return { allowed: true, remaining: RATE_LIMIT_PER_HOUR - entry.count };
+}
+
+// Bound the map size — drop oldest entries past 5000 IPs to prevent unbounded
+// memory growth on long-running instances. Cheap O(n) sweep at insert time.
+function maybeEvictOldest() {
+  if (rateLimitMap.size < 5000) return;
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap) {
+    if (now > entry.reset_at) rateLimitMap.delete(ip);
+  }
+}
+
+async function reject(
+  req: NextRequest,
+  reason: string,
+  clientKey: string,
+  status: number,
+  publicError: string,
+): Promise<NextResponse> {
+  // Audit log every rejection. Powers the future attack-attempt alert.
+  void logAuthAttempt({
+    endpoint: "/api/chapter/identity-prompt-email",
+    client_key: clientKey || "unknown",
+    success: false,
+    failure_reason: reason,
+    ip_hash: hashIp(getClientIp(req)),
+    user_agent_snippet: req.headers.get("user-agent")?.slice(0, 200) ?? null,
+    request_id: req.headers.get("x-vercel-id") ?? null,
+  });
+  return withCors(req, NextResponse.json({ error: publicError }, { status }));
+}
+
 export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsPreflightHeaders(req) });
 }
 
 export async function POST(req: NextRequest) {
-  let body: { client_key?: string; prompt_slug?: string; recipient?: string };
+  let body: {
+    client_key?: string;
+    prompt_slug?: string;
+    recipient?: string;
+    session_token?: string;
+    hp_field?: string;  // honeypot — should always be empty
+  };
   try {
     body = await req.json();
   } catch {
-    return withCors(req, NextResponse.json({ error: "invalid_json" }, { status: 400 }));
+    return reject(req, "invalid_json", "", 400, "invalid_json");
   }
 
   const clientKey = (body.client_key || "").trim();
   const slug = (body.prompt_slug || "").trim();
   const recipient = (body.recipient || "").trim();
+  const sessionToken = (body.session_token || "").trim();
+  const hpField = body.hp_field;
+
+  // Defense 1 — honeypot. Real humans never see this field; bots that
+  // fill all inputs reveal themselves cheaply (no DB hit yet).
+  if (hpField && hpField.trim() !== "") {
+    return reject(req, "honeypot_filled", clientKey, 400, "invalid_request");
+  }
 
   if (!clientKey || !slug || !recipient) {
-    return withCors(req, NextResponse.json({ error: "missing_required_fields" }, { status: 400 }));
+    return reject(req, "missing_required_fields", clientKey, 400, "missing_required_fields");
   }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) {
-    return withCors(req, NextResponse.json({ error: "invalid_email" }, { status: 400 }));
+    return reject(req, "invalid_email", clientKey, 400, "invalid_email");
+  }
+
+  // Defense 2 — session token. Verifies the visitor's browser fetched
+  // /api/chapter/identity-prompts in the last 30 min for THIS client_key.
+  // Fail-closed: no CHAPTER_PROMPT_SECRET configured = reject all sends.
+  const sessionResult = verifyPromptSession(sessionToken, clientKey);
+  if (!sessionResult.ok) {
+    return reject(
+      req,
+      `session_${sessionResult.reason}`,
+      clientKey,
+      sessionResult.reason === "missing_secret" ? 503 : 401,
+      sessionResult.reason === "missing_secret" ? "service_misconfigured" : "invalid_session",
+    );
+  }
+
+  // Defense 3 — per-IP rate limit. 10 sends per IP per hour. Catches anyone
+  // who got past defenses 1 and 2.
+  const ip = getClientIp(req);
+  maybeEvictOldest();
+  const rate = checkRateLimit(ip);
+  if (!rate.allowed) {
+    return reject(req, "rate_limited", clientKey, 429, "rate_limited");
   }
 
   const { data: prompt, error: lookupErr } = await supabase
@@ -63,20 +155,20 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (lookupErr || !prompt) {
-    return withCors(req, NextResponse.json({ error: "prompt_not_found" }, { status: 404 }));
+    return reject(req, "prompt_not_found", clientKey, 404, "prompt_not_found");
   }
   if (!prompt.enabled) {
-    return withCors(req, NextResponse.json({ error: "prompt_disabled" }, { status: 400 }));
+    return reject(req, "prompt_disabled", clientKey, 400, "prompt_disabled");
   }
   const action = prompt.post_submit_action;
   if (action !== "email" && action !== "email_message") {
-    return withCors(req, NextResponse.json({ error: "wrong_action" }, { status: 400 }));
+    return reject(req, "wrong_action", clientKey, 400, "wrong_action");
   }
   if (action === "email" && !prompt.offer_code) {
-    return withCors(req, NextResponse.json({ error: "no_offer_code" }, { status: 400 }));
+    return reject(req, "no_offer_code", clientKey, 400, "no_offer_code");
   }
   if (action === "email_message" && !prompt.email_body) {
-    return withCors(req, NextResponse.json({ error: "no_body" }, { status: 400 }));
+    return reject(req, "no_body", clientKey, 400, "no_body");
   }
 
   if (!RESEND_API_KEY || !FROM_EMAIL) {
@@ -107,13 +199,22 @@ export async function POST(req: NextRequest) {
     });
     if (result.error) {
       console.warn("[identity-prompt-email] Resend error:", result.error.message);
-      return withCors(req, NextResponse.json({ sent: false, reason: "send_failed" }, { status: 500 }));
+      return reject(req, "send_failed", clientKey, 500, "send_failed");
     }
+    void logAuthAttempt({
+      endpoint: "/api/chapter/identity-prompt-email",
+      client_key: clientKey,
+      success: true,
+      failure_reason: null,
+      ip_hash: hashIp(getClientIp(req)),
+      user_agent_snippet: req.headers.get("user-agent")?.slice(0, 200) ?? null,
+      request_id: req.headers.get("x-vercel-id") ?? null,
+    });
     return withCors(req, NextResponse.json({ sent: true }, { status: 200 }));
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown";
     console.warn("[identity-prompt-email] threw:", msg);
-    return withCors(req, NextResponse.json({ sent: false, reason: "send_failed" }, { status: 500 }));
+    return reject(req, "send_threw", clientKey, 500, "send_failed");
   }
 }
 

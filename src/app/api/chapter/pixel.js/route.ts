@@ -631,6 +631,18 @@ setInterval(function () {
     errorEl.className = "chapter-prompt-error";
     errorEl.style.display = "none";
 
+    // Honeypot: invisible input that bots commonly fill. Hidden from real
+    // humans via position + size + aria. If it arrives non-empty in the
+    // email-send POST, the server rejects.
+    var honeypotInput = document.createElement("input");
+    honeypotInput.type = "text";
+    honeypotInput.name = "hp_field";
+    honeypotInput.tabIndex = -1;
+    honeypotInput.autocomplete = "off";
+    honeypotInput.setAttribute("aria-hidden", "true");
+    honeypotInput.style.cssText =
+      "position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;";
+
     var button = document.createElement("button");
     button.type = "submit";
     button.className = "chapter-prompt-button";
@@ -646,6 +658,7 @@ setInterval(function () {
       if (emailInput) form.appendChild(emailInput);
       if (phoneInput) form.appendChild(phoneInput);
     }
+    form.appendChild(honeypotInput);
     form.appendChild(errorEl);
     form.appendChild(button);
 
@@ -723,7 +736,7 @@ setInterval(function () {
         }
 
         if ((postAction === "email" || postAction === "email_message") && hasEmail) {
-          chapterSendPromptEmail(prompt.slug, emailVal);
+          chapterSendPromptEmail(prompt.slug, emailVal, honeypotInput.value || "");
           // Fall through to success state so user sees confirmation.
         }
 
@@ -775,7 +788,7 @@ setInterval(function () {
     }
   }
 
-  function chapterSendPromptEmail(slug, recipient) {
+  function chapterSendPromptEmail(slug, recipient, hpField) {
     var apiOrigin = getApiOrigin() || "https://ads4good.com";
     var url = new URL("/api/chapter/identity-prompt-email", apiOrigin);
     try {
@@ -787,6 +800,8 @@ setInterval(function () {
           client_key: clientKey,
           prompt_slug: slug,
           recipient: recipient,
+          session_token: chapterPromptSessionToken,
+          hp_field: hpField,
         }),
       }).catch(function () { /* fire-and-forget */ });
     } catch (e) { /* noop */ }
@@ -835,6 +850,11 @@ setInterval(function () {
     }, { passive: true });
   }
 
+  // Session token from the prompts GET response. Required by the email-send
+  // endpoint as proof that this visitor's browser actually loaded the config
+  // (defense against direct-POST attackers).
+  var chapterPromptSessionToken = "";
+
   function chapterLoadIdentityPrompts() {
     if (!clientKey) return;
     // Derive origin from script src so 1P installs hit the client's own
@@ -844,8 +864,9 @@ setInterval(function () {
     var url = new URL("/api/chapter/identity-prompts", apiOrigin);
     url.searchParams.set("client_key", clientKey);
     fetch(url.toString(), { credentials: "omit", cache: "no-store" })
-      .then(function (res) { return res.ok ? res.json() : { prompts: [] }; })
+      .then(function (res) { return res.ok ? res.json() : { prompts: [], session_token: "" }; })
       .then(function (data) {
+        chapterPromptSessionToken = (data && data.session_token) || "";
         var prompts = (data && data.prompts) || [];
         prompts.forEach(function (prompt) {
           var trig = prompt.trigger_jsonb || {};

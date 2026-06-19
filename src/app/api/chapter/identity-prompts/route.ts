@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
+import { signPromptSession } from "@/app/lib/auth/prompt-session";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -42,7 +43,19 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ prompts: [] }, { status: 200 }));
   }
 
-  const res = NextResponse.json({ prompts: data ?? [] }, { status: 200 });
-  res.headers.set("Cache-Control", "public, s-maxage=30, stale-while-revalidate=60");
+  // Mint an HMAC session token. The pixel includes it in subsequent
+  // /api/chapter/identity-prompt-email POSTs as proof that the visitor's
+  // browser actually loaded the prompt config (not a direct-POST attacker).
+  // Token is null when CHAPTER_PROMPT_SECRET isn't configured; the email
+  // route will then reject all sends (fail-closed).
+  //
+  // Cache-Control note: because each request mints a fresh token, the
+  // response is no longer safely shareable across visitors. Drop CDN cache
+  // and force per-request mint. (We accept the extra DB hit per session-init
+  // — endpoint is hit once per visitor per ~5 min window via browser's HTTP
+  // cache.)
+  const session_token = signPromptSession(clientKey);
+  const res = NextResponse.json({ prompts: data ?? [], session_token }, { status: 200 });
+  res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   return withCors(req, res);
 }
