@@ -73,7 +73,7 @@ export default function LifecycleAttributionPage() {
           <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold">Reduce duplicate credit</h2>
             <p className="mt-3 text-sm leading-7 text-neutral-700">
-              Stop relying soley on separate platform views where multiple tools
+              Stop relying solely on separate platform views where multiple tools
              claim the same person and the same conversion.
             </p>
           </div>
