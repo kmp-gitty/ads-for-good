@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: June 19, 2026 (late evening — Sprint 9 Phase 1B + Phase 2 + Sprint 10 tenants admin + security audit + Moment Identity v1.5 + 3-layer prompt defenses + attack alert + CRM producer v1 + inquiry email-back)
+> Last updated: June 19, 2026 (late-late evening — Sprint 9 Phase 1B + Phase 2 + Sprint 10 tenants admin + security audit + Moment Identity v1.5 + 3-layer prompt defenses + attack alert + CRM producer v1 + inquiry email-back + tenants edit-in-place + inbox unread badge + consent layer + Moment Identity v2 architectural plan locked)
 
 ---
 
@@ -191,6 +191,95 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ---
 
 ## ✅ Completed Fixes (as of June 19, 2026)
+
+### Moment Identity v2 — architectural plan locked, ready to start Phase 1 (June 19, 2026 late-late evening)
+- **Goal of session:** read the full Moment Identity v2 handoff doc + lock the 6 open questions + reconcile v1.5's June 19 schema with v2's composable design. **Implementation deferred to next session** — operator was tired; plan committed for cold pickup.
+- **Handoff doc reference:** `~/Downloads/moment_identity_v2_handoff.md` (969 lines, June 14, 2026). 6 presets (Email Exchange / Custom Form / Custom Notification / Make an Offer / Phone Call / Remind Me); composable building blocks (trigger / container / content blocks / form fields / multi-step / recovery / submit actions / frequency / targeting / variant); 6-phase implementation (foundation → recovery + Custom Form → auto-email → Custom Notification + Phone Call → Make an Offer → Remind Me).
+- **6 open questions, all locked:**
+  1. **Direct send provider (when client has no ESP):** Resend — already standardized across contact form / identity prompts / inquiry replies. SES + Postmark not needed.
+  2. **Template authoring location:** **Hybrid in `/internal/identity-prompts`**. Shell (header/footer/button styles/layout) lives in code as React Email components in `src/app/lib/email-templates/*.tsx`. Per-template subject + body lives in DB (new `chapter_config.email_templates` table keyed on `(client_key, template_type)`). Operator edits subject + body via admin form — never touches HTML. At send time, shell + operator content + merge data compose into the final email. Operator-invisible HTML rendering layer.
+  3. **Per-prompt email send mechanism override:** YES. New column `identity_prompts.email_mechanism_override text` (nullable, NULL = use client default). Use cases: client with both Klaviyo + Mailchimp picks per prompt; upsell from Chapter's ESP to client's own.
+  4. **Tier gating:** NONE in v2. All 6 presets in the same tier. Existing Observations Starter lock pattern stays specific to that page. Tier-based gating revisitable later if/when MI splits by tier OR sold standalone.
+  5. **SMS for Remind Me:** **DEFERRED to v2.1**. Remind Me v2.0 = email-only notifications. Twilio (or client's SMS provider via the same client-or-Chapter mechanism we picked for email) lands in v2.1. No code decision needed for v2.0.
+  6. **Platform adapter pattern:** YES. Three adapter shells in `src/app/lib/platform/` — `shopify.ts` (full: Admin API for product/inventory + priceRules for discount codes), `square.ts` (partial: Catalog API for product/inventory; coupons need investigation — Remind Me supported, Make an Offer may be deferred to v2.1), `custom.ts` (returns null for product queries; generates code strings only; operator manually honors). Common interface `PlatformAdapter { getProduct, createDiscountCode, isSupported }`. Client selected via new column `chapter_config.clients.platform text DEFAULT 'custom'` (values: `shopify` / `square` / `custom`). For Remind Me trigger types: `page_returns` works on ALL; `price_below` / `back_in_stock` / `variant_available` gated to shopify + square.
+- **Bonus locked decisions (came up during Q&A):**
+  - **Resend per-client reply-to + sender domain:** new columns `chapter_config.clients.email_reply_to text` (per-client reply address; falls back to katoa@ads4good.com if NULL) + `email_sender_domain text` (optional per-client verified sender domain in Resend; NULL = use Chapter's shared `ads4good.com`). Resend supports `replyTo` per send on both free + pro plans (no tier restriction). Per-client domain verification is free in Resend (multiple verified domains per account); operator adds DNS records once per client who wants brand control.
+- **Architectural decision 1 — Two parallel column groups in `identity_prompts` discriminated by `preset_type`:**
+  - Old plan (handoff): migrate existing v1 prompts into new composable shape, deprecate v1 columns after 2-week soak. Risk: production prompts must round-trip through migration logic.
+  - **New plan (operator-pinned: "Email Exchange can just be what we have currently, no need to rebuild"):** keep ALL v1.5 columns exactly as they are (`headline`, `body`, `input_mode`, `email_placeholder`, `phone_placeholder`, `button_label`, `success_message`, `offer_code`, `offer_description`, `post_submit_action`, `post_submit_url`, `post_submit_button_label`, `email_subject`, `email_body`, `frequency`, `frequency_days`, `trigger_jsonb`). ADD composable columns alongside (`container_jsonb`, `content_blocks_jsonb`, `form_fields_jsonb`, `pages_jsonb`, `recovery_jsonb`, `submit_actions_jsonb`, `targeting_jsonb`, `variant_jsonb`, `enabled_devices text[]`, `email_mechanism_override`). New column `preset_type text NOT NULL DEFAULT 'email_exchange'` discriminates which path renders. Pixel renderer: `if (preset_type === 'email_exchange') renderV1(prompt) else renderComposable(prompt)`. **Zero data migration. Existing prompts untouched. Rollback trivial.**
+- **Architectural decision 2 — New `chapter_engagement` schema for dynamic/operational tables:**
+  - `chapter_engagement.prompt_responses` — Custom Form submissions (non-identity field values)
+  - `chapter_engagement.subscriptions` — Remind Me lifecycle (active, last_evaluated_at, last_notified_at, notification_count, canceled_at, cancel_reason)
+  - `chapter_engagement.offers` — Make an Offer state machine (status: pending_review / auto_accepted / manually_accepted / countered / declined / expired / redeemed; generated_code; counter_amount)
+  - `chapter_engagement.email_sends` — audit log of every auto-email (source_type, source_id, mechanism, template_id, esp_message_id, status, status_detail)
+  - **3-step schema gotcha (already known):** new schema needs GRANTs on tables + USAGE on schema + PostgREST exposed-schemas toggle. Pair schema-creation migration with grants migration in same PR. Same trap that bit chapter_recommendations + chapter_inquiries today.
+- **Architectural decision 3 — 2 new config tables + 6 new columns on `clients`:**
+  - `chapter_config.email_templates (client_key, template_type, subject, body, updated_at, updated_by)` — PK on (client_key, template_type). Operator edits via `/internal/identity-prompts/<key>/templates/<type>`.
+  - `chapter_config.offer_thresholds (client_key, target_type, target_id, threshold_pct, threshold_absolute, active)` — per-product / per-collection / global default. Make an Offer evaluator hits product → collection → global, first match wins.
+  - `chapter_config.clients` ADD: `email_reply_to`, `email_sender_domain`, `email_mechanism` (default 'direct'), `esp_provider` (klaviyo/mailchimp/null), `esp_credentials_jsonb` (encrypted), `platform` (default 'custom').
+  - Default privileges already set on `chapter_config` from today's earlier security audit — new tables auto-inherit write grants. No manual GRANT migration needed for chapter_config additions.
+- **Reconciliation deltas vs the original handoff:**
+  - **DROPPED** — handoff's migration-script-for-existing-v1-prompts (preset_type='email_exchange' avoids the migration entirely).
+  - **DROPPED** — handoff's deprecation-after-2-week-soak of v1 columns (they stay as Email Exchange's columns).
+  - **REPLACED** — handoff's `email_send_config` table → folded into 4 new columns on `chapter_config.clients` (matches existing per-client config pattern, no separate table needed).
+  - **NEW (not in handoff)** — `chapter_config.email_templates` table (came from our hybrid template authoring discussion).
+  - All other v2 changes from handoff kept as-is.
+- **What Phase 1 actually ships (revised, ready for tomorrow):**
+  1. ONE DB migration: add columns to `identity_prompts` + add columns to `clients` + create `chapter_config.email_templates` + `chapter_config.offer_thresholds` + create `chapter_engagement` schema + 4 tables + GRANTs + USAGE + PostgREST exposed-schemas registration.
+  2. Pixel widget refactor: add `renderComposable()` path alongside existing v1 `renderV1()`. Switch on `preset_type`. v1.5 prompts keep using v1 path (zero regression risk); new prompts use composable.
+  3. Admin UI: `PromptForm` adds preset picker at the top. Selecting "Email Exchange" shows current form (unchanged). Selecting any other preset opens the composable form builder (multi-step or accordion). Validation per preset (e.g., Email Exchange requires identity field; Phone Call cannot have form fields; Remind Me requires trigger condition).
+  4. **NO template authoring page yet** (Phase 3 with auto-email infrastructure).
+  5. **NO subscription/offer logic yet** (Phase 5/6). Phase 1 just lays foundation — new presets exist in DB but don't actually fire emails until Phase 3.
+- **Subsequent phases (locked, sequenced for separate PRs):**
+  - **Phase 2:** Recovery flow subsystem (pixel-side exit-intent recapture) + Custom Form preset wiring + Responses admin view + multi-page form rendering.
+  - **Phase 3:** Auto-email send infrastructure — `email_mechanism` admin UI + Resend adapter (`src/app/lib/email-send/direct-adapters/resend.ts`) + Klaviyo + Mailchimp adapters (`src/app/lib/email-send/esp-adapters/<provider>.ts`) + `email_sends` audit logging + bounce/delivery webhook receiver at `/api/email-send-webhook` + template authoring page at `/internal/identity-prompts/<key>/templates`.
+  - **Phase 4:** Custom Notification + Phone Call presets — bubble container type + yes/no and CTA-only form modes + `phone_call_initiated` pixel event on tel: click.
+  - **Phase 5:** Make an Offer — threshold configuration UI + auto-accept logic + manual review queue at `/internal/identity-prompts/<key>/offers` + counter-offer flow + Shopify Admin API discount code generation + email templates.
+  - **Phase 6:** Remind Me — subscription create flow + hourly cron at `/api/internal/cron/evaluate-subscriptions` + Shopify product data source adapter + auto-cancel-on-purchase hook in `/api/purchase` + subscriptions admin view at `/internal/identity-prompts/<key>/subscriptions` + email templates.
+- **Files queued for tomorrow's session (Phase 1):**
+  - DB: schema migration `moment_identity_v2_phase_1_schema`
+  - `src/app/api/chapter/pixel.js/route.ts` — add `renderComposable()` switch
+  - `src/app/internal/identity-prompts/[clientKey]/PromptForm.tsx` — add preset picker
+  - `src/app/internal/identity-prompts/[clientKey]/composable-form/*` — multi-step builder components (new directory)
+  - `src/app/lib/platform/{shopify,square,custom}.ts` — adapter shells (no implementations yet beyond stubs)
+
+### Cross-domain consent layer — pixel reads cookie + setConsent API + redirect-apex sync (June 19, 2026 late-late evening)
+- **Goal:** close the three sub-problems on the consent architecture that surfaced when discussing `/api/consent-sync`:
+  - **Problem 1 — pixel doesn't read the chapter_consent cookie at all.** Pixel hardcodes `consent_mode: "opt_out"` on every event. `/api/pixel` consent gate has no real visitor signal to work with.
+  - **Problem 2 — no standard Chapter consent UI on storefronts.** Clients drop their own banner (Cookiebot/OneTrust/inline). Chapter has no integration hook for those banners.
+  - **Problem 3 — consent state doesn't sync across the storefront ↔ redirect domain boundary.** Visitor opts out on `eosfabrics.com` (storefront cookie banner) → redirect handler at `ads4good.com/r/...` doesn't see the opt-out → still logs click + sets cookies.
+- **Operator decision locked:** fix problems 1 + 3 together (sub-problem 2 reduces to "provide an integration point" rather than "build a banner UI").
+- **Three fixes shipped in one commit:**
+  1. **Pixel reads `chapter_consent` cookie on storefront origin** (`chapterReadConsent()` helper). Sends real `consent_status` field in every event payload (previously sent NO `consent_status` field at all; the misleading hardcoded `consent_mode: "opt_out"` was the only consent signal). `/api/pixel` consent gate now has real data.
+  2. **New `ChapterPixel.setConsent(state)` public API** for storefront cookie banners to call. Sets `chapter_consent` cookie on storefront apex (so the pixel itself reads it immediately on next event) AND POSTs to `/api/consent` (so the server records the event + the redirect/API origin gets its own `chapter_consent` cookie for the next `/r/<key>/<slug>` click). Queue replay supports `(window.ChapterPixel = window.ChapterPixel || []).push(["setConsent", "opt_in"])` so banners that fire before `pixel.js` loads still work.
+  3. **`/api/consent` route extended** to set `chapter_consent` cookie on its own response origin (in addition to existing `up_journey_/up_anon_` identity cookies). This is the cross-domain sync — covers the Tier 1 redirect case where storefront and redirect handler are on different eTLD+1 (3P installs).
+- **Architectural caveat documented in `docs/consent-integration.md`:** 3P installs (EOS, projectagram) — cross-origin cookie propagation is **best-effort**. Modern browsers' third-party cookie restrictions (Safari ITP, Brave, Firefox ETP) may block the `chapter_consent` response cookie from landing on `ads4good.com` when called from `eosfabrics.com`. Server-side consent_events still records, but redirect handler at `ads4good.com/r/<key>/<slug>` may not see the right state. **Mitigation:** migrate these tenants to 1P installs (e.g. `chapter.eosfabrics.com`) — already on backlog.
+- **1P installs (adsforgood_prod, not_so_cavalier) fully reliable** — pixel + API + redirect are all on the same eTLD+1, so cookie sharing works without browser interference.
+- **Integration docs at `docs/consent-integration.md`** — recipes for Cookiebot, OneTrust, and custom inline banners, each ~3 lines calling `ChapterPixel.setConsent(...)`.
+- **Deferred:** wire `ChapterPixel.setConsent()` integration on all 4 client storefronts (ads4good.com, EOS Fabrics Shopify, Projectagram Shopify, NSC Lovable). Server side fully wired; each storefront needs its own banner-integration step. Without it, every visitor stays in "unknown" state, which currently still gets tracked by the gate logic (no regression for unintegrated sites).
+
+### Inbox unread badge for client + agency viewers (June 19, 2026 late-late evening)
+- **Pairs with the staff-reply email notification shipped earlier today.** Visual cue in `/chapter/<key>/*` sidebar showing how many inquiry threads have a pending Chapter team reply the viewer hasn't responded to.
+- **New `getInquiryUnreadCount()` action** in `lib/inquiries/actions.ts`: counts threads visible to the current user where (a) status != 'resolved' AND (b) latest message's `sender_role = 'chapter_staff'`. Capped at 200 thread scan for badge purposes.
+- **chapter_staff sees 0 by design** — they have Gchat pings for their direction; no self-notify badge needed.
+- **Layout passes count to Sidebar as prop.** Sidebar renders badge to existing Inbox nav item when count > 0. Reuses the existing `NavItem.badge` field (already rendered as a pill on the right side of the nav row from earlier work).
+- **No new schema. No new table writes.** Pure read-only count using existing `chapter_inquiries.threads` + `messages` tables.
+
+### Tenants admin edit-in-place (June 19, 2026 late-late evening)
+- **Closes the Sprint 10 follow-on backlog item.** Previously the only mutations were create + revoke + assign — to change an existing row's content you had to revoke + recreate.
+- **Three new server actions in `_actions.ts`:** `updateAgency(agency_key, {display_name, contact_email, notes})`, `updateAllowedDomainNotes(id, notes)`, `updateUserRole({id, role, agency_key, client_key})` — the user one mirrors the `chapter_config.users` CHECK constraint client-side so role-scope alignment errors surface before the DB.
+- **Three new row components** (`AgencyRow`, `DomainRow`, `UserRow`) handle the edit↔view toggle inline within the existing tables. Edit button per row → cells become inputs/selects → Save/Cancel. Save calls the action; success collapses back to view mode + revalidates.
+- **Editing scope per section** — pragmatic, not exhaustive:
+  - Agency: display_name + contact_email + notes (NOT `agency_key` — that's the PK and used in FKs across users + allowed_email_domains).
+  - Domain: notes only (rule shape changes still go via revoke + recreate; domain/role/scope tuple defines the rule's purpose).
+  - User: role + scope (agency_key / client_key) with role-driven scope field visibility + auto-clear when role changes to an incompatible scope.
+
+### Mailchimp recipient_token coverage verified clean (June 19, 2026 late-late evening)
+- **The "Mailchimp recipient_token backfill" todo from earlier in the day was based on incorrect memory** — the backfill actually shipped June 15 per the existing CLAUDE.md entry. Verified end-to-end during this session:
+  - EOS Fabrics: 156,153 Mailchimp engagement rows with **100% `recipient_token` coverage** (6,563 unique tokens, 3,067 unique click-recipients).
+  - `?rid=` URL hint flavor is **fully functional** for any Mailchimp campaign URL on EOS — wrap CTA links as `ads4good.com/r/eos_fabrics/<slug>?to=<destination>&rid=*|UNIQID|*`. Mailchimp expands `*|UNIQID|*` per recipient at send time → redirect handler resolves to `email_sha256` via the `recipient_token` lookup → identity stitched at click.
+  - Newest event timestamp June 16. **Sync rerun via `chapter-scripts/sync-mailchimp-engagement.js`** with `CAMPAIGN_SINCE=2026-06-15` returned zero new rows — EOS hasn't sent any new campaigns since June 16.
+- **Backlog item logged during session:** move `sync-mailchimp-engagement.js` (currently in separate `chapter-scripts/` directory outside main repo, manual run) into the main repo + wire as a Vercel cron. Small future polish; not urgent because campaigns aren't sent daily.
 
 ### Outreach URL Builder — generic 1P link + multi-client picker + per-client redirect host (June 19, 2026 late evening)
 - **Three ergonomic upgrades** to `/internal/outreach-builder` driven by the v2 CRM-interactions roadmap (wrapping external CTAs in 1P redirect URLs becomes the default workflow):
