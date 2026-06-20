@@ -165,6 +165,23 @@ export async function POST(req: NextRequest) {
     maxAge: 60 * 60 * 24 * 365,
   });
 
+  // Set chapter_consent on the API/redirect origin so the redirect handler
+  // at /r/<key>/<slug> reads the right state on the next click. For 1P
+  // installs (storefront and API on same eTLD+1), this lands on the same
+  // host the storefront pixel reads. For 3P installs (cross-origin call
+  // from storefront → ads4good.com), the cookie lands on ads4good.com and
+  // covers the redirect-handler read path; the storefront-side cookie is
+  // set client-side by the pixel (see chapterWriteConsentCookie in pixel.js).
+  if (consent_status === "opt_in" || consent_status === "opt_out") {
+    res.cookies.set("chapter_consent", consent_status, {
+      httpOnly: false,
+      secure: !isLocal,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+  }
+
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
   return withCors(req, res);
 }

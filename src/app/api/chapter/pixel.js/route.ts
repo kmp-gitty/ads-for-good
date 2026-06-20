@@ -200,6 +200,15 @@ if (!anonId) {
         page_path: window.location.pathname,
         referrer: document.referrer || null,
         props: props || {},
+        // Actual visitor consent state read from chapter_consent cookie.
+        // Defaults to "unknown" when no cookie is set — the server's
+        // consent_mode policy decides what to do with "unknown".
+        consent_status: chapterReadConsent(),
+        // consent_mode = the per-client default policy when status is unknown.
+        // "opt_in" = US-style (collect unless explicit opt-out).
+        // "opt_out" = EU-strict (don't collect unless explicit opt-in).
+        // Today hardcoded "opt_out" matching prior behavior; future op a
+        // per-client config knob.
         consent_mode: "opt_out"
       };
 
@@ -248,10 +257,71 @@ if (!anonId) {
     } catch (e) {}
   }
 
+  // Consent helpers (read from storefront-domain cookie).
+  function chapterReadConsent() {
+    try {
+      var match = document.cookie.match(/(?:^|;\s*)chapter_consent=([^;]+)/);
+      if (!match) return "unknown";
+      var v = decodeURIComponent(match[1]);
+      if (v === "opt_in" || v === "opt_out") return v;
+      return "unknown";
+    } catch (e) {
+      return "unknown";
+    }
+  }
+
+  function chapterWriteConsentCookie(state) {
+    // Write on storefront origin (current host). Lax+Secure for typical
+    // first-party use; HTTPS-only.
+    try {
+      var maxAge = 60 * 60 * 24 * 365; // 1 year
+      document.cookie =
+        "chapter_consent=" + encodeURIComponent(state) +
+        "; Path=/; Max-Age=" + maxAge +
+        "; SameSite=Lax" +
+        (location.protocol === "https:" ? "; Secure" : "");
+    } catch (e) {}
+  }
+
+  function chapterPostConsent(state) {
+    // Tell server: writes to consent_events + journey + propagates a
+    // chapter_consent cookie to the API/redirect origin so /r/<key>/<slug>
+    // reads the right state on next click.
+    try {
+      var apiOrigin = getApiOrigin() || "https://ads4good.com";
+      var url = apiOrigin + "/api/consent";
+      fetch(url, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          client_key: clientKey,
+          consent_status: state,
+          consent_mode: "opt_out",
+          consent_ts: new Date().toISOString(),
+          source: "storefront_banner",
+          page_url: window.location.href,
+          page_path: window.location.pathname,
+          referrer: document.referrer || null,
+        }),
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   var api = {
     __chapterLoaded: true,
     track: function (eventName, props) {
       send(eventName, props);
+    },
+    setConsent: function (state) {
+      // Public API for storefront cookie banners. Pass "opt_in" or "opt_out".
+      // Sets local cookie immediately (so the next event in this session
+      // uses the new value) AND posts to /api/consent (so the redirect
+      // domain learns about it).
+      if (state !== "opt_in" && state !== "opt_out") return;
+      chapterWriteConsentCookie(state);
+      chapterPostConsent(state);
     },
     identify: function (props) {
       try {
@@ -279,6 +349,8 @@ if (!anonId) {
         api.track(args[1], args[2] || {});
       } else if (method === "identify") {
         api.identify(args[1] || {});
+      } else if (method === "setConsent") {
+        api.setConsent(args[1]);
       }
     }
   };
