@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
             END,
             jsonb_build_object(
               'journey_id',  cj.journey_id::text,
-              'client_key',  ${TARGET_CLIENT_KEY},
+              'client_key',  ${TARGET_CLIENT_KEY}::text,
               'first_touch', cj.first_touch,
               'country',     cj.country,
               'city',        cj.city
