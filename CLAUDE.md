@@ -1779,6 +1779,22 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ### 🚀 Scale Readiness Roadmap (added May 5, 2026)
 Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; **Fix #24 done May 8; Fix #25 Phase 0 + Phase 1 cascade done May 12; Fix #26 parts 1/3/4 + part 2 framework done May 12; Fix #26 Part 2 route migration done May 13.** Remaining scale items: #28 below + dashboard MV refresh cadence.
 
+### 🚨 NEXT SESSION — DO THIS FIRST (added June 30, 2026)
+**Cliff:** EOS nightly attribution chain is at **~497s and growing ~7–11s/day** vs the cron's 600–800s `maxDuration`. **~2-week clock** before the cron times out. Spec + measured baseline + build order locked in [docs/chapter-billing-usage-handoff.md](docs/chapter-billing-usage-handoff.md).
+
+**Sequenced build order** (from the handoff doc):
+1. **Fix 2 — incremental `canonical_v1` + `canonical_v2`** (the big win; low risk). Reprocess only canonicals that changed tonight (already free via `lifecycle_chapters_snapshot.snapshot_ts_hi`). Same shape as how `lifecycle_chapters` already works. Regression-gate on identical row counts + `channel_path` values vs full rebuild before shipping.
+2. **Fix 1 — per-client tier + retention_days columns + rolling retention floor.** Chapter-spanning caveat: anchor reads to chapter's `first_ts`, not raw event timestamp, to avoid truncating in-flight chapters that started before the floor.
+3. **Validate tier ceilings** (Standard 25K / Growth 75K / Pro 150K human-likely) at ~60–70% of the post-fix cliff.
+4. **Pin + version the classifier** + investigate the April→June drift (April 61.7% bot_likely → June 0.7%). **Billing blocker.**
+5. **`chapter_reporting.usage_snapshot`** + nightly upsert (burst-weighted overhead allocation, effective-dated rate card, monthly reconciliation against real invoices).
+6. **Billing page** at `/chapter/<key>/billing` (Phase 1 transparency view: journeys analyzed + tier utilization % + class breakdown; no costs, no vendor names). Under Support → Inbox in sidebar.
+7. Trailing 2–3 month billing window rule.
+8. Codify fair-use clause + "real customer journey = human_likely" in contract templates.
+9. Consolidate Vercel/Supabase billing onto one business entity.
+
+**Before any DB writes:** read `vercel.json` to confirm the real `refresh-attribution-chain` `maxDuration` (the 600–800s ceiling is inferred from CLAUDE.md, not verified). If lower, the cliff is closer than two weeks.
+
 ### 🔴 Priority 1 — Active build plan (sequenced June 9, 2026)
 
 **Dashboard wiring queue: 10 of 10 pages fully live.** **Production attribution chain cron + Observations + cohort cron all healthy** (validated). **Cross-Source Influence cold-load: 24s → 4s** after Sprint 1.5 (June 8–9). **Boundary-event Phase 2: 11 of 13 dashboard RPCs wired** through `chapter_config.boundary_event()` helper (Sprint 1.3, June 9).
