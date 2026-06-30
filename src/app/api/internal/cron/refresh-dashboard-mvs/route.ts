@@ -17,7 +17,16 @@ import { unauthorizedIfNotCron } from "@/app/lib/monitoring/auth";
 // its own 800s/300s budget; chained schedule keeps the ordering invariant
 // (derived snapshots fire AFTER MVs are refreshed).
 //
-// Schedule: 04:00 UTC. Derived-snapshots cron fires 25 min later (04:25 UTC).
+// Schedule: 03:00 UTC. Moved from 04:00 → 03:00 on June 30, 2026 to fix the
+// chain-order bug: attribution chain at 03:30 UTC reads journey_bot_classification_v1
+// to filter bots. With MV refresh at 04:00 (AFTER chain), the chain saw 23.5h-stale
+// classifications and missed same-day journeys' purchases (they fell through to v2's
+// '(direct)' fallback). Refreshing at 03:00 gives a 30-min buffer for the typical ~3 min
+// refresh (worst-case cold-cache ~13 min still safely finishes before 03:30); chain
+// reads fresh MV. Miss window narrowed from ~23.5h to 30 min (journeys arriving 03:00-03:30
+// still miss tonight, get picked up tomorrow when lifecycle's incremental watermark
+// catches their canonicals). Derived-snapshots cron fires at 04:25 UTC, well after both
+// MV refresh + chain finish.
 export const maxDuration = 800;
 
 const MVS = [
