@@ -631,7 +631,35 @@ setInterval(function () {
     document.head.appendChild(style);
   }
 
+  // Moment Identity v2 Phase 1B — preset_type dispatch.
+  //
+  // Existing v1.5 prompts have preset_type='email_exchange' (DB default) and
+  // continue rendering through chapterRenderPromptV1 unchanged — zero
+  // regression risk. New presets (custom_form, custom_notification,
+  // make_an_offer, phone_call, remind_me) will route through
+  // chapterRenderPromptComposable as Phase 2+ wires up the composable renderer.
   function chapterRenderPrompt(prompt) {
+    var presetType = prompt.preset_type || "email_exchange";
+    if (presetType === "email_exchange") {
+      return chapterRenderPromptV1(prompt);
+    }
+    return chapterRenderPromptComposable(prompt);
+  }
+
+  // Phase 1 stub. Phase 2 fills in actual rendering driven by
+  // content_blocks_jsonb + form_fields_jsonb + submit_actions_jsonb + the
+  // container_jsonb selection (modal/drawer/bubble/inline/takeover).
+  // For now we log a warning so unfinished v2 prompts don't silently fail.
+  function chapterRenderPromptComposable(prompt) {
+    try {
+      console.warn(
+        "[chapter-pixel] composable preset '" + (prompt.preset_type || "?") +
+        "' not yet rendered (Phase 2+); slug=" + (prompt.slug || "?")
+      );
+    } catch (e) {}
+  }
+
+  function chapterRenderPromptV1(prompt) {
     chapterInjectPromptStyles();
     var inputMode = prompt.input_mode || "email";
     var postAction = prompt.post_submit_action || "message";
