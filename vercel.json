@@ -17,6 +17,10 @@
       "schedule": "30 3 * * *"
     },
     {
+      "path": "/api/internal/cron/refresh-usage-snapshot",
+      "schedule": "0 4 * * *"
+    },
+    {
       "path": "/api/internal/cron/refresh-derived-snapshots",
       "schedule": "25 4 * * *"
     },

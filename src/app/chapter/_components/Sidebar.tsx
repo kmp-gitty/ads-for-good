@@ -71,6 +71,11 @@ export function Sidebar({ inquiryUnreadCount = 0 }: { inquiryUnreadCount?: numbe
       // side by design — they have the Gchat ping for their direction).
       badge: inquiryUnreadCount > 0 ? String(inquiryUnreadCount) : undefined,
     },
+    {
+      key: "billing",
+      label: "Billing",
+      icon: "observations",
+    },
   ];
 
   // Default landing is /chapter/overview (Lifecycle Overview) per the
