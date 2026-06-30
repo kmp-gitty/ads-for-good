@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPrompt, updatePrompt, type PromptFormInput } from "../_actions";
+import CustomFormBuilder, { type ContentBlock, type FormField } from "./CustomFormBuilder";
 
 type TriggerType = PromptFormInput["trigger_type"];
 type Frequency = PromptFormInput["frequency"];
@@ -32,6 +33,8 @@ export type ExistingPrompt = {
   frequency: string;
   frequency_days: number | null;
   enabled: boolean;
+  content_blocks_jsonb: ContentBlock[] | null;
+  form_fields_jsonb: FormField[] | null;
 };
 
 // Phase 1C — Preset roadmap. Email Exchange is the current v1.5 path.
@@ -45,7 +48,7 @@ const PRESET_OPTIONS: {
   phase: number;
 }[] = [
   { value: "email_exchange",      label: "Email Exchange",      description: "Email field + button + offer reveal on submit. The existing v1 prompt type.",                       phase: 1 },
-  { value: "custom_form",         label: "Custom Form",         description: "Multi-field, optionally multi-page capture. Lead enrichment + qualification.",                     phase: 2 },
+  { value: "custom_form",         label: "Custom Form",         description: "Multi-field capture. Lead enrichment + qualification.",                                              phase: 2 },
   { value: "custom_notification", label: "Custom Notification", description: "Lightweight corner-bubble (Intercom-style). Yes/no, single CTA, soft offers.",                     phase: 4 },
   { value: "make_an_offer",       label: "Make an Offer",       description: "Cart-recovery bidding with operator-defined thresholds + counter-offer state machine.",            phase: 5 },
   { value: "phone_call",          label: "Phone Call",          description: "CTA-style click-to-call options. No identity capture — analytics-only.",                            phase: 4 },
@@ -71,6 +74,12 @@ export default function PromptForm({
 
   const [presetType, setPresetType] = useState<PresetType>(
     (prompt?.preset_type as PresetType) || "email_exchange",
+  );
+  const [contentBlocks, setContentBlocks] = useState<ContentBlock[]>(
+    prompt?.content_blocks_jsonb ?? [],
+  );
+  const [formFields, setFormFields] = useState<FormField[]>(
+    prompt?.form_fields_jsonb ?? [],
   );
   const [slug, setSlug] = useState(prompt?.slug ?? "");
   const [triggerType, setTriggerType] = useState<TriggerType>(
@@ -112,6 +121,8 @@ export default function PromptForm({
     const input: PromptFormInput = {
       client_key,
       preset_type: presetType,
+      content_blocks_jsonb: contentBlocks,
+      form_fields_jsonb: formFields,
       slug: slug.trim().toLowerCase().replace(/\s+/g, "_"),
       trigger_type: triggerType,
       trigger_selector: triggerSelector,
@@ -174,7 +185,7 @@ export default function PromptForm({
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {PRESET_OPTIONS.map((opt) => {
             const isCurrent = presetType === opt.value;
-            const isAvailable = opt.value === "email_exchange";
+            const isAvailable = opt.value === "email_exchange" || opt.value === "custom_form";
             const disabled = !isAvailable || (isEdit && opt.value !== presetType);
             return (
               <button
@@ -213,7 +224,129 @@ export default function PromptForm({
         )}
       </div>
 
-      {presetType !== "email_exchange" ? (
+      {presetType === "custom_form" ? (
+        <>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="text-sm">
+            <span className="block font-semibold text-neutral-800">Slug</span>
+            <input
+              type="text"
+              value={slug}
+              onChange={e => setSlug(e.target.value)}
+              placeholder="lead_capture"
+              required
+              className={inputCls + " font-mono"}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="block font-semibold text-neutral-800">Trigger type</span>
+            <select
+              value={triggerType}
+              onChange={e => setTriggerType(e.target.value as TriggerType)}
+              className={inputCls}
+            >
+              <option value="click_element">Click element (CSS selector)</option>
+              <option value="exit_intent">Exit intent (mouse leaves viewport)</option>
+              <option value="time_on_page">Time on page</option>
+              <option value="scroll_depth">Scroll depth</option>
+            </select>
+          </label>
+        </div>
+        {triggerType === "click_element" && (
+          <label className="block text-sm">
+            <span className="block font-semibold text-neutral-800">CSS selector</span>
+            <input
+              type="text"
+              value={triggerSelector}
+              onChange={e => setTriggerSelector(e.target.value)}
+              placeholder=".cta-button, #book-now"
+              className={inputCls + " font-mono"}
+            />
+          </label>
+        )}
+        {triggerType === "time_on_page" && (
+          <label className="block text-sm">
+            <span className="block font-semibold text-neutral-800">Delay (ms)</span>
+            <input
+              type="number"
+              value={triggerDelayMs}
+              onChange={e => setTriggerDelayMs(e.target.value)}
+              min={0}
+              className={inputCls + " font-mono"}
+            />
+          </label>
+        )}
+        {triggerType === "scroll_depth" && (
+          <label className="block text-sm">
+            <span className="block font-semibold text-neutral-800">Scroll percent</span>
+            <input
+              type="number"
+              value={triggerPercent}
+              onChange={e => setTriggerPercent(e.target.value)}
+              min={1} max={100}
+              className={inputCls + " font-mono"}
+            />
+          </label>
+        )}
+
+        <CustomFormBuilder
+          contentBlocks={contentBlocks}
+          formFields={formFields}
+          onChange={(next) => {
+            setContentBlocks(next.contentBlocks);
+            setFormFields(next.formFields);
+          }}
+        />
+
+        <div className="grid grid-cols-2 gap-4">
+          <label className="text-sm">
+            <span className="block font-semibold text-neutral-800">Frequency</span>
+            <select
+              value={frequency}
+              onChange={e => setFrequency(e.target.value as Frequency)}
+              className={inputCls}
+            >
+              <option value="session">Once per session</option>
+              <option value="visitor">Once per visitor</option>
+              <option value="every_visit">Every visit (no throttle)</option>
+            </select>
+          </label>
+          {frequency === "visitor" && (
+            <label className="text-sm">
+              <span className="block font-semibold text-neutral-800">Days</span>
+              <input
+                type="number"
+                value={frequencyDays}
+                onChange={e => setFrequencyDays(e.target.value)}
+                min={1}
+                className={inputCls + " font-mono"}
+              />
+            </label>
+          )}
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={e => setEnabled(e.target.checked)}
+          />
+          <span className="font-semibold text-neutral-800">Enabled</span>
+        </label>
+
+        {error && (
+          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        )}
+
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+        >
+          {pending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create prompt")}
+        </button>
+        </>
+      ) : presetType !== "email_exchange" ? (
         <div className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 p-6 text-center">
           <p className="text-sm font-semibold text-neutral-700">
             {PRESET_OPTIONS.find(p => p.value === presetType)?.label}

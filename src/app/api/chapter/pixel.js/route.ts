@@ -646,17 +646,285 @@ setInterval(function () {
     return chapterRenderPromptComposable(prompt);
   }
 
-  // Phase 1 stub. Phase 2 fills in actual rendering driven by
-  // content_blocks_jsonb + form_fields_jsonb + submit_actions_jsonb + the
-  // container_jsonb selection (modal/drawer/bubble/inline/takeover).
-  // For now we log a warning so unfinished v2 prompts don't silently fail.
+  // Phase 2A — composable renderer for Custom Form preset (single-page).
+  // Reads content_blocks_jsonb + form_fields_jsonb + submit_actions_jsonb.
+  // Modal container only (drawer/bubble/inline land in Phase 4).
+  // Field types: email, phone, text, textarea, single_choice, multi_choice.
+  // Submit chain: identify (for_identity:true fields) → store_response →
+  // show_message. Other action types and multi-page deferred to 2B+.
   function chapterRenderPromptComposable(prompt) {
+    chapterInjectPromptStyles();
+
+    var contentBlocks = Array.isArray(prompt.content_blocks_jsonb) ? prompt.content_blocks_jsonb : [];
+    var formFields = Array.isArray(prompt.form_fields_jsonb) ? prompt.form_fields_jsonb : [];
+
+    var backdrop = document.createElement("div");
+    backdrop.className = "chapter-prompt-backdrop";
+    var card = document.createElement("div");
+    card.className = "chapter-prompt-card";
+
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "chapter-prompt-close";
+    closeBtn.textContent = "×";
+    closeBtn.setAttribute("aria-label", "Close");
+    card.appendChild(closeBtn);
+
+    var form = document.createElement("form");
+
+    // Render content blocks (headline + body for Phase 2A; image/video/list
+    // come in 2B). Unknown types are skipped silently.
+    contentBlocks.forEach(function (block) {
+      if (!block || !block.type) return;
+      if (block.type === "headline") {
+        var h = document.createElement("h3");
+        h.className = "chapter-prompt-headline";
+        h.textContent = String(block.text || "");
+        form.appendChild(h);
+      } else if (block.type === "body") {
+        var p = document.createElement("p");
+        p.className = "chapter-prompt-body";
+        p.textContent = String(block.text || "");
+        form.appendChild(p);
+      }
+    });
+
+    // Render form fields. Field configs: {id, type, label, required,
+    // placeholder, options, for_identity}.
+    var fieldElements = {};  // id -> input/group reference for value reads
+    formFields.forEach(function (field) {
+      if (!field || !field.id || !field.type) return;
+      var wrap = document.createElement("div");
+
+      if (field.label) {
+        var lbl = document.createElement("label");
+        lbl.className = "chapter-prompt-field-label";
+        lbl.textContent = String(field.label) + (field.required ? " *" : "");
+        wrap.appendChild(lbl);
+      }
+
+      if (field.type === "text" || field.type === "email" || field.type === "phone") {
+        var inp = document.createElement("input");
+        inp.type = field.type === "email" ? "email" : (field.type === "phone" ? "tel" : "text");
+        inp.className = "chapter-prompt-input";
+        if (field.placeholder) inp.placeholder = String(field.placeholder);
+        if (field.required) inp.required = true;
+        if (field.type === "email") inp.autocomplete = "email";
+        else if (field.type === "phone") inp.autocomplete = "tel";
+        wrap.appendChild(inp);
+        fieldElements[field.id] = { kind: "input", el: inp, config: field };
+      } else if (field.type === "textarea") {
+        var ta = document.createElement("textarea");
+        ta.className = "chapter-prompt-input";
+        ta.rows = 3;
+        if (field.placeholder) ta.placeholder = String(field.placeholder);
+        if (field.required) ta.required = true;
+        wrap.appendChild(ta);
+        fieldElements[field.id] = { kind: "input", el: ta, config: field };
+      } else if (field.type === "single_choice" || field.type === "multi_choice") {
+        var options = Array.isArray(field.options) ? field.options : [];
+        var inputs = [];
+        options.forEach(function (opt, idx) {
+          var optLabel = document.createElement("label");
+          optLabel.style.cssText = "display:block;margin:4px 0;font-size:13px;color:#1F2D43;cursor:pointer;";
+          var radio = document.createElement("input");
+          radio.type = field.type === "single_choice" ? "radio" : "checkbox";
+          radio.name = field.id;
+          radio.value = String(opt);
+          radio.style.cssText = "margin-right:6px;";
+          if (field.required && field.type === "single_choice" && idx === 0) radio.required = true;
+          optLabel.appendChild(radio);
+          optLabel.appendChild(document.createTextNode(String(opt)));
+          wrap.appendChild(optLabel);
+          inputs.push(radio);
+        });
+        fieldElements[field.id] = { kind: "choice", els: inputs, config: field };
+      }
+      form.appendChild(wrap);
+    });
+
+    // Honeypot (same defense as v1 email path)
+    var honeypotInput = document.createElement("input");
+    honeypotInput.type = "text";
+    honeypotInput.name = "hp_field";
+    honeypotInput.tabIndex = -1;
+    honeypotInput.autocomplete = "off";
+    honeypotInput.setAttribute("aria-hidden", "true");
+    honeypotInput.style.cssText =
+      "position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;";
+    form.appendChild(honeypotInput);
+
+    var errorEl = document.createElement("p");
+    errorEl.className = "chapter-prompt-error";
+    errorEl.style.display = "none";
+    form.appendChild(errorEl);
+
+    var button = document.createElement("button");
+    button.type = "submit";
+    button.className = "chapter-prompt-button";
+    button.textContent = "Submit";
+    form.appendChild(button);
+
+    card.appendChild(form);
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+
+    chapterRecordPromptShown(prompt);
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type });
+
+    function dismiss(method) {
+      if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+      api.track("identity_prompt_dismissed", {
+        prompt_slug: prompt.slug,
+        preset_type: prompt.preset_type,
+        dismiss_method: method,
+      });
+    }
+    closeBtn.addEventListener("click", function () { dismiss("close_button"); });
+    backdrop.addEventListener("click", function (e) { if (e.target === backdrop) dismiss("backdrop_click"); });
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.display = "block";
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      errorEl.style.display = "none";
+
+      // Collect values + identify which are identity fields
+      var responses = {};
+      var identityTasks = [];
+      var validationOk = true;
+
+      Object.keys(fieldElements).forEach(function (fieldId) {
+        var ref = fieldElements[fieldId];
+        var cfg = ref.config;
+        var val;
+        if (ref.kind === "input") {
+          val = ref.el.value ? String(ref.el.value).trim() : "";
+        } else if (ref.kind === "choice") {
+          if (cfg.type === "single_choice") {
+            var picked = ref.els.filter(function (r) { return r.checked; });
+            val = picked.length ? picked[0].value : "";
+          } else {
+            val = ref.els.filter(function (r) { return r.checked; }).map(function (r) { return r.value; });
+          }
+        }
+
+        // Validation
+        if (cfg.required) {
+          var isEmpty = (ref.kind === "input" && !val) ||
+            (ref.kind === "choice" && cfg.type === "single_choice" && !val) ||
+            (ref.kind === "choice" && cfg.type === "multi_choice" && (!val || val.length === 0));
+          if (isEmpty) {
+            validationOk = false;
+            showError("Please fill in: " + (cfg.label || cfg.id));
+            return;
+          }
+        }
+
+        if (cfg.for_identity && val) {
+          if (cfg.type === "email" && chapterValidEmail(val)) {
+            identityTasks.push(
+              chapterHashEmail(val).then(function (h) {
+                if (h) {
+                  api.identify({
+                    identity_key: "email_sha256:" + h,
+                    traits: { source: "identity_prompt", prompt_slug: prompt.slug },
+                  });
+                  return "email_sha256:" + h;
+                }
+                return null;
+              })
+            );
+          } else if (cfg.type === "phone") {
+            identityTasks.push(
+              chapterHashPhone(val).then(function (h) {
+                if (h) {
+                  api.identify({
+                    identity_key: "phone_sha256:" + h,
+                    traits: { source: "identity_prompt", prompt_slug: prompt.slug },
+                  });
+                  return "phone_sha256:" + h;
+                }
+                return null;
+              })
+            );
+          }
+        } else {
+          responses[fieldId] = val;
+        }
+      });
+
+      if (!validationOk) return;
+
+      button.disabled = true;
+      button.textContent = "Submitting…";
+
+      Promise.all(identityTasks).then(function (identityKeys) {
+        // Pick the first valid identity key (email preferred per stitch convention)
+        var identityKey = null;
+        for (var i = 0; i < identityKeys.length; i++) {
+          if (identityKeys[i] && identityKeys[i].indexOf("email_sha256:") === 0) {
+            identityKey = identityKeys[i];
+            break;
+          }
+        }
+        if (!identityKey) {
+          for (var j = 0; j < identityKeys.length; j++) {
+            if (identityKeys[j]) { identityKey = identityKeys[j]; break; }
+          }
+        }
+
+        api.track("identity_prompt_submitted", {
+          prompt_slug: prompt.slug,
+          preset_type: prompt.preset_type,
+        });
+
+        // POST to /api/chapter/prompt-response for storage
+        chapterPostPromptResponse({
+          prompt_id: prompt.id,
+          prompt_slug: prompt.slug,
+          responses: responses,
+          identity_key: identityKey,
+          hp_field: honeypotInput.value || "",
+        });
+
+        // Show success state — replace form contents with success message
+        while (card.firstChild) card.removeChild(card.firstChild);
+        card.appendChild(closeBtn);
+        var successMsg = document.createElement("p");
+        successMsg.className = "chapter-prompt-success-msg";
+        successMsg.textContent = "Thanks!";
+        card.appendChild(successMsg);
+      });
+    });
+  }
+
+  function chapterPostPromptResponse(payload) {
+    var apiOrigin = getApiOrigin() || "https://ads4good.com";
+    var url = apiOrigin + "/api/chapter/prompt-response";
     try {
-      console.warn(
-        "[chapter-pixel] composable preset '" + (prompt.preset_type || "?") +
-        "' not yet rendered (Phase 2+); slug=" + (prompt.slug || "?")
-      );
-    } catch (e) {}
+      fetch(url, {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          client_key: clientKey,
+          prompt_id: payload.prompt_id,
+          prompt_slug: payload.prompt_slug,
+          responses: payload.responses,
+          identity_key: payload.identity_key,
+          anonymous_id: typeof cachedAnonId !== "undefined" ? cachedAnonId : null,
+          journey_id: typeof cachedJourneyId !== "undefined" ? cachedJourneyId : null,
+          page_url: window.location.href,
+          session_token: chapterPromptSessionToken,
+          hp_field: payload.hp_field,
+        }),
+      }).catch(function () { /* fire-and-forget */ });
+    } catch (e) { /* noop */ }
   }
 
   function chapterRenderPromptV1(prompt) {

@@ -34,6 +34,9 @@ export type PromptFormInput = {
   frequency: "session" | "visitor" | "every_visit";
   frequency_days: number;
   enabled: boolean;
+  // MI v2 Phase 2A — composable shape (used when preset_type !== 'email_exchange')
+  content_blocks_jsonb?: Array<{ type: string; text: string }>;
+  form_fields_jsonb?: Array<{ id: string; type: string; label: string; required: boolean; placeholder?: string; options?: string[]; for_identity?: boolean }>;
 };
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -79,10 +82,16 @@ function validate(input: PromptFormInput): string | null {
 }
 
 function shapePayload(input: PromptFormInput) {
+  // Composable jsonb columns are populated only for non-Email-Exchange presets.
+  // Email Exchange continues writing the v1.5 dedicated columns; the composable
+  // columns stay null. preset_type discriminates which renderer path runs.
+  const isComposable = input.preset_type !== "email_exchange";
   return {
     preset_type: input.preset_type,
     slug: input.slug,
     trigger_jsonb: buildTriggerJsonb(input),
+    content_blocks_jsonb: isComposable ? (input.content_blocks_jsonb ?? null) : null,
+    form_fields_jsonb: isComposable ? (input.form_fields_jsonb ?? null) : null,
     headline: input.headline.trim(),
     body: input.body.trim() || null,
     input_mode: input.input_mode,
