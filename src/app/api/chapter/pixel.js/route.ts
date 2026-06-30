@@ -667,10 +667,12 @@ setInterval(function () {
     var pages;
     var progressIndicator = false;
     var backButton = true;
+    var branchingRules = [];
     if (pagesConfig && pagesConfig.pages.length > 0) {
       pages = pagesConfig.pages;
       progressIndicator = !!pagesConfig.progress_indicator;
       backButton = pagesConfig.back_button !== false;  // default true
+      branchingRules = Array.isArray(pagesConfig.branching) ? pagesConfig.branching : [];
     } else {
       pages = [{
         id: "_single",
@@ -933,7 +935,27 @@ setInterval(function () {
 
       var isLast = currentPageIdx === pages.length - 1;
       if (!isLast) {
-        renderPage(currentPageIdx + 1);
+        // Phase 2B.1 — apply branching rules. First matching rule wins.
+        // Rule fires when its from_page_id matches the current page AND
+        // accumulatedValues[field_id] equals the rule's value (string-coerced).
+        var currentPageId = pages[currentPageIdx].id;
+        var jumpToIdx = -1;
+        for (var ri = 0; ri < branchingRules.length; ri++) {
+          var rule = branchingRules[ri];
+          if (!rule || rule.from_page_id !== currentPageId) continue;
+          if (!rule.field_id) continue;
+          var actual = accumulatedValues[rule.field_id];
+          var actualStr = Array.isArray(actual) ? actual.join(",") : (actual == null ? "" : String(actual));
+          if (rule.operator === "equals" && actualStr === String(rule.value || "")) {
+            // Find target page idx by id
+            for (var pi = 0; pi < pages.length; pi++) {
+              if (pages[pi].id === rule.to_page_id) { jumpToIdx = pi; break; }
+            }
+            if (jumpToIdx !== -1) break;  // First matching rule wins
+          }
+        }
+        // Fallback: sequential next if no rule matched OR to_page is invalid
+        renderPage(jumpToIdx !== -1 ? jumpToIdx : currentPageIdx + 1);
         return;
       }
 

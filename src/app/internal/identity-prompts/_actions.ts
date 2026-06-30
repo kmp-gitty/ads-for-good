@@ -46,6 +46,14 @@ export type PromptFormInput = {
     }>;
     progress_indicator: boolean;
     back_button: boolean;
+    // MI v2 Phase 2B.1 — conditional branching rules
+    branching?: Array<{
+      from_page_id: string;
+      field_id: string;
+      operator: "equals";
+      value: string;
+      to_page_id: string;
+    }>;
   } | null;
 };
 
