@@ -6,6 +6,8 @@ import { createPrompt, updatePrompt, type PromptFormInput } from "../_actions";
 import CustomFormBuilder, { type ContentBlock, type FormField } from "./CustomFormBuilder";
 import MultiPageBuilder, { type PagesConfig } from "./MultiPageBuilder";
 import RecoveryBuilder, { type RecoveryConfig } from "./RecoveryBuilder";
+import NotificationBuilder, { type NotificationConfig } from "./NotificationBuilder";
+import PhoneCallBuilder, { type PhoneCallConfig, type PhoneCta } from "./PhoneCallBuilder";
 
 type TriggerType = PromptFormInput["trigger_type"];
 type Frequency = PromptFormInput["frequency"];
@@ -39,6 +41,15 @@ export type ExistingPrompt = {
   form_fields_jsonb: FormField[] | null;
   pages_jsonb: PagesConfig | null;
   recovery_jsonb: RecoveryConfig | null;
+  container_jsonb: { type: string; position?: string } | null;
+  submit_actions_jsonb: {
+    cta_type?: "dismiss_only" | "button" | "yes_no";
+    cta_label?: string;
+    cta_url?: string;
+    yes_label?: string;
+    yes_url?: string;
+    no_label?: string;
+  } | null;
 };
 
 // Phase 1C — Preset roadmap. Email Exchange is the current v1.5 path.
@@ -104,6 +115,28 @@ export default function PromptForm({
       max_attempts: 1,
     },
   );
+  const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>(() => {
+    const c = prompt?.container_jsonb;
+    const a = prompt?.submit_actions_jsonb;
+    return {
+      container: {
+        type: "bubble",
+        position: (c?.position as NotificationConfig["container"]["position"]) || "bottom-right",
+      },
+      content_blocks: prompt?.content_blocks_jsonb ?? [],
+      submit_actions: {
+        cta_type: a?.cta_type || "dismiss_only",
+        cta_label: a?.cta_label,
+        cta_url: a?.cta_url,
+        yes_label: a?.yes_label,
+        yes_url: a?.yes_url,
+        no_label: a?.no_label,
+      },
+    };
+  });
+  const [phoneCallConfig, setPhoneCallConfig] = useState<PhoneCallConfig>(() => ({
+    content_blocks: (prompt?.content_blocks_jsonb as PhoneCallConfig["content_blocks"]) ?? [],
+  }));
   const [slug, setSlug] = useState(prompt?.slug ?? "");
   const [triggerType, setTriggerType] = useState<TriggerType>(
     (trig.type as TriggerType) || "click_element",
@@ -141,13 +174,34 @@ export default function PromptForm({
     e.preventDefault();
     setError(null);
 
+    // Phase 4: when notification or phone_call selected, content_blocks comes
+    // from the respective builder (not the form-fields builder).
+    let effectiveContentBlocks = multiPageEnabled ? [] : contentBlocks;
+    let effectiveContainer: PromptFormInput["container_jsonb"] = null;
+    let effectiveSubmitActions: PromptFormInput["submit_actions_jsonb"] = null;
+    if (presetType === "custom_notification") {
+      effectiveContentBlocks = notificationConfig.content_blocks;
+      effectiveContainer = notificationConfig.container;
+      effectiveSubmitActions = notificationConfig.submit_actions;
+    } else if (presetType === "phone_call") {
+      effectiveContentBlocks = phoneCallConfig.content_blocks as ContentBlock[];
+      effectiveContainer = { type: "modal" };
+    }
+
     const input: PromptFormInput = {
       client_key,
       preset_type: presetType,
-      content_blocks_jsonb: multiPageEnabled ? [] : contentBlocks,
-      form_fields_jsonb: multiPageEnabled ? [] : formFields,
-      pages_jsonb: multiPageEnabled ? pagesConfig : null,
-      recovery_jsonb: recoveryConfig.enabled ? recoveryConfig : null,
+      content_blocks_jsonb: effectiveContentBlocks,
+      form_fields_jsonb:
+        presetType === "custom_notification" || presetType === "phone_call"
+          ? []
+          : multiPageEnabled
+            ? []
+            : formFields,
+      pages_jsonb: multiPageEnabled && presetType === "custom_form" ? pagesConfig : null,
+      recovery_jsonb: recoveryConfig.enabled && presetType === "custom_form" ? recoveryConfig : null,
+      container_jsonb: effectiveContainer,
+      submit_actions_jsonb: effectiveSubmitActions,
       slug: slug.trim().toLowerCase().replace(/\s+/g, "_"),
       trigger_type: triggerType,
       trigger_selector: triggerSelector,
@@ -210,7 +264,11 @@ export default function PromptForm({
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {PRESET_OPTIONS.map((opt) => {
             const isCurrent = presetType === opt.value;
-            const isAvailable = opt.value === "email_exchange" || opt.value === "custom_form";
+            const isAvailable =
+              opt.value === "email_exchange" ||
+              opt.value === "custom_form" ||
+              opt.value === "custom_notification" ||
+              opt.value === "phone_call";
             const disabled = !isAvailable || (isEdit && opt.value !== presetType);
             return (
               <button
@@ -342,6 +400,125 @@ export default function PromptForm({
         )}
 
         <RecoveryBuilder value={recoveryConfig} onChange={setRecoveryConfig} />
+
+        <div className="grid grid-cols-2 gap-4">
+          <label className="text-sm">
+            <span className="block font-semibold text-neutral-800">Frequency</span>
+            <select
+              value={frequency}
+              onChange={e => setFrequency(e.target.value as Frequency)}
+              className={inputCls}
+            >
+              <option value="session">Once per session</option>
+              <option value="visitor">Once per visitor</option>
+              <option value="every_visit">Every visit (no throttle)</option>
+            </select>
+          </label>
+          {frequency === "visitor" && (
+            <label className="text-sm">
+              <span className="block font-semibold text-neutral-800">Days</span>
+              <input
+                type="number"
+                value={frequencyDays}
+                onChange={e => setFrequencyDays(e.target.value)}
+                min={1}
+                className={inputCls + " font-mono"}
+              />
+            </label>
+          )}
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={e => setEnabled(e.target.checked)}
+          />
+          <span className="font-semibold text-neutral-800">Enabled</span>
+        </label>
+
+        {error && (
+          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        )}
+
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+        >
+          {pending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create prompt")}
+        </button>
+        </>
+      ) : presetType === "custom_notification" || presetType === "phone_call" ? (
+        <>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="text-sm">
+            <span className="block font-semibold text-neutral-800">Slug</span>
+            <input
+              type="text"
+              value={slug}
+              onChange={e => setSlug(e.target.value)}
+              placeholder={presetType === "phone_call" ? "talk_to_sales" : "got_a_question"}
+              required
+              className={inputCls + " font-mono"}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="block font-semibold text-neutral-800">Trigger type</span>
+            <select
+              value={triggerType}
+              onChange={e => setTriggerType(e.target.value as TriggerType)}
+              className={inputCls}
+            >
+              <option value="click_element">Click element (CSS selector)</option>
+              <option value="exit_intent">Exit intent (mouse leaves viewport)</option>
+              <option value="time_on_page">Time on page</option>
+              <option value="scroll_depth">Scroll depth</option>
+            </select>
+          </label>
+        </div>
+        {triggerType === "click_element" && (
+          <label className="block text-sm">
+            <span className="block font-semibold text-neutral-800">CSS selector</span>
+            <input
+              type="text"
+              value={triggerSelector}
+              onChange={e => setTriggerSelector(e.target.value)}
+              placeholder=".help-bubble"
+              className={inputCls + " font-mono"}
+            />
+          </label>
+        )}
+        {triggerType === "time_on_page" && (
+          <label className="block text-sm">
+            <span className="block font-semibold text-neutral-800">Delay (ms)</span>
+            <input
+              type="number"
+              value={triggerDelayMs}
+              onChange={e => setTriggerDelayMs(e.target.value)}
+              min={0}
+              className={inputCls + " font-mono"}
+            />
+          </label>
+        )}
+        {triggerType === "scroll_depth" && (
+          <label className="block text-sm">
+            <span className="block font-semibold text-neutral-800">Scroll percent</span>
+            <input
+              type="number"
+              value={triggerPercent}
+              onChange={e => setTriggerPercent(e.target.value)}
+              min={1} max={100}
+              className={inputCls + " font-mono"}
+            />
+          </label>
+        )}
+
+        {presetType === "custom_notification" ? (
+          <NotificationBuilder value={notificationConfig} onChange={setNotificationConfig} />
+        ) : (
+          <PhoneCallBuilder value={phoneCallConfig} onChange={setPhoneCallConfig} />
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <label className="text-sm">

@@ -22,7 +22,7 @@ export default async function EditPromptPage({
     .schema("chapter_config")
     .from("identity_prompts")
     .select(
-      "id, slug, preset_type, trigger_jsonb, headline, body, input_mode, email_placeholder, phone_placeholder, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, post_submit_button_label, email_subject, email_body, frequency, frequency_days, enabled, content_blocks_jsonb, form_fields_jsonb, pages_jsonb, recovery_jsonb",
+      "id, slug, preset_type, trigger_jsonb, headline, body, input_mode, email_placeholder, phone_placeholder, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, post_submit_button_label, email_subject, email_body, frequency, frequency_days, enabled, content_blocks_jsonb, form_fields_jsonb, pages_jsonb, recovery_jsonb, container_jsonb, submit_actions_jsonb",
     )
     .eq("id", promptId)
     .eq("client_key", clientKey)

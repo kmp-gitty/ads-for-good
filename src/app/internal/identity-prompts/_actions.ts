@@ -63,6 +63,16 @@ export type PromptFormInput = {
     form_fields: Array<{ id: string; type: string; label: string; required: boolean; placeholder?: string; options?: string[]; for_identity?: boolean }>;
     max_attempts: number;
   } | null;
+  // MI v2 Phase 4 — bubble container + CTA actions (Custom Notification + future presets)
+  container_jsonb?: { type: "modal" | "bubble"; position?: "bottom-right" | "bottom-left" | "top-right" | "top-left" } | null;
+  submit_actions_jsonb?: {
+    cta_type?: "dismiss_only" | "button" | "yes_no";
+    cta_label?: string;
+    cta_url?: string;
+    yes_label?: string;
+    yes_url?: string;
+    no_label?: string;
+  } | null;
 };
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -120,6 +130,8 @@ function shapePayload(input: PromptFormInput) {
     form_fields_jsonb: isComposable ? (input.form_fields_jsonb ?? null) : null,
     pages_jsonb: isComposable ? (input.pages_jsonb ?? null) : null,
     recovery_jsonb: isComposable ? (input.recovery_jsonb ?? null) : null,
+    container_jsonb: isComposable ? (input.container_jsonb ?? null) : null,
+    submit_actions_jsonb: isComposable ? (input.submit_actions_jsonb ?? null) : null,
     headline: input.headline.trim(),
     body: input.body.trim() || null,
     input_mode: input.input_mode,

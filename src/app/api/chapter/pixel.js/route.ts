@@ -627,23 +627,202 @@ setInterval(function () {
       ".chapter-prompt-offer{background:#FBE6D2;border:1px dashed #E36410;border-radius:8px;padding:12px;margin-top:8px;text-align:center;}",
       ".chapter-prompt-offer-code{font-family:monospace;font-size:18px;font-weight:700;color:#1F2D43;letter-spacing:.05em;}",
       ".chapter-prompt-offer-desc{font-size:12px;color:#5C6B82;margin-top:4px;}",
+      // MI v2 Phase 4 — bubble container (Custom Notification preset)
+      ".chapter-prompt-bubble{position:fixed;z-index:2147483640;background:#fff;border-radius:12px;padding:20px;max-width:340px;width:calc(100% - 32px);box-shadow:0 8px 32px rgba(31,45,67,.18);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;animation:chapter-bubble-in .25s ease-out;}",
+      ".chapter-prompt-bubble-bottom-right{bottom:24px;right:24px;}",
+      ".chapter-prompt-bubble-bottom-left{bottom:24px;left:24px;}",
+      ".chapter-prompt-bubble-top-right{top:24px;right:24px;}",
+      ".chapter-prompt-bubble-top-left{top:24px;left:24px;}",
+      "@keyframes chapter-bubble-in{from{transform:translateY(12px);opacity:0;}to{transform:translateY(0);opacity:1;}}",
+      ".chapter-prompt-yesno{display:flex;gap:8px;margin-top:12px;}",
+      ".chapter-prompt-yesno button{flex:1;padding:10px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;border:0;}",
+      ".chapter-prompt-yesno .chapter-yes{background:#E36410;color:#fff;}",
+      ".chapter-prompt-yesno .chapter-yes:hover{background:#C9550B;}",
+      ".chapter-prompt-yesno .chapter-no{background:#F1ECDF;color:#1F2D43;}",
+      ".chapter-prompt-yesno .chapter-no:hover{background:#E5DDC8;}",
+      // MI v2 Phase 4 — phone CTA (Phone Call preset)
+      ".chapter-prompt-phone-cta{display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 16px;margin-top:8px;background:#fff;border:1px solid #E36410;border-radius:8px;color:#E36410;text-decoration:none;font-size:14px;font-weight:600;}",
+      ".chapter-prompt-phone-cta:hover{background:#FFF4EC;}",
+      ".chapter-prompt-phone-cta-label{}",
+      ".chapter-prompt-phone-cta-number{font-family:monospace;font-size:13px;opacity:.85;}",
     ].join("");
     document.head.appendChild(style);
   }
 
-  // Moment Identity v2 Phase 1B — preset_type dispatch.
+  // Moment Identity v2 — preset_type dispatch.
   //
-  // Existing v1.5 prompts have preset_type='email_exchange' (DB default) and
-  // continue rendering through chapterRenderPromptV1 unchanged — zero
-  // regression risk. New presets (custom_form, custom_notification,
-  // make_an_offer, phone_call, remind_me) will route through
-  // chapterRenderPromptComposable as Phase 2+ wires up the composable renderer.
+  // Existing v1.5 prompts (preset_type='email_exchange') route through V1.
+  // Phase 2 custom_form routes through Composable. Phase 4 adds bubble
+  // (Custom Notification) + Phone Call renderers. make_an_offer + remind_me
+  // fall through to Composable for now (Phase 5/6 will replace).
   function chapterRenderPrompt(prompt) {
     var presetType = prompt.preset_type || "email_exchange";
-    if (presetType === "email_exchange") {
-      return chapterRenderPromptV1(prompt);
-    }
+    if (presetType === "email_exchange") return chapterRenderPromptV1(prompt);
+    if (presetType === "custom_notification") return chapterRenderPromptBubble(prompt);
+    if (presetType === "phone_call") return chapterRenderPromptPhoneCall(prompt);
     return chapterRenderPromptComposable(prompt);
+  }
+
+  // MI v2 Phase 4 — bubble container (Custom Notification preset).
+  // Fixed corner position, no backdrop, slide-in animation, dismissible.
+  // Supports content blocks (headline, body) + a single CTA (button/yes_no/dismiss_only).
+  function chapterRenderPromptBubble(prompt) {
+    chapterInjectPromptStyles();
+    var container = prompt.container_jsonb || {};
+    var actions = prompt.submit_actions_jsonb || {};
+    var position = container.position || "bottom-right";
+    var contentBlocks = Array.isArray(prompt.content_blocks_jsonb) ? prompt.content_blocks_jsonb : [];
+
+    var bubble = document.createElement("div");
+    bubble.className = "chapter-prompt-bubble chapter-prompt-bubble-" + position;
+
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "chapter-prompt-close";
+    closeBtn.textContent = "×";
+    closeBtn.setAttribute("aria-label", "Dismiss");
+    bubble.appendChild(closeBtn);
+
+    contentBlocks.forEach(function (block) {
+      if (!block || !block.type) return;
+      if (block.type === "headline") {
+        var h = document.createElement("h3");
+        h.className = "chapter-prompt-headline";
+        h.textContent = String(block.text || "");
+        bubble.appendChild(h);
+      } else if (block.type === "body") {
+        var p = document.createElement("p");
+        p.className = "chapter-prompt-body";
+        p.textContent = String(block.text || "");
+        bubble.appendChild(p);
+      }
+    });
+
+    function dismiss(method, choice) {
+      if (bubble.parentNode) bubble.parentNode.removeChild(bubble);
+      var props = { prompt_slug: prompt.slug, preset_type: prompt.preset_type, dismiss_method: method };
+      if (choice) props.choice = choice;
+      api.track("identity_prompt_dismissed", props);
+    }
+
+    var ctaType = actions.cta_type || "dismiss_only";
+    if (ctaType === "yes_no") {
+      var wrap = document.createElement("div");
+      wrap.className = "chapter-prompt-yesno";
+      var yesBtn = document.createElement("button");
+      yesBtn.type = "button";
+      yesBtn.className = "chapter-yes";
+      yesBtn.textContent = actions.yes_label || "Yes";
+      var noBtn = document.createElement("button");
+      noBtn.type = "button";
+      noBtn.className = "chapter-no";
+      noBtn.textContent = actions.no_label || "No thanks";
+      yesBtn.addEventListener("click", function () {
+        api.track("identity_prompt_submitted", { prompt_slug: prompt.slug, preset_type: prompt.preset_type, choice: "yes" });
+        if (actions.yes_url) { try { window.location.href = String(actions.yes_url); } catch (e) {} }
+        dismiss("yes_clicked", "yes");
+      });
+      noBtn.addEventListener("click", function () { dismiss("no_clicked", "no"); });
+      wrap.appendChild(yesBtn);
+      wrap.appendChild(noBtn);
+      bubble.appendChild(wrap);
+    } else if (ctaType === "button") {
+      var btn = document.createElement("a");
+      btn.className = "chapter-prompt-link-btn";
+      btn.style.display = "block";
+      btn.style.textAlign = "center";
+      btn.href = String(actions.cta_url || "#");
+      btn.textContent = actions.cta_label || "Open";
+      btn.addEventListener("click", function () {
+        api.track("identity_prompt_submitted", { prompt_slug: prompt.slug, preset_type: prompt.preset_type });
+      });
+      bubble.appendChild(btn);
+    }
+    // 'dismiss_only': no CTA, just the close button.
+
+    closeBtn.addEventListener("click", function () { dismiss("close_button"); });
+
+    document.body.appendChild(bubble);
+    chapterRecordPromptShown(prompt);
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type, container: "bubble" });
+  }
+
+  // MI v2 Phase 4 — Phone Call preset.
+  // Modal layout, content blocks + N tel: CTA buttons. No form, no identity
+  // capture. Each tel: click fires phone_call_initiated with the masked number.
+  function chapterRenderPromptPhoneCall(prompt) {
+    chapterInjectPromptStyles();
+    var contentBlocks = Array.isArray(prompt.content_blocks_jsonb) ? prompt.content_blocks_jsonb : [];
+
+    var backdrop = document.createElement("div");
+    backdrop.className = "chapter-prompt-backdrop";
+    var card = document.createElement("div");
+    card.className = "chapter-prompt-card";
+
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "chapter-prompt-close";
+    closeBtn.textContent = "×";
+    closeBtn.setAttribute("aria-label", "Close");
+    card.appendChild(closeBtn);
+
+    contentBlocks.forEach(function (block) {
+      if (!block || !block.type) return;
+      if (block.type === "headline") {
+        var h = document.createElement("h3");
+        h.className = "chapter-prompt-headline";
+        h.textContent = String(block.text || "");
+        card.appendChild(h);
+      } else if (block.type === "body") {
+        var p = document.createElement("p");
+        p.className = "chapter-prompt-body";
+        p.textContent = String(block.text || "");
+        card.appendChild(p);
+      } else if (block.type === "phone_cta") {
+        var num = String(block.phone_number || "");
+        var lbl = String(block.label || num);
+        if (!num) return;
+        var a = document.createElement("a");
+        a.className = "chapter-prompt-phone-cta";
+        a.href = "tel:" + num;
+        var labelSpan = document.createElement("span");
+        labelSpan.className = "chapter-prompt-phone-cta-label";
+        labelSpan.textContent = lbl;
+        var numSpan = document.createElement("span");
+        numSpan.className = "chapter-prompt-phone-cta-number";
+        numSpan.textContent = num;
+        a.appendChild(labelSpan);
+        a.appendChild(numSpan);
+        a.addEventListener("click", function () {
+          // Hash phone number client-side for the event (privacy: never log raw).
+          chapterHashPhone(num).then(function (h) {
+            api.track("phone_call_initiated", {
+              prompt_slug: prompt.slug,
+              preset_type: prompt.preset_type,
+              cta_label: lbl,
+              phone_sha256: h || null,
+            });
+          });
+        });
+        card.appendChild(a);
+      }
+    });
+
+    function dismiss(method) {
+      if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+      api.track("identity_prompt_dismissed", {
+        prompt_slug: prompt.slug,
+        preset_type: prompt.preset_type,
+        dismiss_method: method,
+      });
+    }
+    closeBtn.addEventListener("click", function () { dismiss("close_button"); });
+    backdrop.addEventListener("click", function (e) { if (e.target === backdrop) dismiss("backdrop_click"); });
+
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+    chapterRecordPromptShown(prompt);
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type, container: "modal" });
   }
 
   // Phase 2A/2B — composable renderer for Custom Form preset.
