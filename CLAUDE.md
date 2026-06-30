@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: June 30, 2026 (evening — Fix 2 SHIPPED: canonical_v1 + canonical_v2 incrementalized, EOS nightly chain ~500s → ~86s, headroom restored from 100s to 514s of 600s cron ceiling. ~22-23× speedup on v1/v2 stages. Pre-existing chain-order bug (MV refresh after attribution) and session-tie non-determinism discovered + filed)
+> Last updated: June 30, 2026 (late-late evening — TWELVE commits, NINE distinct shipments tonight: Fix 2 incremental v1/v2 (cliff cleared), chain-order MV reschedule, Fix 1A tier+retention schema, classifier v1 pinned, MI v2 Phase 3 auto-email infrastructure, MI v2 Phase 4 Custom Notification + Phone Call presets, usage_snapshot + tier ceiling helper + trailing window + cron, Billing page Phase 1 transparency view, classifier calibration tooling)
 
 ---
 
@@ -191,6 +191,68 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ---
 
 ## ✅ Completed Fixes (as of June 30, 2026)
+
+### Classifier calibration tooling (June 30, 2026 late-late evening)
+- **Per `docs/bot-classifier-v1.md` calibration backlog** — built the labeling infrastructure so the operator can measure precision/recall against ground truth whenever they want. The pin (earlier tonight) closed the change-control gap; this closes the accuracy-measurement gap.
+- **New table `chapter_observations.classifier_labels`** — one row per (client, journey) with `mv_bot_class` + `mv_bot_score` snapshot at labeling time (so future re-classifications don't poison historical calibration) + `operator_label` ('human' | 'suspect' | 'bot' | 'unsure') + `operator_notes` + `labeled_by` + `labeled_at`. Unique on `(client_key, journey_id)`.
+- **Admin UI at `/internal/classifier-calibration`** — page pulls a random 20-journey sample from the last 30 days, filters out already-labelled ones, computes confusion matrix stats from the labels table. Operator picks a client from the switcher (4 active clients), sees each journey with v1's verdict (chip + score) + every signal v1 reads (event_count, distinct types, page_view/scroll/hover/time_on/identify counts, has_identity, durations, gaps, events/min). Click one of 4 label buttons → optimistic mark + server action upserts. "New sample" button re-rolls.
+- **Stats panel computes (once labels accumulate to ≥20):**
+  - **False positive on `suspect`** = real humans excluded from billing as suspect (we're under-billing the client by this much)
+  - **False negative on `human_likely`** = bots billed as human (we're over-billing the client by this much)
+  - **Confusion matrix** (raw counts, expandable details panel)
+- **Locked semantics:** the snapshot of `mv_bot_class` + `mv_bot_score` at labeling time is the contract. If the MV gets refreshed later and a journey's classification changes, that doesn't invalidate the historical label — we measure v1's accuracy on the data v1 actually wrote at that moment.
+- **Files:** schema migration `classifier_labels_table`; [src/app/internal/classifier-calibration/page.tsx](src/app/internal/classifier-calibration/page.tsx), [CalibrationBoard.tsx](src/app/internal/classifier-calibration/CalibrationBoard.tsx), [_actions.ts](src/app/internal/classifier-calibration/_actions.ts), [layout.tsx](src/app/internal/classifier-calibration/layout.tsx).
+- **Operator workflow when picking up:** visit `/internal/classifier-calibration?client=eos_fabrics`, label ~20 journeys per session over a few sittings (don't try to do all 200 at once — fatigue-induced mis-labels poison ground truth), come back to check the stats panel after each batch. Threshold tuning becomes possible once each client has >50 labels.
+
+### usage_snapshot + tier ceiling helper + trailing window function + Billing page Phase 1 (June 30, 2026 late-late evening)
+- **Billing roadmap foundation shipped end-to-end.** Per `docs/chapter-billing-usage-handoff.md`'s Priority 3 spec — usage_snapshot table + tier ceiling helper + trailing window function + nightly cron + Billing page Phase 1 transparency view. All in one shipment because the page depends on the snapshot.
+- **Schema (migration `usage_snapshot_and_tier_ceiling`):**
+  - **`chapter_reporting.usage_snapshot`** — one row per `(snapshot_date, client_key)`. **Identity:** snapshot_date, client_key, tier, retention_days, classifier_version (default 'v1' — pinned per row). **Usage (client-facing, MTD):** human_likely / suspect / bot_likely journey counts, total_events, avg_events_per_human_journey. **Tier math:** tier_journey_ceiling (computed via helper), utilization_pct. **Health (internal):** chain_seconds_today, chain_headroom_pct, cumulative_events_to_date, est_disk_bytes. **Cost buckets (NULL today, populated by future rate-card cron):** storage/visualization/analysis/attributable/overhead/fully-loaded/tier-price/margin. PK on `(snapshot_date, client_key)`.
+  - **`chapter_reporting.tier_journey_ceiling(p_tier text) RETURNS integer`** IMMUTABLE — `standard=25K / growth=75K / pro=150K / NULL otherwise`. Inline-foldable so the planner can use it in WHERE clauses for free.
+  - **`chapter_reporting.trailing_human_journeys(client_key, end_date, months=3) RETURNS numeric`** STABLE — averages MTD totals across trailing N months (uses MAX per month since MTD counts grow monotonically within a month). Used by future tier-recommendation logic so a single seasonal spike doesn't auto-bump tier.
+- **Cron route `/api/internal/cron/refresh-usage-snapshot`** scheduled **04:00 UTC** daily (slot opened up when dashboard-mvs moved to 03:00). Iterates active clients (those with non-revoked client_secrets), single SQL with CTEs computes everything in one round-trip, upserts today's row (re-run during the day overwrites with fresher data). Per-client error → GChat alert. `maxDuration=300` (will complete in seconds).
+- **Today's snapshot seeded** (one-time backfill) for all 4 active clients. EOS: 14,990 human / 24,947 suspect / 254 bot, 1.73M events MTD, 5.96M cumulative. utilization_pct NULL because tier is NULL (Fix 1A default).
+- **Billing page at `/chapter/<key>/billing`** (under Support → Inbox in sidebar). Phase 1 transparency view per handoff spec:
+  - **Plan header** — tier label + ceiling + utilization bar (renders "Plan not assigned" + neutral state when tier NULL)
+  - **Class-breakdown table** — Real customer journeys (counts toward plan, orange "Counts" pill) / Low-signal sessions (excluded, neutral pill) / Filtered bot traffic (excluded) + Total processed row. Each row has counts + share-of-total + counts-toward-plan column. Per-class subtitle explains the classification rule in plain English.
+  - **Good-faith caption** — "We processed N additional sessions this month and excluded them from your plan, so you're only assessed on verified customer activity."
+  - **Secondary metrics row** — Total events MTD, Avg events per real journey, Lifetime events tracked
+  - **Classifier version footer** — `classifier_version: v1` for audit trail
+  - **No costs, no vendor names** — strictly Phase 1; Phase 2 invoices come later
+- **Sidebar link added** under Support, below Inbox. Uses observations icon for visual consistency.
+- **Files:** schema migration; [/api/internal/cron/refresh-usage-snapshot/route.ts](src/app/api/internal/cron/refresh-usage-snapshot/route.ts); [/chapter/(authed)/billing/page.tsx](src/app/chapter/(authed)/billing/page.tsx) + [BillingClient.tsx](src/app/chapter/(authed)/billing/BillingClient.tsx); [Sidebar.tsx](src/app/chapter/_components/Sidebar.tsx). [vercel.json](vercel.json) gains the cron entry.
+
+### MI v2 Phase 4 — Custom Notification + Phone Call presets (June 30, 2026 evening)
+- **Two new operator-usable presets**, both enabled in the picker (no more "Phase 4" badge on either). Custom Notification is the corner-bubble Intercom-style affordance; Phone Call is a CTA-only modal with tel: links for analytics-driven call campaigns.
+- **Pixel renderer additions:**
+  - **`chapterRenderPromptBubble`** (Custom Notification) — new `bubble` container type. Fixed corner position (4 choices: bottom-right, bottom-left, top-right, top-left), no backdrop, slide-in animation, dismissible. CTA modes: `dismiss_only` (just close X), `button` (single CTA with operator-configured URL), `yes_no` (two-button row, optional Yes URL). Fires `identity_prompt_submitted` on yes with `choice='yes'`; `identity_prompt_dismissed` with method/choice on close.
+  - **`chapterRenderPromptPhoneCall`** (Phone Call) — modal container with content blocks + N tel: CTAs. No form, no identity capture. Each phone CTA renders as a labelled outlined link with monospace number. Click fires `phone_call_initiated` event with the SHA-256 hash of the number (never raw).
+- **New container + CTA styles** in pixel.js: `.chapter-prompt-bubble` + 4 position variants + `@keyframes chapter-bubble-in` (250ms slide-in) + `.chapter-prompt-yesno` (yes/no button row) + `.chapter-prompt-phone-cta` (outlined link with label + monospace number).
+- **Admin builders:**
+  - **`NotificationBuilder.tsx`** — position picker (4 corners as radio buttons), content blocks (headline + body, addable + removable), CTA type radio (dismiss_only / button / yes_no) with type-conditional fields.
+  - **`PhoneCallBuilder.tsx`** — content blocks + ordered phone CTA list (Add Headline / Add Body / Add Phone CTA buttons; per-CTA label + phone_number; reorder up/down + delete).
+- **PromptForm** renders the right builder per `preset_type`, saves `container_jsonb` + `submit_actions_jsonb` (Phase 4 columns). Action input type extended; `shapePayload` writes the new fields when `preset_type !== 'email_exchange'`. Edit page select extended with the two new columns.
+- **Build fix shipped same evening:** PhoneCallBuilder had a TypeScript narrowing issue (Partial<Union> ≠ Union<Partial>). Reordered the ternary to check the more specific `phone_cta` discriminant first, relaxed `updateBlock` next-param shape to a union-of-partials. Now compiles clean.
+- **Files (new):** [NotificationBuilder.tsx](src/app/internal/identity-prompts/[clientKey]/NotificationBuilder.tsx), [PhoneCallBuilder.tsx](src/app/internal/identity-prompts/[clientKey]/PhoneCallBuilder.tsx). Modified: [pixel.js/route.ts](src/app/api/chapter/pixel.js/route.ts), [PromptForm.tsx](src/app/internal/identity-prompts/[clientKey]/PromptForm.tsx), [_actions.ts](src/app/internal/identity-prompts/_actions.ts), [edit page.tsx](src/app/internal/identity-prompts/[clientKey]/[promptId]/edit/page.tsx).
+
+### MI v2 Phase 3 — Auto-email send infrastructure (June 30, 2026 evening)
+- **Foundation for Phases 5 + 6** (which can't actually fire their emails without this). Three pieces shipping together: orchestrator + adapters + template authoring + audit log + webhook receiver. Platform-agnostic by design — Resend direct adapter functional today; Klaviyo + Mailchimp ESP adapters land when first client onboards onto those.
+- **Library at `src/app/lib/email-send/`:**
+  - **`types.ts`** — `EmailSendInput`, `EmailAdapter`, `EmailSendResult`, `EmailMechanism` ('direct' | 'esp_klaviyo' | 'esp_mailchimp'), `ClientEmailConfig`, `AdapterContext` interfaces. `EmailSourceType` enum: 'identity_prompt' | 'offer_response' | 'subscription_event' | 'test_send'.
+  - **`index.ts`** — `sendEmail()` orchestrator. Picks adapter from `client.email_mechanism` or per-prompt override, looks up template from `chapter_config.email_templates`, renders, sends, audits to `chapter_engagement.email_sends`. All callers go through this. Existing direct Resend calls in `/api/inquiry`, `/api/chapter/identity-prompt-email`, `/lib/inquiries/actions.ts` predate and are left as-is for now.
+  - **`direct-adapters/resend.ts`** — full Resend implementation using existing `RESEND_API_KEY` env var. Honors `client.email_reply_to` + `email_sender_domain` (Resend supports multiple verified domains per account).
+  - **`esp-adapters/klaviyo.ts`** — shell returning `klaviyo_adapter_not_yet_implemented`. Documents the integration pattern (Klaviyo events API: profile + metric event → flow trigger). Klaviyo doesn't support arbitrary transactional sends like Resend; the integration is event-based.
+  - **`esp-adapters/mailchimp.ts`** — shell. Documents the two sub-modes: `tag_trigger` (add a tag → Mailchimp Journey sends from its templates) vs `mandrill_send` (direct transactional via Mandrill API).
+  - **`templates/default-shell.ts`** — HTML wrapper with orange branding + preheader + reply-to footer.
+  - **`templates/render.ts`** — composes shell + operator subject/body + merge data; `{{token}}` substitution leaves unknown tokens literal (so operators SEE the failure in the rendered email).
+- **Admin UI at `/internal/identity-prompts/[clientKey]/templates`:**
+  - **List page** — existing `chapter_config.email_templates` rows for the client + inline create form
+  - **TemplateForm.tsx** — editor with `template_type` cheat sheet of merge tokens per common type (welcome_offer, offer_accepted, offer_countered, offer_declined, back_in_stock, price_dropped, custom_form_followup)
+  - **`[templateType]/page.tsx`** — edit single template
+  - **`_actions.ts`** — upsert + delete server actions (PK on `(client_key, template_type)`, can't change template_type on edit)
+  - **"Email templates →" link** added to per-client prompts page header alongside "View responses →"
+- **Webhook at `/api/email-send-webhook`** — POST handler for Resend events (`email.delivered` / `email.bounced` / `email.complained` / `email.delivery_delayed`). Looks up `email_sends` row by `esp_message_id`, updates status + status_detail. Signature verification deferred to v2 (svix dependency cost).
+- **Files:** all 12 new under `src/app/lib/email-send/` + `src/app/internal/identity-prompts/[clientKey]/templates/` + `src/app/api/email-send-webhook/`.
 
 ### Bot classifier v1 pinned + drift mystery resolved (June 30, 2026)
 - **Pin shipped as a contractual lock**, not a schema rebuild. New doc [docs/bot-classifier-v1.md](docs/bot-classifier-v1.md) is the authoritative definition of `chapter_reporting.journey_bot_classification_v1` — every signal, weight, threshold, rationale. Change-control: any modification to v1's signals/weights/thresholds requires a new MV `_v2` alongside, with `usage_snapshot.classifier_version` stamping each billing row. Specifically prohibited: modifying `_v1` in place.
