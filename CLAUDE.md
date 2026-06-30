@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: June 29, 2026 (post-vacation evening — Moment Identity v2 Phase 1 + Phase 2 complete: schema migration + pixel preset dispatch + admin preset picker + Custom Form preset end-to-end with single-page, multi-page, conditional branching, recovery flow, and responses admin view)
+> Last updated: June 30, 2026 (evening — Fix 2 SHIPPED: canonical_v1 + canonical_v2 incrementalized, EOS nightly chain ~500s → ~86s, headroom restored from 100s to 514s of 600s cron ceiling. ~22-23× speedup on v1/v2 stages. Pre-existing chain-order bug (MV refresh after attribution) and session-tie non-determinism discovered + filed)
 
 ---
 
@@ -190,7 +190,20 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ---
 
-## ✅ Completed Fixes (as of June 29, 2026)
+## ✅ Completed Fixes (as of June 30, 2026)
+
+### Fix 2 — canonical_v1 + canonical_v2 incrementalized (June 30, 2026)
+- **The cliff:** EOS nightly chain was at **497-500s** vs Vercel's **600s** `maxDuration` ceiling on `/api/internal/cron/refresh-attribution-chain` (the 800s figure in the original handoff was wrong — verified 600s in route handler). Growth rate ~13s/day (v1 6.7 + v2 6.7). Clock to cliff: **~7-8 days, no new clients added.** Root cause: v1/v2 were all-time full rebuilds. They DELETE'd every row for the client and re-scanned all accumulated pixel_events / lifecycle_chapters_snapshot every night. Cost grows with cumulative data forever.
+- **The fix (migration `fix_2_canonical_v1_v2_incremental`):** mirror lifecycle_chapters' affected-canonical pattern (the same shape Fix 25 used May 12). Affected canonicals = those lifecycle re-wrote in this chain, identified by `snapshot_ts_hi` match. Free signal — lifecycle already stamps it. Pixel re-sessionization is scoped by `journey_id` (not identity_key) so multi-canonical journeys keep full event context for session boundary detection.
+- **Algorithm:** `_affected = SELECT DISTINCT canonical FROM lifecycle_chapters_snapshot WHERE client_key=X AND snapshot_ts_hi=v_snapshot_ts_hi`. `_raw_ids = identity_canon JOIN _affected` (same shape as lifecycle's `_opt_b_raw_ids`). `_journeys = DISTINCT pixel_events.journey_id WHERE identity_key IN _raw_ids`. Scoped DELETE + scoped INSERT — same CTE chain as full rebuild but with `JOIN _journeys` on the pixel scan and `JOIN _affected` on chapter_meta. Dormant canonicals stay frozen — intentional.
+- **Regression test:** built `_test` function variants writing to scratch tables. Ran against EOS at `snapshot_ts_hi=2026-06-30 03:30:07.144638+00`. Compared incremental output vs full-rebuild output (both run NOW, same MV/canon state), scoped to the 225 affected canonicals.
+  - **v1: 225/225 chapters present** (0 missing, 0 extra). **222/225 byte-identical (98.7%).** The 3 mismatches: 1 was pure-multiset-match (reordered channels — pre-existing session-tie non-determinism in `STRING_AGG(... ORDER BY entry_ts, sessionized_journey_id)` when sessions tie on both); 2 were caused by identity_canon mutations between the two test runs (04:57 UTC and 17:14 UTC — both happened to mutate between v1_test and v1_test_full). **No regressions from the incremental scope.**
+  - **v2: 234/234 exact match.**
+- **Performance:** v1 **214s → ~10s (~22×)**, v2 **220s → ~10s (~23×)**. **Chain wall-clock 500s → ~86s.** Headroom **514s of 600s ceiling** (was 100s). Growth rate now scales with daily affected canonicals (near-constant) instead of cumulative event volume.
+- **Architectural notes:** signature unchanged (`(p_client_key, p_snapshot_ts_hi DEFAULT NULL)`) so orchestrator + cron route unchanged. New `_snapshot_runs` label `'canonical_v[12]_snapshot_incremental'` distinguishes incremental runs from prior full-rebuilds in audit history. Empty-affected case returns immediately with 0 rows + status='ok'; production tables retain prior state.
+- **Discovered separately during regression — chain-order bug** (not introduced by Fix 2). Production missed 2 chapters today because `journey_bot_classification_v1` (a materialized view that v1 reads to filter bots) wasn't refreshed until 04:00 UTC — AFTER the attribution chain at 03:30 UTC. Tonight's journeys hadn't been classified yet when v1 ran. Those 2 chapters fell through to v2's `(direct)` fallback instead of being attributed to their actual channels. **Filed as separate to-do.** Fix is to reorder crons (MV refresh before attribution) OR include MV refresh inside the attribution chain.
+- **Lessons re-locked:** Supabase pooler client-side timeout at ~5 min is NOT a query failure (memory: `feedback_avoid_pooler_for_long_queries.md`). Backend keeps running. Poll table row counts to detect completion. The v1_test_full full rebuild client-timed out twice but completed server-side at 1088 rows both times. Apples-to-apples regression testing requires same-time runs of both variants because identity_canon mutates continuously.
+- **Files:** [docs/fix-2-canonical-incremental-design.md](docs/fix-2-canonical-incremental-design.md) (full design + regression results). Production functions: `chapter_attribution.refresh_canonical_v1_snapshot`, `chapter_attribution.refresh_canonical_v2_snapshot`.
 
 ### Moment Identity v2 Phase 1 + Phase 2 — Custom Form preset end-to-end (June 29, 2026, post-vacation)
 - **Picked up from the locked architectural plan** (June 19 entry below). The 6-open-questions, the two-parallel-column-groups discriminator strategy, the `chapter_engagement` schema layout, and the platform-adapter stubs were all designed but unshipped at vacation start. This session executes Phase 1 + Phase 2 against that plan. 7 commits in one evening (`6782c01` → `6d857ab`).
@@ -1779,21 +1792,19 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ### 🚀 Scale Readiness Roadmap (added May 5, 2026)
 Pipeline of clients on the horizon: 300-location school, 2K-location national dentist, B2B startup, more ecommerce. Goal: prevent the "single runaway query melts the DB" pattern from May 5 (Fix #21 cascade) and similar issues at 5-30 clients with high per-client volume. Build for scale + security NOW, not after the next blowup. Fixes #22, #23, #27 done May 7; **Fix #24 done May 8; Fix #25 Phase 0 + Phase 1 cascade done May 12; Fix #26 parts 1/3/4 + part 2 framework done May 12; Fix #26 Part 2 route migration done May 13.** Remaining scale items: #28 below + dashboard MV refresh cadence.
 
-### 🚨 NEXT SESSION — DO THIS FIRST (added June 30, 2026)
-**Cliff:** EOS nightly attribution chain is at **~497s and growing ~7–11s/day** vs the cron's 600–800s `maxDuration`. **~2-week clock** before the cron times out. Spec + measured baseline + build order locked in [docs/chapter-billing-usage-handoff.md](docs/chapter-billing-usage-handoff.md).
+### 🟢 Cliff cleared — next priorities (updated June 30, 2026)
+Fix 2 shipped. Chain wall-clock 500s → ~86s, **headroom 514s of 600s ceiling** (was 100s). Growth rate drops too — v1/v2 now scale with daily affected canonicals (near-constant), not cumulative event volume.
 
-**Sequenced build order** (from the handoff doc):
-1. **Fix 2 — incremental `canonical_v1` + `canonical_v2`** (the big win; low risk). Reprocess only canonicals that changed tonight (already free via `lifecycle_chapters_snapshot.snapshot_ts_hi`). Same shape as how `lifecycle_chapters` already works. Regression-gate on identical row counts + `channel_path` values vs full rebuild before shipping.
-2. **Fix 1 — per-client tier + retention_days columns + rolling retention floor.** Chapter-spanning caveat: anchor reads to chapter's `first_ts`, not raw event timestamp, to avoid truncating in-flight chapters that started before the floor.
-3. **Validate tier ceilings** (Standard 25K / Growth 75K / Pro 150K human-likely) at ~60–70% of the post-fix cliff.
-4. **Pin + version the classifier** + investigate the April→June drift (April 61.7% bot_likely → June 0.7%). **Billing blocker.**
+Remaining billing/usage build order (from [docs/chapter-billing-usage-handoff.md](docs/chapter-billing-usage-handoff.md)):
+1. **Chain-order bug** (filed June 30 from regression test) — `journey_bot_classification_v1` refreshes at 04:00 UTC, AFTER the 03:30 UTC attribution chain. Same-day journeys miss attribution because the MV doesn't yet have them classified when v1 runs. Reorder crons OR refresh MVs inside the attribution chain. ~1hr fix, blocks honest same-day attribution.
+2. **Fix 1 — per-client tier + retention_days + rolling retention floor.** Smaller win than Fix 2 (depth matters less than breadth here), but needed before tier validation. Chapter-spanning caveat: anchor reads to chapter's `first_ts`, not raw event timestamp.
+3. **Validate tier ceilings** (Standard 25K / Growth 75K / Pro 150K human-likely) at ~60–70% of the post-fix cliff. Need to measure chain-seconds per human-journey post-Fix 2.
+4. **Pin + version the classifier** + investigate April→June drift (April 61.7% bot_likely → June 0.7%). **Billing blocker.**
 5. **`chapter_reporting.usage_snapshot`** + nightly upsert (burst-weighted overhead allocation, effective-dated rate card, monthly reconciliation against real invoices).
-6. **Billing page** at `/chapter/<key>/billing` (Phase 1 transparency view: journeys analyzed + tier utilization % + class breakdown; no costs, no vendor names). Under Support → Inbox in sidebar.
+6. **Billing page** at `/chapter/<key>/billing` (Phase 1 transparency view). Under Support → Inbox in sidebar.
 7. Trailing 2–3 month billing window rule.
 8. Codify fair-use clause + "real customer journey = human_likely" in contract templates.
 9. Consolidate Vercel/Supabase billing onto one business entity.
-
-**Before any DB writes:** read `vercel.json` to confirm the real `refresh-attribution-chain` `maxDuration` (the 600–800s ceiling is inferred from CLAUDE.md, not verified). If lower, the cliff is closer than two weeks.
 
 ### 🔴 Priority 1 — Active build plan (sequenced June 9, 2026)
 
