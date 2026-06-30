@@ -646,18 +646,40 @@ setInterval(function () {
     return chapterRenderPromptComposable(prompt);
   }
 
-  // Phase 2A — composable renderer for Custom Form preset (single-page).
-  // Reads content_blocks_jsonb + form_fields_jsonb + submit_actions_jsonb.
+  // Phase 2A/2B — composable renderer for Custom Form preset.
+  //
+  // Detects multi-page mode from pages_jsonb. Single-page is the trivial
+  // case (1 synthetic page from root content_blocks_jsonb + form_fields_jsonb).
+  // Multi-page: Back + Next navigation, optional progress dots, accumulated
+  // values across pages, identity hashing + POST run once at final Submit.
+  //
   // Modal container only (drawer/bubble/inline land in Phase 4).
   // Field types: email, phone, text, textarea, single_choice, multi_choice.
-  // Submit chain: identify (for_identity:true fields) → store_response →
-  // show_message. Other action types and multi-page deferred to 2B+.
+  // Conditional branching between pages deferred to Phase 2B.1.
   function chapterRenderPromptComposable(prompt) {
     chapterInjectPromptStyles();
 
-    var contentBlocks = Array.isArray(prompt.content_blocks_jsonb) ? prompt.content_blocks_jsonb : [];
-    var formFields = Array.isArray(prompt.form_fields_jsonb) ? prompt.form_fields_jsonb : [];
+    // Resolve pages: pages_jsonb wins; otherwise synthesize a single page
+    // from root content_blocks_jsonb + form_fields_jsonb (Phase 2A shape).
+    var pagesConfig = prompt.pages_jsonb && Array.isArray(prompt.pages_jsonb.pages)
+      ? prompt.pages_jsonb
+      : null;
+    var pages;
+    var progressIndicator = false;
+    var backButton = true;
+    if (pagesConfig && pagesConfig.pages.length > 0) {
+      pages = pagesConfig.pages;
+      progressIndicator = !!pagesConfig.progress_indicator;
+      backButton = pagesConfig.back_button !== false;  // default true
+    } else {
+      pages = [{
+        id: "_single",
+        content_blocks: Array.isArray(prompt.content_blocks_jsonb) ? prompt.content_blocks_jsonb : [],
+        form_fields: Array.isArray(prompt.form_fields_jsonb) ? prompt.form_fields_jsonb : [],
+      }];
+    }
 
+    // DOM scaffolding shared across page navigations.
     var backdrop = document.createElement("div");
     backdrop.className = "chapter-prompt-backdrop";
     var card = document.createElement("div");
@@ -671,79 +693,10 @@ setInterval(function () {
     card.appendChild(closeBtn);
 
     var form = document.createElement("form");
+    var contentArea = document.createElement("div");  // gets cleared+repopulated per page
+    form.appendChild(contentArea);
 
-    // Render content blocks (headline + body for Phase 2A; image/video/list
-    // come in 2B). Unknown types are skipped silently.
-    contentBlocks.forEach(function (block) {
-      if (!block || !block.type) return;
-      if (block.type === "headline") {
-        var h = document.createElement("h3");
-        h.className = "chapter-prompt-headline";
-        h.textContent = String(block.text || "");
-        form.appendChild(h);
-      } else if (block.type === "body") {
-        var p = document.createElement("p");
-        p.className = "chapter-prompt-body";
-        p.textContent = String(block.text || "");
-        form.appendChild(p);
-      }
-    });
-
-    // Render form fields. Field configs: {id, type, label, required,
-    // placeholder, options, for_identity}.
-    var fieldElements = {};  // id -> input/group reference for value reads
-    formFields.forEach(function (field) {
-      if (!field || !field.id || !field.type) return;
-      var wrap = document.createElement("div");
-
-      if (field.label) {
-        var lbl = document.createElement("label");
-        lbl.className = "chapter-prompt-field-label";
-        lbl.textContent = String(field.label) + (field.required ? " *" : "");
-        wrap.appendChild(lbl);
-      }
-
-      if (field.type === "text" || field.type === "email" || field.type === "phone") {
-        var inp = document.createElement("input");
-        inp.type = field.type === "email" ? "email" : (field.type === "phone" ? "tel" : "text");
-        inp.className = "chapter-prompt-input";
-        if (field.placeholder) inp.placeholder = String(field.placeholder);
-        if (field.required) inp.required = true;
-        if (field.type === "email") inp.autocomplete = "email";
-        else if (field.type === "phone") inp.autocomplete = "tel";
-        wrap.appendChild(inp);
-        fieldElements[field.id] = { kind: "input", el: inp, config: field };
-      } else if (field.type === "textarea") {
-        var ta = document.createElement("textarea");
-        ta.className = "chapter-prompt-input";
-        ta.rows = 3;
-        if (field.placeholder) ta.placeholder = String(field.placeholder);
-        if (field.required) ta.required = true;
-        wrap.appendChild(ta);
-        fieldElements[field.id] = { kind: "input", el: ta, config: field };
-      } else if (field.type === "single_choice" || field.type === "multi_choice") {
-        var options = Array.isArray(field.options) ? field.options : [];
-        var inputs = [];
-        options.forEach(function (opt, idx) {
-          var optLabel = document.createElement("label");
-          optLabel.style.cssText = "display:block;margin:4px 0;font-size:13px;color:#1F2D43;cursor:pointer;";
-          var radio = document.createElement("input");
-          radio.type = field.type === "single_choice" ? "radio" : "checkbox";
-          radio.name = field.id;
-          radio.value = String(opt);
-          radio.style.cssText = "margin-right:6px;";
-          if (field.required && field.type === "single_choice" && idx === 0) radio.required = true;
-          optLabel.appendChild(radio);
-          optLabel.appendChild(document.createTextNode(String(opt)));
-          wrap.appendChild(optLabel);
-          inputs.push(radio);
-        });
-        fieldElements[field.id] = { kind: "choice", els: inputs, config: field };
-      }
-      form.appendChild(wrap);
-    });
-
-    // Honeypot (same defense as v1 email path)
+    // Honeypot lives on the form, not in the content area — preserved across pages.
     var honeypotInput = document.createElement("input");
     honeypotInput.type = "text";
     honeypotInput.name = "hp_field";
@@ -759,11 +712,9 @@ setInterval(function () {
     errorEl.style.display = "none";
     form.appendChild(errorEl);
 
-    var button = document.createElement("button");
-    button.type = "submit";
-    button.className = "chapter-prompt-button";
-    button.textContent = "Submit";
-    form.appendChild(button);
+    var navWrap = document.createElement("div");
+    navWrap.style.cssText = "display:flex;gap:8px;align-items:center;margin-top:12px;";
+    form.appendChild(navWrap);
 
     card.appendChild(form);
     backdrop.appendChild(card);
@@ -788,22 +739,111 @@ setInterval(function () {
       errorEl.style.display = "block";
     }
 
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      errorEl.style.display = "none";
+    // Cross-page state.
+    var currentPageIdx = 0;
+    var accumulatedValues = {};      // field_id -> value (string | string[])
+    var fieldConfigsById = {};       // field_id -> field config (for identity-flag lookup at submit)
+    var currentPageRefs = {};        // field_id -> { kind, el / els, config } for THIS page
 
-      // Collect values + identify which are identity fields
-      var responses = {};
-      var identityTasks = [];
-      var validationOk = true;
+    function buildContentBlock(block) {
+      if (!block || !block.type) return null;
+      if (block.type === "headline") {
+        var h = document.createElement("h3");
+        h.className = "chapter-prompt-headline";
+        h.textContent = String(block.text || "");
+        return h;
+      } else if (block.type === "body") {
+        var p = document.createElement("p");
+        p.className = "chapter-prompt-body";
+        p.textContent = String(block.text || "");
+        return p;
+      }
+      return null;
+    }
 
-      Object.keys(fieldElements).forEach(function (fieldId) {
-        var ref = fieldElements[fieldId];
-        var cfg = ref.config;
-        var val;
+    function buildFormField(field) {
+      var wrap = document.createElement("div");
+      if (field.label) {
+        var lbl = document.createElement("label");
+        lbl.className = "chapter-prompt-field-label";
+        lbl.textContent = String(field.label) + (field.required ? " *" : "");
+        wrap.appendChild(lbl);
+      }
+      var prev = accumulatedValues[field.id];  // restore prior value on Back nav
+
+      if (field.type === "text" || field.type === "email" || field.type === "phone") {
+        var inp = document.createElement("input");
+        inp.type = field.type === "email" ? "email" : (field.type === "phone" ? "tel" : "text");
+        inp.className = "chapter-prompt-input";
+        if (field.placeholder) inp.placeholder = String(field.placeholder);
+        if (field.required) inp.required = true;
+        if (field.type === "email") inp.autocomplete = "email";
+        else if (field.type === "phone") inp.autocomplete = "tel";
+        if (typeof prev === "string") inp.value = prev;
+        wrap.appendChild(inp);
+        currentPageRefs[field.id] = { kind: "input", el: inp, config: field };
+      } else if (field.type === "textarea") {
+        var ta = document.createElement("textarea");
+        ta.className = "chapter-prompt-input";
+        ta.rows = 3;
+        if (field.placeholder) ta.placeholder = String(field.placeholder);
+        if (field.required) ta.required = true;
+        if (typeof prev === "string") ta.value = prev;
+        wrap.appendChild(ta);
+        currentPageRefs[field.id] = { kind: "input", el: ta, config: field };
+      } else if (field.type === "single_choice" || field.type === "multi_choice") {
+        var options = Array.isArray(field.options) ? field.options : [];
+        var inputs = [];
+        options.forEach(function (opt, optIdx) {
+          var optLabel = document.createElement("label");
+          optLabel.style.cssText = "display:block;margin:4px 0;font-size:13px;color:#1F2D43;cursor:pointer;";
+          var radio = document.createElement("input");
+          radio.type = field.type === "single_choice" ? "radio" : "checkbox";
+          radio.name = field.id;
+          radio.value = String(opt);
+          radio.style.cssText = "margin-right:6px;";
+          if (field.required && field.type === "single_choice" && optIdx === 0) radio.required = true;
+          if (prev) {
+            if (field.type === "single_choice" && prev === String(opt)) radio.checked = true;
+            else if (field.type === "multi_choice" && Array.isArray(prev) && prev.indexOf(String(opt)) !== -1) radio.checked = true;
+          }
+          optLabel.appendChild(radio);
+          optLabel.appendChild(document.createTextNode(String(opt)));
+          wrap.appendChild(optLabel);
+          inputs.push(radio);
+        });
+        currentPageRefs[field.id] = { kind: "choice", els: inputs, config: field };
+      }
+      return wrap;
+    }
+
+    function captureCurrentPageValues() {
+      Object.keys(currentPageRefs).forEach(function (fieldId) {
+        var ref = currentPageRefs[fieldId];
         if (ref.kind === "input") {
-          val = ref.el.value ? String(ref.el.value).trim() : "";
+          accumulatedValues[fieldId] = ref.el.value ? String(ref.el.value).trim() : "";
         } else if (ref.kind === "choice") {
+          if (ref.config.type === "single_choice") {
+            var picked = ref.els.filter(function (r) { return r.checked; });
+            accumulatedValues[fieldId] = picked.length ? picked[0].value : "";
+          } else {
+            accumulatedValues[fieldId] = ref.els.filter(function (r) { return r.checked; }).map(function (r) { return r.value; });
+          }
+        }
+        fieldConfigsById[fieldId] = ref.config;
+      });
+    }
+
+    function validateCurrentPage() {
+      var ok = true;
+      Object.keys(currentPageRefs).forEach(function (fieldId) {
+        if (!ok) return;
+        var ref = currentPageRefs[fieldId];
+        var cfg = ref.config;
+        if (!cfg.required) return;
+        var val;
+        if (ref.kind === "input") val = ref.el.value ? String(ref.el.value).trim() : "";
+        else if (ref.kind === "choice") {
           if (cfg.type === "single_choice") {
             var picked = ref.els.filter(function (r) { return r.checked; });
             val = picked.length ? picked[0].value : "";
@@ -811,20 +851,103 @@ setInterval(function () {
             val = ref.els.filter(function (r) { return r.checked; }).map(function (r) { return r.value; });
           }
         }
-
-        // Validation
-        if (cfg.required) {
-          var isEmpty = (ref.kind === "input" && !val) ||
-            (ref.kind === "choice" && cfg.type === "single_choice" && !val) ||
-            (ref.kind === "choice" && cfg.type === "multi_choice" && (!val || val.length === 0));
-          if (isEmpty) {
-            validationOk = false;
-            showError("Please fill in: " + (cfg.label || cfg.id));
-            return;
-          }
+        var isEmpty = (ref.kind === "input" && !val) ||
+          (ref.kind === "choice" && cfg.type === "single_choice" && !val) ||
+          (ref.kind === "choice" && cfg.type === "multi_choice" && (!val || val.length === 0));
+        if (isEmpty) {
+          showError("Please fill in: " + (cfg.label || cfg.id));
+          ok = false;
         }
+      });
+      return ok;
+    }
 
-        if (cfg.for_identity && val) {
+    function renderPage(idx) {
+      currentPageIdx = idx;
+      currentPageRefs = {};
+      errorEl.style.display = "none";
+      while (contentArea.firstChild) contentArea.removeChild(contentArea.firstChild);
+      while (navWrap.firstChild) navWrap.removeChild(navWrap.firstChild);
+
+      var isMultiPage = pages.length > 1;
+      var isLast = idx === pages.length - 1;
+      var isFirst = idx === 0;
+      var page = pages[idx];
+
+      // Progress dots (multi-page only)
+      if (isMultiPage && progressIndicator) {
+        var dots = document.createElement("div");
+        dots.style.cssText = "display:flex;gap:6px;justify-content:center;margin-bottom:12px;";
+        pages.forEach(function (_, dotIdx) {
+          var dot = document.createElement("span");
+          dot.style.cssText = "width:8px;height:8px;border-radius:50%;display:inline-block;" +
+            "background:" + (dotIdx === idx ? "#E36410" : (dotIdx < idx ? "#FED7AA" : "#E5E7EB")) + ";";
+          dots.appendChild(dot);
+        });
+        contentArea.appendChild(dots);
+      }
+
+      // Content blocks
+      (page.content_blocks || []).forEach(function (block) {
+        var el = buildContentBlock(block);
+        if (el) contentArea.appendChild(el);
+      });
+
+      // Form fields
+      (page.form_fields || []).forEach(function (field) {
+        if (!field || !field.id || !field.type) return;
+        var fieldEl = buildFormField(field);
+        if (fieldEl) contentArea.appendChild(fieldEl);
+      });
+
+      // Nav buttons
+      if (isMultiPage && !isFirst && backButton) {
+        var backBtn = document.createElement("button");
+        backBtn.type = "button";
+        backBtn.className = "chapter-prompt-button";
+        backBtn.style.cssText = "background:#9CA3AF;flex:1;";
+        backBtn.textContent = "Back";
+        backBtn.addEventListener("click", function () {
+          captureCurrentPageValues();  // preserve current entries even when navigating back
+          renderPage(idx - 1);
+        });
+        navWrap.appendChild(backBtn);
+      }
+
+      var primaryBtn = document.createElement("button");
+      primaryBtn.type = "submit";
+      primaryBtn.className = "chapter-prompt-button";
+      primaryBtn.style.cssText = "flex:1;";
+      primaryBtn.textContent = isLast ? "Submit" : "Next";
+      navWrap.appendChild(primaryBtn);
+    }
+
+    renderPage(0);
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      errorEl.style.display = "none";
+
+      if (!validateCurrentPage()) return;
+      captureCurrentPageValues();
+
+      var isLast = currentPageIdx === pages.length - 1;
+      if (!isLast) {
+        renderPage(currentPageIdx + 1);
+        return;
+      }
+
+      // Final submit — process accumulated values across all pages.
+      var primaryBtn = navWrap.querySelector('button[type="submit"]');
+      if (primaryBtn) { primaryBtn.disabled = true; primaryBtn.textContent = "Submitting…"; }
+
+      var identityTasks = [];
+      var responses = {};
+
+      Object.keys(accumulatedValues).forEach(function (fieldId) {
+        var cfg = fieldConfigsById[fieldId];
+        var val = accumulatedValues[fieldId];
+        if (cfg && cfg.for_identity && val) {
           if (cfg.type === "email" && chapterValidEmail(val)) {
             identityTasks.push(
               chapterHashEmail(val).then(function (h) {
@@ -857,13 +980,7 @@ setInterval(function () {
         }
       });
 
-      if (!validationOk) return;
-
-      button.disabled = true;
-      button.textContent = "Submitting…";
-
       Promise.all(identityTasks).then(function (identityKeys) {
-        // Pick the first valid identity key (email preferred per stitch convention)
         var identityKey = null;
         for (var i = 0; i < identityKeys.length; i++) {
           if (identityKeys[i] && identityKeys[i].indexOf("email_sha256:") === 0) {
@@ -882,7 +999,6 @@ setInterval(function () {
           preset_type: prompt.preset_type,
         });
 
-        // POST to /api/chapter/prompt-response for storage
         chapterPostPromptResponse({
           prompt_id: prompt.id,
           prompt_slug: prompt.slug,
@@ -891,7 +1007,7 @@ setInterval(function () {
           hp_field: honeypotInput.value || "",
         });
 
-        // Show success state — replace form contents with success message
+        // Success state
         while (card.firstChild) card.removeChild(card.firstChild);
         card.appendChild(closeBtn);
         var successMsg = document.createElement("p");

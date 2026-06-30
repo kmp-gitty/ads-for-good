@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPrompt, updatePrompt, type PromptFormInput } from "../_actions";
 import CustomFormBuilder, { type ContentBlock, type FormField } from "./CustomFormBuilder";
+import MultiPageBuilder, { type PagesConfig } from "./MultiPageBuilder";
 
 type TriggerType = PromptFormInput["trigger_type"];
 type Frequency = PromptFormInput["frequency"];
@@ -35,6 +36,7 @@ export type ExistingPrompt = {
   enabled: boolean;
   content_blocks_jsonb: ContentBlock[] | null;
   form_fields_jsonb: FormField[] | null;
+  pages_jsonb: PagesConfig | null;
 };
 
 // Phase 1C — Preset roadmap. Email Exchange is the current v1.5 path.
@@ -81,6 +83,16 @@ export default function PromptForm({
   const [formFields, setFormFields] = useState<FormField[]>(
     prompt?.form_fields_jsonb ?? [],
   );
+  const [multiPageEnabled, setMultiPageEnabled] = useState<boolean>(
+    !!(prompt?.pages_jsonb && prompt.pages_jsonb.pages && prompt.pages_jsonb.pages.length > 0),
+  );
+  const [pagesConfig, setPagesConfig] = useState<PagesConfig>(
+    prompt?.pages_jsonb ?? {
+      pages: [{ id: "page_1", content_blocks: [], form_fields: [] }],
+      progress_indicator: true,
+      back_button: true,
+    },
+  );
   const [slug, setSlug] = useState(prompt?.slug ?? "");
   const [triggerType, setTriggerType] = useState<TriggerType>(
     (trig.type as TriggerType) || "click_element",
@@ -121,8 +133,9 @@ export default function PromptForm({
     const input: PromptFormInput = {
       client_key,
       preset_type: presetType,
-      content_blocks_jsonb: contentBlocks,
-      form_fields_jsonb: formFields,
+      content_blocks_jsonb: multiPageEnabled ? [] : contentBlocks,
+      form_fields_jsonb: multiPageEnabled ? [] : formFields,
+      pages_jsonb: multiPageEnabled ? pagesConfig : null,
       slug: slug.trim().toLowerCase().replace(/\s+/g, "_"),
       trigger_type: triggerType,
       trigger_selector: triggerSelector,
@@ -289,14 +302,32 @@ export default function PromptForm({
           </label>
         )}
 
-        <CustomFormBuilder
-          contentBlocks={contentBlocks}
-          formFields={formFields}
-          onChange={(next) => {
-            setContentBlocks(next.contentBlocks);
-            setFormFields(next.formFields);
-          }}
-        />
+        <div className="rounded-md border border-neutral-300 bg-white p-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={multiPageEnabled}
+              onChange={e => setMultiPageEnabled(e.target.checked)}
+            />
+            <span className="font-semibold text-neutral-800">Multi-page form</span>
+            <span className="text-xs text-neutral-500">
+              Break the form into ordered pages with Next / Back navigation
+            </span>
+          </label>
+        </div>
+
+        {multiPageEnabled ? (
+          <MultiPageBuilder value={pagesConfig} onChange={setPagesConfig} />
+        ) : (
+          <CustomFormBuilder
+            contentBlocks={contentBlocks}
+            formFields={formFields}
+            onChange={(next) => {
+              setContentBlocks(next.contentBlocks);
+              setFormFields(next.formFields);
+            }}
+          />
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <label className="text-sm">

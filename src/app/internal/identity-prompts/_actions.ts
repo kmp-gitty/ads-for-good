@@ -37,6 +37,16 @@ export type PromptFormInput = {
   // MI v2 Phase 2A — composable shape (used when preset_type !== 'email_exchange')
   content_blocks_jsonb?: Array<{ type: string; text: string }>;
   form_fields_jsonb?: Array<{ id: string; type: string; label: string; required: boolean; placeholder?: string; options?: string[]; for_identity?: boolean }>;
+  // MI v2 Phase 2B — multi-page (used when Custom Form has multi-page toggled on)
+  pages_jsonb?: {
+    pages: Array<{
+      id: string;
+      content_blocks: Array<{ type: string; text: string }>;
+      form_fields: Array<{ id: string; type: string; label: string; required: boolean; placeholder?: string; options?: string[]; for_identity?: boolean }>;
+    }>;
+    progress_indicator: boolean;
+    back_button: boolean;
+  } | null;
 };
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -92,6 +102,7 @@ function shapePayload(input: PromptFormInput) {
     trigger_jsonb: buildTriggerJsonb(input),
     content_blocks_jsonb: isComposable ? (input.content_blocks_jsonb ?? null) : null,
     form_fields_jsonb: isComposable ? (input.form_fields_jsonb ?? null) : null,
+    pages_jsonb: isComposable ? (input.pages_jsonb ?? null) : null,
     headline: input.headline.trim(),
     body: input.body.trim() || null,
     input_mode: input.input_mode,
