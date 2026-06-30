@@ -23,7 +23,10 @@ export default function PhoneCallBuilder({
   value: PhoneCallConfig;
   onChange: (next: PhoneCallConfig) => void;
 }) {
-  function updateBlock(idx: number, next: Partial<PhoneCallBlock>) {
+  // Union-of-partials shape so callers can pass any subset of either variant's
+  // fields. Cast happens inside the spread.
+  type BlockUpdate = { type?: PhoneCallBlock["type"]; text?: string; label?: string; phone_number?: string };
+  function updateBlock(idx: number, next: BlockUpdate) {
     onChange({
       content_blocks: value.content_blocks.map((c, i) =>
         i === idx ? ({ ...c, ...next } as PhoneCallBlock) : c,
@@ -78,15 +81,7 @@ export default function PhoneCallBuilder({
               <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-mono uppercase text-neutral-600">
                 {block.type}
               </span>
-              {block.type === "headline" || block.type === "body" ? (
-                <input
-                  type="text"
-                  value={block.text}
-                  onChange={e => updateBlock(idx, { text: e.target.value })}
-                  placeholder={block.type === "headline" ? "Headline text" : "Body text"}
-                  className={inputCls + " flex-1"}
-                />
-              ) : (
+              {block.type === "phone_cta" ? (
                 <>
                   <input
                     type="text"
@@ -103,6 +98,14 @@ export default function PhoneCallBuilder({
                     className={inputCls + " flex-1 font-mono"}
                   />
                 </>
+              ) : (
+                <input
+                  type="text"
+                  value={block.text}
+                  onChange={e => updateBlock(idx, { text: e.target.value })}
+                  placeholder={block.type === "headline" ? "Headline text" : "Body text"}
+                  className={inputCls + " flex-1"}
+                />
               )}
               <button
                 type="button"
