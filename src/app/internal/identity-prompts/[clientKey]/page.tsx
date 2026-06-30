@@ -71,12 +71,20 @@ export default async function ClientPromptsPage({
         <p className="text-sm text-neutral-500">
           <Link href="/internal/identity-prompts" className="hover:text-orange-700">← All clients</Link>
         </p>
-        <Link
-          href={`/internal/identity-prompts/${clientKey}/responses`}
-          className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-        >
-          View responses →
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/internal/identity-prompts/${clientKey}/templates`}
+            className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+          >
+            Email templates →
+          </Link>
+          <Link
+            href={`/internal/identity-prompts/${clientKey}/responses`}
+            className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+          >
+            View responses →
+          </Link>
+        </div>
       </div>
 
       <section>
