@@ -725,12 +725,50 @@ setInterval(function () {
     chapterRecordPromptShown(prompt);
     api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type });
 
+    // MI v2 Phase 2C — recovery flow state
+    var recoveryConfig = prompt.recovery_jsonb && prompt.recovery_jsonb.enabled
+      ? prompt.recovery_jsonb
+      : null;
+    var recoveryAttempts = 0;
+    var inRecovery = false;
+
+    function triggerRecovery() {
+      if (!recoveryConfig) return false;
+      var maxAttempts = recoveryConfig.max_attempts || 1;
+      if (recoveryAttempts >= maxAttempts) return false;
+      if (inRecovery) return false;  // can't recover from a recovery (one shot)
+      recoveryAttempts++;
+      inRecovery = true;
+
+      // Replace pages with a single synthetic recovery page; clear all
+      // accumulated values + branching (recovery is its own submission).
+      pages = [{
+        id: "_recovery",
+        content_blocks: Array.isArray(recoveryConfig.content_blocks) ? recoveryConfig.content_blocks : [],
+        form_fields: Array.isArray(recoveryConfig.form_fields) ? recoveryConfig.form_fields : [],
+      }];
+      branchingRules = [];
+      accumulatedValues = {};
+      fieldConfigsById = {};
+
+      api.track("identity_prompt_recovery_shown", {
+        prompt_slug: prompt.slug,
+        preset_type: prompt.preset_type,
+      });
+      renderPage(0);
+      return true;
+    }
+
     function dismiss(method) {
+      // First close attempt fires recovery if configured. Subsequent closes
+      // (or close inside recovery) actually dismiss.
+      if (method === "close_button" && triggerRecovery()) return;
       if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
       api.track("identity_prompt_dismissed", {
         prompt_slug: prompt.slug,
         preset_type: prompt.preset_type,
         dismiss_method: method,
+        in_recovery: inRecovery,
       });
     }
     closeBtn.addEventListener("click", function () { dismiss("close_button"); });

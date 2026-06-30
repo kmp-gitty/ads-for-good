@@ -55,6 +55,14 @@ export type PromptFormInput = {
       to_page_id: string;
     }>;
   } | null;
+  // MI v2 Phase 2C — recovery flow (close-button recapture)
+  recovery_jsonb?: {
+    enabled: boolean;
+    trigger: "close_button";
+    content_blocks: Array<{ type: string; text: string }>;
+    form_fields: Array<{ id: string; type: string; label: string; required: boolean; placeholder?: string; options?: string[]; for_identity?: boolean }>;
+    max_attempts: number;
+  } | null;
 };
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -111,6 +119,7 @@ function shapePayload(input: PromptFormInput) {
     content_blocks_jsonb: isComposable ? (input.content_blocks_jsonb ?? null) : null,
     form_fields_jsonb: isComposable ? (input.form_fields_jsonb ?? null) : null,
     pages_jsonb: isComposable ? (input.pages_jsonb ?? null) : null,
+    recovery_jsonb: isComposable ? (input.recovery_jsonb ?? null) : null,
     headline: input.headline.trim(),
     body: input.body.trim() || null,
     input_mode: input.input_mode,

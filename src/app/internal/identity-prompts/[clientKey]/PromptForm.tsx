@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createPrompt, updatePrompt, type PromptFormInput } from "../_actions";
 import CustomFormBuilder, { type ContentBlock, type FormField } from "./CustomFormBuilder";
 import MultiPageBuilder, { type PagesConfig } from "./MultiPageBuilder";
+import RecoveryBuilder, { type RecoveryConfig } from "./RecoveryBuilder";
 
 type TriggerType = PromptFormInput["trigger_type"];
 type Frequency = PromptFormInput["frequency"];
@@ -37,6 +38,7 @@ export type ExistingPrompt = {
   content_blocks_jsonb: ContentBlock[] | null;
   form_fields_jsonb: FormField[] | null;
   pages_jsonb: PagesConfig | null;
+  recovery_jsonb: RecoveryConfig | null;
 };
 
 // Phase 1C — Preset roadmap. Email Exchange is the current v1.5 path.
@@ -93,6 +95,15 @@ export default function PromptForm({
       back_button: true,
     },
   );
+  const [recoveryConfig, setRecoveryConfig] = useState<RecoveryConfig>(
+    prompt?.recovery_jsonb ?? {
+      enabled: false,
+      trigger: "close_button",
+      content_blocks: [],
+      form_fields: [],
+      max_attempts: 1,
+    },
+  );
   const [slug, setSlug] = useState(prompt?.slug ?? "");
   const [triggerType, setTriggerType] = useState<TriggerType>(
     (trig.type as TriggerType) || "click_element",
@@ -136,6 +147,7 @@ export default function PromptForm({
       content_blocks_jsonb: multiPageEnabled ? [] : contentBlocks,
       form_fields_jsonb: multiPageEnabled ? [] : formFields,
       pages_jsonb: multiPageEnabled ? pagesConfig : null,
+      recovery_jsonb: recoveryConfig.enabled ? recoveryConfig : null,
       slug: slug.trim().toLowerCase().replace(/\s+/g, "_"),
       trigger_type: triggerType,
       trigger_selector: triggerSelector,
@@ -328,6 +340,8 @@ export default function PromptForm({
             }}
           />
         )}
+
+        <RecoveryBuilder value={recoveryConfig} onChange={setRecoveryConfig} />
 
         <div className="grid grid-cols-2 gap-4">
           <label className="text-sm">
