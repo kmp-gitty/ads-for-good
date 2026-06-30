@@ -8,10 +8,12 @@ type TriggerType = PromptFormInput["trigger_type"];
 type Frequency = PromptFormInput["frequency"];
 type InputMode = PromptFormInput["input_mode"];
 type PostSubmitAction = PromptFormInput["post_submit_action"];
+type PresetType = PromptFormInput["preset_type"];
 
 export type ExistingPrompt = {
   id: string;
   slug: string;
+  preset_type: string;
   trigger_jsonb: { type?: string; selector?: string; delay_ms?: number; percent?: number };
   headline: string;
   body: string | null;
@@ -32,6 +34,24 @@ export type ExistingPrompt = {
   enabled: boolean;
 };
 
+// Phase 1C — Preset roadmap. Email Exchange is the current v1.5 path.
+// Other presets render through chapterRenderPromptComposable (pixel widget
+// Phase 1B stub) and need their composable form builders to come online
+// before they're useful here.
+const PRESET_OPTIONS: {
+  value: PresetType;
+  label: string;
+  description: string;
+  phase: number;
+}[] = [
+  { value: "email_exchange",      label: "Email Exchange",      description: "Email field + button + offer reveal on submit. The existing v1 prompt type.",                       phase: 1 },
+  { value: "custom_form",         label: "Custom Form",         description: "Multi-field, optionally multi-page capture. Lead enrichment + qualification.",                     phase: 2 },
+  { value: "custom_notification", label: "Custom Notification", description: "Lightweight corner-bubble (Intercom-style). Yes/no, single CTA, soft offers.",                     phase: 4 },
+  { value: "make_an_offer",       label: "Make an Offer",       description: "Cart-recovery bidding with operator-defined thresholds + counter-offer state machine.",            phase: 5 },
+  { value: "phone_call",          label: "Phone Call",          description: "CTA-style click-to-call options. No identity capture — analytics-only.",                            phase: 4 },
+  { value: "remind_me",           label: "Remind Me",           description: "Persistent monitoring (price drops, restocks). Hourly evaluation + notification on trigger.",      phase: 6 },
+];
+
 const inputCls =
   "mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder-neutral-400";
 
@@ -49,6 +69,9 @@ export default function PromptForm({
 
   const trig = prompt?.trigger_jsonb ?? {};
 
+  const [presetType, setPresetType] = useState<PresetType>(
+    (prompt?.preset_type as PresetType) || "email_exchange",
+  );
   const [slug, setSlug] = useState(prompt?.slug ?? "");
   const [triggerType, setTriggerType] = useState<TriggerType>(
     (trig.type as TriggerType) || "click_element",
@@ -88,6 +111,7 @@ export default function PromptForm({
 
     const input: PromptFormInput = {
       client_key,
+      preset_type: presetType,
       slug: slug.trim().toLowerCase().replace(/\s+/g, "_"),
       trigger_type: triggerType,
       trigger_selector: triggerSelector,
@@ -136,6 +160,75 @@ export default function PromptForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+      {/* MI v2 Phase 1C — preset picker. Email Exchange is the only fully-
+       *  built path today; other presets are visible-but-disabled with phase
+       *  badges so operators see the roadmap without authoring half-configured
+       *  prompts. Each phase unlocks its tile. */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
+          Preset
+        </p>
+        <p className="mt-1 text-xs text-neutral-500">
+          Email Exchange is the v1 prompt type. New preset types unlock as they ship.
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {PRESET_OPTIONS.map((opt) => {
+            const isCurrent = presetType === opt.value;
+            const isAvailable = opt.value === "email_exchange";
+            const disabled = !isAvailable || (isEdit && opt.value !== presetType);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                disabled={disabled}
+                onClick={() => !disabled && setPresetType(opt.value)}
+                className={
+                  "rounded-md border p-3 text-left transition " +
+                  (isCurrent
+                    ? "border-orange-500 bg-orange-50"
+                    : isAvailable
+                    ? "border-neutral-300 bg-white hover:bg-neutral-50"
+                    : "border-neutral-200 bg-neutral-50 cursor-not-allowed opacity-60")
+                }
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-semibold text-neutral-900">{opt.label}</span>
+                  {!isAvailable && (
+                    <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-mono text-neutral-600">
+                      Phase {opt.phase}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs leading-snug text-neutral-600">
+                  {opt.description}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+        {isEdit && presetType !== "email_exchange" && (
+          <p className="mt-2 text-xs text-orange-700">
+            Preset is locked while editing — change requires creating a new prompt.
+          </p>
+        )}
+      </div>
+
+      {presetType !== "email_exchange" ? (
+        <div className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 p-6 text-center">
+          <p className="text-sm font-semibold text-neutral-700">
+            {PRESET_OPTIONS.find(p => p.value === presetType)?.label}
+          </p>
+          <p className="mt-2 text-xs text-neutral-500">
+            Configuration UI ships in Phase {PRESET_OPTIONS.find(p => p.value === presetType)?.phase}.
+            Schema is already live — you&apos;ll be able to author this preset as soon as the
+            composable form builder lands.
+          </p>
+          {error && (
+            <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+          )}
+        </div>
+      ) : (
+      <>
       <div className="grid grid-cols-2 gap-4">
         <label className="text-sm">
           <span className="block font-semibold text-neutral-800">Slug</span>
@@ -478,6 +571,8 @@ export default function PromptForm({
       >
         {pending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create prompt")}
       </button>
+      </>
+      )}
     </form>
   );
 }

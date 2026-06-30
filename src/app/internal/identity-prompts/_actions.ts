@@ -11,6 +11,7 @@ const supabase = createClient(
 
 export type PromptFormInput = {
   client_key: string;
+  preset_type: "email_exchange" | "custom_form" | "custom_notification" | "make_an_offer" | "phone_call" | "remind_me" | "custom";
   slug: string;
   trigger_type: "click_element" | "exit_intent" | "time_on_page" | "scroll_depth";
   trigger_selector?: string;
@@ -79,6 +80,7 @@ function validate(input: PromptFormInput): string | null {
 
 function shapePayload(input: PromptFormInput) {
   return {
+    preset_type: input.preset_type,
     slug: input.slug,
     trigger_jsonb: buildTriggerJsonb(input),
     headline: input.headline.trim(),

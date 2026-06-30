@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 type PromptRow = {
   id: string;
   slug: string;
+  preset_type: string;
   trigger_jsonb: { type?: string; selector?: string; delay_ms?: number; percent?: number };
   headline: string;
   body: string | null;
@@ -57,7 +58,7 @@ export default async function ClientPromptsPage({
     .schema("chapter_config")
     .from("identity_prompts")
     .select(
-      "id, slug, trigger_jsonb, headline, body, input_mode, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, frequency, frequency_days, enabled, hit_count, submit_count, last_hit_at",
+      "id, slug, preset_type, trigger_jsonb, headline, body, input_mode, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, frequency, frequency_days, enabled, hit_count, submit_count, last_hit_at",
     )
     .eq("client_key", clientKey)
     .order("created_at", { ascending: false });
@@ -100,6 +101,9 @@ export default async function ClientPromptsPage({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-sm font-semibold">{p.slug}</span>
+                      <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
+                        {p.preset_type ?? "email_exchange"}
+                      </span>
                       <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
                         {describeTrigger(p.trigger_jsonb)}
                       </span>
