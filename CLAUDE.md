@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: June 30, 2026 (late-late evening — TWELVE commits, NINE distinct shipments tonight: Fix 2 incremental v1/v2 (cliff cleared), chain-order MV reschedule, Fix 1A tier+retention schema, classifier v1 pinned, MI v2 Phase 3 auto-email infrastructure, MI v2 Phase 4 Custom Notification + Phone Call presets, usage_snapshot + tier ceiling helper + trailing window + cron, Billing page Phase 1 transparency view, classifier calibration tooling)
+> Last updated: July 1, 2026 (morning — Fix 2 temp table collision postmortem: first nightly cron of the incremental v1/v2 failed with `relation "_affected" already exists`, caused by v1/v2 sharing the same temp table name in the same orchestrator transaction. Migration `fix_2_temp_table_collision` shipped, all 4 clients manually recovered)
 
 ---
 
@@ -191,6 +191,17 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ---
 
 ## ✅ Completed Fixes (as of June 30, 2026)
+
+### Fix 2 temp table collision postmortem (July 1, 2026 morning)
+- **First nightly cron run of the Fix 2 incremental functions failed** July 1 03:30 UTC. GChat alert (Katoa saw ~11:33 PM ET June 30): "Attribution chain refresh — 4 client(s) failed. Elapsed: 186s. 0 clients ran successfully." Every client hit `relation "_affected" already exists`.
+- **Root cause:** Fix 2's `refresh_canonical_v1_snapshot` and `refresh_canonical_v2_snapshot` BOTH used `CREATE TEMP TABLE _affected ON COMMIT DROP AS ...` — same table name. When called sequentially by `refresh_full_attribution_chain`, both functions run in the SAME plpgsql transaction. `ON COMMIT DROP` only fires at transaction commit (after v2). So v2's `CREATE TEMP TABLE _affected` collided with v1's still-live temp table.
+- **Blast radius:** v2's exception raised, which rolled back the ENTIRE transaction — including lifecycle + v1's `_snapshot_runs` INSERTs AND their DELETE + INSERT operations against the snapshot tables. So NO snapshots updated for July 1, and NO `_snapshot_runs` rows exist for that date. Only journey_resolved_v1 (fired at 04:25 UTC by the separate derived-snapshots cron) has July 1 rows, but it read stale canonical_v1 data.
+- **Regression test blind spot** (the important lesson): the `_test` function variants written for Fix 2's regression test wrote to SEPARATE scratch tables (`_v1_test`, `_v2_test`) and were called independently via manual SQL — not chained through the orchestrator in a single transaction. So the ON-COMMIT-DROP-timing-across-stages scenario never materialized. **The chain-in-one-transaction behavior only manifests when the production orchestrator runs both stages back-to-back.**
+- **Fix (migration `fix_2_temp_table_collision`):** added `DROP TABLE IF EXISTS _affected` (and defensively `_raw_ids`, `_journeys`) at the top of each function's inner BEGIN block. If the temp table exists from a prior stage in the same transaction, drop it first; otherwise no-op. `ON COMMIT DROP` still handles post-transaction cleanup.
+- **Recovery:** manual `refresh_full_attribution_chain(client_key)` per client. All 4 clients ran clean: adsforgood_prod 1.2s (0 rows) · not_so_cavalier 0.08s (0 rows) · projectagram_reels 0.1s (0 rows) · eos_fabrics ~4 min (lifecycle 107s / v1 119s / v2 12s; 209 canonical_v1 rows + 223 canonical_v2 rows + 514,322 lifecycle rows). Three of four clients showed 0 rows because they had no new activity since watermark — expected incremental behavior, not a symptom of the bug.
+- **Interpretation of "no new July 1 data" for 3 of 4 clients:** for tiny tenants (adsforgood_prod, not_so_cavalier) OR quiet ones (projectagram_reels), the lifecycle incremental correctly detected zero affected canonicals since the last successful watermark and no-op'd. adsforgood_prod + not_so_cavalier have NULL canonical_v1/v2 (no purchases ever, no boundary events, no chapters). Only EOS had material data to fill in.
+- **Lesson recorded for future incremental patterns:** temp table names are shared across sibling function calls in the same transaction. Either (a) namespace them per-function (`_affected_v1`, `_affected_v2`), or (b) `DROP TABLE IF EXISTS` at the top of each function. Both work; we chose (b) — defensive without renaming, no signature changes required.
+- **Design doc updated** with full postmortem: [docs/fix-2-canonical-incremental-design.md](docs/fix-2-canonical-incremental-design.md).
 
 ### Classifier calibration tooling (June 30, 2026 late-late evening)
 - **Per `docs/bot-classifier-v1.md` calibration backlog** — built the labeling infrastructure so the operator can measure precision/recall against ground truth whenever they want. The pin (earlier tonight) closed the change-control gap; this closes the accuracy-measurement gap.

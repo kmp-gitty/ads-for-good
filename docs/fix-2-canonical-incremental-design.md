@@ -75,5 +75,27 @@ Production missed 2 chapters today because `journey_bot_classification_v1` (a ma
 
 ## Followups
 - **Pre-existing session-tie non-determinism** (mismatch #30f2652e). Could add a stable tiebreaker (e.g. `ORDER BY entry_ts, sessionized_journey_id, ts` — already done — plus a final tiebreaker on identity_key or event_id). Low priority; cosmetic only.
-- **MV refresh ordering** — reorder so journey_bot_classification_v1 + journey_funnel_steps_v1 + journey_entry_channel_v1 refresh BEFORE the attribution chain. Critical for end-to-end attribution correctness on same-day events.
+- **MV refresh ordering** — reorder so journey_bot_classification_v1 + journey_funnel_steps_v1 + journey_entry_channel_v1 refresh BEFORE the attribution chain. Critical for end-to-end attribution correctness on same-day events. **SHIPPED June 30** — cron schedule swap 04:00 → 03:00 UTC.
 - **Fix 1** — per-client retention floor, chapter-aware. Caps how far back any single canonical is re-read. Smaller win than Fix 2 (depth matters less than breadth), but needed before tier validation.
+
+## Postmortem — July 1 temp table collision (fix_2_canonical_v1_v2_incremental_v2)
+
+**Failure:** first nightly cron run of the incremental functions (July 1 03:30 UTC) failed for all 4 clients with `relation "_affected" already exists`. Chain elapsed 186s, 0 clients succeeded. GChat alert fired.
+
+**Root cause:** `canonical_v1` and `canonical_v2` both used `CREATE TEMP TABLE _affected ON COMMIT DROP AS ...`. Same name in both. When called sequentially by `refresh_full_attribution_chain`, both functions run in the SAME transaction. `ON COMMIT DROP` only fires at transaction commit (after v2). So v2's `CREATE TEMP TABLE _affected` collided with v1's still-live temp table.
+
+**Blast radius:** v2's exception raised, which rolled back the ENTIRE transaction — including lifecycle + v1's `_snapshot_runs` INSERTs AND their DELETE + INSERT operations against the snapshot tables. So NO snapshots updated for July 1, and NO `_snapshot_runs` rows exist for that date. Dashboards were 1 day stale until manual recovery.
+
+**Regression test blind spot:** the `_test` function variants shipped alongside Fix 2 wrote to SEPARATE scratch tables (`_v1_test`, `_v2_test`) and were called independently, not chained together via the orchestrator. So the ON-COMMIT-DROP-timing-across-stages scenario never materialized in test. The chain-in-one-transaction behavior only manifests when the production orchestrator runs both stages back-to-back.
+
+**Fix:** migration `fix_2_temp_table_collision`. Added `DROP TABLE IF EXISTS _affected` (and defensively `_raw_ids`, `_journeys`) at the top of each function's inner BEGIN block. If the temp table exists from a prior stage in the same transaction, drop it first; otherwise no-op. `ON COMMIT DROP` still handles post-transaction cleanup.
+
+**Recovery:** manual `refresh_full_attribution_chain(client_key)` per client. All 4 clients ran clean:
+- adsforgood_prod: 1.2s, 0 rows (no new activity)
+- not_so_cavalier: 0.08s, 0 rows (no new activity, no purchases ever)
+- projectagram_reels: 0.1s, 0 rows (no new activity)
+- eos_fabrics: ~4 min total (lifecycle 107s + v1 119s + v2 12s) — 209 canonical_v1 rows, 223 canonical_v2 rows, 514,322 lifecycle rows
+
+**Lesson for future regression tests:** when function bodies share a transaction with sibling functions (via an orchestrator), test EACH ORCHESTRATOR PATH, not each function individually. The `_test` variants should have been called by a test-orchestrator that chains them in the same transaction — that would have surfaced this collision immediately.
+
+**Lesson for the incremental pattern:** temp table names are shared across sibling function calls in the same transaction. Either (a) namespace them per-function (`_affected_v1`, `_affected_v2`) or (b) `DROP TABLE IF EXISTS` at the top of each function. Both work; we chose (b) because it's defensive without renaming.
