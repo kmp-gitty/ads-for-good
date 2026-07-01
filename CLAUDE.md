@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: July 1, 2026 (morning — Fix 2 temp table collision postmortem: first nightly cron of the incremental v1/v2 failed with `relation "_affected" already exists`, caused by v1/v2 sharing the same temp table name in the same orchestrator transaction. Migration `fix_2_temp_table_collision` shipped, all 4 clients manually recovered)
+> Last updated: July 2, 2026 (morning — chain-order backfill executed: 74 candidate victims → 1 actual chain-order miss recovered ($202 shifted from `(direct)` to `organic social`). Detection filter was too broad; real historical chain-order impact at EOS was minimal)
 
 ---
 
@@ -191,6 +191,15 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ---
 
 ## ✅ Completed Fixes (as of June 30, 2026)
+
+### Chain-order backfill — 1 real recovery, 73 false positives (July 2, 2026 morning)
+- **Ran the historical chain-order miss backfill** against EOS to close the "canonicals misattributed by pre-June-30 stale-MV reads" gap. Executed via a synthetic-snapshot_ts_hi mechanism: mark victim canonicals' lifecycle rows with a specific timestamp, then call `refresh_canonical_v1_snapshot('eos_fabrics', synthetic_ts)` + `refresh_canonical_v2_snapshot('eos_fabrics', synthetic_ts)`. Fix 2's incremental detects them via the marker and reprocesses.
+- **Detection filter was too broad.** Initial query flagged 74 candidate victims ($5,451.70 nominal revenue): `channel_path = '(direct)' AND non_boundary_events = 1 AND non_bot journey exists in chapter window`. This over-collects because MANY genuinely-direct visitors satisfy the same filter — a visitor who bookmarks the site + fills a form is single-touch direct + has non-bot journey activity + is a real customer, not a chain-order victim.
+- **Real signature would be tighter:** canonical_v1 has NO row for a chapter that has classifiable non-bot journeys tied to non-direct entry channels (referrer/utm/click_id). The filter I used caught #1 but missed the "entry channel is actually non-direct" qualifier.
+- **Recovery outcome:** 1 chapter recovered ($202, `email_sha256:ede28d93...` chapter 0 — reattributed from `(direct)` to `organic social`). 73 chapters stayed as single-touch `(direct)` because they were genuinely direct all along. Total EOS revenue unchanged; only 1 chapter's channel label shifted.
+- **Historical impact of the chain-order bug at EOS: minimal.** The June 30 fix (MV refresh 04:00 → 03:00 UTC) prevents future misses; the historical damage was <$300 total. Not worth deep future backfill investment.
+- **Artifact left behind (benign):** 68 canonicals' `chapter_model.lifecycle_chapters_snapshot` rows now have `snapshot_ts_hi = '2026-07-02 14:00:00.999999+00'` (the synthetic marker). This doesn't affect future crons (they read watermark from `_snapshot_runs`, not from lifecycle rows). Will get overwritten naturally when those canonicals see new activity.
+- **Backfill mechanism lesson:** the "synthetic-marker + call refresh functions" pattern works cleanly. Adds `_snapshot_runs` rows with the synthetic ts (marked `ok`). Doesn't disrupt production data flows. Reusable for other clients if needed — but based on EOS's tiny actual impact, unlikely worth running for the other 3 clients.
 
 ### Fix 2 temp table collision postmortem (July 1, 2026 morning)
 - **First nightly cron run of the Fix 2 incremental functions failed** July 1 03:30 UTC. GChat alert (Katoa saw ~11:33 PM ET June 30): "Attribution chain refresh — 4 client(s) failed. Elapsed: 186s. 0 clients ran successfully." Every client hit `relation "_affected" already exists`.
