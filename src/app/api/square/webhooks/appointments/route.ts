@@ -36,6 +36,7 @@ import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
 import { getActiveSecretForOutbound } from "@/app/lib/auth/client-secrets";
 import { getActiveSquareSecrets } from "@/app/lib/auth/square-webhook-secrets";
 import { fetchSquareCustomer } from "@/app/lib/square/customers";
+import { attemptProbabilisticStitch } from "@/app/lib/square/probabilistic-stitch";
 
 const ENDPOINT = "/api/square/webhooks/appointments";
 
@@ -267,6 +268,27 @@ export async function POST(req: NextRequest) {
     });
 
     const forwardText = await forwardRes.text();
+
+    // Fire-and-forget probabilistic time-window stitch: only when /api/purchase
+    // succeeded AND we have a target identity (customer_id) AND a booking_id.
+    // Runs after the response is queued but before we return.
+    if (forwardRes.ok && bookingId && purchasePayload.customer_id) {
+      const stitchInput = {
+        client_key: clientKey,
+        booking_id: bookingId,
+        booking_created_at: eventTs,
+        target_identity_key: purchasePayload.customer_id,
+      };
+      // Not awaited — errors log internally and don't block response.
+      void attemptProbabilisticStitch(stitchInput).then((result) => {
+        if (result.matched) {
+          console.log(
+            `[stitch] client=${clientKey} booking=${bookingId} matched anonymous=${result.from_identity_key} confidence=${result.confidence} candidates=${result.candidates_count}`
+          );
+        }
+      });
+    }
+
     return new NextResponse(forwardText, {
       status: forwardRes.status,
       headers: {

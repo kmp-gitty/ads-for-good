@@ -192,6 +192,42 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of June 30, 2026)
 
+### Probabilistic stitcher shipped for /api/square/webhooks/appointments (July 2, 2026 midday)
+- **Task #2 from today's stitching layer plan** shipped ahead of the Lovable-side Book Now wrap (which is still pending). Code lives dormant until redirect_click events targeting `book.squareup.com` start flowing; then it activates automatically.
+- **New module:** [src/app/lib/square/probabilistic-stitch.ts](src/app/lib/square/probabilistic-stitch.ts). Exports `attemptProbabilisticStitch({client_key, booking_id, booking_created_at, target_identity_key})`. Uses the existing `withClient(client_key, tx => ...)` RLS-scoped DB pattern.
+- **Match logic:**
+  - Query `chapter_ingest.pixel_events` for `redirect_click` events matching: `client_key = X`, `identity_key LIKE 'anonymous_id:%'`, `ts >= booking_ts - 30min AND ts < booking_ts`, `props->>destination ILIKE '%book.squareup.com%' OR props->'full_query'->>'to' ILIKE '%book.squareup.com%'` (checks both the destination field and the original inbound `?to=` query hint).
+  - **0 candidates** → no stitch, returns `{matched: false, reason: 'no_pre_click_observed'}`
+  - **1 candidate** → confidence 80 (HIGH), insert alias
+  - **N > 1 candidates** → nearest-in-time wins (ORDER BY ts DESC LIMIT 5), confidence 50 (MEDIUM)
+- **Alias insert:** `INSERT INTO chapter_identity.identity_aliases (client_key, ts, from_identity_key, to_identity_key, method, confidence, is_deterministic, reason, metadata) VALUES (..., 'probabilistic_time_window', ..., false, 'square_booking_probabilistic_stitch', <json>) ON CONFLICT (client_key, from_identity_key, to_identity_key) DO NOTHING`. Target key is the booking's already-prefixed `square_customer_id:Y`; the existing `trg_sync_canon_from_alias` trigger walks the graph to `email_sha256:X` automatically (Y's canonical is X via Phase 3.5 of /api/purchase).
+- **Fire-and-forget wiring:** in [src/app/api/square/webhooks/appointments/route.ts](src/app/api/square/webhooks/appointments/route.ts), after the `/api/purchase` forward returns 200, the stitcher is invoked via `void attemptProbabilisticStitch(input).then(result => ...)`. Never awaited. Errors log to console and return `{matched: false, reason: 'error'}` — never blocks the webhook response.
+- **Metadata captured for audit** (in `identity_aliases.metadata`): booking_id, booking_ts, click_ts, window_minutes, candidates_count, journey_id. Lets us later query "what fraction of matches were unambiguous vs medium-confidence" from `identity_aliases WHERE reason = 'square_booking_probabilistic_stitch'`.
+- **Zero effect on non-NSC clients:** the stitcher only fires when Square's appointments webhook returns 200 with a `bookingId` and a `customer_id`. Only NSC (and future Square clients) exercise this code path. EOS/projectagram/adsforgood untouched.
+- **Zero matches expected in v1 rollout** until NSC's Book Now button on Lovable is wrapped in `/r/not_so_cavalier/book-now?to=<square_url>`. The stitcher's SQL requires a `redirect_click` targeting `book.squareup.com` in the window — no such events exist today. Result: `no_pre_click_observed` for every current booking. This is intentional. The Lovable wrap is the activation switch.
+- **What NSC operator sees when they wrap Book Now** (going-forward behavior):
+  1. Visitor clicks Book Now → Tier 1 redirect logs `redirect_click` with destination = Square URL, anonymous_id, journey_id, timestamp
+  2. Redirect 302s to Square. Visitor books normally.
+  3. Square webhook fires `booking.created` → route processes normally (June 9 adapter's Phase 3.5 stitches `square_customer_id:Y ↔ email_sha256:X ↔ phone_sha256:Z`)
+  4. **NEW:** post-webhook fire-and-forget calls `attemptProbabilisticStitch(...)` → finds the Book Now click in the 30-min window → inserts alias `anonymous_id ↔ square_customer_id:Y` → canon trigger walks: anonymous_id gets same canonical as customer_id (= email_sha256:X)
+  5. Every future pixel event on that anonymous_id maps to email_sha256:X's canonical → chapters attribute correctly
+- **Console logs:** on successful match, logs `[stitch] client=... booking=... matched anonymous=... confidence=... candidates=...` for post-hoc observability. On failure, error logs but doesn't break the webhook.
+
+### Lifecycle customer_id double-prefix bug — 51 rows silently orphaned across production, fixed (July 2, 2026 midday, follow-up)
+- **Latent bug flagged in the event_name postmortem earlier today, fixed same session.** The lifecycle SQL function's identity resolution had `'shopify_customer_id:' || p.customer_id` in TWO places (affected-canonical detection CTE + purchase-branch identity resolution). But since Sprint 2.1 (June 10 2026), all webhook adapters store `customer_id` with the prefix already applied:
+  - Shopify: `'shopify_customer_id:8518128075045'`
+  - Square: `'square_customer_id:B65EMYVVYBZ5WFHQ5N6HZTFRM0'`
+- **Concat produced malformed keys** like `'shopify_customer_id:shopify_customer_id:8518...'` that didn't match any `identity_canon` row.
+- **Impact was silent because the CASE also has `WHEN p.email_hash IS NOT NULL`** as the FIRST branch — most purchase rows have email_hash and route through the correct `'email_sha256:' || p.email_hash` path. Only rows WITHOUT email_hash silently orphaned. Current production impact:
+  - eos_fabrics: 2 rows
+  - projectagram_reels: 1 row
+  - not_so_cavalier: 48 rows
+  - **Total: 51 rows silently orphaned pre-fix**
+- **Same shape as the June 9 `/api/purchase` double-prefix fix** — that fix corrected the runtime canon-write path but the lifecycle SQL function inherited the buggy pattern and wasn't updated in Fix 2 or Fix 1B.
+- **Fix (1-line in two places):** replaced `'shopify_customer_id:' || p.customer_id` → `p.customer_id`. Applied via `~/chapter-scripts/snapshots/2026-07-02-fix-lifecycle-customer-id-prefix-bug.sql` through Supabase Dashboard SQL Editor.
+- **Recovery run:** reset NSC's chain watermark, called `refresh_full_attribution_chain('not_so_cavalier')`. Lifecycle went 1,076 → 1,079 rows; canonical_v2 went 869 → 872 rows. **3 NSC customer_id-only bookings recovered** into the chain. (48 NSC-rows-affected included many `appointment_paid` payments which don't drive boundary chapters — the 3 recovered are the unique booking canonicals.)
+- **EOS + projectagram recovery** deferred to their next natural cron watermark advance. Their impact is trivial (2 + 1 = 3 rows) so no manual intervention warranted.
+
 ### Lifecycle event_name hardcode bug — silent NSC canonical failure diagnosed + fixed (July 2, 2026 midday)
 - **Fix 1B production cron ran clean overnight** (21/21 runs ok, 0 failed, 1.4M rows written across all 4 clients). Fix 1B semantics validated in production — no temp-table collisions, no HAVING regressions, no chapter_id discontinuity. Confirmed pure Fix 1B chain in NSC's stage runs.
 - **But NSC's dashboards would have been empty** — noticed while spot-checking chain state post-cron. `chapter_model.lifecycle_chapters_snapshot` had 801 NSC rows (✓ processed), but `canonical_v1_snapshot` had **0 rows** and `canonical_v2_snapshot` had **0 rows**, both with `status='ok'`. Silent HAVING-filter miss.
