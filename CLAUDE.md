@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: July 2, 2026 (late evening — NSC Square webhook recovery + backfill continues. Design investigation for the anonymous→booking stitching layer exhausted: seller_note, Customer + Booking Custom Attributes, OAuth flow, and full Square webhook event catalog all confirmed as write-only audit slots OR merchant-side auth, NOT input mechanisms. Square emits ZERO events for customer landing / session start / abandoned bookings. Final plan: Tier 1 redirect wrap on Book Now (click-side breadcrumb) + post-webhook probabilistic time-window matcher. Payments backfill running 800/4297, will finish overnight.)
+> Last updated: July 2, 2026 (midday — Fix 1B production cron validated overnight (21/21 runs ok). NSC digest surfaced a real bug: lifecycle SQL was hardcoding `event_name='purchase'` in the purchase-events UNION branch, silently overwriting NSC's `appointment_booked` boundary events → canonical_v1/v2 wrote 0 rows. Fix applied (1-line change: use `p.event_name` from source). Chain re-ran 2.6s clean; 869 canonical_v2 rows land as `(direct)` fallback (expected — no pre-click pixel data until Book Now is wrapped in Tier 1 redirect). Payments backfill hardened with SQL retry + `max_lifetime:0` after repeated ECONNRESET at ~30-min mark; resumed 1795 → 4298.)
 
 ---
 
@@ -191,6 +191,27 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ---
 
 ## ✅ Completed Fixes (as of June 30, 2026)
+
+### Lifecycle event_name hardcode bug — silent NSC canonical failure diagnosed + fixed (July 2, 2026 midday)
+- **Fix 1B production cron ran clean overnight** (21/21 runs ok, 0 failed, 1.4M rows written across all 4 clients). Fix 1B semantics validated in production — no temp-table collisions, no HAVING regressions, no chapter_id discontinuity. Confirmed pure Fix 1B chain in NSC's stage runs.
+- **But NSC's dashboards would have been empty** — noticed while spot-checking chain state post-cron. `chapter_model.lifecycle_chapters_snapshot` had 801 NSC rows (✓ processed), but `canonical_v1_snapshot` had **0 rows** and `canonical_v2_snapshot` had **0 rows**, both with `status='ok'`. Silent HAVING-filter miss.
+- **Root cause:** the lifecycle refresh function's purchase-events UNION branch hardcoded `event_name` in the SELECT list:
+  ```sql
+  SELECT p.client_key, p.event_ts, 'purchase', 'purchase',
+         COALESCE(p.source_platform, 'shopify'), ...
+  FROM chapter_ingest.purchase_events p
+  ```
+  Column order for the INSERT is `(client_key, event_ts, event_type, event_name, ...)`. First `'purchase'` fine (event_type is a category). **Second `'purchase'` overwrites the actual `event_name` from source data.**
+- **Why EOS/projectagram/adsforgood weren't affected:** their `boundary_event_name = 'purchase'` in `chapter_config.clients`. The hardcode matches their real event_name by accident. NSC's `boundary_event_name = 'appointment_booked'` — the hardcode overwrites → canonical_v1's `HAVING event_name = <boundary_event>` filter never matches → 0 rows → dashboard silence.
+- **The bug has been latent since Fix 1B lifecycle shipped July 1** (and identical code likely predates Fix 1B — inherited from the original Fix 25 lifecycle refactor). Just wasn't stressed until NSC's data flowed through the chain.
+- **Fix:** one-line change. Replace `'purchase', 'purchase',` → `'purchase', p.event_name,` in that UNION branch. Applied via `~/chapter-scripts/snapshots/2026-07-02-fix-lifecycle-event-name-bug.sql` through Supabase Dashboard SQL Editor (MCP path stayed blocked by same Cloudflare rule as last night). Everything else in the function byte-identical.
+- **Recovery run:** deleted NSC's 66 recent successful `_snapshot_runs` rows (22 per stage × 3 stages) to reset the watermark to April 1 2026, then called `chapter_reporting.refresh_full_attribution_chain('not_so_cavalier')`. Ran in 2.6s. Fix 1B's chapter-scoped DELETE-then-INSERT overwrote the 801 incorrect lifecycle rows and inserted 1,076 fresh rows (869 with `event_name = 'appointment_booked'` + 207 pixel events).
+- **Canonical_v2: 869 rows, all `(direct)`, $0 revenue.** Both are structurally-expected given current NSC state, NOT bugs:
+  - **All `(direct)`:** NSC has no pre-click pixel data linked to any booking. Chapter pixel was installed June 16 but Book Now button on Lovable isn't yet wrapped in Tier 1 redirect, so no `redirect_click` breadcrumbs exist for canonical_v1's session-entry classifier. Every chapter falls through to canonical_v2's `(direct)` fallback. **Fixed forward** when the stitching layer ships (see prior entry).
+  - **$0 revenue:** by design. NSC boundary events are `appointment_booked` with `value=0`. Real revenue lives in downstream `appointment_paid` events (Sprint 2.1). Dashboard queries need to JOIN payments to bookings via `order_id` to compute revenue-per-chapter. That JOIN layer isn't wired yet either — separate dashboard-side work.
+- **Canonical_v1: 0 rows** — expected for the same reason. Zero session-entry data means zero chapters with attributable channel paths. Will populate once Book Now is wrapped + a couple weeks of clicks accumulate.
+- **Latent secondary bug flagged during investigation (NOT fixed today):** the lifecycle function's identity resolution also hardcodes `'shopify_customer_id:' || p.customer_id` in the affected-canonical detection CTE AND in the purchase-branch identity join. But NSC stores `customer_id` in `chapter_ingest.purchase_events` with the `square_customer_id:` prefix already applied by the webhook adapter. So the string concat yields `'shopify_customer_id:square_customer_id:...'` — a malformed key that doesn't match any `identity_canon` row. **Impact for NSC is small (~24 bookings without email_hash would silently orphan; 97.3% of NSC bookings have email_hash and route through the `'email_sha256:' || p.email_hash` branch correctly).** Same shape as the June 9 `/api/purchase` double-prefix fix — the lifecycle function inherited the pre-fix pattern. Fix is trivial (`CASE WHEN p.customer_id LIKE '%:%' THEN p.customer_id ELSE 'shopify_customer_id:' || p.customer_id END`) but not blocking; deferred to a follow-up.
+- **Payments backfill hardening:** the postgres-js connection was hitting the default 30-min `max_lifetime` and blowing up with ECONNRESET. Two prior resumes died at ~30 min. Fix: `max_lifetime: 0` + `idle_timeout: 0` on the `postgres()` config + a `sqlWithRetry()` wrapper on the idempotency check that catches ECONNRESET/EPIPE/CONNECTION_ENDED and retries with exponential backoff. Resumed with 1795 payments already landed ($105K revenue recovered pre-crash); continues toward 4298 target.
 
 ### NSC stitching layer — design decisions locked, Square constraint boundary confirmed (July 2, 2026 late evening)
 - **Question being answered:** how to link anonymous browser sessions on `notsocavalier.com` to identified bookings on `book.squareup.com` given that Square's hosted flow strips all URL params + doesn't expose custom customer-input fields + doesn't emit any customer-behavior webhook events.
