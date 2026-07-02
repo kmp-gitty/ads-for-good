@@ -30,6 +30,7 @@ import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
 import { getActiveSecretForOutbound } from "@/app/lib/auth/client-secrets";
 import { getActiveSquareSecrets } from "@/app/lib/auth/square-webhook-secrets";
 import { fetchSquareCustomer } from "@/app/lib/square/customers";
+import { fetchSquareOrder } from "@/app/lib/square/orders";
 
 const ENDPOINT = "/api/square/webhooks/payments";
 
@@ -193,9 +194,15 @@ export async function POST(req: NextRequest) {
           : null;
         const eventTs = paymentCreatedAt || event.created_at || new Date().toISOString();
 
-        const [afgSecret, sqCustomer] = await Promise.all([
+        // Fetch AFG secret + Square Customer + Square Order all in parallel.
+        // Order fetch adds precision to booking↔payment matching: the Order's
+        // line_items[].catalog_object_id + created_by_team_member_id can be
+        // matched to a booking's appointment_segments to link a specific
+        // payment to a specific booking (better than customer+time alone).
+        const [afgSecret, sqCustomer, sqOrder] = await Promise.all([
           getActiveSecretForOutbound(clientKey),
           customerId ? fetchSquareCustomer(merchantId, customerId) : Promise.resolve(null),
+          orderId ? fetchSquareOrder(merchantId, orderId) : Promise.resolve(null),
         ]);
         if (!afgSecret) {
           console.error(`[payments] missing_afg_secret_for_client client=${clientKey}`);
@@ -230,7 +237,24 @@ export async function POST(req: NextRequest) {
             enriched: {
               email: Boolean(enrichedEmail),
               phone: Boolean(enrichedPhone),
+              order: Boolean(sqOrder),
             },
+            // Order summary from Square Orders API — the fields we need to
+            // match payments to bookings via (service_variation_id +
+            // team_member_id). Only stored if the Order fetch succeeded.
+            order_summary: sqOrder
+              ? {
+                  order_id:                   sqOrder.id,
+                  created_by_team_member_id:  sqOrder.created_by_team_member_id,
+                  service_variation_ids:      sqOrder.line_items
+                    .map((li) => li.catalog_object_id)
+                    .filter((x): x is string => typeof x === "string"),
+                  line_item_names:            sqOrder.line_items
+                    .map((li) => li.name)
+                    .filter((x): x is string => typeof x === "string"),
+                  is_appointment_linked:      sqOrder.is_appointment_linked,
+                }
+              : null,
           },
         };
 
