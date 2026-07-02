@@ -111,11 +111,31 @@ export type ChannelPerformanceRow = {
   cr: number | null;
 };
 
-export const cachedPurchaseOverview     = makeCachedRpc<PurchaseOverviewRow>("purchase_overview");
-export const cachedJourneyOverview      = makeCachedRpc<JourneyOverviewRow>("journey_overview");
-export const cachedEngagementQuality    = makeCachedRpc<EngagementQualityRow>("engagement_quality");
-export const cachedFunnelOverview       = makeCachedRpc<FunnelStepRow>("funnel_overview");
-export const cachedChannelPerformance   = makeCachedRpc<ChannelPerformanceRow>("channel_performance_overview");
+// Per-chapter revenue with attribution + refund netting. Works for both
+// event-and-order-in-one-shot clients (Shopify: boundary event_name='purchase',
+// value carries directly on the row) and split-flow clients (Square:
+// event_name='appointment_booked' with value=0, revenue in downstream
+// appointment_paid events attributed via nearest-prior-booking per customer).
+// Consumers group/sum by channel_path client-side for revenue-by-channel views.
+export type ChapterPurchaseSummaryRow = {
+  canonical_identity_key: string;
+  chapter_id: number;
+  first_ts: string;
+  boundary_ts: string;
+  order_id: string | null;
+  channel_path: string | null;
+  gross_revenue: number | null;
+  refunded: number | null;
+  net_revenue: number | null;
+  currency: string | null;
+};
+
+export const cachedPurchaseOverview       = makeCachedRpc<PurchaseOverviewRow>("purchase_overview");
+export const cachedJourneyOverview        = makeCachedRpc<JourneyOverviewRow>("journey_overview");
+export const cachedEngagementQuality      = makeCachedRpc<EngagementQualityRow>("engagement_quality");
+export const cachedFunnelOverview         = makeCachedRpc<FunnelStepRow>("funnel_overview");
+export const cachedChannelPerformance     = makeCachedRpc<ChannelPerformanceRow>("channel_performance_overview");
+export const cachedChapterPurchaseSummary = makeCachedRpc<ChapterPurchaseSummaryRow>("chapter_purchase_summary");
 
 // ─────── Time series for sparklines ──────────────────────────────────────────
 // dashboard_timeseries returns N equi-width buckets across [start, end). One
