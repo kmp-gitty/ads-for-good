@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: July 2, 2026 (midday — Fix 1B production cron validated overnight (21/21 runs ok). NSC digest surfaced a real bug: lifecycle SQL was hardcoding `event_name='purchase'` in the purchase-events UNION branch, silently overwriting NSC's `appointment_booked` boundary events → canonical_v1/v2 wrote 0 rows. Fix applied (1-line change: use `p.event_name` from source). Chain re-ran 2.6s clean; 869 canonical_v2 rows land as `(direct)` fallback (expected — no pre-click pixel data until Book Now is wrapped in Tier 1 redirect). Payments backfill hardened with SQL retry + `max_lifetime:0` after repeated ECONNRESET at ~30-min mark; resumed 1795 → 4298.)
+> Last updated: July 2, 2026 (afternoon — big NSC revenue-attribution build. Investigated multiple Square API surfaces (Customer, Orders, TerminalCheckout, Custom Attributes, all 149 webhook event types) to see if any deterministic booking↔payment link exists on Square's hosted flow. It doesn't — Square's model splits Appointments and POS into separate Order+Payment entities with no shared identifier. Best available signal: Order line items carry `catalog_object_id` (= booking's `service_variation_id`) + `created_by_team_member_id` (= booking's `team_member_id`). Built end-to-end: Orders API helper + payments-webhook Order fetch + one-shot backfill for 4,267 NSC payments + chapter_purchase_summary RPC v3 with 4-tier match ladder. NSC revenue coverage 68% → 86% (749/872 chapters attributed correctly, up from 593). $72K walk-in remainder is customers with no booking records — structurally unattributable. Payments webhook route also refactored to after() pattern earlier today to eliminate Square-side 504s. Fix 1B production cron validated overnight (21/21 runs ok).)
 
 ---
 
@@ -191,6 +191,48 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ---
 
 ## ✅ Completed Fixes (as of June 30, 2026)
+
+### chapter_purchase_summary RPC + Orders API integration — NSC revenue attribution 86% coverage (July 2, 2026 afternoon)
+- **Problem NSC dashboards had:** canonical_v2 showed $0 revenue on every chapter because NSC's boundary event is `appointment_booked` with `value=0`. Real revenue lives in downstream `appointment_paid` events (POS transactions, split into a separate Square Order/Payment from the booking). Dashboard needed a way to attribute payment revenue back to booking chapters via JOIN.
+- **Investigation exhausted:** searched every Square API surface for a deterministic booking↔payment link before falling back to a heuristic:
+  - **Customer object:** no relational fields to bookings/payments/orders. `reference_id` writable but doesn't help decide which booking a specific payment paid for.
+  - **Order object (payment-side):** carries `line_items[].catalog_object_id` (= booking's `service_variation_id`) + `created_by_team_member_id` (= booking's `team_member_id`). This is the signal we ended up using — deterministic for unique service+staff combinations.
+  - **Order object (booking-side, APPOINTMENTS-source):** contains a `"* Late Cancellation/No Show Fee"` line item as $0 placeholder (Square's marker that the order was appointments-linked, distinguishing from pure POS). No booking_id reference field though.
+  - **TerminalCheckout:** developer-facing API for programmatic terminal checkouts. NSC's staff uses native POS iPad app which creates Order+Payment directly — not TerminalCheckouts. Only relevant if we built a custom Appointments↔POS integration app (rejected: 1-2 weeks of custom work + staff workflow change, not worth it for a barbershop).
+  - **All 149 Square webhook event types:** state-change only. No landing/session-start/booking-payment-link events exist.
+  - **Custom Attributes API (booking/customer/order):** all write-slots for post-decision audit, not decision mechanisms.
+- **NSC's actual payment flow (empirically measured from real data):**
+  - 91% CARD + SQUARE_POS: staff swipes customer's card on iPad terminal after service
+  - 9% CASH + SQUARE_POS: cash at register
+  - 0.14% CARD + APPOINTMENTS: 6 of 4,267 payments came through online booking flow with card-on-file charge (rare)
+  - Card-on-file at booking time is for **no-show fee protection only**, not upfront payment
+- **Verdict:** Square's data model separates Appointments (bookings) from POS (payments) with no shared identifier. 100% of NSC payments have `customer_id` (staff looks up returning customers by phone at POS), giving deterministic customer-level linkage. Booking-specific linkage requires heuristic matching.
+- **Build shipped end-to-end today:**
+  1. **`src/app/lib/square/orders.ts`** — Orders API helper mirroring the existing `fetchSquareCustomer` pattern. Fetches an Order by ID, extracts `line_items[].catalog_object_id` (service_variation_ids), `created_by_team_member_id`, and detects the "Late Cancellation" line item marker. 5-min token cache. Best-effort — never throws, returns null on any failure.
+  2. **`/api/square/webhooks/payments` route** — modified after() block to fetch Order in parallel with existing Customer enrichment. Stores summary in `raw.order_summary` on the purchase_events row. All post-response, no impact on Square-side latency.
+  3. **`~/chapter-scripts/backfill-nsc-square-orders.js`** — one-shot backfill for existing NSC payment rows. 5 concurrent workers, idempotent via `raw ? 'order_summary'` check. Processed 4,267 rows in ~10 min with zero errors.
+  4. **`chapter_reporting.chapter_purchase_summary(client_key, start, end)` RPC v3** — 4-tier match ladder:
+     - **Tier 1:** customer + service_variation_id + team_member_id (nearest time). Deterministic when unique service+staff combo.
+     - **Tier 2:** customer + service_variation_id (nearest time). Handles staff changes between booking and service.
+     - **Tier 3:** customer + nearest-prior. v2 baseline heuristic.
+     - **Tier 4:** customer + nearest-anywhere. Fallback for customers whose first payment predates their first booking record (walk-ins booked retroactively).
+     Falls through the ladder until first match. Handles both boundary types (`purchase` for Shopify uses Tier 0 direct order_id; `appointment_booked` for Square uses Tier 1-4 ladder).
+  5. **`cachedChapterPurchaseSummary` + `ChapterPurchaseSummaryRow` type** in [dashboard-rpc.ts](src/app/chapter/_lib/dashboard-rpc.ts) — dashboards call this to get per-chapter revenue with channel_path attribution.
+- **Coverage results for NSC:**
+  - v1 (customer+time nearest-prior only): 458 chapters w/ revenue = 53%
+  - v2 (added nearest-anywhere fallback): 593 chapters = 68%
+  - **v3 (added service+team ladder): 749 chapters = 86%** ← +156 chapters correctly matched vs v2
+  - Total revenue unchanged (~$163K) — same money spread across the RIGHT chapters
+- **Structural remainder (accepted):** $72K walk-in revenue from 525 NSC customers who never had ANY booking record. No mechanism can attribute them; they truly walked in cold. Dashboards should label this slice honestly as "walk-in / unattributed" rather than hiding it.
+- **EOS/projectagram unaffected:** Shopify boundary event IS `purchase` with value on the same row, order_id links directly. Uses Tier 0 direct order_id match. 428 EOS chapters, $35,677 revenue, 415 with revenue (97% coverage — 13 zero-revenue chapters are refunded/comp orders).
+- **Files:** [src/app/lib/square/orders.ts](src/app/lib/square/orders.ts) (new), modified [src/app/api/square/webhooks/payments/route.ts](src/app/api/square/webhooks/payments/route.ts) (Order fetch in after()), [src/app/chapter/_lib/dashboard-rpc.ts](src/app/chapter/_lib/dashboard-rpc.ts) (TS wrapper + type). Backfill script at `~/chapter-scripts/backfill-nsc-square-orders.js`. Commits `d32a186` (route + orders.ts) + `6a6a04b` (RPC v3 marker).
+
+### Square webhook routes: after() refactor to eliminate 504s (July 2, 2026 midday)
+- **Problem:** Square's webhook gateway times out at ~10s. Combined with Vercel cold-start latency + Customers API call + internal `/api/purchase` forward + probabilistic stitcher, `/api/square/webhooks/appointments` and `/api/square/webhooks/payments` were regularly exceeding the ceiling. Square marked events as 504 in the dashboard even though our audit showed successful processing (idempotency protected against Square's automatic retries).
+- **Fix:** kept HMAC verification + audit logging synchronous (must run before response for security), moved all heavy work — Customers API + `/api/purchase` forward + probabilistic stitcher (+ Orders API fetch added later same day) — into `after()`. Response ships in <100ms after HMAC passes; downstream work continues in the background container.
+- **Behavior post-deploy:** Vercel logs show recent Square webhooks all `success=true` with 1-2 sec deltas between pairs (booking.created + booking.updated legitimate pair cadence). Previously they came in 3-4 sec pairs indicating Square timeouts + retries. Refactor confirmed working.
+- **Trade-off:** failure modes moved from HTTP responses to server-side `console.error()`. Missing payloads (`missing_purchase_identity`, `missing_booking_payload`, etc.) log + no-op instead of returning 4xx to Square. Operators observe issues via logs, not via Square's dashboard.
+- **Files:** [src/app/api/square/webhooks/appointments/route.ts](src/app/api/square/webhooks/appointments/route.ts) + [src/app/api/square/webhooks/payments/route.ts](src/app/api/square/webhooks/payments/route.ts). Commit `47a3f86`. Refunds route (direct INSERT to `chapter_ingest.refund_events`) doesn't have the latency profile and stays synchronous for now.
 
 ### Probabilistic stitcher shipped for /api/square/webhooks/appointments (July 2, 2026 midday)
 - **Task #2 from today's stitching layer plan** shipped ahead of the Lovable-side Book Now wrap (which is still pending). Code lives dormant until redirect_click events targeting `book.squareup.com` start flowing; then it activates automatically.
