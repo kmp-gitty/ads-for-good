@@ -32,6 +32,7 @@
 
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
 import { getActiveSecretForOutbound } from "@/app/lib/auth/client-secrets";
 import { getActiveSquareSecrets } from "@/app/lib/auth/square-webhook-secrets";
@@ -172,130 +173,139 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, skipped: eventType }, { status: 200 });
     }
 
-    const booking = event.data?.object?.booking;
-    if (!booking || typeof booking !== "object") {
-      return NextResponse.json({ error: "missing_booking_payload" }, { status: 400 });
-    }
-
-    const bookingId = typeof booking.id === "string" ? booking.id : null;
-    const customerId = typeof booking.customer_id === "string" ? booking.customer_id : null;
-
-    // event_ts must reflect when the BOOKING was made (boundary event for
-    // attribution), NOT when the service is scheduled to happen. Priority:
-    //   1. booking.created_at — when the booking record was created
-    //   2. event.created_at   — when Square emitted the webhook (~same moment)
-    //   3. now()              — fallback if neither present
-    // We intentionally do NOT use booking.start_at here — that's when the
-    // service occurs (possibly hours or days later), which would put the
-    // lifecycle chapter's boundary in the future relative to the customer's
-    // actual journey.
-    const bookingCreatedAt = typeof (booking as Record<string, unknown>).created_at === "string"
-      ? ((booking as Record<string, unknown>).created_at as string)
-      : null;
-    const eventTs = bookingCreatedAt || event.created_at || new Date().toISOString();
-
-    // Sprint 2.3 v2 alt — Square Customers API enrichment.
-    // Fetch Customer record in parallel with the AFG secret read so identity
-    // hints land in the SAME forward to /api/purchase, letting all canon
-    // phases run in one shot (vs. a second alias-only call later). Best-effort:
-    // if Square 401s / 404s / times out, we forward without enrichment and
-    // identity stitching falls back to canon-via-pixel-journey later.
-    const [afgSecret, sqCustomer] = await Promise.all([
-      getActiveSecretForOutbound(clientKey),
-      customerId ? fetchSquareCustomer(merchantId, customerId) : Promise.resolve(null),
-    ]);
-    if (!afgSecret) {
-      return NextResponse.json({ error: "missing_afg_secret_for_client" }, { status: 500 });
-    }
-
-    const enrichedEmail = sqCustomer?.email_address?.trim() || null;
-    const enrichedPhone = sqCustomer?.phone_number?.trim() || null;
-
-    const purchasePayload = {
-      client_key:      clientKey,
-      source_platform: "square_bookings",
-      event_id:        bookingId ? `square_booking_created_${bookingId}` : null,
-      event_name:      "appointment_booked",      // matches chapter_config.clients.boundary_event_name
-      // order_id = bookingId so the downstream payment webhook can JOIN on
-      // the same key when it emits appointment_paid.
-      order_id:        bookingId,
-      payment_id:      null,
-      customer_id:     customerId ? `square_customer_id:${customerId}` : null,
-      email:           enrichedEmail,              // Sprint 2.3 v2 alt
-      phone:           enrichedPhone,              // Sprint 2.3 v2: phone-first stitching
-      value:           0,                          // bookings have no $$ amount at booking; payment.created fills in
-      currency:        "USD",
-      event_ts:        eventTs,
-      coupon:          null,
-      shipping:        null,
-      tax:             null,
-      user_agent:      null,
-      raw: {
-        merchant_id: merchantId,
-        topic: eventType,
-        event_id: event.event_id || null,
-        booking: sanitizeSquareAppointmentForRaw(booking),
-        // Note: enrichment metadata only — actual email/phone never go into
-        // `raw` (they're hashed via /api/purchase and stored in identity_canon
-        // only). Just record WHETHER we got them.
-        enriched: {
-          email: Boolean(enrichedEmail),
-          phone: Boolean(enrichedPhone),
-        },
-      },
-    };
-
-    // /api/purchase requires either email OR customer_id. customer_id present
-    // here (Square always provides it); if not, fail loud.
-    if (!purchasePayload.customer_id && !purchasePayload.email) {
-      return NextResponse.json({ error: "missing_purchase_identity" }, { status: 400 });
-    }
-    if (!purchasePayload.order_id && !purchasePayload.event_id) {
-      return NextResponse.json({ error: "missing_booking_identifier" }, { status: 400 });
-    }
-
-    const normalizedBody = JSON.stringify(purchasePayload);
-    const afgSignature = hmacSha256Hex(afgSecret, normalizedBody);
-    const purchaseUrl = new URL("/api/purchase", req.nextUrl.origin).toString();
-
-    const forwardRes = await fetch(purchaseUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-afg-signature": afgSignature,
-      },
-      body: normalizedBody,
-    });
-
-    const forwardText = await forwardRes.text();
-
-    // Fire-and-forget probabilistic time-window stitch: only when /api/purchase
-    // succeeded AND we have a target identity (customer_id) AND a booking_id.
-    // Runs after the response is queued but before we return.
-    if (forwardRes.ok && bookingId && purchasePayload.customer_id) {
-      const stitchInput = {
-        client_key: clientKey,
-        booking_id: bookingId,
-        booking_created_at: eventTs,
-        target_identity_key: purchasePayload.customer_id,
-      };
-      // Not awaited — errors log internally and don't block response.
-      void attemptProbabilisticStitch(stitchInput).then((result) => {
-        if (result.matched) {
-          console.log(
-            `[stitch] client=${clientKey} booking=${bookingId} matched anonymous=${result.from_identity_key} confidence=${result.confidence} candidates=${result.candidates_count}`
+    // Do all heavy work (Customers API enrichment + /api/purchase forward +
+    // probabilistic stitcher) AFTER the response ships. Square's webhook
+    // gateway times out at ~10s and our cold-start + external calls can push
+    // us over. HMAC is already verified above so we're safe to ack early.
+    // Errors are logged server-side; Square doesn't need to know about
+    // downstream processing outcomes (idempotency handles retries anyway).
+    after(async () => {
+      try {
+        const booking = event.data?.object?.booking;
+        if (!booking || typeof booking !== "object") {
+          console.warn(
+            `[appointments] missing_booking_payload merchant=${merchantId} event_id=${event.event_id || "unknown"}`
           );
+          return;
         }
-      });
-    }
 
-    return new NextResponse(forwardText, {
-      status: forwardRes.status,
-      headers: {
-        "Content-Type": forwardRes.headers.get("Content-Type") || "application/json",
-        "X-Robots-Tag": "noindex, nofollow",
-      },
+        const bookingId = typeof booking.id === "string" ? booking.id : null;
+        const customerId = typeof booking.customer_id === "string" ? booking.customer_id : null;
+
+        // event_ts must reflect when the BOOKING was made (boundary event for
+        // attribution), NOT when the service is scheduled to happen. Priority:
+        //   1. booking.created_at — when the booking record was created
+        //   2. event.created_at   — when Square emitted the webhook (~same moment)
+        //   3. now()              — fallback if neither present
+        // We intentionally do NOT use booking.start_at here — that's when the
+        // service occurs (possibly hours or days later), which would put the
+        // lifecycle chapter's boundary in the future relative to the customer's
+        // actual journey.
+        const bookingCreatedAt = typeof (booking as Record<string, unknown>).created_at === "string"
+          ? ((booking as Record<string, unknown>).created_at as string)
+          : null;
+        const eventTs = bookingCreatedAt || event.created_at || new Date().toISOString();
+
+        // Sprint 2.3 v2 alt — Square Customers API enrichment.
+        const [afgSecret, sqCustomer] = await Promise.all([
+          getActiveSecretForOutbound(clientKey),
+          customerId ? fetchSquareCustomer(merchantId, customerId) : Promise.resolve(null),
+        ]);
+        if (!afgSecret) {
+          console.error(`[appointments] missing_afg_secret_for_client client=${clientKey}`);
+          return;
+        }
+
+        const enrichedEmail = sqCustomer?.email_address?.trim() || null;
+        const enrichedPhone = sqCustomer?.phone_number?.trim() || null;
+
+        const purchasePayload = {
+          client_key:      clientKey,
+          source_platform: "square_bookings",
+          event_id:        bookingId ? `square_booking_created_${bookingId}` : null,
+          event_name:      "appointment_booked",
+          order_id:        bookingId,
+          payment_id:      null,
+          customer_id:     customerId ? `square_customer_id:${customerId}` : null,
+          email:           enrichedEmail,
+          phone:           enrichedPhone,
+          value:           0,
+          currency:        "USD",
+          event_ts:        eventTs,
+          coupon:          null,
+          shipping:        null,
+          tax:             null,
+          user_agent:      null,
+          raw: {
+            merchant_id: merchantId,
+            topic: eventType,
+            event_id: event.event_id || null,
+            booking: sanitizeSquareAppointmentForRaw(booking),
+            enriched: {
+              email: Boolean(enrichedEmail),
+              phone: Boolean(enrichedPhone),
+            },
+          },
+        };
+
+        if (!purchasePayload.customer_id && !purchasePayload.email) {
+          console.warn(
+            `[appointments] missing_purchase_identity client=${clientKey} booking=${bookingId}`
+          );
+          return;
+        }
+        if (!purchasePayload.order_id && !purchasePayload.event_id) {
+          console.warn(
+            `[appointments] missing_booking_identifier client=${clientKey}`
+          );
+          return;
+        }
+
+        const normalizedBody = JSON.stringify(purchasePayload);
+        const afgSignature = hmacSha256Hex(afgSecret, normalizedBody);
+        const purchaseUrl = new URL("/api/purchase", req.nextUrl.origin).toString();
+
+        const forwardRes = await fetch(purchaseUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-afg-signature": afgSignature,
+          },
+          body: normalizedBody,
+        });
+
+        if (!forwardRes.ok) {
+          const errText = await forwardRes.text().catch(() => "<no body>");
+          console.error(
+            `[appointments] purchase forward failed client=${clientKey} booking=${bookingId} status=${forwardRes.status} body=${errText.slice(0, 200)}`
+          );
+          return;
+        }
+
+        // Probabilistic time-window stitch — only on successful forward.
+        if (bookingId && purchasePayload.customer_id) {
+          const result = await attemptProbabilisticStitch({
+            client_key: clientKey,
+            booking_id: bookingId,
+            booking_created_at: eventTs,
+            target_identity_key: purchasePayload.customer_id,
+          });
+          if (result.matched) {
+            console.log(
+              `[stitch] client=${clientKey} booking=${bookingId} matched anonymous=${result.from_identity_key} confidence=${result.confidence} candidates=${result.candidates_count}`
+            );
+          }
+        }
+      } catch (err) {
+        console.error(
+          `[appointments] background processing failed merchant=${merchantId} event_id=${event.event_id || "unknown"}:`,
+          err
+        );
+      }
     });
+
+    // Immediate ack to Square. All downstream processing continues in after().
+    return NextResponse.json({ ok: true, queued: true }, { status: 200 });
   } catch (err) {
     console.error("square appointments webhook unhandled error:", err);
     return NextResponse.json(

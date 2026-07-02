@@ -25,6 +25,7 @@
 
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
 import { getActiveSecretForOutbound } from "@/app/lib/auth/client-secrets";
 import { getActiveSquareSecrets } from "@/app/lib/auth/square-webhook-secrets";
@@ -156,109 +157,123 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, skipped: eventType }, { status: 200 });
     }
 
-    const payment = event.data?.object?.payment;
-    if (!payment || typeof payment !== "object") {
-      return NextResponse.json({ error: "missing_payment_payload" }, { status: 400 });
-    }
+    // Heavy work in after() so Square's ~10s gateway timeout doesn't get us.
+    // HMAC is already verified above. Errors log server-side; Square doesn't
+    // need to know about downstream outcomes (idempotency handles retries).
+    after(async () => {
+      try {
+        const payment = event.data?.object?.payment;
+        if (!payment || typeof payment !== "object") {
+          console.warn(
+            `[payments] missing_payment_payload merchant=${merchantId} event_id=${event.event_id || "unknown"}`
+          );
+          return;
+        }
 
-    const status = typeof payment.status === "string" ? payment.status : null;
-    if (status !== "COMPLETED") {
-      // Ack-and-skip in-flight / failed payments. payment.updated will fire
-      // when the status transitions to COMPLETED.
-      return NextResponse.json({ ok: true, skipped_status: status }, { status: 200 });
-    }
+        const status = typeof payment.status === "string" ? payment.status : null;
+        if (status !== "COMPLETED") {
+          // Ack-and-skip in-flight / failed payments. payment.updated fires
+          // when status transitions to COMPLETED.
+          return;
+        }
 
-    const paymentId = typeof payment.id === "string" ? payment.id : null;
-    const orderId = typeof payment.order_id === "string" ? payment.order_id : null;
-    const customerId = typeof payment.customer_id === "string" ? payment.customer_id : null;
+        const paymentId = typeof payment.id === "string" ? payment.id : null;
+        const orderId = typeof payment.order_id === "string" ? payment.order_id : null;
+        const customerId = typeof payment.customer_id === "string" ? payment.customer_id : null;
 
-    // Amount comes from Square in minor units (cents for USD). Convert.
-    const amountMoney = (payment as Record<string, unknown>).amount_money as
-      | { amount?: number; currency?: string }
-      | undefined;
-    const valueCents = typeof amountMoney?.amount === "number" ? amountMoney.amount : 0;
-    const value = valueCents / 100;
-    const currency = amountMoney?.currency || "USD";
+        const amountMoney = (payment as Record<string, unknown>).amount_money as
+          | { amount?: number; currency?: string }
+          | undefined;
+        const valueCents = typeof amountMoney?.amount === "number" ? amountMoney.amount : 0;
+        const value = valueCents / 100;
+        const currency = amountMoney?.currency || "USD";
 
-    // Use payment.created_at as event_ts so the chapter event timestamp
-    // reflects when payment was received.
-    const paymentCreatedAt = typeof (payment as Record<string, unknown>).created_at === "string"
-      ? ((payment as Record<string, unknown>).created_at as string)
-      : null;
-    const eventTs = paymentCreatedAt || event.created_at || new Date().toISOString();
+        const paymentCreatedAt = typeof (payment as Record<string, unknown>).created_at === "string"
+          ? ((payment as Record<string, unknown>).created_at as string)
+          : null;
+        const eventTs = paymentCreatedAt || event.created_at || new Date().toISOString();
 
-    const [afgSecret, sqCustomer] = await Promise.all([
-      getActiveSecretForOutbound(clientKey),
-      customerId ? fetchSquareCustomer(merchantId, customerId) : Promise.resolve(null),
-    ]);
-    if (!afgSecret) {
-      return NextResponse.json({ error: "missing_afg_secret_for_client" }, { status: 500 });
-    }
+        const [afgSecret, sqCustomer] = await Promise.all([
+          getActiveSecretForOutbound(clientKey),
+          customerId ? fetchSquareCustomer(merchantId, customerId) : Promise.resolve(null),
+        ]);
+        if (!afgSecret) {
+          console.error(`[payments] missing_afg_secret_for_client client=${clientKey}`);
+          return;
+        }
 
-    const enrichedEmail = sqCustomer?.email_address?.trim() || null;
-    const enrichedPhone = sqCustomer?.phone_number?.trim() || null;
+        const enrichedEmail = sqCustomer?.email_address?.trim() || null;
+        const enrichedPhone = sqCustomer?.phone_number?.trim() || null;
 
-    const purchasePayload = {
-      client_key:      clientKey,
-      source_platform: "square_payments",
-      event_id:        paymentId ? `square_payment_created_${paymentId}` : null,
-      // appointment_paid is NOT the boundary event for the client. Booking
-      // is. This row rides downstream on the same canonical's chapter so
-      // dashboards can compute booking → paid fulfillment rate by JOINing on
-      // order_id.
-      event_name:      "appointment_paid",
-      order_id:        orderId,                       // same as the booking's order_id
-      payment_id:      paymentId,
-      customer_id:     customerId ? `square_customer_id:${customerId}` : null,
-      email:           enrichedEmail,
-      phone:           enrichedPhone,
-      value:           value,
-      currency:        currency,
-      event_ts:        eventTs,
-      coupon:          null,
-      shipping:        null,
-      tax:             null,
-      user_agent:      null,
-      raw: {
-        merchant_id: merchantId,
-        topic: eventType,
-        event_id: event.event_id || null,
-        payment: sanitizePaymentForRaw(payment),
-        enriched: {
-          email: Boolean(enrichedEmail),
-          phone: Boolean(enrichedPhone),
-        },
-      },
-    };
+        const purchasePayload = {
+          client_key:      clientKey,
+          source_platform: "square_payments",
+          event_id:        paymentId ? `square_payment_created_${paymentId}` : null,
+          event_name:      "appointment_paid",
+          order_id:        orderId,
+          payment_id:      paymentId,
+          customer_id:     customerId ? `square_customer_id:${customerId}` : null,
+          email:           enrichedEmail,
+          phone:           enrichedPhone,
+          value:           value,
+          currency:        currency,
+          event_ts:        eventTs,
+          coupon:          null,
+          shipping:        null,
+          tax:             null,
+          user_agent:      null,
+          raw: {
+            merchant_id: merchantId,
+            topic: eventType,
+            event_id: event.event_id || null,
+            payment: sanitizePaymentForRaw(payment),
+            enriched: {
+              email: Boolean(enrichedEmail),
+              phone: Boolean(enrichedPhone),
+            },
+          },
+        };
 
-    if (!purchasePayload.customer_id && !purchasePayload.email) {
-      return NextResponse.json({ error: "missing_payment_identity" }, { status: 400 });
-    }
-    if (!purchasePayload.payment_id && !purchasePayload.event_id) {
-      return NextResponse.json({ error: "missing_payment_identifier" }, { status: 400 });
-    }
+        if (!purchasePayload.customer_id && !purchasePayload.email) {
+          console.warn(
+            `[payments] missing_payment_identity client=${clientKey} payment=${paymentId}`
+          );
+          return;
+        }
+        if (!purchasePayload.payment_id && !purchasePayload.event_id) {
+          console.warn(`[payments] missing_payment_identifier client=${clientKey}`);
+          return;
+        }
 
-    const normalizedBody = JSON.stringify(purchasePayload);
-    const afgSignature = hmacSha256Hex(afgSecret, normalizedBody);
-    const purchaseUrl = new URL("/api/purchase", req.nextUrl.origin).toString();
+        const normalizedBody = JSON.stringify(purchasePayload);
+        const afgSignature = hmacSha256Hex(afgSecret, normalizedBody);
+        const purchaseUrl = new URL("/api/purchase", req.nextUrl.origin).toString();
 
-    const forwardRes = await fetch(purchaseUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-afg-signature": afgSignature,
-      },
-      body: normalizedBody,
+        const forwardRes = await fetch(purchaseUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-afg-signature": afgSignature,
+          },
+          body: normalizedBody,
+        });
+
+        if (!forwardRes.ok) {
+          const errText = await forwardRes.text().catch(() => "<no body>");
+          console.error(
+            `[payments] purchase forward failed client=${clientKey} payment=${paymentId} status=${forwardRes.status} body=${errText.slice(0, 200)}`
+          );
+        }
+      } catch (err) {
+        console.error(
+          `[payments] background processing failed merchant=${merchantId} event_id=${event.event_id || "unknown"}:`,
+          err
+        );
+      }
     });
 
-    const forwardText = await forwardRes.text();
-    return new NextResponse(forwardText, {
-      status: forwardRes.status,
-      headers: {
-        "Content-Type": forwardRes.headers.get("Content-Type") || "application/json",
-        "X-Robots-Tag": "noindex, nofollow",
-      },
-    });
+    // Immediate ack to Square. All downstream processing continues in after().
+    return NextResponse.json({ ok: true, queued: true }, { status: 200 });
   } catch (err) {
     console.error("square payments webhook unhandled error:", err);
     return NextResponse.json(
