@@ -1,7 +1,7 @@
 # CLAUDE.md — Chapter Project Context
 > This file is the living source of truth for Claude Code sessions.
 > Updated at the end of each working session. Do not modify manually.
-> Last updated: July 2, 2026 (afternoon — big NSC revenue-attribution build. Investigated multiple Square API surfaces (Customer, Orders, TerminalCheckout, Custom Attributes, all 149 webhook event types) to see if any deterministic booking↔payment link exists on Square's hosted flow. It doesn't — Square's model splits Appointments and POS into separate Order+Payment entities with no shared identifier. Best available signal: Order line items carry `catalog_object_id` (= booking's `service_variation_id`) + `created_by_team_member_id` (= booking's `team_member_id`). Built end-to-end: Orders API helper + payments-webhook Order fetch + one-shot backfill for 4,267 NSC payments + chapter_purchase_summary RPC v3 with 4-tier match ladder. NSC revenue coverage 68% → 86% (749/872 chapters attributed correctly, up from 593). $72K walk-in remainder is customers with no booking records — structurally unattributable. Payments webhook route also refactored to after() pattern earlier today to eliminate Square-side 504s. Fix 1B production cron validated overnight (21/21 runs ok).)
+> Last updated: July 5, 2026 (evening — completed NSC dashboard revenue-attribution wiring end-to-end. All 8 Category B RPCs (5 Tier 1: channel_performance / attribution / path_combinations / channel_roles / channel_affinity; 3 Tier 2: correlation / contribution / incrementality) switched from `chapter_channel_paths_canonical_v1_snapshot + boundary_value` → `chapter_purchase_summary + canonical_v2_snapshot`. NSC dashboards now render real revenue attributed to `(direct)` today ($53K in the last-month window); once Book Now wrap activates the stitcher end-to-end, revenue naturally spreads to actual channels via canonical_v1 session entries. NSC Book Now wrap SHIPPED on Lovable (20 references find-and-replaced to `chapter.notsocavalier.com/r/not_so_cavalier/book-now?to=<square_url>`); 3 test clicks verified landing correctly with anonymous_id + journey_id + destination captured in pixel_events. First real end-to-end booking through the wrapped flow will validate the stitcher's alias insertion. Also captured MI v2 Phase 5+6 planning discussion: Path A (Shopify-focused with adapter-ready structure) chosen for upcoming Shopify-owner sales conversation; mocked adapter enables full demo without live store connection.)
 
 ---
 
@@ -191,6 +191,59 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ---
 
 ## ✅ Completed Fixes (as of June 30, 2026)
+
+### MI v2 Phase 5+6 planning — Path A locked (Shopify-focused, adapter-ready structure) (July 5, 2026 evening, no code yet)
+- **Trigger for planning:** operator has a Shopify store owner meeting next week; wants to demo Chapter's Make an Offer + Remind Me features before committing engineering time on a specific client integration.
+- **Refresher on the two phases:**
+  - **Phase 5 — Make an Offer.** Visitor puts an item in cart, hits abandonment trigger, sees modal: "Would you like this for $X?" Backend logic auto-accepts / counter-offers / declines based on `chapter_config.offer_thresholds` (product / collection / global default hierarchy). On auto-accept: generate a unique Shopify discount code via priceRules API, deliver via Resend email. Manual review queue for edge cases at `/internal/identity-prompts/<key>/offers`. State machine on `chapter_engagement.offers` (pending_review / auto_accepted / manually_accepted / countered / declined / expired / redeemed).
+  - **Phase 6 — Remind Me.** Visitor viewing product → "Notify me when back in stock" or "when price drops." Creates row in `chapter_engagement.subscriptions`. Hourly cron at `/api/internal/cron/evaluate-subscriptions` polls Shopify inventory + price → fires email notifications on trigger. Auto-cancel subscription on same-visitor purchase (`/api/purchase` hook).
+- **Path A locked (Shopify-focused, adapter-ready structure).** Builds core (universal UI + state machines + tables + cron + email delivery) + full Shopify adapter in `src/app/lib/platform/shopify.ts`. Leaves `square.ts` + `custom.ts` as `null`-returning stubs. Add real implementations for those platforms when specific clients ask. ~1 week focused effort for both phases end-to-end. **NOT Path B** (full platform-agnostic build at ~1.5-2 weeks) — non-Shopify demand doesn't exist yet.
+- **Mocked-adapter dev pattern:** demo build can proceed WITHOUT a live Shopify store. Two adapter files:
+  - `shopify.ts` — real Shopify Admin API calls; gated on `chapter_config.clients.esp_credentials_jsonb` credential presence
+  - `shopify-mock.ts` — returns fake data (`CHAPTER-ABC12345` codes, static price/inventory) for build + demo
+  Adapter selection via env var. Full UI, state machine, email delivery, admin dashboard all real. Only the outbound API call to Shopify is mocked. On client-signing, swap credentials in DB → adapter transparently switches to real Shopify calls. **Zero code changes needed post-signing.**
+- **What the demo shows without a real store:**
+  - Visitor experience: modal, bid input, confirmation (real UI, real behavior)
+  - Backend: threshold logic runs, decision made, code generated (mocked value, realistic format)
+  - Email delivery: real Resend send, real inbox delivery, real code visible in email
+  - Admin experience: `/internal/identity-prompts/<key>/offers` with real state machine + review queue
+  - Analytics: real `chapter_engagement.offers` rows + `identity_prompt_submitted` pixel events
+- **Optional realism boost for demo day:** free Shopify Partners dev store (~30 min setup) lets you show one code being generated + redeemed on a real (test) Shopify store during the demo — "we know this actually works" proof point. Not required.
+- **Existing foundation to build on (all shipped in prior MI v2 phases):**
+  - `chapter_engagement` schema + `subscriptions` + `offers` tables (already created in Phase 1)
+  - `chapter_config.offer_thresholds` table (already created)
+  - `chapter_config.clients.platform text DEFAULT 'custom'` column + `esp_credentials_jsonb` column
+  - Adapter shells in `src/app/lib/platform/{shopify,square,custom}.ts` (skeleton only)
+  - Email send infrastructure (Phase 3): Resend adapter + template composition
+  - Admin UI patterns from Phase 4 (Custom Notification + Phone Call presets)
+- **Next-session actionable when picked up:** ship Phase 5 first (Make an Offer) — user's sales conversation next week is Shopify-focused, and Phase 5 is the more differentiated feature. Phase 6 (Remind Me) can follow depending on time + demand.
+
+### NSC Book Now wrap shipped on Lovable + Category B RPCs Tier 1 + Tier 2 all switched to chapter_purchase_summary (July 5, 2026 evening)
+- **NSC Book Now Tier 1 redirect wrap SHIPPED on Lovable.** Operator find-and-replaced all 20 instances of the raw Square booking URL (`https://book.squareup.com/appointments/lfi1vnwnd57jf7/location/L9Z08X3BZXQJB/services`) with the Chapter wrap (`https://chapter.notsocavalier.com/r/not_so_cavalier/book-now?to=https://book.squareup.com/appointments/lfi1vnwnd57jf7/location/L9Z08X3BZXQJB/services`) across 6 files (Navbar.tsx, About.tsx, Contact.tsx, Index.tsx, Services.tsx, Team.tsx). The old URL was a full absolute URL so it's a safe substring inside the new URL — one clean find-and-replace pass, no risk of over-matching. Also swapped the URL inside `window.gtag_report_booking(...)` calls to keep Google Ads conversion tracking parameter in sync with the href.
+- **Google Ads tracking template + Book Now wrap don't interfere.** NSC's Google Ads account-level template already wraps ad clicks under a DIFFERENT slug (`/r/not_so_cavalier/google-ads`). Book Now is `/r/not_so_cavalier/book-now`. Two separate redirect rules, no collision. A visitor's typical journey now: Google ad click → Chapter's google-ads redirect (logs `redirect_click` #1 with gclid + utm) → landing on notsocavalier.com (pixel builds session) → clicks Book Now → Chapter's book-now redirect (logs `redirect_click` #2, gtag_report_booking fires "Booking initiated" in Google Ads) → Square booking → Square webhook → identity_canon merge → tonight's attribution chain refresh picks it up. All Chapter cookies (`.notsocavalier.com` scoped) persist across both redirects.
+- **Test click verification:** 3 test clicks landed cleanly in `chapter_ingest.pixel_events`:
+  - anonymous_id consistent across all 3 clicks (same browser session)
+  - journey_id consistent
+  - `props->>'destination'` includes `book.squareup.com/appointments/...?chid=anonymous_id%3A...&jid=...` (chid/jid handoff params appended by Sprint 4's `appendIdentityHandoff`)
+  - `props->'full_query'->>'to'` = raw Square URL (matches stitcher's ILIKE filter)
+  - `matched_rule_id: null` (correct — fallback path via `?to=`, no rule needed; hit_count analytics on a rule is the only reason to add one)
+  - device_type: desktop, country: US, all geo/device metadata captured
+- **First real booking through the wrapped flow will validate the stitcher's alias insertion** — anonymous_id from the redirect_click → aliased to square_customer_id (from Square webhook) → canon graph propagates to email_sha256 canonical. Deferred check for natural verification over next few days.
+- **8 Category B RPCs (5 Tier 1 + 3 Tier 2) all switched from `chapter_channel_paths_canonical_v1_snapshot + boundary_value` → `chapter_purchase_summary + canonical_v2_snapshot`.** All commits from today: `e63e24c` (Tier 1) + `ca2babb` (Tier 2).
+- **Tier 1 (highest-value NSC dashboard tiles):**
+  - `channel_performance_overview`: promoted the v2 preview to primary. Reads chapters from `chapter_purchase_summary` (canonical_v2 path + payment-attributed net_revenue). EOS: (unknown) $1,502 → (direct) via canonical_v2 fallback attribution. NSC: (unknown) $27,506 → (direct) $53,118 via payment attribution.
+  - `attribution_overview`: computes first/last/linear on-the-fly from `chapter_purchase_summary`, bypasses the pre-computed `purchase_channel_final_v1` + `attribution_linear_chapter_v1` snapshots which had the same $0 boundary_value problem for NSC.
+  - `path_combinations_overview` / `channel_roles_overview` / `channel_affinity_overview`: all switched to `chapter_purchase_summary` source.
+- **Tier 2 (L&I page RPCs):**
+  - `correlation_channel_overview`: swap converters + converting_chapters source. NSC now returns 3 rows (previously 0).
+  - `contribution_overview`: swap base source, compute linear on-the-fly (bypasses `attribution_linear_chapter_v1`), use `canonical_v2_snapshot` for returning customer lookup. NSC: 1 row (direct + $53K, participation 100%, recurrence 1.0).
+  - `incrementality_channel_overview`: use `canonical_v2_snapshot` for all_chapters (preserves LAG for prev_boundary_ts across all-time), LEFT JOIN `chapter_purchase_summary` for windowed net_revenue. NSC: 1 row (direct × subscriber bucket).
+- **Sample dashboards deferred:** `lagged_impact_pair_series` + `matched_lift_bucket_stats` don't read `boundary_value` and stay unchanged — their identity-level math is untouched by the split-flow issue. `funnel_overview` is ecom-oriented and doesn't need modification for a barbershop's Book Now → Book chain.
+- **EOS regression verification: byte-identical numbers across all 4 revenue-computing RPCs after the shift** (channel_performance / attribution first-touch / channel_roles / path_combinations). The (unknown) → (direct) shift ($1,502) is the ONLY EOS delta and is architecturally correct (canonical_v2 fallback chapters are legitimately direct-attributed, not unknown).
+- **Full state of NSC dashboards after today:**
+  - Category A tiles (already worked): `purchase_overview` ($27,506 orders + revenue in the last month), `journey_overview`, `dashboard_timeseries`, etc.
+  - Category B tiles (fixed today): Attribution / Channels / Paths / Roles / Affinity / L&I all render real numbers, all attributing to `(direct)` today. When stitcher populates canonical_v1 session entries via redirect_click matching, revenue automatically spreads across real channels (organic search, paid search, etc.) in the next attribution chain refresh (03:30 UTC nightly). **No further RPC changes needed.**
+- **On the boundary_ts vs payment_ts semantic question raised during the build:** chapter_purchase_summary attributes revenue to a chapter using the chapter's `boundary_ts` = booking's `event_ts` (when the booking record was created in Square), NOT when the appointment happened OR when payment was received. A May booking → June appointment → June payment attributes revenue to the MAY window (chapter's boundary_ts), not June. This is marketing-attribution-correct (credits the touchpoint that drove the booking commitment) but different from cash-flow accounting. Operator explicitly OK'd this — matches Chapter's boundary-event framing.
 
 ### chapter_purchase_summary RPC + Orders API integration — NSC revenue attribution 86% coverage (July 2, 2026 afternoon)
 - **Problem NSC dashboards had:** canonical_v2 showed $0 revenue on every chapter because NSC's boundary event is `appointment_booked` with `value=0`. Real revenue lives in downstream `appointment_paid` events (POS transactions, split into a separate Square Order/Payment from the booking). Dashboard needed a way to attribute payment revenue back to booking chapters via JOIN.
