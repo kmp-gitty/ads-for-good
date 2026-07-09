@@ -64,7 +64,16 @@ export type PromptFormInput = {
     max_attempts: number;
   } | null;
   // MI v2 Phase 4 — bubble container + CTA actions (Custom Notification + future presets)
-  container_jsonb?: { type: "modal" | "bubble"; position?: "bottom-right" | "bottom-left" | "top-right" | "top-left" } | null;
+  // MI v2 Phase 5 — `target` is the offer's target resource (product / collection / storewide)
+  //                 for make_an_offer preset. Read by the pixel renderer.
+  container_jsonb?: {
+    type: "modal" | "bubble";
+    position?: "bottom-right" | "bottom-left" | "top-right" | "top-left";
+    target?:
+      | { type: "product"; product_id: string; product_name?: string; list_price?: number }
+      | { type: "collection"; collection_id: string; collection_name?: string }
+      | { type: "storewide" };
+  } | null;
   submit_actions_jsonb?: {
     cta_type?: "dismiss_only" | "button" | "yes_no";
     cta_label?: string;
@@ -93,7 +102,13 @@ function buildTriggerJsonb(input: PromptFormInput): Record<string, unknown> {
 function validate(input: PromptFormInput): string | null {
   if (!input.client_key) return "client_key required";
   if (!/^[a-z0-9_]+$/.test(input.slug)) return "slug must be lowercase letters/digits/underscore";
-  if (!input.headline.trim()) return "headline required";
+  // Email Exchange stores its headline in the dedicated `headline` column.
+  // Composable presets (custom_form / custom_notification / phone_call /
+  // make_an_offer / remind_me) put their headline inside content_blocks_jsonb.
+  // For those, top-level `headline` is optional.
+  if (input.preset_type === "email_exchange" && !input.headline.trim()) {
+    return "headline required";
+  }
   if (input.trigger_type === "click_element" && !input.trigger_selector?.trim()) {
     return "click_element trigger requires a CSS selector";
   }

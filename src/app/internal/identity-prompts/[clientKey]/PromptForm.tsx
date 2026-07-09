@@ -8,6 +8,7 @@ import MultiPageBuilder, { type PagesConfig } from "./MultiPageBuilder";
 import RecoveryBuilder, { type RecoveryConfig } from "./RecoveryBuilder";
 import NotificationBuilder, { type NotificationConfig } from "./NotificationBuilder";
 import PhoneCallBuilder, { type PhoneCallConfig, type PhoneCta } from "./PhoneCallBuilder";
+import MakeAnOfferBuilder, { type MakeAnOfferConfig } from "./MakeAnOfferBuilder";
 
 type TriggerType = PromptFormInput["trigger_type"];
 type Frequency = PromptFormInput["frequency"];
@@ -41,7 +42,14 @@ export type ExistingPrompt = {
   form_fields_jsonb: FormField[] | null;
   pages_jsonb: PagesConfig | null;
   recovery_jsonb: RecoveryConfig | null;
-  container_jsonb: { type: string; position?: string } | null;
+  container_jsonb: {
+    type: string;
+    position?: string;
+    target?:
+      | { type: "product"; product_id: string; product_name?: string; list_price?: number }
+      | { type: "collection"; collection_id: string; collection_name?: string }
+      | { type: "storewide" };
+  } | null;
   submit_actions_jsonb: {
     cta_type?: "dismiss_only" | "button" | "yes_no";
     cta_label?: string;
@@ -137,6 +145,13 @@ export default function PromptForm({
   const [phoneCallConfig, setPhoneCallConfig] = useState<PhoneCallConfig>(() => ({
     content_blocks: (prompt?.content_blocks_jsonb as PhoneCallConfig["content_blocks"]) ?? [],
   }));
+  const [makeAnOfferConfig, setMakeAnOfferConfig] = useState<MakeAnOfferConfig>(() => {
+    const t = prompt?.container_jsonb && (prompt.container_jsonb as { target?: MakeAnOfferConfig["target"] }).target;
+    return {
+      content_blocks: prompt?.content_blocks_jsonb ?? [],
+      target: t ?? { type: "storewide" },
+    };
+  });
   const [slug, setSlug] = useState(prompt?.slug ?? "");
   const [triggerType, setTriggerType] = useState<TriggerType>(
     (trig.type as TriggerType) || "click_element",
@@ -186,6 +201,9 @@ export default function PromptForm({
     } else if (presetType === "phone_call") {
       effectiveContentBlocks = phoneCallConfig.content_blocks as ContentBlock[];
       effectiveContainer = { type: "modal" };
+    } else if (presetType === "make_an_offer") {
+      effectiveContentBlocks = makeAnOfferConfig.content_blocks;
+      effectiveContainer = { type: "modal", target: makeAnOfferConfig.target };
     }
 
     const input: PromptFormInput = {
@@ -193,7 +211,9 @@ export default function PromptForm({
       preset_type: presetType,
       content_blocks_jsonb: effectiveContentBlocks,
       form_fields_jsonb:
-        presetType === "custom_notification" || presetType === "phone_call"
+        presetType === "custom_notification" ||
+        presetType === "phone_call" ||
+        presetType === "make_an_offer"
           ? []
           : multiPageEnabled
             ? []
@@ -268,7 +288,8 @@ export default function PromptForm({
               opt.value === "email_exchange" ||
               opt.value === "custom_form" ||
               opt.value === "custom_notification" ||
-              opt.value === "phone_call";
+              opt.value === "phone_call" ||
+              opt.value === "make_an_offer";
             const disabled = !isAvailable || (isEdit && opt.value !== presetType);
             return (
               <button
@@ -546,6 +567,140 @@ export default function PromptForm({
             </label>
           )}
         </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={e => setEnabled(e.target.checked)}
+          />
+          <span className="font-semibold text-neutral-800">Enabled</span>
+        </label>
+
+        {error && (
+          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        )}
+
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
+        >
+          {pending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create prompt")}
+        </button>
+        </>
+      ) : presetType === "make_an_offer" ? (
+        <>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="text-sm">
+            <span className="block font-semibold text-neutral-800">Slug</span>
+            <input
+              type="text"
+              value={slug}
+              onChange={e => setSlug(e.target.value)}
+              placeholder="make_offer_hoodie"
+              required
+              className={inputCls + " font-mono"}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="block font-semibold text-neutral-800">Trigger type</span>
+            <select
+              value={triggerType}
+              onChange={e => setTriggerType(e.target.value as TriggerType)}
+              className={inputCls}
+            >
+              <option value="click_element">Click element (CSS selector)</option>
+              <option value="exit_intent">Exit intent (mouse leaves viewport)</option>
+              <option value="time_on_page">Time on page</option>
+              <option value="scroll_depth">Scroll depth</option>
+            </select>
+          </label>
+        </div>
+        {triggerType === "click_element" && (
+          <label className="block text-sm">
+            <span className="block font-semibold text-neutral-800">CSS selector</span>
+            <input
+              type="text"
+              value={triggerSelector}
+              onChange={e => setTriggerSelector(e.target.value)}
+              placeholder=".make-offer-btn"
+              className={inputCls + " font-mono"}
+            />
+          </label>
+        )}
+        {triggerType === "time_on_page" && (
+          <label className="block text-sm">
+            <span className="block font-semibold text-neutral-800">Delay (ms)</span>
+            <input
+              type="number"
+              value={triggerDelayMs}
+              onChange={e => setTriggerDelayMs(e.target.value)}
+              min={0}
+              className={inputCls + " font-mono"}
+            />
+          </label>
+        )}
+        {triggerType === "scroll_depth" && (
+          <label className="block text-sm">
+            <span className="block font-semibold text-neutral-800">Scroll percent</span>
+            <input
+              type="number"
+              value={triggerPercent}
+              onChange={e => setTriggerPercent(e.target.value)}
+              min={1} max={100}
+              className={inputCls + " font-mono"}
+            />
+          </label>
+        )}
+
+        <label className="block text-sm">
+          <span className="block font-semibold text-neutral-800">Submit button label</span>
+          <input
+            type="text"
+            value={buttonLabel}
+            onChange={e => setButtonLabel(e.target.value)}
+            placeholder="Send offer"
+            className={inputCls}
+          />
+        </label>
+
+        <MakeAnOfferBuilder value={makeAnOfferConfig} onChange={setMakeAnOfferConfig} />
+
+        <div className="grid grid-cols-2 gap-4">
+          <label className="text-sm">
+            <span className="block font-semibold text-neutral-800">Frequency</span>
+            <select
+              value={frequency}
+              onChange={e => setFrequency(e.target.value as Frequency)}
+              className={inputCls}
+            >
+              <option value="session">Once per session</option>
+              <option value="visitor">Once per visitor</option>
+              <option value="every_visit">Every visit (no throttle)</option>
+            </select>
+          </label>
+          {frequency === "visitor" && (
+            <label className="text-sm">
+              <span className="block font-semibold text-neutral-800">Days</span>
+              <input
+                type="number"
+                value={frequencyDays}
+                onChange={e => setFrequencyDays(e.target.value)}
+                min={1}
+                className={inputCls + " font-mono"}
+              />
+            </label>
+          )}
+        </div>
+
+        <p className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
+          Auto-accept + counter-offer decisions read from{" "}
+          <em>Offer thresholds</em> (product / collection / global scope). Set
+          them at the client&apos;s{" "}
+          <span className="font-mono">Offer thresholds →</span> page — without a
+          threshold row and no list price the bid is routed to manual review.
+        </p>
 
         <label className="flex items-center gap-2 text-sm">
           <input
