@@ -84,6 +84,18 @@ export default async function ClientPromptsPage({
           >
             View responses →
           </Link>
+          <Link
+            href={`/internal/identity-prompts/${clientKey}/offers`}
+            className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+          >
+            Offers →
+          </Link>
+          <Link
+            href={`/internal/identity-prompts/${clientKey}/offer-thresholds`}
+            className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+          >
+            Offer thresholds →
+          </Link>
         </div>
       </div>
 

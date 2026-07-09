@@ -660,6 +660,7 @@ setInterval(function () {
     if (presetType === "email_exchange") return chapterRenderPromptV1(prompt);
     if (presetType === "custom_notification") return chapterRenderPromptBubble(prompt);
     if (presetType === "phone_call") return chapterRenderPromptPhoneCall(prompt);
+    if (presetType === "make_an_offer") return chapterRenderPromptMakeAnOffer(prompt);
     return chapterRenderPromptComposable(prompt);
   }
 
@@ -1280,6 +1281,205 @@ setInterval(function () {
         }),
       }).catch(function () { /* fire-and-forget */ });
     } catch (e) { /* noop */ }
+  }
+
+  // MI v2 Phase 5 — Make an Offer renderer.
+  //
+  // Modal with product summary + bid input + email input. Submit POSTs to
+  // /api/chapter/offer-submit and swaps to a decision-appropriate success
+  // state (auto_accept → show code, counter → show counter number, review →
+  // "we'll be in touch"). Honeypot + session_token same defense pattern as
+  // /api/chapter/prompt-response.
+  function chapterRenderPromptMakeAnOffer(prompt) {
+    chapterInjectPromptStyles();
+    var target = (prompt.container_jsonb && prompt.container_jsonb.target) || null;
+    var contentBlocks = Array.isArray(prompt.content_blocks_jsonb) ? prompt.content_blocks_jsonb : [];
+
+    var backdrop = document.createElement("div");
+    backdrop.className = "chapter-prompt-backdrop";
+    var card = document.createElement("div");
+    card.className = "chapter-prompt-card";
+
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "chapter-prompt-close";
+    closeBtn.textContent = "×";
+    closeBtn.setAttribute("aria-label", "Close");
+    card.appendChild(closeBtn);
+
+    function dismiss(method) {
+      try { backdrop.remove(); } catch (e) { /* noop */ }
+      api.track("identity_prompt_dismissed", {
+        prompt_slug: prompt.slug,
+        preset_type: prompt.preset_type,
+        dismiss_method: method,
+      });
+    }
+    closeBtn.addEventListener("click", function () { dismiss("close_button"); });
+    backdrop.addEventListener("click", function (e) { if (e.target === backdrop) dismiss("backdrop"); });
+
+    for (var i = 0; i < contentBlocks.length; i++) {
+      var block = contentBlocks[i] || {};
+      if (block.type === "headline") {
+        var h = document.createElement("h3");
+        h.className = "chapter-prompt-headline";
+        h.textContent = String(block.text || "Name your price");
+        card.appendChild(h);
+      } else if (block.type === "body") {
+        var p = document.createElement("p");
+        p.className = "chapter-prompt-body";
+        p.textContent = String(block.text || "");
+        card.appendChild(p);
+      }
+    }
+
+    if (target && target.product_name) {
+      var meta = document.createElement("div");
+      meta.className = "chapter-prompt-body";
+      var listPriceText = target.list_price != null ? " (list $" + Number(target.list_price).toFixed(2) + ")" : "";
+      meta.textContent = "For: " + target.product_name + listPriceText;
+      card.appendChild(meta);
+    }
+
+    var form = document.createElement("form");
+    form.style.display = "grid";
+    form.style.gap = "10px";
+    form.style.marginTop = "12px";
+
+    var bidInput = document.createElement("input");
+    bidInput.type = "number";
+    bidInput.name = "bid_amount";
+    bidInput.min = "0.01";
+    bidInput.step = "0.01";
+    bidInput.required = true;
+    bidInput.placeholder = "Your offer ($)";
+    bidInput.className = "chapter-prompt-input";
+    form.appendChild(bidInput);
+
+    var emailInput = document.createElement("input");
+    emailInput.type = "email";
+    emailInput.name = "email";
+    emailInput.required = true;
+    emailInput.placeholder = "you@example.com";
+    emailInput.className = "chapter-prompt-input";
+    form.appendChild(emailInput);
+
+    var honeypotInput = document.createElement("input");
+    honeypotInput.type = "text";
+    honeypotInput.name = "hp_field";
+    honeypotInput.tabIndex = -1;
+    honeypotInput.setAttribute("aria-hidden", "true");
+    honeypotInput.style.cssText = "position:absolute;left:-9999px;width:1px;height:1px;opacity:0";
+    form.appendChild(honeypotInput);
+
+    var submitBtn = document.createElement("button");
+    submitBtn.type = "submit";
+    submitBtn.className = "chapter-prompt-submit";
+    submitBtn.textContent = prompt.button_label || "Send offer";
+    form.appendChild(submitBtn);
+
+    var errBox = document.createElement("div");
+    errBox.style.color = "#B04A00";
+    errBox.style.fontSize = "13px";
+    errBox.style.display = "none";
+    form.appendChild(errBox);
+
+    card.appendChild(form);
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      errBox.style.display = "none";
+      var bid = parseFloat(bidInput.value);
+      var email = String(emailInput.value || "").trim().toLowerCase();
+      if (!isFinite(bid) || bid <= 0) {
+        errBox.textContent = "Please enter a valid offer amount.";
+        errBox.style.display = "block";
+        return;
+      }
+      if (!email || email.indexOf("@") < 0) {
+        errBox.textContent = "Please enter a valid email.";
+        errBox.style.display = "block";
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Sending…";
+
+      chapterHashEmail(email).then(function (hash) {
+        var identityKey = "email_sha256:" + hash;
+        // Identify first so downstream event stitches immediately.
+        try { api.identify(identityKey, {}, {}); } catch (e2) { /* noop */ }
+
+        chapterPostOfferSubmit({
+          prompt_id: prompt.id,
+          identity_key: identityKey,
+          recipient_email: email,
+          bid_amount: bid,
+          target: target || { type: "storewide" },
+          hp_field: honeypotInput.value || "",
+        }).then(function (result) {
+          submitBtn.disabled = false;
+          if (!result || result.error) {
+            errBox.textContent = "Something went wrong. Please try again.";
+            errBox.style.display = "block";
+            submitBtn.textContent = prompt.button_label || "Send offer";
+            return;
+          }
+          api.track("identity_prompt_submitted", {
+            prompt_slug: prompt.slug,
+            preset_type: prompt.preset_type,
+            decision: result.decision,
+            bid_amount: bid,
+          });
+          // Swap card contents to the decision-appropriate success state.
+          form.style.display = "none";
+          var successBox = document.createElement("div");
+          successBox.className = "chapter-prompt-body";
+          if (result.decision === "auto_accept") {
+            successBox.innerHTML = "<strong>Offer accepted.</strong> We just emailed your code.";
+          } else if (result.decision === "counter" && result.counter_amount != null) {
+            successBox.innerHTML = "<strong>Counter-offer sent.</strong> We countered at $" +
+              Number(result.counter_amount).toFixed(2) + ". Check your inbox to accept.";
+          } else if (result.decision === "decline") {
+            successBox.innerHTML = "Thanks for your offer — unfortunately we can't go that low right now.";
+          } else {
+            successBox.innerHTML = "Thanks! We'll review your offer and follow up.";
+          }
+          card.appendChild(successBox);
+        }).catch(function () {
+          submitBtn.disabled = false;
+          errBox.textContent = "Network error. Please try again.";
+          errBox.style.display = "block";
+          submitBtn.textContent = prompt.button_label || "Send offer";
+        });
+      });
+    });
+
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type, container: "modal" });
+  }
+
+  function chapterPostOfferSubmit(payload) {
+    var apiOrigin = getApiOrigin() || "https://ads4good.com";
+    var url = apiOrigin + "/api/chapter/offer-submit";
+    return fetch(url, {
+      method: "POST",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_key: clientKey,
+        prompt_id: payload.prompt_id,
+        session_token: chapterPromptSessionToken,
+        hp_field: payload.hp_field,
+        bid_amount: payload.bid_amount,
+        target: payload.target,
+        identity_key: payload.identity_key,
+        recipient_email: payload.recipient_email,
+        page_url: window.location.href,
+      }),
+    })
+      .then(function (res) { return res.json().catch(function () { return { error: "invalid_json" }; }); })
+      .catch(function (e) { return { error: String(e) }; });
   }
 
   function chapterRenderPromptV1(prompt) {
