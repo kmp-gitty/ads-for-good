@@ -89,7 +89,14 @@ export async function POST(req: NextRequest) {
     (existingAnon && /^[0-9a-fA-F-]{36}$/.test(existingAnon) ? existingAnon : null) ||
     randomUUID();
 
-  const identity_key = incomingIdentityKey || anon_id;
+  // Prefix raw UUIDs with 'anonymous_id:' so pixel identities share format with
+  // redirect-minted identities (`anonymous_id:<uuid>` per src/app/lib/redirect/
+  // identity.ts). Without this, pixel identities and redirect identities can
+  // never share a canonical even when they're the same visitor. Callers that
+  // pass an explicit deterministic identity_key (email_sha256:*, phone_sha256:*,
+  // shopify_customer_id:*, etc.) bypass wrapping.
+  const identity_key =
+    incomingIdentityKey || `anonymous_id:${anon_id}`;
 
   const vertical = payload?.vertical ? String(payload.vertical).trim() : null;
   const page_url = payload?.page_url ? String(payload.page_url) : null;
@@ -97,6 +104,22 @@ export async function POST(req: NextRequest) {
   const referrer = payload?.referrer
     ? String(payload.referrer)
     : req.headers.get("referer") || null;
+
+  // Compute shared-apex for cookie domain so pixel + redirect subdomains can
+  // share cookies. For NSC (1P): pixel is on notsocavalier.com, collect route
+  // is on chapter.notsocavalier.com. Setting Domain=.notsocavalier.com makes
+  // the cookie visible on both. Without this, pixel-side identity and redirect-
+  // side identity fragment into separate anonymous_ids for the same visitor.
+  const reqHost = req.nextUrl.hostname;
+  const isLocalReq = reqHost === "localhost" || reqHost.startsWith("127.");
+  const cookieApex = (() => {
+    if (isLocalReq) return undefined;
+    const parts = reqHost.split(".");
+    if (parts.length <= 2) return reqHost;
+    // Strip leftmost subdomain: chapter.notsocavalier.com → notsocavalier.com
+    return parts.slice(1).join(".");
+  })();
+  const cookieDomain = cookieApex ? `.${cookieApex}` : undefined;
 
   const cookieName = `up_journey_${client_key}`;
   const existing = req.cookies.get(cookieName)?.value || null;
@@ -168,14 +191,14 @@ export async function POST(req: NextRequest) {
   if (!should_track) {
     // 204 + cookies so the same journey continues if/when the user opts in.
     const res = new NextResponse(null, { status: 204 });
-    const isLocal =
-      req.nextUrl.hostname === "localhost" || req.nextUrl.hostname === "127.0.0.1";
     res.cookies.set(cookieName, journey_id, {
-      httpOnly: false, secure: !isLocal, sameSite: isLocal ? "lax" : "none",
+      domain: cookieDomain, httpOnly: false,
+      secure: !isLocalReq, sameSite: isLocalReq ? "lax" : "none",
       path: "/", maxAge: 60 * 60 * 24 * 180,
     });
     res.cookies.set(anonCookieName, anon_id, {
-      httpOnly: false, secure: !isLocal, sameSite: isLocal ? "lax" : "none",
+      domain: cookieDomain, httpOnly: false,
+      secure: !isLocalReq, sameSite: isLocalReq ? "lax" : "none",
       path: "/", maxAge: 60 * 60 * 24 * 365,
     });
     res.headers.set("X-Robots-Tag", "noindex, nofollow");
@@ -244,6 +267,17 @@ export async function POST(req: NextRequest) {
           DO UPDATE SET
             last_linked_at = EXCLUDED.last_linked_at,
             traits = COALESCE(EXCLUDED.traits, chapter_identity.identity_links.traits)
+        `;
+
+        // Self-canonical: ensure the pixel identity exists in identity_canon
+        // so downstream canonical_v1 chain classification can find it. Without
+        // this, pixel identities stay orphan-canonical (never populate canon
+        // unless an alias is inserted for them). Idempotent via ON CONFLICT.
+        await tx`
+          INSERT INTO chapter_identity.identity_canon
+            (client_key, identity_key, canonical_identity_key, updated_at)
+          VALUES (${client_key}, ${identity_key}, ${identity_key}, ${nowIso})
+          ON CONFLICT (client_key, identity_key) DO NOTHING
         `;
       }
 
@@ -324,10 +358,14 @@ export async function POST(req: NextRequest) {
   // Response.
   const res = new NextResponse(null, { status: 204 });
   res.cookies.set(cookieName, journey_id, {
-    httpOnly: false, secure: true, sameSite: "none", path: "/", maxAge: 60 * 60 * 24 * 30,
+    domain: cookieDomain, httpOnly: false,
+    secure: !isLocalReq, sameSite: isLocalReq ? "lax" : "none",
+    path: "/", maxAge: 60 * 60 * 24 * 30,
   });
   res.cookies.set(anonCookieName, anon_id, {
-    httpOnly: false, secure: true, sameSite: "none", path: "/", maxAge: 60 * 60 * 24 * 365,
+    domain: cookieDomain, httpOnly: false,
+    secure: !isLocalReq, sameSite: isLocalReq ? "lax" : "none",
+    path: "/", maxAge: 60 * 60 * 24 * 365,
   });
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
   return res;

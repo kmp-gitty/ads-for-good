@@ -55,12 +55,18 @@ export function applyIdentityCookies(
   hostname: string
 ): NextResponse {
   // Cookie domain: leading dot so the cookie is visible across subdomains of
-  // the redirect host. For ads4good.com → ".ads4good.com". For a future
-  // dedicated redirect domain (e.g. ".chptr.link") → ".chptr.link". Skip the
-  // dot for localhost since browsers reject domain attribute on localhost.
-  const domain = hostname === "localhost" || hostname.startsWith("127.")
-    ? undefined
-    : `.${hostname.replace(/^www\./, "")}`;
+  // the redirect host. For chapter.notsocavalier.com strip the leftmost
+  // subdomain to get .notsocavalier.com — that's the shared apex with the
+  // storefront (where the pixel runs). Without this, redirect-side cookies
+  // scope to .chapter.notsocavalier.com only, invisible to the pixel on
+  // notsocavalier.com → identity fragmentation.
+  const domain = (() => {
+    if (hostname === "localhost" || hostname.startsWith("127.")) return undefined;
+    const stripped = hostname.replace(/^www\./, "");
+    const parts = stripped.split(".");
+    if (parts.length <= 2) return `.${stripped}`;
+    return `.${parts.slice(1).join(".")}`;
+  })();
 
   res.cookies.set(JOURNEY_COOKIE, resolved.journeyId, {
     domain,
