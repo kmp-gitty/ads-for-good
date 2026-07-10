@@ -64,7 +64,7 @@ export async function GET(
   const emailHint = extractEmailHint(rawQuery);
   const query = stripHintParams(rawQuery);
 
-  const identity = resolveIdentity(req);
+  const identity = resolveIdentity(req, client_key);
   const geo = resolveGeo(req);
   const device = classifyUA(req.headers.get("user-agent"));
   const referrer = req.headers.get("referer");
@@ -231,7 +231,7 @@ export async function GET(
   // the consent banner's responsibility on the property where the visitor
   // expressed the opt-out.
   if (consent.allowCollection) {
-    applyIdentityCookies(res, identity, hostname);
+    applyIdentityCookies(res, identity, hostname, client_key);
   }
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
   res.headers.set("Cache-Control", "no-store");

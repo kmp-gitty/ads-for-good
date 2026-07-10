@@ -95,6 +95,27 @@ function writeStorage(key, value) {
   } catch (e) {}
 }
 
+// Cross-subdomain cookie fallback. Pixel API + redirect handler both set
+// up_anon_<client_key> and up_journey_<client_key> on the eTLD+1 apex
+// (e.g. .notsocavalier.com). When a visitor first lands on the storefront via
+// a redirect (chapter.notsocavalier.com/r/... → 302 to notsocavalier.com),
+// localStorage is empty (localStorage is origin-scoped) but the cookie set by
+// the redirect is visible here. Reading it as a fallback prevents the pixel
+// from minting a fresh anonymous_id in that case.
+var CHAPTER_UUID_REGEX = /^[0-9a-fA-F-]{36}$/;
+function readCookieValue(name) {
+  try {
+    var parts = document.cookie.split(";");
+    for (var i = 0; i < parts.length; i++) {
+      var trimmed = parts[i].replace(/^\s+/, "");
+      if (trimmed.indexOf(name + "=") === 0) {
+        return decodeURIComponent(trimmed.substring(name.length + 1));
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 function getOrCreateId(storageKey) {
   try {
     var existing = readStorage(storageKey);
@@ -109,6 +130,23 @@ function getOrCreateId(storageKey) {
   } catch (e) {
     return null;
   }
+}
+
+// getOrCreateId + cookie fallback. Priority:
+//   1. localStorage (fastest, most stable within the origin)
+//   2. Shared-apex cookie set by pixel API or redirect handler
+//   3. Mint a new UUID and persist it to localStorage
+function getOrCreateIdWithCookieFallback(storageKey, cookieName) {
+  var existing = readStorage(storageKey);
+  if (existing) return existing;
+
+  var fromCookie = readCookieValue(cookieName);
+  if (fromCookie && CHAPTER_UUID_REGEX.test(fromCookie)) {
+    writeStorage(storageKey, fromCookie);
+    return fromCookie;
+  }
+
+  return getOrCreateId(storageKey);
 }
 
   function writeBuffer(clientKey, events) {
@@ -141,8 +179,8 @@ function getOrCreateId(storageKey) {
   var clientKey = getClientKey();
   var collectUrl = getCollectUrl();
   var identifyUrl = getIdentifyUrl();
-  var cachedJourneyId = clientKey ? getOrCreateId(getJourneyStorageKey(clientKey)) : null;
-  var cachedAnonId = clientKey ? getOrCreateId(getAnonStorageKey(clientKey)) : null;
+  var cachedJourneyId = clientKey ? getOrCreateIdWithCookieFallback(getJourneyStorageKey(clientKey), "up_journey_" + clientKey) : null;
+  var cachedAnonId = clientKey ? getOrCreateIdWithCookieFallback(getAnonStorageKey(clientKey), "up_anon_" + clientKey) : null;
 
     function shouldIgnoreChapterTracking() {
     try {
@@ -178,12 +216,12 @@ function getOrCreateId(storageKey) {
 var anonId = cachedAnonId;
 
 if (!journeyId) {
-  journeyId = getOrCreateId(getJourneyStorageKey(clientKey));
+  journeyId = getOrCreateIdWithCookieFallback(getJourneyStorageKey(clientKey), "up_journey_" + clientKey);
   cachedJourneyId = journeyId;
 }
 
 if (!anonId) {
-  anonId = getOrCreateId(getAnonStorageKey(clientKey));
+  anonId = getOrCreateIdWithCookieFallback(getAnonStorageKey(clientKey), "up_anon_" + clientKey);
   cachedAnonId = anonId;
 }
 
@@ -368,7 +406,7 @@ if (!anonId) {
     var params = new URLSearchParams(window.location.search);
     var chid = params.get("chid");
     if (chid && clientKey) {
-      var pixelAnonId = cachedAnonId || getOrCreateId(getAnonStorageKey(clientKey));
+      var pixelAnonId = cachedAnonId || getOrCreateIdWithCookieFallback(getAnonStorageKey(clientKey), "up_anon_" + clientKey);
       cachedAnonId = pixelAnonId;
       if (chid !== pixelAnonId) {
         fetch(identifyUrl, {
