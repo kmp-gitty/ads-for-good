@@ -200,9 +200,6 @@ export default function DemoPage() {
       <div className="mx-auto max-w-6xl px-4 py-10">
         {/* Header */}
         <header className="mb-8">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-orange-800">
-            Practice + Sales Demo
-          </div>
           <h1 className="text-3xl font-bold tracking-tight text-neutral-900">
             Chapter Moment Identity Playground
           </h1>
