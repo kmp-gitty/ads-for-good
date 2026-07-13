@@ -4,10 +4,22 @@
 //   For each enabled rule in chapter_recommendations.rules:
 //     Run rule evaluator (pre-written SQL, parameterized by client + window)
 //     If fired:
-//       Look up prior finding for (client, rule, subject) → determine state
+//       Compute severity bucket (rule-declared or coarse default)
 //       Render card text via Claude (or fallback template substitution)
-//       Insert into findings
-//   Mark prior findings as 'resolved' when this run didn't refire them
+//       writeFindingRow:
+//         if active finding exists for (client, rule, subject):
+//           UPDATE in place — new state via bucket comparison, append to history
+//         else:
+//           INSERT new row — set prior_finding_id if a resolved row exists
+//   Mark stale findings as 'resolved' when this run didn't refire them
+//   (compared by last_observed_at vs run_started_at)
+//
+// Part 2 (write-time dedup) — one row per active finding for a (client, rule,
+// subject), updated in place as long as the finding is active. Substance
+// change is detected via severity-band bucketing (escalation-asymmetric —
+// escalation triggers state='changed', de-escalation while still triggering
+// is state='standing' with confidence attenuation captured on the row).
+// See CLAUDE.md "Recommendations dedup Part 2" for the design rationale.
 //
 // Failure surfacing: any cron-level error → GChat alert. Per-rule failures are
 // caught and logged but don't kill the run.
@@ -142,7 +154,12 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
   let skipped = 0;
   let apiCalls = 0;
   let fallbacks = 0;
-  const firedKeys = new Set<string>(); // (rule_id::subject_key) — used to resolve stale findings
+  let inserted = 0;
+  let updated = 0;
+  // Timestamp captured once at run start — used as the "touched this run"
+  // marker for the stale-findings sweep. Any active finding whose
+  // last_observed_at < run_started_at didn't fire this run → resolved.
+  const runStartedAt = new Date();
 
   try {
     for (const ruleCfg of ruleConfigs) {
@@ -160,9 +177,11 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
         });
         if (!result || !result.fired) continue;
 
-        // Dedup: look up the most recent non-dismissed finding for this
-        // (client, rule, subject). Determine state: new / standing / changed.
-        const state = await determineState(clientKey, result);
+        // Compute severity bucket. Rule-declared takes precedence; coarse
+        // default handles unimplemented rules.
+        const bucket = result.dedup_bucket !== undefined && result.severity_ordinal !== undefined
+          ? { bucket: result.dedup_bucket, ordinal: result.severity_ordinal }
+          : defaultBucket(result.data);
 
         // Render card text via Claude.
         const rendered = await renderRecommendationCard(
@@ -173,27 +192,18 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
         if (rendered.render_method === "claude") apiCalls++;
         else fallbacks++;
 
-        const dedupKey = `${result.rule_id}::${result.subject_key ?? ""}`;
-        firedKeys.add(dedupKey);
-
-        await supabase.schema("chapter_recommendations").from("findings").insert({
-          client_key: clientKey,
-          rule_id: result.rule_id,
-          theme: ruleCfg.theme,
-          subject_key: result.subject_key,
-          headline: rendered.card.headline,
-          story: rendered.card.story,
-          evidence: result.evidence,
-          action: rendered.card.action,
-          action_type: result.action_type,
-          confidence: result.confidence,
-          severity_weight: result.severity_weight,
-          state,
-          raw_metrics: result.data,
-          render_method: rendered.render_method,
-          data_window_start: windowStart.toISOString(),
-          data_window_end: windowEnd.toISOString(),
+        const writeResult = await writeFindingRow({
+          clientKey,
+          ruleCfg,
+          result,
+          bucket,
+          rendered,
+          runStartedAt,
+          windowStart,
+          windowEnd,
         });
+        if (writeResult.action === "inserted") inserted++;
+        else updated++;
         fired++;
       } catch (err) {
         console.warn(`[refresh-recommendations] rule ${ruleCfg.rule_id} failed for ${clientKey}:`, err);
@@ -201,9 +211,9 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
       }
     }
 
-    // Resolve stale findings — rules that fired previously but didn't fire
-    // this run. Mark as 'resolved'.
-    await markStaleAsResolved(clientKey, firedKeys);
+    // Resolve stale findings — active findings whose last_observed_at is
+    // older than this run's start didn't fire this run → resolved.
+    await markStaleAsResolved(clientKey, runStartedAt);
 
     await supabase
       .schema("chapter_recommendations")
@@ -218,6 +228,8 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
         fallback_renders: fallbacks,
       })
       .eq("id", runId);
+
+    console.log(`[refresh-recommendations] ${clientKey}: ${fired} fired (${inserted} inserted, ${updated} updated)`);
 
     return {
       client_key: clientKey, ok: true,
@@ -246,62 +258,232 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
   }
 }
 
-// State machine for the new finding vs. the most recent prior finding.
-async function determineState(
+// Part 2 write-time dedup helpers.
+
+type FindingState = "new" | "standing" | "changed" | "resolved";
+type Bucket = { bucket: Record<string, unknown>; ordinal: number };
+
+type ActiveFinding = {
+  id: string;
+  state: FindingState;
+  dedup_bucket: Record<string, unknown> | null;
+  dedup_ordinal: number | null;
+  confidence: string;
+  raw_metrics: Record<string, unknown> | null;
+  last_observed_at: string;
+  first_observed_at: string;
+  run_count: number;
+  history: unknown[] | null;
+};
+
+type WriteFindingArgs = {
+  clientKey: string;
+  ruleCfg: RuleConfig;
+  result: RuleEvaluationResult;
+  bucket: Bucket;
+  rendered: { render_method: "claude" | "fallback"; card: { headline: string; story: string; action: string } };
+  runStartedAt: Date;
+  windowStart: Date;
+  windowEnd: Date;
+};
+
+// One row per active finding for a (client, rule, subject). If an active row
+// exists, update it in place (state via bucket comparison, append prior
+// observation to history). Otherwise insert a new row and set prior_finding_id
+// if a prior resolved row exists for the same (rule, subject).
+async function writeFindingRow(
+  args: WriteFindingArgs,
+): Promise<{ action: "inserted" | "updated"; state: FindingState; findingId: string }> {
+  const { clientKey, ruleCfg, result, bucket, rendered, runStartedAt, windowStart, windowEnd } = args;
+
+  const active = await lookupActiveFinding(clientKey, result.rule_id, result.subject_key);
+
+  if (active) {
+    // Update path: determine state via bucket comparison.
+    const priorBucket = active.dedup_bucket ?? {};
+    const priorOrdinal = active.dedup_ordinal ?? 0;
+
+    let newState: FindingState;
+    if (stableStringify(priorBucket) === stableStringify(bucket.bucket)) {
+      newState = "standing";
+    } else if (bucket.ordinal > priorOrdinal) {
+      newState = "changed";
+    } else {
+      // De-escalation while still triggering — attenuation captured by
+      // confidence transition, state stays standing.
+      newState = "standing";
+    }
+
+    const priorSnapshot = {
+      observed_at: active.last_observed_at,
+      confidence: active.confidence,
+      raw_metrics: active.raw_metrics,
+      dedup_bucket: priorBucket,
+      dedup_ordinal: priorOrdinal,
+      state_transition_to: active.state,
+    };
+    const priorHistory: unknown[] = Array.isArray(active.history) ? active.history : [];
+    const newHistory = [...priorHistory, priorSnapshot].slice(-20);
+
+    const { error: updateErr } = await supabase
+      .schema("chapter_recommendations")
+      .from("findings")
+      .update({
+        state: newState,
+        confidence: result.confidence,
+        severity_weight: result.severity_weight,
+        action_type: result.action_type,
+        raw_metrics: result.data,
+        dedup_bucket: bucket.bucket,
+        dedup_ordinal: bucket.ordinal,
+        last_observed_at: runStartedAt.toISOString(),
+        run_count: active.run_count + 1,
+        history: newHistory,
+        headline: rendered.card.headline,
+        story: rendered.card.story,
+        action: rendered.card.action,
+        evidence: result.evidence,
+        render_method: rendered.render_method,
+        data_window_end: windowEnd.toISOString(),
+      })
+      .eq("id", active.id);
+
+    if (updateErr) throw updateErr;
+
+    return { action: "updated", state: newState, findingId: active.id };
+  }
+
+  // Insert path — look up the most recent resolved finding to set prior_finding_id.
+  const priorResolvedId = await lookupPriorResolvedFinding(clientKey, result.rule_id, result.subject_key);
+  const nowIso = runStartedAt.toISOString();
+
+  const { data: insertedRow, error: insertErr } = await supabase
+    .schema("chapter_recommendations")
+    .from("findings")
+    .insert({
+      client_key: clientKey,
+      rule_id: result.rule_id,
+      theme: ruleCfg.theme,
+      subject_key: result.subject_key,
+      state: "new",
+      confidence: result.confidence,
+      severity_weight: result.severity_weight,
+      action_type: result.action_type,
+      raw_metrics: result.data,
+      dedup_bucket: bucket.bucket,
+      dedup_ordinal: bucket.ordinal,
+      evidence: result.evidence,
+      headline: rendered.card.headline,
+      story: rendered.card.story,
+      action: rendered.card.action,
+      render_method: rendered.render_method,
+      generated_at: nowIso,
+      first_observed_at: nowIso,
+      last_observed_at: nowIso,
+      run_count: 1,
+      history: [],
+      prior_finding_id: priorResolvedId,
+      data_window_start: windowStart.toISOString(),
+      data_window_end: windowEnd.toISOString(),
+    })
+    .select("id")
+    .single();
+
+  if (insertErr || !insertedRow) throw insertErr ?? new Error("insert returned no row");
+
+  return { action: "inserted", state: "new", findingId: insertedRow.id as string };
+}
+
+async function lookupActiveFinding(
   clientKey: string,
-  result: RuleEvaluationResult,
-): Promise<"new" | "standing" | "changed"> {
-  // Match subject_key explicitly — both nulls match, otherwise must equal.
-  // Without this, a rule firing for "Direct" one week and "Email" the next
-  // would look up Direct's prior row when classifying Email's state and
-  // wrongly mark it 'changed'. Multi-subject rules (R2.1, R3.x, R5.x, R6.1)
-  // depend on per-subject state tracking.
+  ruleId: string,
+  subjectKey: string | null,
+): Promise<ActiveFinding | null> {
   let q = supabase
     .schema("chapter_recommendations")
     .from("findings")
-    .select("raw_metrics")
+    .select("id, state, dedup_bucket, dedup_ordinal, confidence, raw_metrics, last_observed_at, first_observed_at, run_count, history")
     .eq("client_key", clientKey)
-    .eq("rule_id", result.rule_id)
+    .eq("rule_id", ruleId)
+    .neq("state", "resolved")     // Fix for the resolved-lookup bug — never treat a resolved row as prior
     .is("dismissed_at", null);
-  q = result.subject_key === null
-    ? q.is("subject_key", null)
-    : q.eq("subject_key", result.subject_key);
-  const { data: prior } = await q
-    .order("generated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!prior) return "new";
-
-  // Compare raw_metrics. Stringify with sorted keys for stable comparison.
-  const priorMetrics = (prior as { raw_metrics?: unknown }).raw_metrics;
-  if (stableStringify(priorMetrics) === stableStringify(result.data)) return "standing";
-  return "changed";
+  q = subjectKey === null ? q.is("subject_key", null) : q.eq("subject_key", subjectKey);
+  const { data } = await q.order("last_observed_at", { ascending: false }).limit(1).maybeSingle();
+  return (data as ActiveFinding | null) ?? null;
 }
 
-async function markStaleAsResolved(clientKey: string, firedKeys: Set<string>): Promise<void> {
-  const { data: priorFindings } = await supabase
+async function lookupPriorResolvedFinding(
+  clientKey: string,
+  ruleId: string,
+  subjectKey: string | null,
+): Promise<string | null> {
+  let q = supabase
     .schema("chapter_recommendations")
     .from("findings")
-    .select("id, rule_id, subject_key, state")
+    .select("id")
     .eq("client_key", clientKey)
-    .in("state", ["new", "standing", "changed"]) // active states
+    .eq("rule_id", ruleId)
+    .eq("state", "resolved")
     .is("dismissed_at", null);
+  q = subjectKey === null ? q.is("subject_key", null) : q.eq("subject_key", subjectKey);
+  const { data } = await q.order("generated_at", { ascending: false }).limit(1).maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
+}
 
-  if (!priorFindings) return;
+// Coarse default bucket for rules that don't declare their own. Looks for a
+// primary numeric metric in a conventional order + quartile-buckets it.
+// Rules with compound or trend-shape metrics should override with an explicit
+// dedup_bucket + severity_ordinal on their RuleEvaluationResult return.
+function defaultBucket(data: Record<string, unknown>): Bucket {
+  const candidates = ["pct_change", "bot_share", "stitching_share", "current_share_pct", "score"];
+  let primaryValue: number | null = null;
+  let primaryKey: string | null = null;
 
-  const toResolve = priorFindings.filter((f) => {
-    const key = `${(f as { rule_id: string }).rule_id}::${(f as { subject_key: string | null }).subject_key ?? ""}`;
-    return !firedKeys.has(key);
-  });
+  for (const key of candidates) {
+    const v = data[key];
+    if (typeof v === "number") {
+      primaryValue = v;
+      primaryKey = key;
+      break;
+    }
+    if (typeof v === "string") {
+      const parsed = parseFloat(v);
+      if (!isNaN(parsed)) {
+        primaryValue = parsed;
+        primaryKey = key;
+        break;
+      }
+    }
+  }
 
-  if (toResolve.length === 0) return;
+  if (primaryValue === null) {
+    // Rule fired without a numeric primary metric — one bucket while active,
+    // so it stays 'standing' after the first observation.
+    return { bucket: { band: "unmatched" }, ordinal: 1 };
+  }
 
-  await supabase
+  if (primaryValue < 25)  return { bucket: { primary_key: primaryKey, band: "q1-0-25" }, ordinal: 1 };
+  if (primaryValue < 50)  return { bucket: { primary_key: primaryKey, band: "q2-25-50" }, ordinal: 2 };
+  if (primaryValue < 100) return { bucket: { primary_key: primaryKey, band: "q3-50-100" }, ordinal: 3 };
+  return { bucket: { primary_key: primaryKey, band: "q4-100-plus" }, ordinal: 4 };
+}
+
+async function markStaleAsResolved(clientKey: string, runStartedAt: Date): Promise<void> {
+  // Any active finding whose last_observed_at is older than this run's start
+  // wasn't touched by this run → the rule stopped firing for that (rule, subject).
+  // Transition to state='resolved'.
+  const { error } = await supabase
     .schema("chapter_recommendations")
     .from("findings")
     .update({ state: "resolved" })
-    .in("id", toResolve.map((f) => (f as { id: string }).id));
+    .eq("client_key", clientKey)
+    .neq("state", "resolved")
+    .is("dismissed_at", null)
+    .lt("last_observed_at", runStartedAt.toISOString());
+
+  if (error) {
+    console.warn(`[refresh-recommendations] markStaleAsResolved failed for ${clientKey}:`, error);
+  }
 }
 
 // JSON.stringify with a tolerant fallback for circular refs or BigInts.

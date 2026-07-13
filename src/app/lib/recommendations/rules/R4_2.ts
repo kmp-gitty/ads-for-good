@@ -9,6 +9,12 @@
 //
 // Uses canonical_v1's boundary_ts - first_ts span per chapter as the
 // time-to-close proxy. Computes per-2-week period medians over 10 weeks.
+//
+// Part 2 severity bands (write-time dedup):
+//   | Band              | pct_change | Ordinal | Operator meaning        |
+//   | time-30-70        | 30-69%     | 1       | Moderate consideration  |
+//   | time-70-100       | 70-99%     | 2       | High consideration      |
+//   | time-100-plus     | 100%+      | 3       | Severe / structural     |
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
@@ -56,6 +62,7 @@ export const R4_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     growth >= 0.40 || consistentRises >= 4 ? "moderate" : "early_signal";
 
   const pctChange = Math.round(growth * 100);
+  const bucket = bucketR4_2(pctChange);
 
   return {
     rule_id: "R4.2",
@@ -67,6 +74,8 @@ export const R4_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
       pct_change: pctChange,
       N: consistentRises,
     },
+    dedup_bucket: bucket.bucket,
+    severity_ordinal: bucket.ordinal,
     evidence: [
       {
         source: "Lifecycle Overview",
@@ -84,6 +93,12 @@ export const R4_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     action_type: "analytical",
   };
 };
+
+function bucketR4_2(pctChange: number): { bucket: Record<string, unknown>; ordinal: number } {
+  if (pctChange >= 100) return { bucket: { band: "time-100-plus" }, ordinal: 3 };
+  if (pctChange >= 70) return { bucket: { band: "time-70-100" }, ordinal: 2 };
+  return { bucket: { band: "time-30-70" }, ordinal: 1 };
+}
 
 async function medianDaysFor(client_key: string, start: Date, end: Date): Promise<number | null> {
   const { data, error } = await supabase

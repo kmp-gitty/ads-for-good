@@ -1164,6 +1164,11 @@ export type RecommendationFinding = {
   generated_at:       string;
   data_window_start:  string;
   data_window_end:    string;
+  // Part 2 write-time dedup columns
+  first_observed_at?: string;         // when the finding was first observed
+  last_observed_at?:  string;         // most recent observation (updated in place)
+  run_count?:         number;         // how many cron runs have observed this finding
+  prior_finding_id?:  string | null;  // populated for re-fires after a resolution
 };
 
 export const cachedRecommendationsCurrent = unstable_cache(
@@ -1171,11 +1176,11 @@ export const cachedRecommendationsCurrent = unstable_cache(
     const r = await supabase
       .schema("chapter_recommendations")
       .from("findings")
-      .select("id, rule_id, theme, subject_key, headline, story, evidence, action, action_type, confidence, severity_weight, state, render_method, generated_at, data_window_start, data_window_end")
+      .select("id, rule_id, theme, subject_key, headline, story, evidence, action, action_type, confidence, severity_weight, state, render_method, generated_at, data_window_start, data_window_end, first_observed_at, last_observed_at, run_count, prior_finding_id")
       .eq("client_key", args.clientKey)
       .is("dismissed_at", null)
       .neq("state", "resolved")
-      .order("generated_at", { ascending: false });
+      .order("last_observed_at", { ascending: false });
     if (r.error) {
       console.error("[dashboard-rpc] chapter_recommendations.findings (current) failed:", r.error.message);
       return [];
@@ -1193,7 +1198,7 @@ export const cachedRecommendationsHistory = unstable_cache(
     const r = await supabase
       .schema("chapter_recommendations")
       .from("findings")
-      .select("id, rule_id, theme, subject_key, headline, story, evidence, action, action_type, confidence, severity_weight, state, render_method, generated_at, data_window_start, data_window_end")
+      .select("id, rule_id, theme, subject_key, headline, story, evidence, action, action_type, confidence, severity_weight, state, render_method, generated_at, data_window_start, data_window_end, first_observed_at, last_observed_at, run_count, prior_finding_id")
       .eq("client_key", args.clientKey)
       .gte("generated_at", since)
       .order("generated_at", { ascending: false });

@@ -8,6 +8,16 @@
 //   - No mitigation flagged in client config (assumed null today —
 //     bot_mitigation_status column not yet on chapter_config.clients)
 //   - Pattern persists across last 2+ comparison periods (stability check)
+//
+// Part 2 severity bands (write-time dedup):
+//   | Band                | Range   | Ordinal | Operator meaning                    |
+//   | elevated-30-50      | 30-49%  | 1       | Concerning; mitigation recommended  |
+//   | elevated-50-70      | 50-69%  | 2       | Critical; mitigation urgent         |
+//   | elevated-70-plus    | 70%+    | 3       | Measurement infrastructure broken   |
+//
+// Same-band drift → state='standing'. Escalation to higher band → state='changed'.
+// De-escalation while still triggering → state='standing' (attenuation captured
+// by confidence field, not state).
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
@@ -51,16 +61,21 @@ export const R1_1: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     currentShare >= BOT_THRESHOLD && priorAboveThreshold >= 1 ? "moderate" :
     "early_signal";
 
+  const botSharePct = Math.round(currentShare * 100);
+  const bucket = bucketR1_1(botSharePct);
+
   return {
     rule_id: "R1.1",
     fired: true,
     subject_key: null, // portfolio-wide
     data: {
-      bot_share: Math.round(currentShare * 100),
+      bot_share: botSharePct,
       N: priorAboveThreshold >= 2 ? 12 : priorAboveThreshold >= 1 ? 8 : 4,
-      current_share_pct: `${Math.round(currentShare * 100)}%`,
+      current_share_pct: `${botSharePct}%`,
       prior_periods_above_threshold: priorAboveThreshold,
     },
+    dedup_bucket: bucket.bucket,
+    severity_ordinal: bucket.ordinal,
     evidence: [
       {
         source: "Raw Performance",
@@ -78,6 +93,14 @@ export const R1_1: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     action_type: "mechanical",
   };
 };
+
+// Part 2 severity band bucketing — declared alongside the rule so the
+// state-transition logic is inspectable next to the finding shape.
+function bucketR1_1(botSharePct: number): { bucket: Record<string, unknown>; ordinal: number } {
+  if (botSharePct >= 70) return { bucket: { band: "elevated-70-plus" }, ordinal: 3 };
+  if (botSharePct >= 50) return { bucket: { band: "elevated-50-70" }, ordinal: 2 };
+  return { bucket: { band: "elevated-30-50" }, ordinal: 1 };
+}
 
 async function botShareFor(
   client_key: string,

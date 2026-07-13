@@ -38,6 +38,13 @@ export type RuleEvaluationResult = {
   // produce different actions depending on direction — e.g. R4.3 increase
   // vs decrease — and want to inject custom action text).
   action_override?: string;
+  // Part 2 write-time dedup: rule-declared severity band (jsonb) + monotone
+  // ordinal for escalation detection. Both optional — engine falls back to
+  // a coarse default when absent (see defaultBucket in the cron route).
+  // Two observations with equal `dedup_bucket` values are substance-equivalent.
+  // Higher `severity_ordinal` = more severe; escalation triggers state='changed'.
+  dedup_bucket?: Record<string, unknown>;
+  severity_ordinal?: number;
 };
 
 export type RuleContext = {

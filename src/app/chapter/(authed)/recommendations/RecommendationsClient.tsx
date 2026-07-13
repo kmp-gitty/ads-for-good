@@ -56,20 +56,16 @@ const ACTION_KICKER: Record<ActT, string> = {
   strategic_prompting:  "Strategic prompt",
 };
 
-// A "current"-view collapsed row: one card per (rule_id, subject_key), showing
-// the latest occurrence's copy + a chip counting how many weekly runs have
-// fired the same rule for the same subject. History view still passes raw
-// RecommendationFinding rows (weeksRunning=1, firstSeenAt=undefined).
-type DisplayFinding = RecommendationFinding & {
-  weeksRunning?: number;
-  firstSeenAt?: string;
-};
-
-function RecommendationCard({ rec }: { rec: DisplayFinding }) {
+// Part 2: engine now writes one row per active (rule, subject). weeksRunning
+// comes directly from the row's run_count column (no client-side collapse).
+// History view passes raw rows too — run_count still applies (history rows
+// carry their own run_count from when they were current).
+function RecommendationCard({ rec }: { rec: RecommendationFinding }) {
   const sevClass = rec.severity_weight === "high" ? "high"
                  : rec.severity_weight === "medium" ? "med" : "low";
   const evidence: RecommendationFinding["evidence"] = Array.isArray(rec.evidence) ? rec.evidence : [];
-  const weeksRunning = rec.weeksRunning ?? 1;
+  const weeksRunning = rec.run_count ?? 1;
+  const firstSeenAt = rec.first_observed_at ?? rec.generated_at;
 
   return (
     <div className="rec-card">
@@ -86,11 +82,7 @@ function RecommendationCard({ rec }: { rec: DisplayFinding }) {
                 color: "var(--accent)",
                 border: "1px solid rgba(227,100,16,0.20)",
               }}
-              title={
-                rec.firstSeenAt
-                  ? `First observed ${new Date(rec.firstSeenAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
-                  : undefined
-              }
+              title={`First observed ${new Date(firstSeenAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
             >
               {weeksRunning}w running
             </span>
@@ -155,33 +147,10 @@ export default function RecommendationsClient({
   const [stateFilter,  setStateFilter]  = useState<"all" | "new" | "standing" | "changed">("all");
   const [actionFilter, setActionFilter] = useState<"all" | ActT>("all");
 
-  // Collapse "current" view by (rule_id, subject_key ?? "") so a rule that
-  // fires the same subject week after week shows as ONE card with a "Nw
-  // running" chip, instead of a stack of near-duplicates. History view stays
-  // flat — it's a chronological log by design.
-  const collapsedCurrent = useMemo<DisplayFinding[]>(() => {
-    const groups = new Map<string, RecommendationFinding[]>();
-    for (const r of current) {
-      const key = `${r.rule_id}::${r.subject_key ?? ""}`;
-      const arr = groups.get(key) ?? [];
-      arr.push(r);
-      groups.set(key, arr);
-    }
-    const out: DisplayFinding[] = [];
-    for (const arr of groups.values()) {
-      arr.sort((a, b) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime());
-      const latest = arr[0];
-      const first = arr[arr.length - 1];
-      out.push({
-        ...latest,
-        weeksRunning: arr.length,
-        firstSeenAt: first.generated_at,
-      });
-    }
-    return out;
-  }, [current]);
-
-  const dataset: DisplayFinding[] = view === "current" ? collapsedCurrent : history;
+  // Part 2: engine writes one row per active (rule, subject). No client-side
+  // collapse needed — `current` is already the collapsed set. `history` is a
+  // chronological log of all findings across the lookback window.
+  const dataset: RecommendationFinding[] = view === "current" ? current : history;
 
   const filtered = useMemo(() => {
     return dataset
@@ -202,18 +171,17 @@ export default function RecommendationsClient({
   }, [dataset, confFilter, stateFilter, actionFilter, view]);
 
   const byTheme = useMemo(() => {
-    const m = new Map<Theme, DisplayFinding[]>();
+    const m = new Map<Theme, RecommendationFinding[]>();
     for (const t of THEMES) m.set(t.key, []);
     for (const f of filtered) m.get(f.theme)?.push(f);
     return m;
   }, [filtered]);
 
-  // Hero counts run off the collapsed set so a rule firing 4 weeks in a row
-  // shows as 1 recommendation, not 4. "New this week" = groups whose LATEST
-  // finding is state='new' (the rule fired here for the first time ever).
-  const totalActive  = collapsedCurrent.length;
-  const strongCount  = collapsedCurrent.filter(r => r.confidence === "strong").length;
-  const newCount     = collapsedCurrent.filter(r => r.state === "new").length;
+  // Hero counts run directly off `current` — engine writes one row per
+  // active (rule, subject), so counts don't need any collapse step.
+  const totalActive  = current.length;
+  const strongCount  = current.filter(r => r.confidence === "strong").length;
+  const newCount     = current.filter(r => r.state === "new").length;
   const engineIsEmpty = current.length === 0 && history.length === 0;
 
   return (

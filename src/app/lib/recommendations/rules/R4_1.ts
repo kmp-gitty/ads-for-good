@@ -9,6 +9,12 @@
 //
 // Uses canonical_v1_snapshot's channel_path array_length as the touch-count
 // proxy (same metric C4 + path_length_trend use).
+//
+// Part 2 severity bands (write-time dedup):
+//   | Band              | pct_change | Ordinal | Operator meaning        |
+//   | growth-20-50      | 20-49%     | 1       | Moderate consideration  |
+//   | growth-50-100     | 50-99%     | 2       | High consideration      |
+//   | growth-100-plus   | 100%+      | 3       | Severe / structural     |
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
@@ -68,6 +74,7 @@ export const R4_1: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     "early_signal";
 
   const pctChange = Math.round(growth * 100);
+  const bucket = bucketR4_1(pctChange);
 
   return {
     rule_id: "R4.1",
@@ -79,6 +86,8 @@ export const R4_1: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
       pct_change: pctChange,
       N: consistentRises,
     },
+    dedup_bucket: bucket.bucket,
+    severity_ordinal: bucket.ordinal,
     evidence: [
       {
         source: "Lifecycle Overview",
@@ -96,6 +105,12 @@ export const R4_1: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     action_type: "analytical",
   };
 };
+
+function bucketR4_1(pctChange: number): { bucket: Record<string, unknown>; ordinal: number } {
+  if (pctChange >= 100) return { bucket: { band: "growth-100-plus" }, ordinal: 3 };
+  if (pctChange >= 50) return { bucket: { band: "growth-50-100" }, ordinal: 2 };
+  return { bucket: { band: "growth-20-50" }, ordinal: 1 };
+}
 
 async function medianTouchesFor(
   client_key: string,
