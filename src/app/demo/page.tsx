@@ -73,9 +73,9 @@ const PRESETS: Preset[] = [
     id: "custom_form",
     name: "Custom Form",
     description:
-      "Multi-field lead capture. Optional multi-page + conditional branching + recovery flow.",
+      "Multi-field lead capture. Single-page variant — email + role dropdown + notes textarea.",
     cssClass: "demo-custom-form",
-    triggerLabel: "Fire Custom Form modal",
+    triggerLabel: "Fire Custom Form (single-page)",
     presetType: "custom_form",
     phase: 2,
     available: true,
@@ -84,8 +84,28 @@ const PRESETS: Preset[] = [
       "trigger type: Click element",
       "CSS selector: .demo-custom-form",
       "add content blocks (headline, body) + form fields",
-      "toggle multi-page for branching demos",
     ],
+  },
+  {
+    id: "custom_form_multipage",
+    name: "Custom Form (multi-page)",
+    description:
+      "Multi-page form with conditional branching. Page 1 asks role → routes Founders to a company-stage question, everyone else to a problem-fit question. Same preset type, richer configuration.",
+    cssClass: "demo-custom-form-multipage",
+    triggerLabel: "Fire multi-page Custom Form",
+    presetType: "custom_form",
+    phase: 2,
+    available: true,
+    configHints: [
+      "slug: demo_custom_form_multipage",
+      "trigger type: Click element",
+      "CSS selector: .demo-custom-form-multipage",
+      "toggle Multi-page form on the admin form",
+      "Page 1: single_choice field 'role' with 4 options",
+      "Branching: role=Founder → founder_track; else → generic_track",
+    ],
+    extraNotes:
+      "The progress dots + Back button are shown; visitor's entered values persist across page transitions. Identity email captured on final submit.",
   },
   {
     id: "custom_notification",
@@ -127,7 +147,7 @@ const PRESETS: Preset[] = [
       "Also configure a threshold at /internal/identity-prompts/adsforgood_prod/offer-thresholds",
     ],
     extraNotes:
-      "PLATFORM_ADAPTER_MODE=mock uses shopify-mock which returns fake CHAPTER-XXXXXXXX codes. Set thresholds like global 85% to see auto-accept, or product-specific 70% for counter-offer demos.",
+      "Live thresholds seeded: global 85% + product mock-hoodie-001 at 60% / $60 floor. Bid $60+ → auto-accept + real CHAPTER-XXXXXXXX code via shopify-mock. Bid $53-59 → counter-offer. Bid <$53 → decline. Change thresholds at Offer thresholds → to test other paths.",
   },
   {
     id: "phone_call",

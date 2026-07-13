@@ -12,6 +12,7 @@ import { Icon } from "../../_components/Icon";
 import { Dropdown } from "../../_components/Dropdown";
 import { useChapter } from "../../_components/ChapterContext";
 import type { RecommendationFinding } from "../../_lib/dashboard-rpc";
+import OverrideMenu from "./OverrideMenu";
 
 type Theme = RecommendationFinding["theme"];
 type Conf  = RecommendationFinding["confidence"];
@@ -61,8 +62,12 @@ const ACTION_KICKER: Record<ActT, string> = {
 // History view passes raw rows too — run_count still applies (history rows
 // carry their own run_count from when they were current).
 function RecommendationCard({ rec }: { rec: RecommendationFinding }) {
-  const sevClass = rec.severity_weight === "high" ? "high"
-                 : rec.severity_weight === "medium" ? "med" : "low";
+  // Effective severity — operator override wins over rule-computed weight.
+  // The rail color + severity sort respect the override; the raw rule-computed
+  // value is visible in the OverrideMenu tooltip so operators can see both.
+  const effectiveSeverity: "high" | "medium" | "low" = rec.severity_override ?? rec.severity_weight;
+  const sevClass = effectiveSeverity === "high" ? "high"
+                 : effectiveSeverity === "medium" ? "med" : "low";
   const evidence: RecommendationFinding["evidence"] = Array.isArray(rec.evidence) ? rec.evidence : [];
   const weeksRunning = rec.run_count ?? 1;
   const firstSeenAt = rec.first_observed_at ?? rec.generated_at;
@@ -71,9 +76,27 @@ function RecommendationCard({ rec }: { rec: RecommendationFinding }) {
     <div className="rec-card">
       <div className={`rail ${sevClass}`} />
       <div className="rec-body">
-        <div className="rec-meta">
+        <div className="rec-meta" style={{ position: "relative" }}>
           <span className={`rec-tag conf-${rec.confidence}`}>{CONF_LABEL[rec.confidence]}</span>
           <span className={`rec-tag state-${rec.state}`}>{STATE_LABEL[rec.state]}</span>
+          {rec.severity_override && (
+            <span
+              className="rec-tag"
+              title={
+                rec.severity_override_by && rec.severity_override_at
+                  ? `Overridden by ${rec.severity_override_by} on ${new Date(rec.severity_override_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}${rec.severity_override_note ? ` — "${rec.severity_override_note}"` : ""}`
+                  : "Severity manually overridden"
+              }
+              style={{
+                background: "rgba(120,120,160,0.15)",
+                color: "var(--ink-2)",
+                border: "1px solid rgba(120,120,160,0.30)",
+                fontStyle: "italic",
+              }}
+            >
+              Sev override: {rec.severity_override} (rule said {rec.severity_weight})
+            </span>
+          )}
           {weeksRunning > 1 && (
             <span
               className="rec-tag"
@@ -87,6 +110,27 @@ function RecommendationCard({ rec }: { rec: RecommendationFinding }) {
               {weeksRunning}w running
             </span>
           )}
+          {/* "Seen before" chip surfaces re-fires — this finding transitioned
+              to resolved once and has re-appeared. prior_finding_id is
+              populated by the engine at insert time; the dates come from the
+              PostgREST self-join in cachedRecommendationsCurrent. */}
+          {rec.prior_finding_id && rec.prior_finding_last_observed_at && (() => {
+            const priorResolvedAt = new Date(rec.prior_finding_last_observed_at);
+            const weeksAgo = Math.max(1, Math.round((Date.now() - priorResolvedAt.getTime()) / (7 * 24 * 3600 * 1000)));
+            return (
+              <span
+                className="rec-tag"
+                style={{
+                  background: "rgba(120,120,160,0.10)",
+                  color: "var(--ink-2)",
+                  border: "1px solid rgba(120,120,160,0.20)",
+                }}
+                title={`Previously resolved ${priorResolvedAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}
+              >
+                Seen before · resolved {weeksAgo}w ago
+              </span>
+            );
+          })()}
           {rec.subject_key && <span className="rec-tag rec-subject">{rec.subject_key}</span>}
           <span className="rec-tag rec-rule">{rec.rule_id}</span>
           {rec.render_method === "fallback" && (
@@ -94,6 +138,16 @@ function RecommendationCard({ rec }: { rec: RecommendationFinding }) {
               Template rendering
             </span>
           )}
+          <div style={{ marginLeft: "auto" }}>
+            <OverrideMenu
+              findingId={rec.id}
+              computedSeverity={rec.severity_weight}
+              currentOverride={rec.severity_override ?? null}
+              overrideNote={rec.severity_override_note ?? null}
+              overrideBy={rec.severity_override_by ?? null}
+              overrideAt={rec.severity_override_at ?? null}
+            />
+          </div>
         </div>
         <h3 className="rec-headline">{rec.headline}</h3>
         {rec.story && <p className="rec-story">{rec.story}</p>}
@@ -118,7 +172,14 @@ function RecommendationCard({ rec }: { rec: RecommendationFinding }) {
           {rec.action}
         </div>
         <div className="rec-foot">
-          <span>{new Date(rec.generated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+          <span>
+            {new Date(rec.generated_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            {weeksRunning > 1 && (
+              <span className="muted" style={{ marginLeft: 8 }}>
+                · Since {new Date(firstSeenAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+              </span>
+            )}
+          </span>
           <span className="muted">
             Window: {new Date(rec.data_window_start).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
             {" → "}
@@ -162,7 +223,11 @@ export default function RecommendationsClient({
       })
       .slice()
       .sort((a, b) => {
-        const sev = SEVERITY_RANK[a.severity_weight] - SEVERITY_RANK[b.severity_weight];
+        // Effective severity respects operator override so downgraded findings
+        // sink to the bottom of the list and upgraded ones rise to the top.
+        const effA = a.severity_override ?? a.severity_weight;
+        const effB = b.severity_override ?? b.severity_weight;
+        const sev = SEVERITY_RANK[effA] - SEVERITY_RANK[effB];
         if (sev !== 0) return sev;
         const conf = CONFIDENCE_RANK[a.confidence] - CONFIDENCE_RANK[b.confidence];
         if (conf !== 0) return conf;

@@ -1169,6 +1169,20 @@ export type RecommendationFinding = {
   last_observed_at?:  string;         // most recent observation (updated in place)
   run_count?:         number;         // how many cron runs have observed this finding
   prior_finding_id?:  string | null;  // populated for re-fires after a resolution
+  // Part 2 UI enhancement — when this row's prior_finding_id is set, we surface
+  // the prior finding's last_observed_at + first_observed_at so the card can
+  // render a "Seen before · resolved Xw ago" chip without a second round-trip.
+  prior_finding_last_observed_at?: string | null;
+  prior_finding_first_observed_at?: string | null;
+  // Operator severity override — nullable; NULL means use the rule's computed
+  // severity_weight. Set via the small menu on each card ("Downgrade to low",
+  // "Upgrade to high", etc.) when the operator knows the rule's default doesn't
+  // match reality (Black Friday spike known to be one-off; minor observation
+  // that operator judges more urgent than the rule detected).
+  severity_override?: "high" | "medium" | "low" | null;
+  severity_override_by?: string | null;
+  severity_override_at?: string | null;
+  severity_override_note?: string | null;
 };
 
 export const cachedRecommendationsCurrent = unstable_cache(
@@ -1176,7 +1190,18 @@ export const cachedRecommendationsCurrent = unstable_cache(
     const r = await supabase
       .schema("chapter_recommendations")
       .from("findings")
-      .select("id, rule_id, theme, subject_key, headline, story, evidence, action, action_type, confidence, severity_weight, state, render_method, generated_at, data_window_start, data_window_end, first_observed_at, last_observed_at, run_count, prior_finding_id")
+      .select(
+        // Base fields
+        "id, rule_id, theme, subject_key, headline, story, evidence, action, action_type, " +
+        "confidence, severity_weight, state, render_method, generated_at, " +
+        "data_window_start, data_window_end, " +
+        // Part 2 columns
+        "first_observed_at, last_observed_at, run_count, prior_finding_id, " +
+        "severity_override, severity_override_by, severity_override_at, severity_override_note, " +
+        // Self-join on prior_finding_id — pulls the prior (resolved) finding's dates so
+        // the card can render a "Seen before · resolved Xw ago" chip without a second query
+        "prior_finding:prior_finding_id(first_observed_at, last_observed_at)"
+      )
       .eq("client_key", args.clientKey)
       .is("dismissed_at", null)
       .neq("state", "resolved")
@@ -1185,7 +1210,23 @@ export const cachedRecommendationsCurrent = unstable_cache(
       console.error("[dashboard-rpc] chapter_recommendations.findings (current) failed:", r.error.message);
       return [];
     }
-    return (r.data ?? []) as RecommendationFinding[];
+    // Flatten the nested prior_finding onto the top-level row so the UI type stays flat.
+    // PostgREST returns nested foreign-key selects as either an object or an array
+    // (defensive against schema-cache oddities); handle both.
+    type Row = RecommendationFinding & {
+      prior_finding?:
+        | { first_observed_at: string; last_observed_at: string }
+        | { first_observed_at: string; last_observed_at: string }[]
+        | null;
+    };
+    return ((r.data ?? []) as unknown as Row[]).map((row) => {
+      const pf = Array.isArray(row.prior_finding) ? row.prior_finding[0] : row.prior_finding;
+      return {
+        ...row,
+        prior_finding_first_observed_at: pf?.first_observed_at ?? null,
+        prior_finding_last_observed_at:  pf?.last_observed_at ?? null,
+      };
+    }) as RecommendationFinding[];
   },
   ["dashboard-rpc:chapter_recommendations:findings_current"],
   { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:recommendations_current"] },
@@ -1198,7 +1239,7 @@ export const cachedRecommendationsHistory = unstable_cache(
     const r = await supabase
       .schema("chapter_recommendations")
       .from("findings")
-      .select("id, rule_id, theme, subject_key, headline, story, evidence, action, action_type, confidence, severity_weight, state, render_method, generated_at, data_window_start, data_window_end, first_observed_at, last_observed_at, run_count, prior_finding_id")
+      .select("id, rule_id, theme, subject_key, headline, story, evidence, action, action_type, confidence, severity_weight, state, render_method, generated_at, data_window_start, data_window_end, first_observed_at, last_observed_at, run_count, prior_finding_id, severity_override, severity_override_by, severity_override_at, severity_override_note")
       .eq("client_key", args.clientKey)
       .gte("generated_at", since)
       .order("generated_at", { ascending: false });
