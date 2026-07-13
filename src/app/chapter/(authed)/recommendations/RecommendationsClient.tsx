@@ -56,10 +56,20 @@ const ACTION_KICKER: Record<ActT, string> = {
   strategic_prompting:  "Strategic prompt",
 };
 
-function RecommendationCard({ rec }: { rec: RecommendationFinding }) {
+// A "current"-view collapsed row: one card per (rule_id, subject_key), showing
+// the latest occurrence's copy + a chip counting how many weekly runs have
+// fired the same rule for the same subject. History view still passes raw
+// RecommendationFinding rows (weeksRunning=1, firstSeenAt=undefined).
+type DisplayFinding = RecommendationFinding & {
+  weeksRunning?: number;
+  firstSeenAt?: string;
+};
+
+function RecommendationCard({ rec }: { rec: DisplayFinding }) {
   const sevClass = rec.severity_weight === "high" ? "high"
                  : rec.severity_weight === "medium" ? "med" : "low";
   const evidence: RecommendationFinding["evidence"] = Array.isArray(rec.evidence) ? rec.evidence : [];
+  const weeksRunning = rec.weeksRunning ?? 1;
 
   return (
     <div className="rec-card">
@@ -68,6 +78,23 @@ function RecommendationCard({ rec }: { rec: RecommendationFinding }) {
         <div className="rec-meta">
           <span className={`rec-tag conf-${rec.confidence}`}>{CONF_LABEL[rec.confidence]}</span>
           <span className={`rec-tag state-${rec.state}`}>{STATE_LABEL[rec.state]}</span>
+          {weeksRunning > 1 && (
+            <span
+              className="rec-tag"
+              style={{
+                background: "rgba(227,100,16,0.10)",
+                color: "var(--accent)",
+                border: "1px solid rgba(227,100,16,0.20)",
+              }}
+              title={
+                rec.firstSeenAt
+                  ? `First observed ${new Date(rec.firstSeenAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+                  : undefined
+              }
+            >
+              {weeksRunning}w running
+            </span>
+          )}
           {rec.subject_key && <span className="rec-tag rec-subject">{rec.subject_key}</span>}
           <span className="rec-tag rec-rule">{rec.rule_id}</span>
           {rec.render_method === "fallback" && (
@@ -128,7 +155,33 @@ export default function RecommendationsClient({
   const [stateFilter,  setStateFilter]  = useState<"all" | "new" | "standing" | "changed">("all");
   const [actionFilter, setActionFilter] = useState<"all" | ActT>("all");
 
-  const dataset = view === "current" ? current : history;
+  // Collapse "current" view by (rule_id, subject_key ?? "") so a rule that
+  // fires the same subject week after week shows as ONE card with a "Nw
+  // running" chip, instead of a stack of near-duplicates. History view stays
+  // flat — it's a chronological log by design.
+  const collapsedCurrent = useMemo<DisplayFinding[]>(() => {
+    const groups = new Map<string, RecommendationFinding[]>();
+    for (const r of current) {
+      const key = `${r.rule_id}::${r.subject_key ?? ""}`;
+      const arr = groups.get(key) ?? [];
+      arr.push(r);
+      groups.set(key, arr);
+    }
+    const out: DisplayFinding[] = [];
+    for (const arr of groups.values()) {
+      arr.sort((a, b) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime());
+      const latest = arr[0];
+      const first = arr[arr.length - 1];
+      out.push({
+        ...latest,
+        weeksRunning: arr.length,
+        firstSeenAt: first.generated_at,
+      });
+    }
+    return out;
+  }, [current]);
+
+  const dataset: DisplayFinding[] = view === "current" ? collapsedCurrent : history;
 
   const filtered = useMemo(() => {
     return dataset
@@ -149,15 +202,18 @@ export default function RecommendationsClient({
   }, [dataset, confFilter, stateFilter, actionFilter, view]);
 
   const byTheme = useMemo(() => {
-    const m = new Map<Theme, RecommendationFinding[]>();
+    const m = new Map<Theme, DisplayFinding[]>();
     for (const t of THEMES) m.set(t.key, []);
     for (const f of filtered) m.get(f.theme)?.push(f);
     return m;
   }, [filtered]);
 
-  const totalActive  = current.length;
-  const strongCount  = current.filter(r => r.confidence === "strong").length;
-  const newCount     = current.filter(r => r.state === "new").length;
+  // Hero counts run off the collapsed set so a rule firing 4 weeks in a row
+  // shows as 1 recommendation, not 4. "New this week" = groups whose LATEST
+  // finding is state='new' (the rule fired here for the first time ever).
+  const totalActive  = collapsedCurrent.length;
+  const strongCount  = collapsedCurrent.filter(r => r.confidence === "strong").length;
+  const newCount     = collapsedCurrent.filter(r => r.state === "new").length;
   const engineIsEmpty = current.length === 0 && history.length === 0;
 
   return (
