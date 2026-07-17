@@ -33,6 +33,12 @@ export type RedirectClickRow = {
   geo: GeoContext;
   device: DeviceContext;
   user_agent: string | null;
+  // Scanner-detection tags. Optional — omitted rows are treated as clean
+  // human clicks. When suspected_scanner=true, downstream analytics +
+  // attribution pipelines should filter these rows out before billing /
+  // conversion counting.
+  suspected_scanner?: boolean;
+  suspected_scanner_reasons?: string[] | null;
 };
 
 export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
@@ -48,7 +54,7 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
     if (row.query[k]) partner_ids[k] = row.query[k];
   }
 
-  const props = {
+  const props: Record<string, unknown> = {
     redirect_slug: row.slug,
     destination: row.destination,
     matched_rule_id: row.matched_rule_id,
@@ -56,6 +62,10 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
     device: row.device,
     full_query: row.query,
   };
+  if (row.suspected_scanner) {
+    props.suspected_scanner = true;
+    props.suspected_scanner_reasons = row.suspected_scanner_reasons ?? [];
+  }
 
   // Journey upsert FIRST — pixel_events has FK constraint on journey_id, and
   // the redirect mints a fresh journey id via resolveIdentity but never wrote

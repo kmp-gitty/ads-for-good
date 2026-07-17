@@ -39,6 +39,8 @@ import { readConsentState, applyConsentPolicy } from "@/app/lib/redirect/consent
 import { extractEmailHint, stripHintParams } from "@/app/lib/redirect/email-hint";
 import { resolveRecipientToken } from "@/app/lib/redirect/recipient-lookup";
 import { stitchIdentity } from "@/app/lib/redirect/identity-stitch";
+import { classifyForScannerRisk } from "@/app/lib/redirect/scanner-detection";
+import { logAuthAttempt } from "@/app/lib/audit/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -126,16 +128,6 @@ export async function GET(
     }
   }
 
-  // Solution 1: append ?chid={identity_key}&jid={journey_id} to the
-  // destination so the destination's Chapter pixel can alias its anonymous_id
-  // back to the redirect's identity at landing. Skipped under opt-out.
-  destination = appendIdentityHandoff(
-    destination,
-    identity.identityKey,
-    identity.journeyId,
-    consent.allowCollection,
-  );
-
   // Tracking-ignore suppression. Two layers:
   //   1. UA substring match → skip ALL writes (click log + email-hint stitch).
   //      Lets operators mute known bot UAs (e.g. GoogleHypersonic) or QA tools
@@ -151,14 +143,48 @@ export async function GET(
       : false;
   const suppressed = uaIgnored || hintEmailIgnored;
 
+  // Scanner-risk classification (email security scanners like Proofpoint /
+  // Mimecast / Microsoft Safe Links click every email link before the human
+  // opens it). Suspicious clicks still get logged (with a tag) but don't
+  // pollute the identity graph — no cookie writes, no email-hint stitch, no
+  // ?chid= handoff on the destination.
+  const scannerRisk = classifyForScannerRisk(req);
+  const scannerSuspected = scannerRisk.suspicious && !suppressed;
+  if (scannerSuspected) {
+    // Route to the auth-audit table so the daily-digest cron can surface the
+    // pattern. Fire-and-forget; never blocks the redirect.
+    void logAuthAttempt({
+      endpoint: "/r/redirect",
+      client_key,
+      success: false,
+      failure_reason: `scanner_suspected:${scannerRisk.reasons.join(",")}`,
+      ip_hash: scannerRisk.ip_hash,
+      user_agent_snippet: userAgent?.slice(0, 200) ?? null,
+      request_id: req.headers.get("x-vercel-id") ?? null,
+    });
+  }
+
+  // Solution 1: append ?chid={identity_key}&jid={journey_id} to the
+  // destination so the destination's Chapter pixel can alias its anonymous_id
+  // back to the redirect's identity at landing. Skipped under opt-out AND
+  // when the click is flagged suspected-scanner (so we don't leak a synthetic
+  // identity into the destination URL that the scanner then follows).
+  destination = appendIdentityHandoff(
+    destination,
+    identity.identityKey,
+    identity.journeyId,
+    consent.allowCollection && !scannerSuspected,
+  );
+
   // Solution 2: stitch the redirect's identity to a known email_sha256 at
   // click time via one of three URL hint flavors (?rh / ?re / ?rid). Closes
   // the cross-device gap that solution 1's pixel handoff can't cover when
   // the visitor never identifies on the redirect-clicking device.
   // Uses after() so the work continues past the 302 — without it the runtime
   // would kill the pending async on response and no stitch row would land.
-  // Skipped under opt-out.
-  if (consent.allowCollection && emailHint && !suppressed) {
+  // Skipped under opt-out AND when suspected-scanner (would falsely bind the
+  // real recipient's email_sha256 to a scanner's synthetic anonymous_id).
+  if (consent.allowCollection && emailHint && !suppressed && !scannerSuspected) {
     after(async () => {
       try {
         let email_sha256: string | null = null;
@@ -214,6 +240,11 @@ export async function GET(
         geo,
         device,
         user_agent: req.headers.get("user-agent"),
+        // Tag suspected scanner clicks so downstream analytics + attribution
+        // can filter them out. Still logged (for observability + billing
+        // audit) but distinguishable from real human clicks.
+        suspected_scanner: scannerSuspected,
+        suspected_scanner_reasons: scannerSuspected ? scannerRisk.reasons : null,
       }),
     );
   }
@@ -230,7 +261,12 @@ export async function GET(
   // don't issue new identifiers. Existing cookies are NOT cleared here; that's
   // the consent banner's responsibility on the property where the visitor
   // expressed the opt-out.
-  if (consent.allowCollection) {
+  //
+  // Also skipped when suspected-scanner: don't issue a durable anonymous_id
+  // cookie to a scanner's IP. If it's a real human being false-flagged, their
+  // next real pixel event brings its own anonymous_id from localStorage and
+  // the graph unifies normally.
+  if (consent.allowCollection && !scannerSuspected) {
     applyIdentityCookies(res, identity, hostname, client_key);
   }
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
