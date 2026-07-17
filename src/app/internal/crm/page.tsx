@@ -2,6 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import AddProspectForm from "./AddProspectForm";
 import LogTouchpointForm from "./LogTouchpointForm";
 import MeetingQueue from "./MeetingQueue";
+import OutreachTracker, {
+  type OutreachRow,
+  type ActivityEntry,
+} from "./outreach/OutreachTracker";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -141,16 +145,129 @@ async function fetchFunnelStats(): Promise<FunnelStats> {
   };
 }
 
+async function fetchOutreachData(): Promise<{
+  rows: OutreachRow[];
+  activity: ActivityEntry[];
+}> {
+  // Two small queries + TS aggregation. Cleaner than PostgREST group-by dance;
+  // dataset is small enough (~76 prospects × ~20 comms currently) that TS
+  // aggregation is trivial. Migrate to a Postgres view when this grows.
+  type ProspectRow = {
+    id: string;
+    business_name: string | null;
+    contact_name: string | null;
+    email: string | null;
+    stage: string | null;
+  };
+  type CommRow = {
+    id: string;
+    prospect_id: string;
+    channel: string;
+    direction: string;
+    occurred_at: string;
+    subject: string | null;
+  };
+
+  const [prospectsR, commsR] = await Promise.all([
+    supabase
+      .schema("crm")
+      .from("prospects")
+      .select("id, business_name, contact_name, email, stage"),
+    supabase
+      .schema("crm")
+      .from("communications")
+      .select("id, prospect_id, channel, direction, occurred_at, subject")
+      .order("occurred_at", { ascending: false })
+      .limit(2000),
+  ]);
+
+  if (prospectsR.error) {
+    console.error("[crm-page] fetchOutreachData prospects failed:", prospectsR.error);
+  }
+  if (commsR.error) {
+    console.error("[crm-page] fetchOutreachData communications failed:", commsR.error);
+  }
+
+  const prospects = (prospectsR.data ?? []) as unknown as ProspectRow[];
+  const comms = (commsR.data ?? []) as unknown as CommRow[];
+
+  const byProspect = new Map<string, CommRow[]>();
+  for (const c of comms) {
+    const arr = byProspect.get(c.prospect_id) ?? [];
+    arr.push(c);
+    byProspect.set(c.prospect_id, arr);
+  }
+
+  const rows: OutreachRow[] = prospects.map((p) => {
+    const list = byProspect.get(p.id) ?? [];
+    const outbound = list.filter((c) => c.direction === "outbound");
+    const inbound = list.filter((c) => c.direction === "inbound");
+    const lastOutbound = outbound.length ? outbound[0].occurred_at : null;
+    const lastInbound = inbound.length ? inbound[0].occurred_at : null;
+    const lastTouch = list.length ? list[0].occurred_at : null;
+    const channels = Array.from(new Set(list.map((c) => c.channel))).sort();
+    return {
+      prospect_id: p.id,
+      business_name: p.business_name,
+      contact_name: p.contact_name,
+      email: p.email,
+      stage: p.stage,
+      total_touchpoints: list.length,
+      sent: outbound.length,
+      received: inbound.length,
+      last_outbound_at: lastOutbound,
+      last_inbound_at: lastInbound,
+      last_touch_at: lastTouch,
+      has_meeting: list.some((c) => c.channel === "meeting"),
+      channels_used: channels,
+    };
+  });
+
+  // Prospect lookup map for activity feed labels
+  const prospectLookup = new Map(prospects.map((p) => [p.id, p]));
+  const activity: ActivityEntry[] = comms.slice(0, 200).map((c) => {
+    const p = prospectLookup.get(c.prospect_id);
+    return {
+      id: c.id,
+      occurred_at: c.occurred_at,
+      direction: c.direction,
+      channel: c.channel,
+      subject: c.subject,
+      prospect_id: c.prospect_id,
+      business_name: p?.business_name ?? null,
+      contact_name: p?.contact_name ?? null,
+    };
+  });
+
+  return { rows, activity };
+}
+
 export default async function CrmPage() {
-  const [pendingMeetings, funnel] = await Promise.all([
+  const [pendingMeetings, funnel, outreach] = await Promise.all([
     fetchPendingMeetings(),
     fetchFunnelStats(),
+    fetchOutreachData(),
   ]);
 
   return (
     <div className="space-y-10">
       {/* Section 4 — Funnel Snapshot (at top so operator sees the state of the world first) */}
       <FunnelSnapshot funnel={funnel} />
+
+      {/* NEW — Outreach Tracker */}
+      <section>
+        <h2 className="text-lg font-semibold tracking-tight text-neutral-900">
+          Outreach Tracker
+        </h2>
+        <p className="mt-1 text-sm text-neutral-600">
+          Per-prospect touchpoint activity. Rows highlight yellow after 7 days
+          idle, red after 14. Click a row or activity entry to filter to that
+          prospect.
+        </p>
+        <div className="mt-4">
+          <OutreachTracker rows={outreach.rows} activity={outreach.activity} />
+        </div>
+      </section>
 
       {/* Section 3 — Meeting Confirmation Queue */}
       <section>
