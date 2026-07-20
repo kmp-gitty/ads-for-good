@@ -19,6 +19,14 @@ type Props = {
   sourceLabel?: string;
 
   ariaLabel?: string;
+
+  // Page-load auto-open. Used by callers that arrive with an intent to open
+  // the modal immediately (e.g. inbound URL param /contact?open=inquiry).
+  // The button remains fully functional; this just opens the modal once on
+  // mount without a click. Does not fire the click-tracked gtag event on
+  // its own — the calling page is expected to fire whatever entry event it
+  // wants (or not).
+  autoOpen?: boolean;
 };
 
 export default function InquiryLauncher({
@@ -29,8 +37,18 @@ export default function InquiryLauncher({
   service,
   className = "",
   sourceLabel,
+  autoOpen = false,
 }: Props) {
   const [open, setOpen] = useState(false);
+
+  // Fire once on mount when the caller signals auto-open. Guard so a later
+  // autoOpen flip doesn't re-open a manually-closed modal (rare, but tidy).
+  useEffect(() => {
+    if (autoOpen) setOpen(true);
+    // Intentional: only run when autoOpen changes to true. Manual close
+    // afterwards should not be undone by re-running this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpen]);
 
   // ✅ Needed for portals in Next.js to avoid SSR/hydration issues
   const [mounted, setMounted] = useState(false);

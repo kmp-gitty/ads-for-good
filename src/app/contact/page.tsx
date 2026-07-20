@@ -1,5 +1,4 @@
 import ContactPageClient from "./ContactPageClient";
-import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
   title: "contact ads for Good | People & Business Questions",
