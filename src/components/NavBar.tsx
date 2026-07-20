@@ -17,8 +17,8 @@ export function NavBar() {
   // desktop dropdown hover state
   const [aboutDesktopOpen, setAboutDesktopOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
-  const [guidanceOpen, setGuidanceOpen] = useState(false);
-  const [executionOpen, setExecutionOpen] = useState(false);
+  const [servicesOpen, setServicesOpen] = useState(false);
+  const [marginOpen, setMarginOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 relative flex justify-center bg-orange-50 px-4 pt-4">
@@ -181,20 +181,20 @@ export function NavBar() {
 
           <span aria-hidden className="h-4 w-px bg-orange-300" />
 
-          {/* FOR GUIDANCE — Ideas & Guidance */}
+          {/* FOR MARGIN — Chapter standalones (more revenue / less cost) */}
           <div
             className="relative"
-            onMouseEnter={() => setGuidanceOpen(true)}
-            onMouseLeave={() => setGuidanceOpen(false)}
+            onMouseEnter={() => setMarginOpen(true)}
+            onMouseLeave={() => setMarginOpen(false)}
           >
             <span className="flex cursor-default items-center gap-1 whitespace-nowrap hover:text-neutral-900">
-              for Guidance
+              for Margin
               <span className="text-[10px]">▾</span>
             </span>
 
             <div
               className={`absolute left-1/2 top-full -translate-x-1/2 transition ${
-                guidanceOpen
+                marginOpen
                   ? "pointer-events-auto translate-y-0 opacity-100"
                   : "pointer-events-none -translate-y-1 opacity-0"
               }`}
@@ -202,43 +202,49 @@ export function NavBar() {
               <div className="mt-2 w-[280px] rounded-2xl border border-orange-100 bg-white px-4 py-4 shadow-lg">
                 <div className="text-left">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                    Ideas &amp; Guidance
+                    Getting More
                   </p>
                   <ul className="mt-3 space-y-2 text-sm">
                     <li>
                       <Link
-                        href="/for-businesses/marketing-guidebook"
+                        href="/for-businesses/smart-links"
                         className="flex items-center gap-2 hover:text-orange-500"
                       >
                         <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Marketing Guidebook
+                        Smart Links
                       </Link>
                     </li>
                     <li>
                       <Link
-                        href="/for-businesses/marketing-advice"
+                        href="/for-businesses/smart-prompts"
                         className="flex items-center gap-2 hover:text-orange-500"
                       >
                         <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Marketing Advice On Demand
+                        Smart Prompts
                       </Link>
                     </li>
                     <li>
                       <Link
-                        href="/for-businesses/digital-health-check"
+                        href="/for-businesses/ad-monetization"
                         className="flex items-center gap-2 hover:text-orange-500"
                       >
                         <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Digital Health Check
+                        Ad Monetization
                       </Link>
                     </li>
+                  </ul>
+
+                  <p className="mt-5 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                    Spending Less
+                  </p>
+                  <ul className="mt-3 space-y-2 text-sm">
                     <li>
                       <Link
-                        href="/for-businesses/consulting"
+                        href="/for-businesses/reduce-software-costs"
                         className="flex items-center gap-2 hover:text-orange-500"
                       >
                         <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Consulting
+                        Subscription Freedom
                       </Link>
                     </li>
                   </ul>
@@ -249,105 +255,146 @@ export function NavBar() {
 
           <span aria-hidden className="h-4 w-px bg-orange-300" />
 
-          {/* FOR EXECUTION — Operation & Execution */}
+          {/* FOR SERVICES — Ideas & Guidance + Operation & Execution */}
           <div
             className="relative"
-            onMouseEnter={() => setExecutionOpen(true)}
-            onMouseLeave={() => setExecutionOpen(false)}
+            onMouseEnter={() => setServicesOpen(true)}
+            onMouseLeave={() => setServicesOpen(false)}
           >
             <span className="flex cursor-default items-center gap-1 whitespace-nowrap hover:text-neutral-900">
-              for Execution
+              for Services
               <span className="text-[10px]">▾</span>
             </span>
 
             <div
               className={`absolute left-1/2 top-full -translate-x-1/2 transition ${
-                executionOpen
+                servicesOpen
                   ? "pointer-events-auto translate-y-0 opacity-100"
                   : "pointer-events-none -translate-y-1 opacity-0"
               }`}
             >
-              <div className="mt-2 w-[280px] rounded-2xl border border-orange-100 bg-white px-4 py-4 shadow-lg">
-                <div className="text-left">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
-                    Operation &amp; Execution
-                  </p>
-                  <ul className="mt-3 space-y-2 text-sm">
-                    <li>
-                      <Link
-                        href="/for-businesses/website-builds-updates"
-                        className="flex items-center gap-2 hover:text-orange-500"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Website Builds &amp; Updates
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        href="/for-businesses/digital-profile-management"
-                        className="flex items-center gap-2 hover:text-orange-500"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Digital Profile Management
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        href="/for-businesses/seo-services"
-                        className="flex items-center gap-2 hover:text-orange-500"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        SEO Services
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        href="/for-businesses/digital-ads"
-                        className="flex items-center gap-2 hover:text-orange-500"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Digital Ads
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        href="/for-businesses/direct-mail"
-                        className="flex items-center gap-2 hover:text-orange-500"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Local Direct Mail
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        href="/for-businesses/email-marketing"
-                        className="flex items-center gap-2 hover:text-orange-500"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Email Marketing
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        href="/for-businesses/marketing-ops"
-                        className="flex items-center gap-2 hover:text-orange-500"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Marketing Operations
-                      </Link>
-                    </li>
-                  </ul>
+              <div className="mt-2 w-[560px] rounded-2xl border border-orange-100 bg-white px-5 py-4 shadow-lg">
+                <div className="grid grid-cols-2 gap-10 text-left">
+                  {/* LEFT — IDEAS & GUIDANCE */}
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                      Ideas &amp; Guidance
+                    </p>
+                    <ul className="mt-3 space-y-2 text-sm">
+                      <li>
+                        <Link
+                          href="/for-businesses/marketing-guidebook"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          Marketing Guidebook
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/for-businesses/marketing-advice"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          Marketing Advice On Demand
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/for-businesses/digital-health-check"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          Digital Health Check
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/for-businesses/consulting"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          Consulting
+                        </Link>
+                      </li>
+                    </ul>
+                  </div>
+
+                  {/* RIGHT — OPERATION & EXECUTION */}
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+                      Operation &amp; Execution
+                    </p>
+                    <ul className="mt-3 space-y-2 text-sm">
+                      <li>
+                        <Link
+                          href="/for-businesses/website-builds-updates"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          Website Builds &amp; Updates
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/for-businesses/digital-profile-management"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          Digital Profile Management
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/for-businesses/seo-services"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          SEO Services
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/for-businesses/digital-ads"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          Digital Ads
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/for-businesses/direct-mail"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          Local Direct Mail
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/for-businesses/email-marketing"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          Email Marketing
+                        </Link>
+                      </li>
+                      <li>
+                        <Link
+                          href="/for-businesses/marketing-ops"
+                          className="flex items-center gap-2 hover:text-orange-500"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                          Marketing Operations
+                        </Link>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-
-          <span aria-hidden className="h-4 w-px bg-orange-300" />
-
-          {/* PEOPLE */}
-          <Link href="/for-people" className="whitespace-nowrap hover:text-neutral-900">
-            for People
-          </Link>
 
           <span aria-hidden className="h-4 w-px bg-orange-300" />
 
@@ -507,87 +554,128 @@ export function NavBar() {
 
               <div className="border-t border-orange-100 pt-2" />
 
-              {/* FOR GUIDANCE */}
-              <p className="font-semibold text-neutral-900">for Guidance</p>
+              {/* FOR MARGIN */}
+              <p className="font-semibold text-neutral-900">for Margin</p>
+              <p className="pl-3 pt-1 text-xs font-semibold text-neutral-800">
+                Getting More
+              </p>
+              <Link
+                href="/for-businesses/smart-links"
+                onClick={() => setMobileOpen(false)}
+                className="pl-6 hover:text-orange-500"
+              >
+                Smart Links
+              </Link>
+              <Link
+                href="/for-businesses/smart-prompts"
+                onClick={() => setMobileOpen(false)}
+                className="pl-6 hover:text-orange-500"
+              >
+                Smart Prompts
+              </Link>
+              <Link
+                href="/for-businesses/ad-monetization"
+                onClick={() => setMobileOpen(false)}
+                className="pl-6 hover:text-orange-500"
+              >
+                Ad Monetization
+              </Link>
+              <p className="pl-3 pt-2 text-xs font-semibold text-neutral-800">
+                Spending Less
+              </p>
+              <Link
+                href="/for-businesses/reduce-software-costs"
+                onClick={() => setMobileOpen(false)}
+                className="pl-6 hover:text-orange-500"
+              >
+                Subscription Freedom
+              </Link>
+
+              <div className="border-t border-orange-100 pt-2" />
+
+              {/* FOR SERVICES */}
+              <p className="font-semibold text-neutral-900">for Services</p>
+              <p className="pl-3 pt-1 text-xs font-semibold text-neutral-800">
+                Ideas &amp; Guidance
+              </p>
               <Link
                 href="/for-businesses/marketing-guidebook"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 Marketing Guidebook
               </Link>
               <Link
                 href="/for-businesses/marketing-advice"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 Marketing Advice On Demand
               </Link>
               <Link
                 href="/for-businesses/digital-health-check"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 Digital Health Check
               </Link>
               <Link
                 href="/for-businesses/consulting"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 Consulting
               </Link>
 
-              <div className="border-t border-orange-100 pt-2" />
-
-              {/* FOR EXECUTION */}
-              <p className="font-semibold text-neutral-900">for Execution</p>
+              <p className="pl-3 pt-2 text-xs font-semibold text-neutral-800">
+                Operation &amp; Execution
+              </p>
               <Link
                 href="/for-businesses/website-builds-updates"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 Website Builds &amp; Updates
               </Link>
               <Link
                 href="/for-businesses/digital-profile-management"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 Digital Profile Management
               </Link>
               <Link
                 href="/for-businesses/seo-services"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 SEO Services
               </Link>
               <Link
                 href="/for-businesses/digital-ads"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 Digital Ads
               </Link>
               <Link
                 href="/for-businesses/direct-mail"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 Local Direct Mail
               </Link>
               <Link
                 href="/for-businesses/email-marketing"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 Email Marketing
               </Link>
               <Link
                 href="/for-businesses/marketing-ops"
                 onClick={() => setMobileOpen(false)}
-                className="pl-3 hover:text-orange-500"
+                className="pl-6 hover:text-orange-500"
               >
                 Marketing Operations
               </Link>

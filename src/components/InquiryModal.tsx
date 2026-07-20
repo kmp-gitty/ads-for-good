@@ -40,6 +40,10 @@ export default function InquiryModal({
         "Local Direct Mail",
         "On-Demand Marketing Plans",
         "Chapter: Lifecycle Attribution",
+        "Smart Links",
+        "Smart Prompts",
+        "Ad Monetization",
+        "Subscription Freedom",
       ],
     [serviceOptions]
   );
