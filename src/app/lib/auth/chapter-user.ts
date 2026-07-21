@@ -17,7 +17,17 @@
 //   client_employee  → client_key IS NOT NULL (agency_key NULL)
 
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "./supabase-server";
-import { randomBytes } from "node:crypto";
+
+// Web Crypto (globalThis.crypto) instead of node:crypto — this module is
+// imported by middleware.ts, which runs on the Edge runtime where Node
+// builtins aren't available. getRandomValues exists in both Edge and Node.
+function randomHex(byteLen: number): string {
+  const bytes = new Uint8Array(byteLen);
+  globalThis.crypto.getRandomValues(bytes);
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out;
+}
 
 export type ChapterUserRole = "chapter_staff" | "agency_operator" | "client_employee";
 
@@ -391,7 +401,7 @@ export async function provisionSelfServeTenant(
   const fullName = (pending?.full_name as string | null) ?? null;
   const phone = (pending?.phone as string | null) ?? null;
 
-  const secret = randomBytes(32).toString("hex");
+  const secret = randomHex(32);
 
   const { data, error } = await supabase
     .schema("chapter_config")
