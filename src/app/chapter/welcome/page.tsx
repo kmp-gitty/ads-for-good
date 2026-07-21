@@ -87,12 +87,32 @@ export default async function WelcomePage({
 
         <p style={{ fontSize: 13, color: "#5C6B82", margin: "0 0 6px", fontWeight: 600 }}>What&rsquo;s next</p>
         <p style={{ fontSize: 13, color: "#5C6B82", margin: 0, lineHeight: 1.6 }}>
-          Your <strong>Smart Prompts</strong> and <strong>Smart Links</strong> setup will appear in your
-          dashboard. We&rsquo;re putting the finishing touches on it — you&rsquo;ll get an email the moment it&rsquo;s ready.
+          Head into your workspace to see your <strong>Smart Prompts</strong> and <strong>Smart Links</strong>. The
+          setup tools are almost ready — we&rsquo;ll email you the moment they go live.
         </p>
 
-        <p style={{ fontSize: 12, color: "#8A98AD", margin: "22px 0 0", lineHeight: 1.5 }}>
-          You can close this tab. Sign back in anytime at{" "}
+        {clientKey && (
+          <a
+            href={`/chapter/${clientKey}/home`}
+            style={{
+              display: "block",
+              textAlign: "center",
+              marginTop: 20,
+              background: "#E36410",
+              color: "white",
+              fontSize: 14,
+              fontWeight: 600,
+              borderRadius: 10,
+              padding: "12px 16px",
+              textDecoration: "none",
+            }}
+          >
+            Enter your workspace →
+          </a>
+        )}
+
+        <p style={{ fontSize: 12, color: "#8A98AD", margin: "18px 0 0", lineHeight: 1.5 }}>
+          Sign back in anytime at{" "}
           <a href="/chapter/login" style={{ color: "#E36410", fontWeight: 600 }}>/chapter/login</a>.
         </p>
       </div>

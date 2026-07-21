@@ -16,6 +16,7 @@ import {
   touchLastLogin,
   provisionFromDomainIfAllowed,
   provisionSelfServeTenant,
+  defaultLandingSlug,
 } from "@/app/lib/auth/chapter-user";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
@@ -104,7 +105,10 @@ export async function GET(req: NextRequest) {
   //   - client_employee → their client's overview
   let destination = "/chapter";
   if (chapterUser.role === "client_employee" && chapterUser.client_key) {
-    destination = `/chapter/${chapterUser.client_key}/overview`;
+    // Tools-only (self-serve) tenants land on their Home hub; full-Chapter
+    // clients keep the Lifecycle Overview default.
+    const slug = await defaultLandingSlug(chapterUser.client_key);
+    destination = `/chapter/${chapterUser.client_key}/${slug}`;
   } else if (chapterUser.role === "agency_operator") {
     // No client_key on the user row directly; middleware resolves first
     // accessible client for global routes. Land them at /chapter and let

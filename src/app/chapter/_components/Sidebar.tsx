@@ -5,15 +5,32 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, IconName } from "./Icon";
 import { Dropdown } from "./Dropdown";
-import { useChapter } from "./ChapterContext";
-import { CLIENTS } from "./mockdata";
+import { useChapter, type EntitlementInfo, type UserInfo } from "./ChapterContext";
+import { CLIENTS, type Client } from "./mockdata";
 
 type NavItem = { key: string; label: string; icon: IconName; badge?: string; locked?: boolean };
 
 export function Sidebar({ inquiryUnreadCount = 0 }: { inquiryUnreadCount?: number } = {}) {
-  const { client, setClient, sidebarOpen, setSidebarOpen, user, accessibleClientKeys } = useChapter();
+  const { client, setClient, sidebarOpen, setSidebarOpen, user, accessibleClientKeys, entitlement } = useChapter();
   const pathname = usePathname();
   const isClientEmployee = user?.role === "client_employee";
+
+  // Phase 2 self-serve — a tools-only tenant (no "chapter" analytics
+  // entitlement) gets a stripped shell instead of the full analytics nav.
+  const toolsOnly = !entitlement.toolsEnabled.includes("chapter");
+  if (toolsOnly) {
+    return (
+      <SelfServeSidebar
+        inquiryUnreadCount={inquiryUnreadCount}
+        client={client}
+        entitlement={entitlement}
+        user={user}
+        pathname={pathname}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
+    );
+  }
 
   // Filter the dropdown list to clients the user can access. When
   // accessibleClientKeys is null (legacy CHAPTER_DASH_TOKEN cookie session, no
@@ -228,6 +245,163 @@ export function Sidebar({ inquiryUnreadCount = 0 }: { inquiryUnreadCount?: numbe
         </button>
       </div>
     </aside>
+    </>
+  );
+}
+
+// Sign-out (shared shape with the operator sidebar foot).
+async function signOut() {
+  try {
+    await fetch("/api/chapter-auth/signout", { method: "POST" });
+  } finally {
+    window.location.href = "/chapter/login";
+  }
+}
+
+// ---------- Self-serve (tools-only) sidebar ----------
+// Rendered for tenants whose entitlement excludes "chapter" analytics. Shows
+// only the tools they own + Account. Tool bodies (Prompts, Links) arrive in
+// Phases 3–4; until then their nav items render disabled with a "Soon" pill so
+// the shape is visible without dead 404 links.
+type SelfServeNavItem = {
+  key: string;
+  label: string;
+  icon: IconName;
+  disabled?: boolean;
+  badge?: string;
+};
+
+function SelfServeSidebar({
+  inquiryUnreadCount,
+  client,
+  entitlement,
+  user,
+  pathname,
+  sidebarOpen,
+  setSidebarOpen,
+}: {
+  inquiryUnreadCount: number;
+  client: Client;
+  entitlement: EntitlementInfo;
+  user: UserInfo | null;
+  pathname: string;
+  sidebarOpen: boolean;
+  setSidebarOpen: (b: boolean) => void;
+}) {
+  const has = (t: string) => entitlement.toolsEnabled.includes(t);
+
+  // Plan/trial label under the workspace name.
+  let planLabel = "Workspace";
+  if (entitlement.billingStatus === "trialing") {
+    planLabel = "Free trial";
+    if (entitlement.trialEndsAt) {
+      const days = Math.max(
+        0,
+        Math.ceil((new Date(entitlement.trialEndsAt).getTime() - Date.now()) / 86_400_000),
+      );
+      planLabel = `Free trial · ${days}d left`;
+    }
+  } else if (entitlement.billingStatus === "active") {
+    planLabel = "Active plan";
+  } else if (entitlement.billingStatus) {
+    planLabel = entitlement.billingStatus;
+  }
+
+  const home: SelfServeNavItem[] = [{ key: "home", label: "Home", icon: "overview" }];
+  const prompts: SelfServeNavItem[] = [
+    { key: "prompts", label: "Prompts", icon: "observations", disabled: true },
+    { key: "prompts/responses", label: "Responses", icon: "journeys", disabled: true },
+    { key: "prompts/install", label: "Install", icon: "raw", disabled: true },
+  ];
+  const links: SelfServeNavItem[] = [
+    { key: "links", label: "Links", icon: "influence", disabled: true },
+    { key: "links/domain", label: "Domain", icon: "paths", disabled: true },
+  ];
+  const account: SelfServeNavItem[] = [
+    { key: "billing", label: "Billing", icon: "attribution" },
+    { key: "settings", label: "Settings", icon: "channels" },
+    {
+      key: "inbox",
+      label: "Support",
+      icon: "observations",
+      badge: inquiryUnreadCount > 0 ? String(inquiryUnreadCount) : undefined,
+    },
+  ];
+
+  const isActive = (key: string) =>
+    pathname === `/chapter/${client.id}/${key}` || pathname === `/chapter/${key}`;
+
+  const renderItem = (it: SelfServeNavItem) => {
+    if (it.disabled) {
+      return (
+        <div key={it.key} className="nav-item" style={{ opacity: 0.5, cursor: "default" }} aria-disabled="true">
+          <span className="icon"><Icon name={it.icon} size={16} /></span>
+          <span>{it.label}</span>
+          <span className="pill">Soon</span>
+        </div>
+      );
+    }
+    return (
+      <Link
+        key={it.key}
+        href={`/chapter/${client.id}/${it.key}`}
+        className={`nav-item ${isActive(it.key) ? "active" : ""}`}
+      >
+        <span className="icon"><Icon name={it.icon} size={16} /></span>
+        <span>{it.label}</span>
+        {it.badge ? <span className="pill">{it.badge}</span> : null}
+      </Link>
+    );
+  };
+
+  const section = (label: string, items: SelfServeNavItem[]) => (
+    <>
+      <div className="nav-section">
+        <div className="nav-section-label">{label}</div>
+        {items.map(renderItem)}
+      </div>
+      <div className="nav-divider" />
+    </>
+  );
+
+  return (
+    <>
+      {sidebarOpen && <div className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />}
+      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+        <div className="brand">
+          <div className="brand-mark">C</div>
+          <div className="brand-name">Chapter<span>by afG</span></div>
+        </div>
+
+        <div className="client-switch client-switch-static" role="presentation" aria-disabled="true">
+          <span className="client-dot" style={{ background: client.color }}></span>
+          <div className="client-info">
+            <div className="client-label">{planLabel}</div>
+            <div className="client-name">{client.name}</div>
+          </div>
+        </div>
+
+        {section("Home", home)}
+        {has("smart_prompts") && section("Smart Prompts", prompts)}
+        {has("smart_links") && section("Smart Links", links)}
+
+        <div className="nav-section">
+          <div className="nav-section-label">Account</div>
+          {account.map(renderItem)}
+        </div>
+
+        <div className="sidebar-foot">
+          {user && (
+            <div className="sidebar-user">
+              <div className="sidebar-user-email" title={user.email}>{user.email}</div>
+              <div className="sidebar-user-role">Owner</div>
+            </div>
+          )}
+          <button type="button" className="sidebar-signout" onClick={signOut}>
+            Sign out
+          </button>
+        </div>
+      </aside>
     </>
   );
 }

@@ -10,6 +10,8 @@
 
 import { createClient } from "@supabase/supabase-js";
 import BillingClient from "./BillingClient";
+import { getClientEntitlement, isToolsOnly } from "@/app/lib/auth/chapter-user";
+import SelfServeBilling from "./SelfServeBilling";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -49,6 +51,21 @@ export default async function BillingPage({
       <div className="p-8 text-sm text-neutral-500">
         No client selected. Use the client switcher in the sidebar.
       </div>
+    );
+  }
+
+  // Self-serve tenants don't have usage-snapshot analytics — they get a
+  // trial/plan view instead of the operator transparency dashboard.
+  const ent = await getClientEntitlement(clientKey);
+  if (ent && (ent.self_serve || isToolsOnly(ent))) {
+    return (
+      <SelfServeBilling
+        businessName={ent.business_name}
+        plan={ent.plan}
+        billingStatus={ent.billing_status}
+        trialEndsAt={ent.trial_ends_at}
+        toolsEnabled={ent.tools_enabled}
+      />
     );
   }
 

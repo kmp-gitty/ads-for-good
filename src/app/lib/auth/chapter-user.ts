@@ -69,6 +69,93 @@ export async function findChapterUserByAuthId(authUserId: string): Promise<Chapt
   return (data as ChapterUser) ?? null;
 }
 
+// ---------- Entitlement (Phase 2 self-serve) ----------
+// A tenant's entitlement is what it's allowed to see + its billing state.
+// `tools_enabled` drives the whole client surface:
+//   - includes "chapter"  → full analytics dashboard (operators + full clients)
+//   - "smart_prompts" / "smart_links" → self-serve tool sections
+// The two compose: a full Chapter client who also self-manages prompts can
+// have {chapter, smart_prompts}. A pure self-serve signup has
+// {smart_prompts, smart_links} and never sees analytics.
+export type ClientEntitlement = {
+  client_key: string;
+  business_name: string | null;
+  plan: string | null;
+  tools_enabled: string[];
+  self_serve: boolean;
+  billing_status: string | null;
+  trial_ends_at: string | null;
+};
+
+// 5-min in-memory cache. Keyed by client_key. Entitlement changes rarely
+// (plan upgrade, tool toggle) and a few minutes of staleness is fine; the
+// layout reads this on every dashboard request for client_employees.
+const _entitlementCache = new Map<string, { at: number; value: ClientEntitlement | null }>();
+const ENTITLEMENT_TTL_MS = 5 * 60 * 1000;
+
+export function clearClientEntitlementCache(clientKey?: string) {
+  if (clientKey) _entitlementCache.delete(clientKey);
+  else _entitlementCache.clear();
+}
+
+// Resolve a client's entitlement from chapter_config.clients. Returns null
+// only if the row genuinely doesn't exist; a missing tools_enabled defaults
+// to ["chapter"] (the historical operator behavior) so existing clients are
+// never accidentally stripped of analytics.
+export async function getClientEntitlement(clientKey: string): Promise<ClientEntitlement | null> {
+  const key = (clientKey || "").trim();
+  if (!key) return null;
+
+  const cached = _entitlementCache.get(key);
+  if (cached && Date.now() - cached.at < ENTITLEMENT_TTL_MS) return cached.value;
+
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .schema("chapter_config")
+    .from("clients")
+    .select("client_key, business_name, plan, tools_enabled, self_serve, billing_status, trial_ends_at")
+    .eq("client_key", key)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[chapter-user] getClientEntitlement failed:", error.message);
+    // Fail open to full analytics for existing clients — never strip access
+    // on a transient DB error.
+    return null;
+  }
+
+  const value: ClientEntitlement | null = data
+    ? {
+        client_key: data.client_key as string,
+        business_name: (data.business_name as string) ?? null,
+        plan: (data.plan as string) ?? null,
+        tools_enabled:
+          Array.isArray(data.tools_enabled) && data.tools_enabled.length > 0
+            ? (data.tools_enabled as string[])
+            : ["chapter"],
+        self_serve: Boolean(data.self_serve),
+        billing_status: (data.billing_status as string) ?? null,
+        trial_ends_at: (data.trial_ends_at as string) ?? null,
+      }
+    : null;
+
+  _entitlementCache.set(key, { at: Date.now(), value });
+  return value;
+}
+
+// True when this tenant is a self-serve tools-only workspace (no full-Chapter
+// analytics). Used to pick the landing slug + sidebar shape.
+export function isToolsOnly(ent: ClientEntitlement | null): boolean {
+  return !!ent && !ent.tools_enabled.includes("chapter");
+}
+
+// Post-login landing slug for a client_employee. Tools-only tenants land on
+// the Home hub; full-Chapter clients keep the Lifecycle Overview default.
+export async function defaultLandingSlug(clientKey: string): Promise<string> {
+  const ent = await getClientEntitlement(clientKey);
+  return isToolsOnly(ent) ? "home" : "overview";
+}
+
 // Called from the auth callback the first time a user clicks a magic link.
 // Sets chapter_config.users.user_id to the Supabase auth.users.id so future
 // lookups can resolve by session.user.id without a per-request email lookup.

@@ -6,6 +6,7 @@ import {
   canAccessClient,
   canAccessGlobal,
   listAccessibleClientKeys,
+  defaultLandingSlug,
 } from "./src/app/lib/auth/chapter-user";
 
 // Routes gated by this middleware:
@@ -178,6 +179,18 @@ async function gateChapter(req: NextRequest) {
         target.pathname = chapterUser.client_key
           ? `/chapter/${chapterUser.client_key}/overview`
           : "/chapter/overview";
+        target.search = "";
+        return NextResponse.redirect(target);
+      }
+      // Bare /chapter/<client_key> (no slug) → send to the entitlement-
+      // appropriate landing (Home for tools-only tenants, Overview for full
+      // Chapter). Only fires on the exact root path, so the entitlement lookup
+      // (cached) isn't on every page load.
+      const slugParts = pathname.split("/").filter(Boolean).slice(2);
+      if (slugParts.length === 0) {
+        const slug = await defaultLandingSlug(clientKey);
+        const target = req.nextUrl.clone();
+        target.pathname = `/chapter/${clientKey}/${slug}`;
         target.search = "";
         return NextResponse.redirect(target);
       }

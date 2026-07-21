@@ -36,6 +36,25 @@ export type FreshnessByClient = Record<
   { as_of_iso: string; display_tz: string }
 >;
 
+// Phase 2 self-serve — the tenant's entitlement, resolved server-side in the
+// (authed) layout from chapter_config.clients. Drives which sidebar the client
+// sees (full analytics vs. tools-only) and the Billing/Home surfaces.
+export type EntitlementInfo = {
+  toolsEnabled: string[];
+  selfServe: boolean;
+  billingStatus: string | null;
+  trialEndsAt: string | null;
+};
+
+const DEFAULT_ENTITLEMENT: EntitlementInfo = {
+  // Default is full analytics so operators + existing clients are unaffected
+  // when no entitlement is resolved (chapter_staff / agency_operator / legacy).
+  toolsEnabled: ["chapter"],
+  selfServe: false,
+  billingStatus: null,
+  trialEndsAt: null,
+};
+
 type Ctx = {
   client: Client;
   setClient: (c: Client) => void;
@@ -75,6 +94,9 @@ type Ctx = {
   // Per-client freshness map — TopBar derives the "Data as of" line by
   // looking up the current client.
   freshness: FreshnessByClient;
+
+  // Phase 2 self-serve — current tenant's entitlement (tools + billing state).
+  entitlement: EntitlementInfo;
 };
 
 const ChapterCtx = createContext<Ctx | null>(null);
@@ -116,11 +138,18 @@ export function ChapterProvider({
   user = null,
   accessibleClientKeys = null,
   freshness = {},
+  entitlement = DEFAULT_ENTITLEMENT,
+  selfServeClient = null,
 }: {
   children: React.ReactNode;
   user?: UserInfo | null;
   accessibleClientKeys?: string[] | null;
   freshness?: FreshnessByClient;
+  entitlement?: EntitlementInfo;
+  // Resolved Client for a self-serve tenant whose client_key isn't in the
+  // CLIENTS operator mock. Used as the fallback so the sidebar/URLs render the
+  // real tenant instead of defaulting to CLIENTS[0].
+  selfServeClient?: Client | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -162,7 +191,14 @@ export function ChapterProvider({
   const compareCode = searchParams.get("compare") || "prior";
   const modelParam  = searchParams.get("model")   || "linear";
 
-  const client    = CLIENTS.find(c => c.id === clientId) || CLIENTS[0];
+  // Resolve the Client for display. Operator/full clients live in the CLIENTS
+  // mock; a self-serve tenant (not in the mock) uses the server-resolved
+  // selfServeClient. Falls back to CLIENTS[0] only if neither matches.
+  const client =
+    CLIENTS.find(c => c.id === clientId) ||
+    (selfServeClient && selfServeClient.id === clientId ? selfServeClient : null) ||
+    selfServeClient ||
+    CLIENTS[0];
   const dateRange = DATE_RANGE_CODE_TO_LABEL[rangeCode] || "Last 30 days";
   const compare   = COMPARE_CODE_TO_LABEL[compareCode]  || "Compare to prior period";
   const model: AttributionModel = VALID_MODELS.has(modelParam as AttributionModel)
@@ -231,6 +267,7 @@ export function ChapterProvider({
     user,
     accessibleClientKeys,
     freshness,
+    entitlement,
   }), [
     client, setClient,
     dateRange, setDateRange,
@@ -242,6 +279,7 @@ export function ChapterProvider({
     user,
     accessibleClientKeys,
     freshness,
+    entitlement,
   ]);
 
   return <ChapterCtx.Provider value={value}>{children}</ChapterCtx.Provider>;
