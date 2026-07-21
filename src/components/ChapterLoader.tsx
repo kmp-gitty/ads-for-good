@@ -19,7 +19,11 @@ export default function ChapterLoader() {
   // One-time: inject pixel script + bind click handlers. Skipped on the
   // /chapter dashboard surface (internal agency-operator UI).
   useEffect(() => {
-    if (pathname?.startsWith("/chapter")) return;
+    // Skip on /chapter/* (agency dashboard) and /internal/* (admin surfaces —
+    // includes /internal/prompt-playground which loads its own pixel with the
+    // chapter_practice tenant, and /internal/demo which loads adsforgood_prod
+    // manually since ChapterLoader itself is skipped here).
+    if (pathname?.startsWith("/chapter") || pathname?.startsWith("/internal")) return;
     try {
       if (localStorage.getItem(CONSENT_KEY) === "declined") return;
 
@@ -122,7 +126,11 @@ export default function ChapterLoader() {
       firstRender.current = false;
       return;
     }
-    if (pathname?.startsWith("/chapter")) return;
+    // Skip on /chapter/* (agency dashboard) and /internal/* (admin surfaces —
+    // includes /internal/prompt-playground which loads its own pixel with the
+    // chapter_practice tenant, and /internal/demo which loads adsforgood_prod
+    // manually since ChapterLoader itself is skipped here).
+    if (pathname?.startsWith("/chapter") || pathname?.startsWith("/internal")) return;
     try {
       const cp = window.ChapterPixel as
         | { track?: (n: string, p: Record<string, unknown>) => void }

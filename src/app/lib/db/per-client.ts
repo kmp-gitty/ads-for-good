@@ -72,6 +72,10 @@ const CLIENT_ROLE_MAP: Record<string, string> = {
   projectagram_reels: "client_projectagram_reels",
   adsforgood_prod: "client_adsforgood_prod",
   not_so_cavalier: "client_not_so_cavalier",
+  // Internal-only practice tenant used by /internal/prompt-playground so operators
+  // can iterate on MI v2 prompts without touching real client storefronts. Isolated
+  // from adsforgood_prod so practice prompts cannot fire on the public site pixel.
+  chapter_practice: "client_chapter_practice",
 };
 
 export function isKnownClient(clientKey: string): boolean {
