@@ -17,6 +17,7 @@
 //   client_employee  → client_key IS NOT NULL (agency_key NULL)
 
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "./supabase-server";
+import { randomBytes } from "crypto";
 
 export type ChapterUserRole = "chapter_staff" | "agency_operator" | "client_employee";
 
@@ -270,6 +271,68 @@ export async function provisionFromDomainIfAllowed(
     return null;
   }
   return data as ChapterUser;
+}
+
+// ─── Self-serve tenant provisioning (Phase 1) ───────────────────────────────
+//
+// Called from the auth callback when a verified email arrived via the self-serve
+// signup flow (?signup=1) and has no existing users row / domain rule. Reads the
+// staged form data from chapter_config.pending_signups, mints an HMAC secret, and
+// calls the atomic chapter_config.provision_self_serve_tenant() function, which
+// creates the clients + client_secrets + client_employee users rows and returns
+// the generated client_key. The staged row is then cleaned up.
+//
+// No per-client Postgres role or CLIENT_ROLE_MAP entry is needed — self-serve
+// tenants share the chapter_selfserve role (Phase 0B), isolated by RLS.
+export async function provisionSelfServeTenant(
+  email: string,
+  authUserId: string,
+): Promise<{ client_key: string } | null> {
+  const supabase = createSupabaseServiceRoleClient();
+  const em = email.trim().toLowerCase();
+
+  // Staged signup data (best-effort — fall back to an email-derived company).
+  const { data: pending } = await supabase
+    .schema("chapter_config")
+    .from("pending_signups")
+    .select("full_name, phone, company")
+    .eq("email", em)
+    .maybeSingle();
+
+  const company =
+    (pending?.company as string | undefined)?.trim() || em.split("@")[0] || "workspace";
+  const fullName = (pending?.full_name as string | null) ?? null;
+  const phone = (pending?.phone as string | null) ?? null;
+
+  const secret = randomBytes(32).toString("hex");
+
+  const { data, error } = await supabase
+    .schema("chapter_config")
+    .rpc("provision_self_serve_tenant", {
+      p_email: em,
+      p_auth_user_id: authUserId,
+      p_full_name: fullName,
+      p_phone: phone,
+      p_company: company,
+      p_secret: secret,
+      p_tools: ["smart_prompts", "smart_links"],
+      p_trial_days: 30,
+    });
+
+  if (error) {
+    console.error("[chapter-user] provisionSelfServeTenant failed:", error.message);
+    return null;
+  }
+  const clientKey = typeof data === "string" ? data : null;
+  if (!clientKey) {
+    console.error("[chapter-user] provisionSelfServeTenant returned no client_key");
+    return null;
+  }
+
+  // Best-effort cleanup of the staged row (non-fatal if it fails).
+  await supabase.schema("chapter_config").from("pending_signups").delete().eq("email", em);
+
+  return { client_key: clientKey };
 }
 
 // Server-side current-user resolver. Returns the active ChapterUser when the

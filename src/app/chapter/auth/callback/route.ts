@@ -15,6 +15,7 @@ import {
   linkChapterUserToAuthId,
   touchLastLogin,
   provisionFromDomainIfAllowed,
+  provisionSelfServeTenant,
 } from "@/app/lib/auth/chapter-user";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
@@ -65,9 +66,23 @@ export async function GET(req: NextRequest) {
   // allowlist auto-provision. provisionFromDomainIfAllowed inserts a fresh
   // row when the email's domain has an active allowed_email_domains rule.
   // Returns null if no rule matches → bounce to login.
+  const isSignup = req.nextUrl.searchParams.get("signup") === "1";
+
   let chapterUser = await findChapterUserByEmail(email);
   if (!chapterUser) {
+    // Existing-client / agency domain auto-provision.
     chapterUser = await provisionFromDomainIfAllowed(email, authUser.id);
+
+    // Self-serve signup (?signup=1): mint a fresh tenant + land at welcome.
+    if (!chapterUser && isSignup) {
+      const provisioned = await provisionSelfServeTenant(email, authUser.id);
+      if (provisioned) {
+        return NextResponse.redirect(
+          new URL(`/chapter/${provisioned.client_key}/welcome`, req.url),
+        );
+      }
+    }
+
     if (!chapterUser) {
       await supabase.auth.signOut();
       return NextResponse.redirect(new URL("/chapter/login?error=not_allowlisted", req.url));

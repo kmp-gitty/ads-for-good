@@ -138,6 +138,8 @@ async function gateChapter(req: NextRequest) {
   if (
     pathname === "/chapter/login" ||
     pathname.startsWith("/chapter/login/") ||
+    pathname === "/chapter/signup" ||
+    pathname.startsWith("/chapter/signup/") ||
     pathname === "/chapter/auth/callback" ||
     pathname === "/api/chapter-auth"
   ) {
