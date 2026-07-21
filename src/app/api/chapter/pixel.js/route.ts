@@ -48,7 +48,12 @@ export async function GET(_req: NextRequest) {
     var s = getCurrentScript();
     var attr = s && s.getAttribute("data-collect-url");
     if (attr) return attr;
-    return (getApiOrigin() || "") + "/api/chapter/collect";
+    // /api/chapter/c is the primary endpoint since July 2026 — renamed from
+    // /api/chapter/collect to defuse ad-blocker filter-list rules that pattern-
+    // match on the substring "collect" (GA endpoint fingerprint). The old
+    // /collect path stays live as an alias so any cached pixel or explicit
+    // data-collect-url override still works.
+    return (getApiOrigin() || "") + "/api/chapter/c";
   }
 
    function getIdentifyUrl() {
