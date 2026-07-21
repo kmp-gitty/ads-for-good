@@ -17,7 +17,7 @@
 //   client_employee  → client_key IS NOT NULL (agency_key NULL)
 
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "./supabase-server";
-import { randomBytes } from "crypto";
+import { randomBytes } from "node:crypto";
 
 export type ChapterUserRole = "chapter_staff" | "agency_operator" | "client_employee";
 
