@@ -136,3 +136,38 @@ export async function withClient<T>(
     return fn(tx);
   }) as unknown as Promise<T>;
 }
+
+// Shared role for self-serve tenants (Phase 0B). Unlike the per-client roles
+// above, self-serve tenants are dynamic (created at signup) and are NOT in
+// CLIENT_ROLE_MAP — they all share this one NOBYPASSRLS role, isolated purely by
+// the `app.client_key` GUC + the `<table>_client_isolation` RLS policies on the
+// tenant-tool tables (identity_prompts, redirect_rules, redirect_ab_experiments,
+// offer_thresholds, email_templates, prompt_responses, offers, subscriptions).
+const SELFSERVE_ROLE = "chapter_selfserve";
+
+/**
+ * Open a self-serve tenant transaction with RLS enforced via the shared
+ * `chapter_selfserve` role.
+ *
+ * Use this for the client-facing self-serve config surface (Smart Prompts /
+ * Smart Links tools). It needs no per-client Postgres role — isolation comes
+ * entirely from `app.client_key` + the client_key RLS policies.
+ *
+ * SECURITY: `clientKey` MUST be derived from the authenticated session
+ * (chapter_config.users.client_key), never from client-supplied input.
+ *
+ * Throws if client_key is unsafe.
+ */
+export async function withSelfServeClient<T>(
+  clientKey: string,
+  fn: (tx: postgres.TransactionSql) => Promise<T>,
+): Promise<T> {
+  assertSafeClientKey(clientKey);
+  const sql = getChapterAppPool();
+  return sql.begin(async (tx) => {
+    // SELFSERVE_ROLE is a fixed literal (not user input), so .unsafe is safe.
+    await tx.unsafe(`SET LOCAL ROLE ${SELFSERVE_ROLE}`);
+    await tx`SELECT set_config('app.client_key', ${clientKey}, true)`;
+    return fn(tx);
+  }) as unknown as Promise<T>;
+}
