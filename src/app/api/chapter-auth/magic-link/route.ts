@@ -21,7 +21,11 @@ export async function POST(req: NextRequest) {
   }
 
   const email = (body.email || "").trim().toLowerCase();
-  const nextPath = (body.next || "/chapter").trim();
+  // No default landing here — when `next` is absent the callback computes the
+  // role/entitlement-appropriate destination (self-serve → /home, full client
+  // → /overview, staff → /chapter). Defaulting to "/chapter" used to override
+  // that and dump everyone on the operator Observations page.
+  const nextPath = (body.next || "").trim();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: "Invalid email" }, { status: 400 });
   }
@@ -73,9 +77,16 @@ export async function POST(req: NextRequest) {
     // The forwarded host is checked in the callback so this won't 302 outside
     // our origin.
     const origin = req.nextUrl.origin;
-    const params = new URLSearchParams();
-    if (nextPath) params.set("next", nextPath);
-    const emailRedirectTo = `${origin}/chapter/auth/callback${params.toString() ? `?${params.toString()}` : ""}`;
+    // `login=1` is a stable base query param: it guarantees emailRedirectTo
+    // always carries a "?" so the email template can safely append
+    // "&token_hash=...&type=magiclink" and produce a valid URL. The callback
+    // ignores it (only `signup=1` is meaningful there). `next` is added only
+    // when the caller (e.g. a bookmarked deep link) provided one.
+    const params = new URLSearchParams({ login: "1" });
+    if (nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")) {
+      params.set("next", nextPath);
+    }
+    const emailRedirectTo = `${origin}/chapter/auth/callback?${params.toString()}`;
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
