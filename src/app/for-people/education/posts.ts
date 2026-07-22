@@ -167,7 +167,7 @@ Underneath all of it is one problem: your tools are each counting their own slic
   },
   {
     slug: "attribution-models-compared",
-    title: "The attribution models, compared — and what each one quietly gets wrong",
+    title: "Attribution models, compared",
     metaTitle: "Attribution Models Compared",
     category: "Attribution Fundamentals",
     date: "Jul 22, 2026",
