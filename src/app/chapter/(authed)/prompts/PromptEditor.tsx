@@ -8,7 +8,7 @@
 // The composable builders are self-contained value/onChange components; we map
 // their output onto the identity_prompts jsonb columns at submit time.
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createPrompt, updatePrompt } from "./_actions";
 import {
@@ -50,14 +50,47 @@ function firstHeadline(blocks: Array<{ type: string; text?: string }>): string {
 export default function PromptEditor({
   clientKey,
   prompt,
+  storefrontDomain,
 }: {
   clientKey: string;
   prompt?: ExistingPrompt;
+  storefrontDomain?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const editing = !!prompt;
+
+  // Element picker (opens the client's site; the pixel there sends a selector
+  // back via postMessage). pickerWin is the tab we opened; we only accept
+  // messages from it.
+  const pickerWin = useRef<Window | null>(null);
+  const [pickMsg, setPickMsg] = useState<string | null>(null);
+  useEffect(() => {
+    function onMsg(e: MessageEvent) {
+      if (
+        pickerWin.current &&
+        e.source === pickerWin.current &&
+        e.data && e.data.type === "chapter_pick_selector" &&
+        typeof e.data.selector === "string"
+      ) {
+        setTriggerSelector(e.data.selector);
+        setPickMsg(`Captured “${e.data.selector}” from your site ✓`);
+        try { pickerWin.current.close(); } catch { /* ignore */ }
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  const startPick = () => {
+    if (!storefrontDomain) {
+      setPickMsg("Add your website first (Install tab), then you can pick elements.");
+      return;
+    }
+    setPickMsg("Opening your site — hover and click the element you want, then press “Use this element”.");
+    pickerWin.current = window.open(`https://${storefrontDomain}/#__chapter_pick`, "_blank");
+  };
 
   const trig = (prompt?.trigger_jsonb || {}) as Record<string, unknown>;
   // preset_type is locked once created (it selects the renderer path).
@@ -267,7 +300,16 @@ export default function PromptEditor({
           <option value="click_element">When an element is clicked</option>
         </select>
         {triggerType === "click_element" && (
-          <input value={triggerSelector} onChange={(e) => setTriggerSelector(e.target.value)} placeholder="CSS selector, e.g. .book-now-btn" style={{ ...inp, marginTop: 8 }} />
+          <div style={{ marginTop: 8 }}>
+            <input value={triggerSelector} onChange={(e) => setTriggerSelector(e.target.value)} placeholder="CSS selector, e.g. .book-now-btn" style={inp} />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+              <button type="button" onClick={startPick} style={{ fontSize: 12.5, fontWeight: 600, color: ORANGE, background: "white", border: `1px solid ${ORANGE}`, borderRadius: 8, padding: "7px 14px", cursor: "pointer" }}>
+                Pick from my site →
+              </button>
+              <span style={{ fontSize: 11.5, color: FAINT, lineHeight: 1.3 }}>Opens your site so you can click the element — no CSS needed.</span>
+            </div>
+            {pickMsg && <div style={{ fontSize: 12, color: MUTED, marginTop: 8, lineHeight: 1.4 }}>{pickMsg}</div>}
+          </div>
         )}
         {triggerType === "time_on_page" && (
           <div style={{ marginTop: 8 }}><NumRow label="Seconds" value={Math.round(triggerDelayMs / 1000)} onChange={(v) => setTriggerDelayMs(v * 1000)} min={1} /></div>

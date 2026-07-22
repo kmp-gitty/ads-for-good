@@ -1845,7 +1845,30 @@ setInterval(function () {
       .catch(function () {});
   }
 
-  chapterLoadIdentityPrompts();
+  // Chapter element picker — when the dashboard opens the client's site with
+  // #__chapter_pick (or picker mode persisted in sessionStorage across a page
+  // navigation), load the picker overlay instead of firing prompts. Lets a
+  // non-technical owner click the element their prompt should trigger on and
+  // sends the CSS selector back to the dashboard tab.
+  function chapterInPickMode() {
+    try {
+      if (/__chapter_pick/.test(location.hash)) return true;
+      if (/[?&]__chapter_pick/.test(location.search)) return true;
+      return sessionStorage.getItem("__chapter_pick") === "1";
+    } catch (e) { return false; }
+  }
+
+  if (chapterInPickMode()) {
+    try {
+      sessionStorage.setItem("__chapter_pick", "1");
+      var pks = document.createElement("script");
+      pks.src = (getApiOrigin() || "https://ads4good.com") + "/api/chapter/picker.js";
+      pks.async = true;
+      document.head.appendChild(pks);
+    } catch (e) {}
+  } else {
+    chapterLoadIdentityPrompts();
+  }
 })();
 `.trim();
 
