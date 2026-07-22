@@ -102,6 +102,19 @@ export default async function HomePage({
 
   const countFor = (slug: string) => (slug === "prompts" ? prompts.length : slug === "links" ? links.length : 0);
 
+  // Smart next-action per tile. Smart Prompts gates on install (the pixel must
+  // be live before a prompt can fire), so route to Install first, then create,
+  // then manage. Smart Links has no install step — create, then manage.
+  const ctaFor = (t: string): { href: string; label: string } => {
+    if (t === "smart_prompts") {
+      if (!activation?.connected) return { href: `/chapter/${clientKey}/prompts/install`, label: "Set up Smart Prompts →" };
+      if (prompts.length === 0) return { href: `/chapter/${clientKey}/prompts/new`, label: "Create your first prompt →" };
+      return { href: `/chapter/${clientKey}/prompts`, label: "Manage Smart Prompts →" };
+    }
+    if (links.length === 0) return { href: `/chapter/${clientKey}/links/new`, label: "Set up Smart Links →" };
+    return { href: `/chapter/${clientKey}/links`, label: "Manage Smart Links →" };
+  };
+
   return (
     <div style={{ padding: "28px 30px 60px", maxWidth: 900, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
@@ -122,8 +135,9 @@ export default async function HomePage({
           const meta = TOOL_META[t];
           if (!meta) return null;
           const n = countFor(meta.slug);
+          const cta = ctaFor(t);
           return (
-            <Link key={t} href={`/chapter/${clientKey}/${meta.slug}`} style={{ textDecoration: "none", display: "block", background: "white", border: `1px solid ${LINE}`, borderRadius: 12, padding: 20 }}>
+            <Link key={t} href={cta.href} style={{ textDecoration: "none", display: "block", background: "white", border: `1px solid ${LINE}`, borderRadius: 12, padding: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <span style={{ fontSize: 16, fontWeight: 700, color: INK }}>{meta.name}</span>
                 <span style={{ fontSize: 10, color: FAINT, textTransform: "uppercase", letterSpacing: ".1em", border: `1px solid ${LINE}`, borderRadius: 999, padding: "2px 7px" }}>
@@ -131,9 +145,7 @@ export default async function HomePage({
                 </span>
               </div>
               <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px", lineHeight: 1.55 }}>{meta.blurb}</p>
-              <span style={{ fontSize: 13, fontWeight: 600, color: ORANGE }}>
-                {n > 0 ? `Manage ${meta.name} →` : `Set up ${meta.name} →`}
-              </span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: ORANGE }}>{cta.label}</span>
             </Link>
           );
         })}
