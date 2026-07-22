@@ -1034,9 +1034,10 @@ setInterval(function () {
       }
       var prev = accumulatedValues[field.id];  // restore prior value on Back nav
 
-      if (field.type === "text" || field.type === "email" || field.type === "phone") {
+      if (field.type === "text" || field.type === "email" || field.type === "phone" || field.type === "number") {
         var inp = document.createElement("input");
-        inp.type = field.type === "email" ? "email" : (field.type === "phone" ? "tel" : "text");
+        inp.type = field.type === "email" ? "email" : (field.type === "phone" ? "tel" : (field.type === "number" ? "number" : "text"));
+        if (field.type === "number") inp.setAttribute("inputmode", "decimal");
         inp.className = "chapter-prompt-input";
         if (field.placeholder) inp.placeholder = String(field.placeholder);
         if (field.required) inp.required = true;
@@ -1097,13 +1098,17 @@ setInterval(function () {
       });
     }
 
+    function chapterIsValidEmail(v) { return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(v)); }
+    function chapterIsValidPhone(v) { var d = String(v).replace(/[^0-9]/g, ""); return d.length >= 7 && d.length <= 15; }
+    function chapterIsValidNumber(v) { return /^-?\\d*\\.?\\d+$/.test(String(v).trim()); }
+
     function validateCurrentPage() {
       var ok = true;
       Object.keys(currentPageRefs).forEach(function (fieldId) {
         if (!ok) return;
         var ref = currentPageRefs[fieldId];
         var cfg = ref.config;
-        if (!cfg.required) return;
+        var label = cfg.label || cfg.id;
         var val;
         if (ref.kind === "input") val = ref.el.value ? String(ref.el.value).trim() : "";
         else if (ref.kind === "choice") {
@@ -1117,9 +1122,23 @@ setInterval(function () {
         var isEmpty = (ref.kind === "input" && !val) ||
           (ref.kind === "choice" && cfg.type === "single_choice" && !val) ||
           (ref.kind === "choice" && cfg.type === "multi_choice" && (!val || val.length === 0));
-        if (isEmpty) {
-          showError("Please fill in: " + (cfg.label || cfg.id));
+        if (cfg.required && isEmpty) {
+          showError("Please fill in: " + label);
           ok = false;
+          return;
+        }
+        // Format checks apply to any filled input field (required or not).
+        if (ref.kind === "input" && val) {
+          if (cfg.type === "email" && !chapterIsValidEmail(val)) {
+            showError("Please enter a valid email for \\u201C" + label + "\\u201D.");
+            ok = false;
+          } else if (cfg.type === "phone" && !chapterIsValidPhone(val)) {
+            showError("Please enter a valid phone number for \\u201C" + label + "\\u201D.");
+            ok = false;
+          } else if (cfg.type === "number" && !chapterIsValidNumber(val)) {
+            showError("\\u201C" + label + "\\u201D must be a number.");
+            ok = false;
+          }
         }
       });
       return ok;

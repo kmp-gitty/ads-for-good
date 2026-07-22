@@ -13,13 +13,14 @@ import { useRouter } from "next/navigation";
 import { createPrompt, updatePrompt } from "./_actions";
 import {
   PRESET_LABELS,
+  IDENTITY_TYPES,
   type ContentBlock,
   type FormField,
   type ExistingPrompt,
   type SelfServePresetType,
   type SelfServePromptInput,
 } from "./types";
-import CustomFormBuilder from "@/app/internal/identity-prompts/[clientKey]/CustomFormBuilder";
+import SelfServeFormBuilder from "./SelfServeFormBuilder";
 import NotificationBuilder, {
   type NotificationConfig,
 } from "@/app/internal/identity-prompts/[clientKey]/NotificationBuilder";
@@ -214,7 +215,9 @@ export default function PromptEditor({
         ...base,
         headline: firstHeadline(cfContent),
         content_blocks_jsonb: cfContent,
-        form_fields_jsonb: cfFields,
+        // email/phone are always identity fields — set it automatically so the
+        // pixel hashes + stitches them (no per-field checkbox).
+        form_fields_jsonb: cfFields.map((f) => ({ ...f, for_identity: IDENTITY_TYPES.includes(f.type) })),
       };
     } else if (presetType === "custom_notification") {
       input = {
@@ -353,10 +356,10 @@ export default function PromptEditor({
 
       {presetType === "custom_form" && (
         <Section label="Form">
-          <CustomFormBuilder
-            contentBlocks={cfContent as never}
-            formFields={cfFields as never}
-            onChange={(next) => { setCfContent(next.contentBlocks as ContentBlock[]); setCfFields(next.formFields as FormField[]); }}
+          <SelfServeFormBuilder
+            contentBlocks={cfContent}
+            formFields={cfFields}
+            onChange={(next) => { setCfContent(next.contentBlocks); setCfFields(next.formFields); }}
           />
         </Section>
       )}

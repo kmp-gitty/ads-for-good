@@ -206,7 +206,7 @@ function fieldMock(f: FormField) {
       </div>
     );
   }
-  return <div style={{ marginBottom: 10 }}>{label}<MockInput placeholder={f.placeholder || (f.type === "email" ? "you@email.com" : f.type === "phone" ? "(555) 555-5555" : "…")} /></div>;
+  return <div style={{ marginBottom: 10 }}>{label}<MockInput placeholder={f.placeholder || (f.type === "email" ? "you@email.com" : f.type === "phone" ? "(555) 555-5555" : f.type === "number" ? "123" : "…")} /></div>;
 }
 
 function formContent(d: PreviewData) {

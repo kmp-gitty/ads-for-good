@@ -17,9 +17,34 @@ export type SelfServePresetType =
 
 export type ContentBlock = { type: string; text: string };
 
+// Self-serve form field types. email/phone are always identity fields
+// (for_identity is set automatically at save); number/email/phone carry
+// validation the pixel enforces on submit.
+export type FieldType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "email"
+  | "phone"
+  | "single_choice"
+  | "multi_choice";
+
+export const FIELD_TYPE_OPTIONS: { value: FieldType; label: string }[] = [
+  { value: "text", label: "Short text" },
+  { value: "textarea", label: "Long text" },
+  { value: "number", label: "Number" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
+  { value: "single_choice", label: "Single-select (choose one)" },
+  { value: "multi_choice", label: "Multi-select (choose several)" },
+];
+
+export const CHOICE_TYPES: FieldType[] = ["single_choice", "multi_choice"];
+export const IDENTITY_TYPES: FieldType[] = ["email", "phone"];
+
 export type FormField = {
   id: string;
-  type: string;
+  type: FieldType;
   label: string;
   required: boolean;
   placeholder?: string;
