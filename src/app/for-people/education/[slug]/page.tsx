@@ -18,7 +18,7 @@ export async function generateMetadata({
   const post = getPost(slug);
   if (!post) return { title: "Post not found | ads for Good blog" };
   return {
-    title: `${post.title} | ads for Good blog`,
+    title: `${post.category} | ads for Good blog`,
     description: post.excerpt,
   };
 }
@@ -61,8 +61,9 @@ export default async function BlogPostPage({
           </div>
         </article>
 
-        {/* RIGHT: sidebar — sticks alongside the article on desktop */}
-        <aside className="space-y-6 md:sticky md:top-6 md:self-start">
+        {/* RIGHT: sidebar — sticks alongside the article on desktop, offset
+            below the sticky navbar (~72px tall) so its top isn't cut off. */}
+        <aside className="space-y-6 md:sticky md:top-24 md:self-start">
           <div className="rounded-3xl border-2 border-orange-100 bg-orange-50/60 px-5 py-5">
             <h3 className="text-sm font-semibold text-neutral-900">See the whole journey, not the last click.</h3>
             <p className="mt-2 text-xs text-neutral-700">
