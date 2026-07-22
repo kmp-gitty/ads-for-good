@@ -1,27 +1,38 @@
 "use client";
 
-// Self-serve prompt editor (Phase 3a). This turn ships the Email Exchange
-// preset fully (no builder dependencies). Custom Form / Notification / Phone
-// reuse the operator builders and land next; their tiles show "Soon" for now.
+// Self-serve prompt editor (Phase 3a). All 4 v1 presets:
+//   - Email Exchange   → dedicated columns (headline/body/collect/offer/…)
+//   - Custom Form       → reuses the operator CustomFormBuilder
+//   - Custom Notification → reuses NotificationBuilder (bubble)
+//   - Phone Call        → reuses PhoneCallBuilder (tel: CTAs)
+// The composable builders are self-contained value/onChange components; we map
+// their output onto the identity_prompts jsonb columns at submit time.
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPrompt, updatePrompt } from "./_actions";
 import {
   PRESET_LABELS,
+  type ContentBlock,
+  type FormField,
   type ExistingPrompt,
   type SelfServePresetType,
   type SelfServePromptInput,
 } from "./types";
+import CustomFormBuilder from "@/app/internal/identity-prompts/[clientKey]/CustomFormBuilder";
+import NotificationBuilder, {
+  type NotificationConfig,
+} from "@/app/internal/identity-prompts/[clientKey]/NotificationBuilder";
+import PhoneCallBuilder, {
+  type PhoneCallConfig,
+} from "@/app/internal/identity-prompts/[clientKey]/PhoneCallBuilder";
 
 const INK = "#1F2D43";
 const MUTED = "#5C6B82";
 const FAINT = "#8A98AD";
 const ORANGE = "#E36410";
 const LINE = "#E5E0D4";
-const PANEL = "#FBFAF6";
 
-const SELECTABLE: SelfServePresetType[] = ["email_exchange"];
 const ALL_PRESETS: SelfServePresetType[] = [
   "email_exchange",
   "custom_form",
@@ -30,6 +41,10 @@ const ALL_PRESETS: SelfServePresetType[] = [
 ];
 
 type TriggerType = SelfServePromptInput["trigger_type"];
+
+function firstHeadline(blocks: Array<{ type: string; text?: string }>): string {
+  return blocks.find((b) => b.type === "headline")?.text?.trim() || "";
+}
 
 export default function PromptEditor({
   clientKey,
@@ -43,11 +58,9 @@ export default function PromptEditor({
   const [error, setError] = useState<string | null>(null);
   const editing = !!prompt;
 
-  // Guard: v1 only edits Email Exchange (the only preset self-serve can create yet).
-  const composableLocked = editing && prompt!.preset_type !== "email_exchange";
-
   const trig = (prompt?.trigger_jsonb || {}) as Record<string, unknown>;
-  const [presetType] = useState<SelfServePresetType>(
+  // preset_type is locked once created (it selects the renderer path).
+  const [presetType, setPresetType] = useState<SelfServePresetType>(
     (prompt?.preset_type as SelfServePresetType) || "email_exchange",
   );
   const [slug, setSlug] = useState(prompt?.slug || "");
@@ -57,6 +70,13 @@ export default function PromptEditor({
   const [triggerSelector, setTriggerSelector] = useState((trig.selector as string) || "");
   const [triggerDelayMs, setTriggerDelayMs] = useState(Number(trig.delay_ms) || 15000);
   const [triggerPercent, setTriggerPercent] = useState(Number(trig.percent) || 50);
+  const [frequency, setFrequency] = useState<SelfServePromptInput["frequency"]>(
+    (prompt?.frequency as SelfServePromptInput["frequency"]) || "session",
+  );
+  const [frequencyDays, setFrequencyDays] = useState(prompt?.frequency_days || 30);
+  const [enabled, setEnabled] = useState(prompt?.enabled ?? true);
+
+  // Email Exchange fields.
   const [headline, setHeadline] = useState(prompt?.headline || "");
   const [body, setBody] = useState(prompt?.body || "");
   const [inputMode, setInputMode] = useState<SelfServePromptInput["input_mode"]>(
@@ -69,43 +89,115 @@ export default function PromptEditor({
   const [offerCode, setOfferCode] = useState(prompt?.offer_code || "");
   const [offerDescription, setOfferDescription] = useState(prompt?.offer_description || "");
   const [postSubmitAction, setPostSubmitAction] = useState<SelfServePromptInput["post_submit_action"]>(
-    (["message", "button", "redirect"].includes(prompt?.post_submit_action || "")
+    ["message", "button", "redirect"].includes(prompt?.post_submit_action || "")
       ? (prompt!.post_submit_action as SelfServePromptInput["post_submit_action"])
-      : "message"),
+      : "message",
   );
   const [postSubmitUrl, setPostSubmitUrl] = useState(prompt?.post_submit_url || "");
   const [postSubmitButtonLabel, setPostSubmitButtonLabel] = useState(prompt?.post_submit_button_label || "Claim it");
-  const [frequency, setFrequency] = useState<SelfServePromptInput["frequency"]>(
-    (prompt?.frequency as SelfServePromptInput["frequency"]) || "session",
+
+  // Composable builder states.
+  const [cfContent, setCfContent] = useState<ContentBlock[]>(
+    (prompt?.preset_type === "custom_form" && prompt.content_blocks_jsonb) || [{ type: "headline", text: "" }],
   );
-  const [frequencyDays, setFrequencyDays] = useState(prompt?.frequency_days || 30);
-  const [enabled, setEnabled] = useState(prompt?.enabled ?? true);
+  const [cfFields, setCfFields] = useState<FormField[]>(
+    (prompt?.preset_type === "custom_form" && prompt.form_fields_jsonb) || [
+      { id: "email", type: "email", label: "Email", required: true, for_identity: true },
+    ],
+  );
+  const [notif, setNotif] = useState<NotificationConfig>(
+    prompt?.preset_type === "custom_notification"
+      ? {
+          container: (prompt.container_jsonb as NotificationConfig["container"]) || { type: "bubble", position: "bottom-right" },
+          content_blocks: (prompt.content_blocks_jsonb as NotificationConfig["content_blocks"]) || [{ type: "headline", text: "" }],
+          submit_actions: (prompt.submit_actions_jsonb as NotificationConfig["submit_actions"]) || { cta_type: "dismiss_only" },
+        }
+      : {
+          container: { type: "bubble", position: "bottom-right" },
+          content_blocks: [{ type: "headline", text: "" }],
+          submit_actions: { cta_type: "dismiss_only" },
+        },
+  );
+  const [phone, setPhone] = useState<PhoneCallConfig>(
+    prompt?.preset_type === "phone_call"
+      ? { content_blocks: (prompt.content_blocks_jsonb as PhoneCallConfig["content_blocks"]) || [] }
+      : {
+          content_blocks: [
+            { type: "headline", text: "" },
+            { type: "phone_cta", label: "Call us", phone_number: "" },
+          ],
+        },
+  );
 
   const submit = () => {
     setError(null);
-    const input: SelfServePromptInput = {
+    // Common defaults for the fields a given preset doesn't use.
+    const base: SelfServePromptInput = {
       preset_type: presetType,
       slug: slug.trim(),
       trigger_type: triggerType,
       trigger_selector: triggerSelector,
       trigger_delay_ms: triggerDelayMs,
       trigger_percent: triggerPercent,
-      headline,
-      body,
-      input_mode: inputMode,
+      headline: "",
+      body: "",
+      input_mode: "email",
       email_placeholder: emailPlaceholder,
       phone_placeholder: phonePlaceholder,
-      button_label: buttonLabel,
-      success_message: successMessage,
-      offer_code: offerCode,
-      offer_description: offerDescription,
-      post_submit_action: postSubmitAction,
-      post_submit_url: postSubmitUrl,
-      post_submit_button_label: postSubmitButtonLabel,
+      button_label: "Submit",
+      success_message: "Thanks!",
+      offer_code: "",
+      offer_description: "",
+      post_submit_action: "message",
+      post_submit_url: "",
+      post_submit_button_label: "Claim it",
       frequency,
       frequency_days: frequencyDays,
       enabled,
+      content_blocks_jsonb: null,
+      form_fields_jsonb: null,
+      container_jsonb: null,
+      submit_actions_jsonb: null,
     };
+
+    let input: SelfServePromptInput = base;
+    if (presetType === "email_exchange") {
+      input = {
+        ...base,
+        headline,
+        body,
+        input_mode: inputMode,
+        button_label: buttonLabel,
+        success_message: successMessage,
+        offer_code: offerCode,
+        offer_description: offerDescription,
+        post_submit_action: postSubmitAction,
+        post_submit_url: postSubmitUrl,
+        post_submit_button_label: postSubmitButtonLabel,
+      };
+    } else if (presetType === "custom_form") {
+      input = {
+        ...base,
+        headline: firstHeadline(cfContent),
+        content_blocks_jsonb: cfContent,
+        form_fields_jsonb: cfFields,
+      };
+    } else if (presetType === "custom_notification") {
+      input = {
+        ...base,
+        headline: firstHeadline(notif.content_blocks),
+        container_jsonb: notif.container,
+        content_blocks_jsonb: notif.content_blocks,
+        submit_actions_jsonb: notif.submit_actions,
+      };
+    } else if (presetType === "phone_call") {
+      input = {
+        ...base,
+        headline: firstHeadline(phone.content_blocks),
+        content_blocks_jsonb: phone.content_blocks as unknown as ContentBlock[],
+      };
+    }
+
     startTransition(async () => {
       const res = editing ? await updatePrompt(prompt!.id, input) : await createPrompt(input);
       if (!res.ok) { setError(res.error); return; }
@@ -114,59 +206,44 @@ export default function PromptEditor({
     });
   };
 
-  if (composableLocked) {
-    return (
-      <div style={{ padding: "28px 30px", maxWidth: 620, margin: "0 auto" }}>
-        <BackLink clientKey={clientKey} />
-        <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 24, background: PANEL, marginTop: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: INK, marginBottom: 6 }}>
-            Editing “{PRESET_LABELS[prompt!.preset_type as SelfServePresetType] || prompt!.preset_type}” is coming soon
-          </div>
-          <p style={{ fontSize: 13.5, color: MUTED, margin: 0, lineHeight: 1.5 }}>
-            This prompt type’s editor lands in the next update. For now you can turn it on/off or delete it from the list.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ padding: "24px 30px 60px", maxWidth: 620, margin: "0 auto" }}>
+    <div style={{ padding: "24px 30px 60px", maxWidth: 640, margin: "0 auto" }}>
       <BackLink clientKey={clientKey} />
       <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: "10px 0 18px" }}>
         {editing ? "Edit prompt" : "New prompt"}
       </h1>
 
-      {/* Preset picker */}
+      {/* Preset picker — locked once created */}
       <Section label="Type">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {ALL_PRESETS.map((p) => {
             const on = p === presetType;
-            const selectable = SELECTABLE.includes(p);
+            const locked = editing && p !== presetType;
             return (
-              <div
+              <button
                 key={p}
-                aria-disabled={!selectable}
+                type="button"
+                disabled={editing}
+                onClick={() => !editing && setPresetType(p)}
                 style={{
                   border: `1.5px solid ${on ? ORANGE : LINE}`,
-                  background: on ? "#FFF4EC" : selectable ? "white" : PANEL,
-                  color: selectable ? INK : FAINT,
+                  background: on ? "#FFF4EC" : "white",
+                  color: locked ? FAINT : INK,
                   borderRadius: 10,
                   padding: "10px 12px",
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: selectable ? "default" : "not-allowed",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
+                  textAlign: "left",
+                  cursor: editing ? "default" : "pointer",
+                  opacity: locked ? 0.5 : 1,
                 }}
               >
                 {PRESET_LABELS[p]}
-                {!selectable && <span style={{ fontSize: 10, color: FAINT }}>Soon</span>}
-              </div>
+              </button>
             );
           })}
         </div>
+        {editing && <div style={{ fontSize: 11.5, color: FAINT, marginTop: 6 }}>Type can’t be changed after creation.</div>}
       </Section>
 
       {/* Name */}
@@ -174,7 +251,7 @@ export default function PromptEditor({
         <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="welcome_offer" style={inp} />
       </Section>
 
-      {/* Trigger */}
+      {/* Trigger — common to all presets */}
       <Section label="When it appears">
         <select value={triggerType} onChange={(e) => setTriggerType(e.target.value as TriggerType)} style={inp}>
           <option value="exit_intent">On exit intent (mouse leaves the page)</option>
@@ -186,94 +263,84 @@ export default function PromptEditor({
           <input value={triggerSelector} onChange={(e) => setTriggerSelector(e.target.value)} placeholder="CSS selector, e.g. .book-now-btn" style={{ ...inp, marginTop: 8 }} />
         )}
         {triggerType === "time_on_page" && (
-          <div style={{ marginTop: 8 }}>
-            <NumRow label="Seconds" value={Math.round(triggerDelayMs / 1000)} onChange={(v) => setTriggerDelayMs(v * 1000)} min={1} />
-          </div>
+          <div style={{ marginTop: 8 }}><NumRow label="Seconds" value={Math.round(triggerDelayMs / 1000)} onChange={(v) => setTriggerDelayMs(v * 1000)} min={1} /></div>
         )}
         {triggerType === "scroll_depth" && (
-          <div style={{ marginTop: 8 }}>
-            <NumRow label="Percent" value={triggerPercent} onChange={setTriggerPercent} min={1} max={100} />
-          </div>
+          <div style={{ marginTop: 8 }}><NumRow label="Percent" value={triggerPercent} onChange={setTriggerPercent} min={1} max={100} /></div>
         )}
       </Section>
 
-      {/* Content */}
-      <Section label="Headline">
-        <input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Get 10% off your first order" style={inp} />
-      </Section>
-      <Section label="Body" hint="Optional supporting line.">
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder="Enter your email and we’ll send your code." style={{ ...inp, resize: "vertical" }} />
-      </Section>
+      {/* Preset-specific content */}
+      {presetType === "email_exchange" && (
+        <>
+          <Section label="Headline"><input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Get 10% off your first order" style={inp} /></Section>
+          <Section label="Body" hint="Optional supporting line."><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} placeholder="Enter your email and we’ll send your code." style={{ ...inp, resize: "vertical" }} /></Section>
+          <Section label="Collect">
+            <select value={inputMode} onChange={(e) => setInputMode(e.target.value as SelfServePromptInput["input_mode"])} style={inp}>
+              <option value="email">Email</option>
+              <option value="phone">Phone</option>
+              <option value="either">Email or phone</option>
+            </select>
+            {inputMode !== "phone" && <input value={emailPlaceholder} onChange={(e) => setEmailPlaceholder(e.target.value)} placeholder="Email placeholder" style={{ ...inp, marginTop: 8 }} />}
+            {inputMode !== "email" && <input value={phonePlaceholder} onChange={(e) => setPhonePlaceholder(e.target.value)} placeholder="Phone placeholder" style={{ ...inp, marginTop: 8 }} />}
+          </Section>
+          <Section label="Button label"><input value={buttonLabel} onChange={(e) => setButtonLabel(e.target.value)} style={inp} /></Section>
+          <Section label="Offer code" hint="Optional. Shown in the success message after they submit.">
+            <input value={offerCode} onChange={(e) => setOfferCode(e.target.value)} placeholder="WELCOME10" style={inp} />
+            {offerCode.trim() && <input value={offerDescription} onChange={(e) => setOfferDescription(e.target.value)} placeholder="What the code does" style={{ ...inp, marginTop: 8 }} />}
+          </Section>
+          <Section label="After they submit">
+            <select value={postSubmitAction} onChange={(e) => setPostSubmitAction(e.target.value as SelfServePromptInput["post_submit_action"])} style={inp}>
+              <option value="message">Show a thank-you message</option>
+              <option value="button">Show a button to a URL</option>
+              <option value="redirect">Redirect to a URL</option>
+            </select>
+            {postSubmitAction === "message" && <input value={successMessage} onChange={(e) => setSuccessMessage(e.target.value)} placeholder="Success message" style={{ ...inp, marginTop: 8 }} />}
+            {(postSubmitAction === "button" || postSubmitAction === "redirect") && <input value={postSubmitUrl} onChange={(e) => setPostSubmitUrl(e.target.value)} placeholder="https://…" style={{ ...inp, marginTop: 8 }} />}
+            {postSubmitAction === "button" && <input value={postSubmitButtonLabel} onChange={(e) => setPostSubmitButtonLabel(e.target.value)} placeholder="Button label" style={{ ...inp, marginTop: 8 }} />}
+          </Section>
+        </>
+      )}
 
-      {/* Input */}
-      <Section label="Collect">
-        <select value={inputMode} onChange={(e) => setInputMode(e.target.value as SelfServePromptInput["input_mode"])} style={inp}>
-          <option value="email">Email</option>
-          <option value="phone">Phone</option>
-          <option value="either">Email or phone</option>
-        </select>
-        {inputMode !== "phone" && (
-          <input value={emailPlaceholder} onChange={(e) => setEmailPlaceholder(e.target.value)} placeholder="Email placeholder" style={{ ...inp, marginTop: 8 }} />
-        )}
-        {inputMode !== "email" && (
-          <input value={phonePlaceholder} onChange={(e) => setPhonePlaceholder(e.target.value)} placeholder="Phone placeholder" style={{ ...inp, marginTop: 8 }} />
-        )}
-      </Section>
+      {presetType === "custom_form" && (
+        <Section label="Form">
+          <CustomFormBuilder
+            contentBlocks={cfContent as never}
+            formFields={cfFields as never}
+            onChange={(next) => { setCfContent(next.contentBlocks as ContentBlock[]); setCfFields(next.formFields as FormField[]); }}
+          />
+        </Section>
+      )}
 
-      <Section label="Button label">
-        <input value={buttonLabel} onChange={(e) => setButtonLabel(e.target.value)} style={inp} />
-      </Section>
+      {presetType === "custom_notification" && (
+        <Section label="Notification">
+          <NotificationBuilder value={notif} onChange={setNotif} />
+        </Section>
+      )}
 
-      {/* Offer (display only) */}
-      <Section label="Offer code" hint="Optional. Shown in the success message after they submit.">
-        <input value={offerCode} onChange={(e) => setOfferCode(e.target.value)} placeholder="WELCOME10" style={inp} />
-        {offerCode.trim() && (
-          <input value={offerDescription} onChange={(e) => setOfferDescription(e.target.value)} placeholder="What the code does (e.g. 10% off your first order)" style={{ ...inp, marginTop: 8 }} />
-        )}
-      </Section>
+      {presetType === "phone_call" && (
+        <Section label="Phone call">
+          <PhoneCallBuilder value={phone} onChange={setPhone} />
+        </Section>
+      )}
 
-      {/* After submit */}
-      <Section label="After they submit">
-        <select value={postSubmitAction} onChange={(e) => setPostSubmitAction(e.target.value as SelfServePromptInput["post_submit_action"])} style={inp}>
-          <option value="message">Show a thank-you message</option>
-          <option value="button">Show a button to a URL</option>
-          <option value="redirect">Redirect to a URL</option>
-        </select>
-        {postSubmitAction === "message" && (
-          <input value={successMessage} onChange={(e) => setSuccessMessage(e.target.value)} placeholder="Success message" style={{ ...inp, marginTop: 8 }} />
-        )}
-        {(postSubmitAction === "button" || postSubmitAction === "redirect") && (
-          <input value={postSubmitUrl} onChange={(e) => setPostSubmitUrl(e.target.value)} placeholder="https://…" style={{ ...inp, marginTop: 8 }} />
-        )}
-        {postSubmitAction === "button" && (
-          <input value={postSubmitButtonLabel} onChange={(e) => setPostSubmitButtonLabel(e.target.value)} placeholder="Button label" style={{ ...inp, marginTop: 8 }} />
-        )}
-      </Section>
-
-      {/* Frequency */}
+      {/* Frequency — common */}
       <Section label="How often per visitor">
         <select value={frequency} onChange={(e) => setFrequency(e.target.value as SelfServePromptInput["frequency"])} style={inp}>
           <option value="session">Once per session</option>
           <option value="visitor">Once every N days</option>
           <option value="every_visit">Every visit</option>
         </select>
-        {frequency === "visitor" && (
-          <div style={{ marginTop: 8 }}>
-            <NumRow label="Days" value={frequencyDays} onChange={setFrequencyDays} min={1} />
-          </div>
-        )}
+        {frequency === "visitor" && <div style={{ marginTop: 8 }}><NumRow label="Days" value={frequencyDays} onChange={setFrequencyDays} min={1} /></div>}
       </Section>
 
-      {/* Enabled */}
       <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, fontSize: 14, color: INK, cursor: "pointer" }}>
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         Live (visitors can see this prompt)
       </label>
 
       {error && (
-        <div style={{ marginTop: 16, background: "#FDECEA", border: "1px solid #E7C9C6", color: "#B3261E", borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>
-          {error}
-        </div>
+        <div style={{ marginTop: 16, background: "#FDECEA", border: "1px solid #E7C9C6", color: "#B3261E", borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>{error}</div>
       )}
 
       <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
