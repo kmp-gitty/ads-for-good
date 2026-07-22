@@ -165,6 +165,73 @@ You don't need to track every flavor of conversion perfectly. You need to know w
 
 Underneath all of it is one problem: your tools are each counting their own slice, and the same customer keeps showing up in more than one of them. That's the thing we built [Chapter](https://chapter.ads4good.com/) to fix — resolving the customer to one identity first, so a conversion gets counted once, by the person who actually made it. Count people, not sessions, and most of these headaches quietly go away.`,
   },
+  {
+    slug: "attribution-models-compared",
+    title: "The attribution models, compared — and what each one quietly gets wrong",
+    metaTitle: "Attribution Models Compared",
+    category: "Attribution Fundamentals",
+    date: "Jul 22, 2026",
+    excerpt:
+      "Change the model, change the hero. There's no “correct” attribution model — each is just a rule for splitting credit, and each is blind to something. A plain-English tour of last-click, first-click, linear, time-decay, and data-driven, and what each one gets wrong.",
+    body: `If you've ever changed an "attribution model" setting in an ad platform and watched your numbers move, you've felt how much these models matter. Same sales, same month, different model — and suddenly a different channel is the hero.
+
+There's no single "correct" model, because each one is just a rule for splitting credit, and every rule makes a tradeoff. The useful thing isn't picking the "right" one — it's knowing what each model sees clearly and what it's blind to. Here's the plain-English tour. (For the bigger picture of why credit is a decision and not a fact, start with [our guide to how attribution actually works](http://ads4good.com/for-people/education/why-your-marketing-reports-never-agree).)
+
+## Last-click attribution: simple, popular, and quietly misleading
+
+**What it does:** gives 100% of the credit to the last thing the customer clicked before buying.
+
+**Why people use it:** it's the easiest to measure and it's the default in most tools. If you've never changed your model, this is almost certainly the one you're running.
+
+**What it gets wrong:** everything that happened before the last click. The ad that introduced the customer, the email that brought them back, the content that built the trust — all of it gets zero. Last-click doesn't just favor the final step; it erases every step before it. That's why awareness channels so often look weak: they rarely get to be the last click, so a last-click model makes them look like they do nothing, when they may be doing the most important work at the start.
+
+## First-click attribution: the opposite blind spot
+
+**What it does:** gives 100% of the credit to the first touch that brought the customer in.
+
+**Why people use it:** it rewards whatever fills the top of the funnel, so it's popular with teams focused on finding new customers.
+
+**What it gets wrong:** it makes the mirror-image mistake of last-click. It hands the whole prize to the introduction and ignores everything that actually closed the deal — the follow-ups, the reminders, the final nudge. First-click over-credits discovery; last-click over-credits closing. Neither tells you what the middle did.
+
+## Linear attribution: fair, and a little too polite
+
+**What it does:** splits the credit evenly across every touch. Four touches, each gets 25%.
+
+**Why people use it:** it stops any single channel from hogging the credit and at least acknowledges the whole journey.
+
+**What it gets wrong:** it pretends every touch mattered equally, which is almost never true. The ad someone half-noticed three weeks ago and the email they opened an hour before buying get the exact same credit. Fairness isn't the same as accuracy — linear is fair to the point of being uninformative.
+
+## Time-decay attribution: recency, for better and worse
+
+**What it does:** gives more credit to touches closer to the sale, less to earlier ones.
+
+**Why people use it:** it matches the intuition that the nudges right before a purchase did more of the closing work.
+
+**What it gets wrong:** it systematically under-credits the touches that start journeys. For a long or considered purchase, the thing that first put you on the customer's radar might be the most valuable moment of all — and time-decay quietly discounts it precisely because it happened early.
+
+## Data-driven attribution: better, but not a crystal ball
+
+**What it does:** uses your own conversion data to assign credit based on patterns, rather than a fixed rule.
+
+**Why people use it:** it's the most sophisticated option most platforms offer, and it adapts to how your customers actually behave.
+
+**What it gets wrong:** two things worth knowing. First, it's only as good as the data feeding it — and if that data can't see the whole journey (the platform still can't watch touches on channels it doesn't own), the model is drawing patterns from a partial picture. Second, "data-driven" gets read as "objective truth," when it's still a model making estimates. Better inputs, better method — but not certainty, and not a substitute for seeing the actual path a customer took.
+
+## The thing every model shares
+
+Notice the pattern. Every model is a different way of dividing credit — and every one of them can only divide the credit it can see. If a platform can't see the email, the affiliate, the offline call, or the same customer arriving on a second device, then no model it runs will account for those, no matter how clever the math.
+
+That's the real ceiling. The model debate — last-click vs. multi-touch vs. data-driven — is a debate about how to slice a picture that's already incomplete. Which is why the more useful question isn't "which model?" but "what is the model not seeing?"
+
+## How to actually use this
+
+- **Know your default.** If you never chose a model, you're on last-click, and you're under-crediting everything that starts journeys.
+- **Match the model to the question.** First-click for "what brings people in," last-click for "what closes," multi-touch for "what's the whole path." Don't expect one to answer all three.
+- **Treat data-driven as strong, not sacred.** It's the best of the built-in options and still only sees what its platform sees.
+- **Ask what's missing before you trust the split.** A model applied to partial data gives you a confident answer to the wrong question.
+
+The fix for the ceiling isn't a better slicing rule — it's a more complete picture to slice. That's what we built [Chapter](https://chapter.ads4good.com/) to do: resolve the customer to one identity across every touch and device first, so whichever model you then choose is dividing credit across the whole journey instead of the slice one platform happened to witness. Pick your model second. See the whole path first.`,
+  },
 ];
 
 export function getPost(slug: string): Post | undefined {
