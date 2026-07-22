@@ -8,6 +8,7 @@ import {
   listAccessibleClientKeys,
   defaultLandingSlug,
 } from "./src/app/lib/auth/chapter-user";
+import { isPrimaryHost, brandedClientKey } from "./src/app/lib/redirect/branded-host";
 
 // Routes gated by this middleware:
 //   /for-clients/*  — HTTP Basic auth, per-client credentials in env vars
@@ -16,7 +17,20 @@ import {
 //   /internal/*     — legacy shared-password cookie (will migrate in a later
 //                     sprint; not in scope for Sprint 5)
 export const config = {
-  matcher: ["/for-clients/:path*", "/chapter/:path*", "/internal/:path*"],
+  matcher: [
+    "/for-clients/:path*",
+    "/chapter/:path*",
+    "/internal/:path*",
+    // Branded Smart Links (Phase 4b): run on every non-asset path served on a
+    // host that isn't the primary app domain, so go.<brand>.com/<slug> can be
+    // rewritten to /r/<workspace>/<slug>. The host negative-lookahead keeps the
+    // marketing site (ads4good.com) out; even if it fails open, isPrimaryHost in
+    // the dispatcher guards against acting on primary-host requests.
+    {
+      source: "/((?!_next/|api/|favicon\\.ico|robots\\.txt|sitemap\\.xml|images/|.*\\.[\\w]+$).*)",
+      has: [{ type: "host", value: "^(?!(?:www\\.)?ads4good\\.com(?::\\d+)?$).+" }],
+    },
+  ],
 };
 
 // ---------- /for-clients/* HTTP Basic auth ----------
@@ -304,6 +318,22 @@ async function gateInternal(req: NextRequest) {
 
 // ---------- Dispatcher ----------
 export async function middleware(req: NextRequest) {
+  // Branded Smart Links: on a non-primary host, rewrite the whole path onto the
+  // owning workspace's redirect route. Runs before path-based gating so a
+  // branded host serves only links (never the /chapter app shell).
+  const host = (req.headers.get("host") || "").toLowerCase().split(":")[0];
+  if (host && !isPrimaryHost(host)) {
+    const clientKey = await brandedClientKey(host);
+    if (clientKey) {
+      const { pathname } = req.nextUrl;
+      const url = req.nextUrl.clone();
+      // Root has no slug → /r/<key> (no [slug]) 404s cleanly via the route.
+      url.pathname = `/r/${clientKey}${pathname === "/" ? "" : pathname}`;
+      return NextResponse.rewrite(url);
+    }
+    // Unknown custom host — let it fall through (Vercel serves a 404).
+  }
+
   const { pathname } = req.nextUrl;
   if (pathname.startsWith("/chapter")) return gateChapter(req);
   if (pathname.startsWith("/internal")) return gateInternal(req);

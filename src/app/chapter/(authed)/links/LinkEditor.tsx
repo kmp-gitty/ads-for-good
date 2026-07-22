@@ -22,7 +22,7 @@ const REDIRECT_ORIGIN = "https://www.ads4good.com";
 let ruleSeq = 0;
 const newRuleKey = () => `nr_${ruleSeq++}`;
 
-export default function LinkEditor({ clientKey, link }: { clientKey: string; link?: LinkDetail }) {
+export default function LinkEditor({ clientKey, link, brandedHost }: { clientKey: string; link?: LinkDetail; brandedHost?: string | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +67,10 @@ export default function LinkEditor({ clientKey, link }: { clientKey: string; lin
     });
   };
 
-  const publicUrl = `${REDIRECT_ORIGIN}/r/${clientKey}/${slug.trim().toLowerCase() || "your-link"}`;
+  const slugForUrl = slug.trim().toLowerCase() || "your-link";
+  const publicUrl = brandedHost
+    ? `https://${brandedHost}/${slugForUrl}`
+    : `${REDIRECT_ORIGIN}/r/${clientKey}/${slugForUrl}`;
 
   return (
     <div style={{ padding: "24px 30px 60px", maxWidth: 680, margin: "0 auto" }}>

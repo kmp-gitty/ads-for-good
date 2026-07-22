@@ -16,11 +16,14 @@ const GREEN = "#2E7D5B";
 
 const REDIRECT_ORIGIN = "https://www.ads4good.com";
 
-export default function LinksClient({ clientKey, links }: { clientKey: string; links: LinkSummary[] }) {
+export default function LinksClient({ clientKey, links, brandedHost }: { clientKey: string; links: LinkSummary[]; brandedHost?: string | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+
+  const linkUrl = (slug: string) =>
+    brandedHost ? `https://${brandedHost}/${slug}` : `${REDIRECT_ORIGIN}/r/${clientKey}/${slug}`;
 
   const act = (slug: string, fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setBusy(slug);
@@ -34,7 +37,7 @@ export default function LinksClient({ clientKey, links }: { clientKey: string; l
 
   const copy = async (slug: string) => {
     try {
-      await navigator.clipboard.writeText(`${REDIRECT_ORIGIN}/r/${clientKey}/${slug}`);
+      await navigator.clipboard.writeText(linkUrl(slug));
       setCopied(slug);
       setTimeout(() => setCopied(null), 1600);
     } catch { /* ignore */ }
@@ -65,7 +68,7 @@ export default function LinksClient({ clientKey, links }: { clientKey: string; l
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {links.map((l) => {
-            const url = `${REDIRECT_ORIGIN}/r/${clientKey}/${l.slug}`;
+            const url = linkUrl(l.slug);
             const isBusy = busy === l.slug && pending;
             return (
               <div key={l.slug} style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 16, background: "white", opacity: isBusy ? 0.6 : 1 }}>

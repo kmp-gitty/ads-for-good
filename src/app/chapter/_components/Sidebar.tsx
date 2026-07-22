@@ -315,7 +315,7 @@ function SelfServeSidebar({
   ];
   const links: SelfServeNavItem[] = [
     { key: "links", label: "Links", icon: "influence" },
-    { key: "links/domain", label: "Domain", icon: "paths", disabled: true },
+    { key: "links/domain", label: "Domain", icon: "paths" },
   ];
   const account: SelfServeNavItem[] = [
     { key: "billing", label: "Billing", icon: "attribution" },
