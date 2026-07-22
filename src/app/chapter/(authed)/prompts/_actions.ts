@@ -20,7 +20,7 @@ import {
 } from "@/app/lib/auth/chapter-user";
 import { createSupabaseServiceRoleClient } from "@/app/lib/auth/supabase-server";
 import { withSelfServeClient } from "@/app/lib/db/per-client";
-import type { SelfServePromptInput, ExistingPrompt } from "./types";
+import type { SelfServePromptInput, ExistingPrompt, PromptResponse } from "./types";
 
 type Result = { ok: true; id?: string } | { ok: false; error: string };
 
@@ -237,6 +237,24 @@ export async function getPrompt(id: string): Promise<ExistingPrompt | null> {
     `,
   );
   return rows[0] ?? null;
+}
+
+// Responses (Phase 3c). prompt_responses is RLS-covered for chapter_selfserve,
+// so this read is scoped to the tenant by the same policy as everything else.
+export async function listResponses(limit = 200): Promise<PromptResponse[]> {
+  const t = await requireTenant();
+  if ("error" in t) return [];
+  const cap = Math.min(Math.max(1, limit), 500);
+  return withSelfServeClient(t.clientKey, (tx) =>
+    tx<PromptResponse[]>`
+      SELECT id::text AS id, prompt_slug, identity_key, anonymous_id,
+             responses_jsonb, submitted_at, page_url, ip_country
+      FROM chapter_engagement.prompt_responses
+      WHERE client_key = ${t.clientKey}
+      ORDER BY submitted_at DESC
+      LIMIT ${cap}
+    `,
+  );
 }
 
 // ---------- Install & Activate (Phase 3b) ----------

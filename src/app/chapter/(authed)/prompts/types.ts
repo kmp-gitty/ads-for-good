@@ -102,6 +102,17 @@ export type ExistingPrompt = {
   submit_actions_jsonb: SubmitActions | null;
 };
 
+export type PromptResponse = {
+  id: string;
+  prompt_slug: string;
+  identity_key: string | null;
+  anonymous_id: string | null;
+  responses_jsonb: Record<string, unknown> | null;
+  submitted_at: string;
+  page_url: string | null;
+  ip_country: string | null;
+};
+
 export const PRESET_LABELS: Record<SelfServePresetType, string> = {
   email_exchange: "Email Exchange",
   custom_form: "Custom Form",
