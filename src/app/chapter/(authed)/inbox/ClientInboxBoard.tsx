@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   replyToInquiry,
@@ -10,6 +10,7 @@ import {
   type InquiryThread,
 } from "@/app/lib/inquiries/actions";
 import { useChapter } from "../../_components/ChapterContext";
+import { SubmitInquiryDrawer } from "../../_components/SubmitInquiryDrawer";
 
 const STATUS_LABEL: Record<InquiryStatus, string> = {
   open: "Open",
@@ -42,9 +43,11 @@ type Props = {
 };
 
 export default function ClientInboxBoard(props: Props) {
-  const { user } = useChapter();
+  const { client, user } = useChapter();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const [inquiryOpen, setInquiryOpen] = useState(false);
 
   // agency_operator is read-only in v1; client_employee can reply on their own threads.
   const canReply = user?.role === "client_employee" || user?.role === "chapter_staff";
@@ -59,7 +62,16 @@ export default function ClientInboxBoard(props: Props) {
     <div className="chapter-app">
       <div className="grid grid-cols-12 gap-6 p-6">
         <aside className="col-span-12 md:col-span-4">
-          <h2 className="text-lg font-semibold tracking-tight">Inquiries</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold tracking-tight">Inquiries</h2>
+            <button
+              type="button"
+              onClick={() => setInquiryOpen(true)}
+              className="shrink-0 rounded-md bg-[color:var(--accent)] px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:brightness-95"
+            >
+              Submit inquiry
+            </button>
+          </div>
           <p className="mt-1 text-xs text-[color:var(--ink-3)]">
             Replies from the Chapter team land here.
           </p>
@@ -69,7 +81,7 @@ export default function ClientInboxBoard(props: Props) {
           <ul className="mt-4 space-y-2">
             {props.threads.length === 0 ? (
               <li className="rounded-lg border border-dashed border-[color:var(--line)] px-4 py-6 text-center text-sm text-[color:var(--ink-3)]">
-                No inquiries yet. Click <strong>Send inquiry</strong> in the top bar to start one.
+                No inquiries yet. Click <strong>Submit inquiry</strong> above to start one.
               </li>
             ) : (
               props.threads.map((t) => (
@@ -121,6 +133,13 @@ export default function ClientInboxBoard(props: Props) {
           )}
         </section>
       </div>
+
+      <SubmitInquiryDrawer
+        open={inquiryOpen}
+        onClose={() => setInquiryOpen(false)}
+        clientKey={client.id}
+        pagePath={pathname}
+      />
     </div>
   );
 }
