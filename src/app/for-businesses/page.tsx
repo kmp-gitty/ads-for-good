@@ -59,7 +59,7 @@ export default function ForBusinessesPage() {
             <p className="text-sm text-neutral-600">/month</p>
 
             <ul className="mt-6 space-y-3 text-sm text-neutral-800">
-              <li>2 active marketing projects</li>
+              <li>2 marketing projects: 1 in active execution</li>
               <li>Standard attention</li>
               <li>Biweekly to monthly milestones</li>
               <li>1 monthly meeting</li>
@@ -86,7 +86,7 @@ export default function ForBusinessesPage() {
             <p className="text-sm text-neutral-600">/month</p>
 
             <ul className="mt-6 space-y-3 text-sm text-neutral-800">
-              <li>4 active marketing projects</li>
+              <li>4 marketing projects: 2 in active execution</li>
               <li>Accelerated attention</li>
               <li>Weekly to biweekly milestones</li>
               <li>2 monthly meetings</li>
@@ -108,7 +108,7 @@ export default function ForBusinessesPage() {
             <p className="text-sm text-neutral-600">/month</p>
 
             <ul className="mt-6 space-y-3 text-sm text-neutral-800">
-              <li>8 active marketing projects</li>
+              <li>8 marketing projects: 4 in active execution</li>
               <li>Priority attention</li>
               <li>Few days to weekly milestones</li>
               <li>4 monthly meetings</li>
