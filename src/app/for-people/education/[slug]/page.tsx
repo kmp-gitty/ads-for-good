@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { POSTS, getPost } from "../posts";
 import PostBody from "../PostBody";
+import BackToTop from "../BackToTop";
 
 export function generateStaticParams() {
   return POSTS.map((p) => ({ slug: p.slug }));
@@ -60,8 +61,8 @@ export default async function BlogPostPage({
           </div>
         </article>
 
-        {/* RIGHT: sidebar */}
-        <aside className="space-y-6">
+        {/* RIGHT: sidebar — sticks alongside the article on desktop */}
+        <aside className="space-y-6 md:sticky md:top-6 md:self-start">
           <div className="rounded-3xl border-2 border-orange-100 bg-orange-50/60 px-5 py-5">
             <h3 className="text-sm font-semibold text-neutral-900">See the whole journey, not the last click.</h3>
             <p className="mt-2 text-xs text-neutral-700">
@@ -86,15 +87,16 @@ export default async function BlogPostPage({
           </div>
 
           <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 py-4">
-            <h3 className="text-sm font-semibold text-neutral-900">Topics</h3>
-            <ul className="mt-2 space-y-1 text-xs text-neutral-700 list-disc list-inside">
-              <li>Attribution Fundamentals</li>
-              <li>Data &amp; Tracking</li>
-              <li>Measurement Strategy</li>
-            </ul>
+            <h3 className="text-sm font-semibold text-neutral-900">You may be a person, but also own a business?</h3>
+            <p className="mt-2 text-xs text-neutral-700">
+              We help businesses too. Want to learn how &ldquo;the big guys&rdquo; do marketing or just talk to someone about it?{" "}
+              <Link href="/for-businesses" className="text-orange-500 hover:underline">Learn more here.</Link>
+            </p>
           </div>
         </aside>
       </div>
+
+      <BackToTop />
     </main>
   );
 }
