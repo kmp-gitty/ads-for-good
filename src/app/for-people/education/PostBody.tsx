@@ -26,11 +26,17 @@ export default function PostBody({ markdown }: { markdown: string }) {
           li: ({ children }) => (
             <li className="text-[15px] sm:text-base leading-relaxed text-neutral-800">{children}</li>
           ),
-          a: ({ href, children }) => (
-            <a href={href} className="font-medium text-orange-500 hover:underline" target={href?.startsWith("http") ? "_blank" : undefined} rel={href?.startsWith("http") ? "noopener noreferrer" : undefined}>
-              {children}
-            </a>
-          ),
+          a: ({ href, children }) => {
+            // Same-site links (relative or ads4good.com / www.ads4good.com) open
+            // in the same tab; everything else (incl. chapter.ads4good.com and
+            // other domains) opens in a new tab.
+            const external = !!href && !/^(\/|https?:\/\/(www\.)?ads4good\.com(\/|$|#))/i.test(href);
+            return (
+              <a href={href} className="font-medium text-orange-500 hover:underline" target={external ? "_blank" : undefined} rel={external ? "noopener noreferrer" : undefined}>
+                {children}
+              </a>
+            );
+          },
           strong: ({ children }) => <strong className="font-semibold text-neutral-900">{children}</strong>,
           em: ({ children }) => <em className="italic">{children}</em>,
           blockquote: ({ children }) => (
