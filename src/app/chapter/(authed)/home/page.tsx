@@ -83,8 +83,8 @@ export default async function HomePage({
       title: "Smart Prompts",
       steps: [
         { label: "Add your website", href: `/chapter/${clientKey}/prompts/install`, done: !!ent?.storefront_domain },
+        { label: "Install your snippet and verify setup", href: `/chapter/${clientKey}/prompts/install`, done: !!activation?.connected },
         { label: "Create your first prompt", href: `/chapter/${clientKey}/prompts/new`, done: prompts.length > 0 },
-        { label: "Install your snippet & go live", href: `/chapter/${clientKey}/prompts/install`, done: !!activation?.connected },
       ],
     });
   }
