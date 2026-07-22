@@ -26,6 +26,7 @@ import NotificationBuilder, {
 import PhoneCallBuilder, {
   type PhoneCallConfig,
 } from "@/app/internal/identity-prompts/[clientKey]/PhoneCallBuilder";
+import PromptPreview from "./PromptPreview";
 
 const INK = "#1F2D43";
 const MUTED = "#5C6B82";
@@ -207,11 +208,15 @@ export default function PromptEditor({
   };
 
   return (
-    <div style={{ padding: "24px 30px 60px", maxWidth: 760, margin: "0 auto" }}>
+    <div style={{ padding: "24px 30px 60px" }}>
       <BackLink clientKey={clientKey} />
       <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: "10px 0 18px" }}>
         {editing ? "Edit prompt" : "New prompt"}
       </h1>
+
+      <div style={{ display: "flex", gap: 36, alignItems: "flex-start", flexWrap: "wrap" }}>
+        {/* Left — form */}
+        <div style={{ flex: "1 1 480px", minWidth: 0, maxWidth: 600 }}>
 
       {/* Preset picker — locked once created */}
       <Section label="Type">
@@ -351,6 +356,16 @@ export default function PromptEditor({
           Cancel
         </button>
       </div>
+
+        </div>{/* left form column */}
+
+        {/* Right — live preview */}
+        <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420 }}>
+          <PromptPreview
+            data={{ presetType, headline, body, inputMode, emailPlaceholder, phonePlaceholder, buttonLabel, offerCode, cfContent, cfFields, notif, phone }}
+          />
+        </div>
+      </div>{/* two-column */}
     </div>
   );
 }
