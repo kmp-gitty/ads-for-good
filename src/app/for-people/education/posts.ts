@@ -12,10 +12,11 @@ export type BlogCategory =
 export type Post = {
   slug: string;
   title: string;
+  metaTitle?: string; // custom <title> lead → "<metaTitle> | ads for Good blog"; falls back to title
   category: BlogCategory;
   date: string;       // display date, e.g. "Jul 22, 2026"
   excerpt: string;    // 1–2 lines for the tile + meta description
-  image?: string;     // optional hero image URL; falls back to a placeholder
+  image?: string;     // optional tile image (e.g. "/images/DigitalAuditWallpaper.png"); falls back to a placeholder
   body: string;       // markdown
 };
 
@@ -23,10 +24,12 @@ export const POSTS: Post[] = [
   {
     slug: "why-your-marketing-reports-never-agree",
     title: "Why your marketing reports never agree with each other",
+    metaTitle: "Attribution Fundamentals",
     category: "Attribution Fundamentals",
     date: "Jul 22, 2026",
     excerpt:
       "Facebook says 50 sales. Google says 40. Email says 30. You had 60. Nobody's lying — everybody's counting. A plain-English look at attribution and why your reports never add up.",
+    image: "/images/DigitalAuditWallpaper.png",
     body: `If you run any kind of advertising, you've probably had this moment. Facebook says it drove 50 sales last month. Google says it drove 40. Your email tool claims 30. You add them up, get 120, then look at your actual orders and find… 60.
 
 Nobody's lying. Everybody's counting. That's the whole problem.

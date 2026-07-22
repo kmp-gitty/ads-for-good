@@ -18,7 +18,7 @@ export async function generateMetadata({
   const post = getPost(slug);
   if (!post) return { title: "Post not found | ads for Good blog" };
   return {
-    title: `${post.category} | ads for Good blog`,
+    title: `${post.metaTitle || post.title} | ads for Good blog`,
     description: post.excerpt,
   };
 }
