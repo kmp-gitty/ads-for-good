@@ -20,6 +20,18 @@ export type Post = {
   body: string;       // markdown
 };
 
+// One default tile image per category (the "category images"). A post can
+// override with its own `image`.
+export const CATEGORY_IMAGES: Record<BlogCategory, string> = {
+  "Attribution Fundamentals": "/images/DigitalAuditWallpaper.png",
+  "Data & Tracking": "/images/PrivacyProtectionWallpaper.png",
+  "Measurement Strategy": "/images/MarketingGuidebookWallpaper.png",
+};
+
+export function postImage(post: Post): string {
+  return post.image ?? CATEGORY_IMAGES[post.category];
+}
+
 export const POSTS: Post[] = [
   {
     slug: "why-your-marketing-reports-never-agree",
@@ -29,7 +41,6 @@ export const POSTS: Post[] = [
     date: "Jul 22, 2026",
     excerpt:
       "Facebook says 50 sales. Google says 40. Email says 30. You had 60. Nobody's lying — everybody's counting. A plain-English look at attribution and why your reports never add up.",
-    image: "/images/DigitalAuditWallpaper.png",
     body: `If you run any kind of advertising, you've probably had this moment. Facebook says it drove 50 sales last month. Google says it drove 40. Your email tool claims 30. You add them up, get 120, then look at your actual orders and find… 60.
 
 Nobody's lying. Everybody's counting. That's the whole problem.
@@ -94,6 +105,65 @@ You don't need to give up on measurement. You need to stop expecting individual 
 - **Care most about the whole journey, not the last click.** The real question isn't "which touch gets credit?" It's "what actually moves people toward buying?" — and answering that means seeing the whole path a customer takes, not the slice any one platform shows you.
 
 That last point is the hard one, and it's the reason we built [Chapter](https://chapter.ads4good.com/) — a way to stitch a real customer's whole journey back together across every touch, so you're measuring people and paths instead of arguing with four disagreeing dashboards. That's a bigger topic than one post. But it starts here, with understanding why the reports disagree in the first place: not because someone's wrong, but because everyone's only seeing part of the picture.`,
+  },
+  {
+    slug: "what-is-a-conversion",
+    title: "What actually counts as a conversion (and why your tools can't agree on it)",
+    metaTitle: "What is a Conversion",
+    category: "Attribution Fundamentals",
+    date: "Jul 22, 2026",
+    excerpt:
+      "A conversion is just an action you decided to count — and that decision quietly shapes every number you trust. What actually counts, why your tools disagree, and why your totals never match your real orders.",
+    body: `Everyone in marketing talks about conversions like the word means one obvious thing. It doesn't. A conversion is just an action you've decided is worth counting — and the moment you look closely, that decision turns out to be doing a lot of quiet work behind every number you trust.
+
+This matters more than it sounds. If you don't know exactly what your tools are counting as a conversion — and whether they're counting the same ones — you're comparing numbers that were never the same thing to begin with. Let's clear it up in plain English.
+
+## A conversion is a decision, not a fact
+
+A conversion is any action you've defined as a goal: a purchase, a lead form, a signup, a phone call, an add-to-cart. That's it. There's no universal list. A conversion for a store is a sale; a conversion for a law firm is a booked consultation; a conversion for an app is a signup.
+
+Which means the first question isn't "how many conversions did we get?" It's "what did we decide to call a conversion?" Two businesses running the same ad can report wildly different results purely because they drew that line in different places. And one business running two tools can get two different counts because each tool was set up to watch for something slightly different.
+
+## Big conversions and small ones: macro vs. micro
+
+Not every meaningful action is a sale. Marketers split them into macro conversions — the big outcome you actually care about, like a purchase — and micro conversions, the smaller steps that lead there: signing up for emails, adding to cart, watching a demo, downloading a guide.
+
+Micro conversions are useful because they show you where people are moving toward a sale before they buy. But they're also where counting gets messy. If your reporting lumps a newsletter signup in with a purchase, your "conversion" number is mixing a $0 action with a $200 one. Knowing which is which is the difference between a number that guides decisions and a number that flatters them.
+
+## The conversions you can't see happen: view-through
+
+Here's one that quietly inflates reports. A view-through conversion is when someone sees an ad — doesn't click it — and later buys anyway. The platform that showed the ad often takes credit for that sale, on the logic that the impression may have influenced them.
+
+Sometimes it did. Sometimes the person was going to buy regardless and the ad just happened to flash by. View-through counting is where a lot of "this channel is crushing it" numbers come from — and it's worth knowing when a platform is claiming credit for a click that never happened.
+
+## Assisted conversions: the credit nobody sees
+
+The flip side of view-through is the assisted conversion — a touch that helped along the way but wasn't the final step before the sale. The email that brought someone back last week. The blog post that first introduced them. In a last-click world, these get zero credit, even though the sale doesn't happen without them.
+
+Assisted conversions are where "what counts as a conversion" runs straight into attribution — because now you're not just counting the sale, you're deciding which of the touches before it deserve a share of the credit. That's a whole topic of its own, and it's exactly what [our guide to how attribution actually works](http://ads4good.com/for-people/education/why-your-marketing-reports-never-agree) gets into.
+
+## The same sale, counted twice: duplicate conversions
+
+Now the problem that breaks totals. A duplicate conversion is one real sale that gets counted more than once — because two tools both saw it, or the tracking fired twice, or the same customer was recorded as two people on two devices.
+
+This is why adding up your platforms never matches your actual orders. Facebook counts the sale. Google counts the sale. Your analytics counts the sale. One purchase, three tallies. The customer didn't buy three times — your tools just each raised their hand for the same event. If you've ever wondered why your reported conversions are higher than your real order count, this is usually where it starts: the same person, the same sale, counted as many.
+
+## Conversion lag: the sale that shows up late
+
+One more wrinkle. Conversion lag is the gap between the first touch and the actual purchase. Someone sees your ad today and buys three weeks from now. If you check your report tomorrow, that sale doesn't exist yet — and the channel that earned it looks weaker than it is, purely because the customer took their time.
+
+Long consideration cycles make this worse. The more expensive or considered the purchase, the longer the lag, and the more your early reports understate what's working.
+
+## So what do you do with all this?
+
+You don't need to track every flavor of conversion perfectly. You need to know which one you're looking at, so you stop comparing things that were never the same:
+
+- **Define your conversion on purpose.** Know exactly which action counts, and whether micro and macro actions are mixed in the same number.
+- **Ask whether credit came from a click or a view.** View-through inflates; know when a platform is claiming an impression as a win.
+- **Expect duplicates when you add tools together.** Matching totals across platforms is a sign of double-counting, not accuracy.
+- **Give slow sales time.** A channel with long conversion lag isn't underperforming; it's waiting.
+
+Underneath all of it is one problem: your tools are each counting their own slice, and the same customer keeps showing up in more than one of them. That's the thing we built [Chapter](https://chapter.ads4good.com/) to fix — resolving the customer to one identity first, so a conversion gets counted once, by the person who actually made it. Count people, not sessions, and most of these headaches quietly go away.`,
   },
 ];
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { POSTS } from "./posts";
+import { POSTS, postImage } from "./posts";
 
 const POSTS_PER_LOAD = 8;
 
@@ -61,9 +61,9 @@ export default function EducationClient() {
               >
                 {/* Top media area */}
                 <div className="relative bg-neutral-200/60 h-40">
-                  {post.image ? (
+                  {postImage(post) ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={post.image} alt="" className="h-full w-full object-cover" />
+                    <img src={postImage(post)} alt="" className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-xs text-neutral-600">
                       Image / visual placeholder
