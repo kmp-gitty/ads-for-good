@@ -34,16 +34,22 @@ export type PreviewData = {
   cfContent: ContentBlock[];
   cfFields: FormField[];
   notif: NotificationConfig;
+  notifAck: string;
   phone: PhoneCallConfig;
 };
 
 // Presets with a distinct post-submit ("after") state worth previewing.
-const HAS_SUCCESS: SelfServePresetType[] = ["email_exchange"];
+const HAS_SUCCESS: SelfServePresetType[] = ["email_exchange", "custom_form"];
 
 export default function PromptPreview({ data }: { data: PreviewData }) {
   const [view, setView] = useState<"form" | "success">("form");
-  const showToggle = HAS_SUCCESS.includes(data.presetType);
+  const notifHasAck =
+    data.presetType === "custom_notification" &&
+    (data.notif.submit_actions.cta_type === "yes_no" || data.notif.submit_actions.cta_type === "button");
+  const showToggle = HAS_SUCCESS.includes(data.presetType) || notifHasAck;
   const active = showToggle ? view : "form";
+  const afterLabel = data.presetType === "custom_notification" ? "After click" : "After submit";
+  const beforeLabel = data.presetType === "custom_notification" ? "Notification" : "Before submit";
   return (
     <div style={{ position: "sticky", top: 20, maxHeight: "calc(100vh - 40px)", overflowY: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
@@ -59,7 +65,7 @@ export default function PromptPreview({ data }: { data: PreviewData }) {
                 onClick={() => setView(v)}
                 style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999, border: "none", cursor: "pointer", background: active === v ? "white" : "transparent", color: active === v ? INK : MUTED }}
               >
-                {v === "form" ? "Before submit" : "After submit"}
+                {v === "form" ? beforeLabel : afterLabel}
               </button>
             ))}
           </div>
@@ -86,13 +92,19 @@ function Frame({ children }: { children: React.ReactNode }) {
 
 function renderPrompt(data: PreviewData, view: "form" | "success"): React.ReactNode {
   if (data.presetType === "custom_notification") {
-    return <Bubble position={data.notif.container.position}>{notificationContent(data)}</Bubble>;
+    return (
+      <Bubble position={data.notif.container.position}>
+        {view === "success" ? notifAckContent(data) : notificationContent(data)}
+      </Bubble>
+    );
   }
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(20,26,38,.35)", display: "grid", placeItems: "center", padding: 16 }}>
       <Card>
         {view === "success" && data.presetType === "email_exchange" ? (
           successContent(data)
+        ) : view === "success" && data.presetType === "custom_form" ? (
+          formSuccessContent(data)
         ) : (
           <>
             {data.presetType === "email_exchange" && emailContent(data)}
@@ -101,6 +113,25 @@ function renderPrompt(data: PreviewData, view: "form" | "success"): React.ReactN
           </>
         )}
       </Card>
+    </div>
+  );
+}
+
+function formSuccessContent(d: PreviewData) {
+  return (
+    <>
+      <div style={{ fontSize: 26, color: GREEN, textAlign: "center", marginBottom: 2 }}>✓</div>
+      <div style={{ fontSize: 14.5, fontWeight: 700, color: INK, textAlign: "center", paddingRight: 12 }}>
+        {d.successMessage || "Thanks — we got it!"}
+      </div>
+    </>
+  );
+}
+
+function notifAckContent(d: PreviewData) {
+  return (
+    <div style={{ fontSize: 13.5, color: INK, lineHeight: 1.45, paddingRight: 10 }}>
+      {d.notifAck || "Thanks!"}
     </div>
   );
 }

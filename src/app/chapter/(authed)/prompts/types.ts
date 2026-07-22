@@ -64,6 +64,8 @@ export type SubmitActions = {
   yes_label?: string;
   yes_url?: string;
   no_label?: string;
+  // Shown in the bubble after a yes/button click (when it doesn't open a link).
+  ack_message?: string;
 };
 
 export type SelfServePromptInput = {

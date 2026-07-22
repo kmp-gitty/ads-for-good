@@ -749,6 +749,15 @@ setInterval(function () {
       api.track("identity_prompt_dismissed", props);
     }
 
+    function showAck() {
+      while (bubble.firstChild) bubble.removeChild(bubble.firstChild);
+      var ack = document.createElement("div");
+      ack.style.cssText = "font-size:13.5px;color:#1F2D43;line-height:1.45;padding:4px 2px;";
+      ack.textContent = actions.ack_message || "Thanks!";
+      bubble.appendChild(ack);
+      setTimeout(function () { if (bubble.parentNode) bubble.parentNode.removeChild(bubble); }, 3500);
+    }
+
     var ctaType = actions.cta_type || "dismiss_only";
     if (ctaType === "yes_no") {
       var wrap = document.createElement("div");
@@ -763,7 +772,8 @@ setInterval(function () {
       noBtn.textContent = actions.no_label || "No thanks";
       yesBtn.addEventListener("click", function () {
         api.track("identity_prompt_submitted", { prompt_slug: prompt.slug, preset_type: prompt.preset_type, choice: "yes" });
-        if (actions.yes_url) { try { window.location.href = String(actions.yes_url); } catch (e) {} }
+        if (actions.yes_url) { try { window.location.href = String(actions.yes_url); } catch (e) {} dismiss("yes_clicked", "yes"); return; }
+        if (actions.ack_message) { showAck(); return; }
         dismiss("yes_clicked", "yes");
       });
       noBtn.addEventListener("click", function () { dismiss("no_clicked", "no"); });
@@ -777,8 +787,9 @@ setInterval(function () {
       btn.style.textAlign = "center";
       btn.href = String(actions.cta_url || "#");
       btn.textContent = actions.cta_label || "Open";
-      btn.addEventListener("click", function () {
+      btn.addEventListener("click", function (e) {
         api.track("identity_prompt_submitted", { prompt_slug: prompt.slug, preset_type: prompt.preset_type });
+        if (!actions.cta_url && actions.ack_message) { if (e && e.preventDefault) e.preventDefault(); showAck(); }
       });
       bubble.appendChild(btn);
     }
@@ -1314,7 +1325,7 @@ setInterval(function () {
         card.appendChild(closeBtn);
         var successMsg = document.createElement("p");
         successMsg.className = "chapter-prompt-success-msg";
-        successMsg.textContent = "Thanks!";
+        successMsg.textContent = prompt.success_message || "Thanks!";
         card.appendChild(successMsg);
       });
     });

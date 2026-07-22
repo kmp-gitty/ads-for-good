@@ -153,6 +153,11 @@ export default function PromptEditor({
           submit_actions: { cta_type: "dismiss_only" },
         },
   );
+  const [notifAck, setNotifAck] = useState(
+    prompt?.preset_type === "custom_notification"
+      ? (prompt.submit_actions_jsonb as { ack_message?: string } | null)?.ack_message || ""
+      : "",
+  );
   const [phone, setPhone] = useState<PhoneCallConfig>(
     prompt?.preset_type === "phone_call"
       ? { content_blocks: (prompt.content_blocks_jsonb as PhoneCallConfig["content_blocks"]) || [] }
@@ -214,6 +219,8 @@ export default function PromptEditor({
       input = {
         ...base,
         headline: firstHeadline(cfContent),
+        // thank-you shown after the visitor submits the form.
+        success_message: successMessage,
         content_blocks_jsonb: cfContent,
         // email/phone are always identity fields — set it automatically so the
         // pixel hashes + stitches them (no per-field checkbox).
@@ -225,7 +232,7 @@ export default function PromptEditor({
         headline: firstHeadline(notif.content_blocks),
         container_jsonb: notif.container,
         content_blocks_jsonb: notif.content_blocks,
-        submit_actions_jsonb: notif.submit_actions,
+        submit_actions_jsonb: { ...notif.submit_actions, ack_message: notifAck.trim() || undefined },
       };
     } else if (presetType === "phone_call") {
       input = {
@@ -355,19 +362,31 @@ export default function PromptEditor({
       )}
 
       {presetType === "custom_form" && (
-        <Section label="Form">
-          <SelfServeFormBuilder
-            contentBlocks={cfContent}
-            formFields={cfFields}
-            onChange={(next) => { setCfContent(next.contentBlocks); setCfFields(next.formFields); }}
-          />
-        </Section>
+        <>
+          <Section label="Form">
+            <SelfServeFormBuilder
+              contentBlocks={cfContent}
+              formFields={cfFields}
+              onChange={(next) => { setCfContent(next.contentBlocks); setCfFields(next.formFields); }}
+            />
+          </Section>
+          <Section label="Thank-you message" hint="Shown after a visitor submits. Preview it with the After toggle.">
+            <input value={successMessage} onChange={(e) => setSuccessMessage(e.target.value)} placeholder="Thanks — we got it!" style={inp} />
+          </Section>
+        </>
       )}
 
       {presetType === "custom_notification" && (
-        <Section label="Notification">
-          <NotificationBuilder value={notif} onChange={setNotif} />
-        </Section>
+        <>
+          <Section label="Notification">
+            <NotificationBuilder value={notif} onChange={setNotif} />
+          </Section>
+          {(notif.submit_actions.cta_type === "yes_no" || notif.submit_actions.cta_type === "button") && (
+            <Section label="Acknowledgement message" hint="Shown after they click (when it doesn’t open a link). Preview it with the After toggle.">
+              <input value={notifAck} onChange={(e) => setNotifAck(e.target.value)} placeholder="Thanks — check your inbox!" style={inp} />
+            </Section>
+          )}
+        </>
       )}
 
       {presetType === "phone_call" && (
@@ -409,7 +428,7 @@ export default function PromptEditor({
         {/* Right — live preview */}
         <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420 }}>
           <PromptPreview
-            data={{ presetType, headline, body, inputMode, emailPlaceholder, phonePlaceholder, buttonLabel, offerCode, successMessage, offerDescription, postSubmitAction, postSubmitUrl, postSubmitButtonLabel, cfContent, cfFields, notif, phone }}
+            data={{ presetType, headline, body, inputMode, emailPlaceholder, phonePlaceholder, buttonLabel, offerCode, successMessage, offerDescription, postSubmitAction, postSubmitUrl, postSubmitButtonLabel, cfContent, cfFields, notif, notifAck, phone }}
           />
         </div>
       </div>{/* two-column */}
