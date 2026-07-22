@@ -16,6 +16,7 @@ import { Resend } from "resend";
 import { getCurrentChapterUser, getClientEntitlement } from "@/app/lib/auth/chapter-user";
 import { createSupabaseServiceRoleClient } from "@/app/lib/auth/supabase-server";
 import { addDomain, getDomainStatus, removeDomain, type DnsRecord } from "@/app/lib/vercel/domains";
+import { normalizeHost, previewDnsRecords } from "@/app/lib/vercel/dns-preview";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -36,10 +37,6 @@ async function requireTenant(): Promise<{ clientKey: string; email: string } | {
     return { error: "Smart Links isn’t enabled on this workspace." };
   }
   return { clientKey: user.client_key, email: user.email };
-}
-
-function normalizeHost(raw: string): string {
-  return raw.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
 }
 
 function hostError(host: string): string | null {
@@ -158,15 +155,28 @@ export async function disconnectBrandedDomain(): Promise<Result> {
 }
 
 // Email the DNS setup steps to the tenant's web person. Replies go to the owner.
-export async function emailDomainInstructions(recipient: string, note?: string): Promise<Result> {
+// Works before OR after connecting: pass the subdomain they're setting up, and
+// we derive the record; if a domain is already connected we use its exact
+// record(s).
+export async function emailDomainInstructions(recipient: string, note?: string, host?: string): Promise<Result> {
   const t = await requireTenant();
   if ("error" in t) return { ok: false, error: t.error };
 
   const to = recipient.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return { ok: false, error: "Enter a valid email address." };
 
-  const info = await getBrandedDomain();
-  if (!info) return { ok: false, error: "Connect a domain first, then email the steps." };
+  // Prefer the connected row's confirmed record; else derive from the typed host.
+  const connected = await getBrandedDomain();
+  let targetHost: string | null = connected?.host ?? null;
+  let dns: DnsRecord[] = connected?.dns ?? [];
+  if (!targetHost && host) {
+    const h = normalizeHost(host);
+    const he = hostError(h);
+    if (he) return { ok: false, error: he };
+    targetHost = h;
+    dns = previewDnsRecords(h);
+  }
+  if (!targetHost) return { ok: false, error: "Enter your subdomain first, then email the steps." };
 
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.FROM_EMAIL;
@@ -178,8 +188,8 @@ export async function emailDomainInstructions(recipient: string, note?: string):
       to,
       from: `Chapter (via Ads for Good) <${from}>`,
       replyTo: t.email,
-      subject: `DNS setup for ${info.host}`,
-      html: buildDomainEmail({ host: info.host, dns: info.dns, ownerEmail: t.email, note: note?.trim() || "" }),
+      subject: `DNS setup for ${targetHost}`,
+      html: buildDomainEmail({ host: targetHost, dns, ownerEmail: t.email, note: note?.trim() || "" }),
     });
   } catch {
     return { ok: false, error: "Couldn’t send the email. Please try again, or copy the record." };

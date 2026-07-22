@@ -10,6 +10,7 @@ import Link from "next/link";
 import { getClientEntitlement } from "@/app/lib/auth/chapter-user";
 import { listPrompts, getActivationStatus } from "../prompts/_actions";
 import { listLinks } from "../links/_actions";
+import { getBrandedDomain } from "../links/domain/_actions";
 
 export const metadata = { title: "Home" };
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ const TOOL_META: Record<string, { name: string; blurb: string; slug: string; nou
   },
 };
 
-type Step = { label: string; href: string; done: boolean };
+type Step = { label: string; href: string; done: boolean; optional?: boolean };
 
 export default async function HomePage({
   searchParams,
@@ -53,11 +54,13 @@ export default async function HomePage({
   const hasPrompts = tools.includes("smart_prompts");
   const hasLinks = tools.includes("smart_links");
 
-  const [prompts, links, activation] = await Promise.all([
+  const [prompts, links, activation, domain] = await Promise.all([
     hasPrompts ? listPrompts() : Promise.resolve([]),
     hasLinks ? listLinks() : Promise.resolve([]),
     hasPrompts ? getActivationStatus() : Promise.resolve(null),
+    hasLinks ? getBrandedDomain() : Promise.resolve(null),
   ]);
+  const brandedVerified = domain?.status === "verified";
 
   // Trial banner.
   let trialLine: string | null = null;
@@ -92,11 +95,14 @@ export default async function HomePage({
     sections.push({
       title: "Smart Links",
       steps: [
+        { label: "Set up a branded domain", href: `/chapter/${clientKey}/links/domain`, done: brandedVerified, optional: true },
         { label: "Create your first smart link", href: `/chapter/${clientKey}/links/new`, done: links.length > 0 },
       ],
     });
   }
-  const allSteps = sections.flatMap((s) => s.steps);
+  // Optional steps (e.g. branded domain — links work without it) don't count
+  // toward completion, so a tenant happy on the generic URL can still be "all set".
+  const allSteps = sections.flatMap((s) => s.steps.filter((x) => !x.optional));
   const doneCount = allSteps.filter((s) => s.done).length;
   const allDone = doneCount === allSteps.length && allSteps.length > 0;
 
@@ -161,12 +167,13 @@ export default async function HomePage({
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {sections.map((sect) => {
-            const sDone = sect.steps.filter((x) => x.done).length;
+            const req = sect.steps.filter((x) => !x.optional);
+            const sDone = req.filter((x) => x.done).length;
             return (
               <div key={sect.title}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 4px 4px" }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".08em" }}>{sect.title}</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: sDone === sect.steps.length ? GREEN : FAINT }}>{sDone}/{sect.steps.length}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: sDone === req.length ? GREEN : FAINT }}>{sDone}/{req.length}</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   {sect.steps.map((s, i) => (
@@ -194,6 +201,7 @@ export default async function HomePage({
                       </span>
                       <span style={{ fontSize: 13.5, color: s.done ? FAINT : INK, textDecoration: s.done ? "line-through" : "none", flex: 1 }}>
                         {s.label}
+                        {s.optional && <span style={{ fontSize: 11, fontWeight: 600, color: FAINT, marginLeft: 8 }}>Optional</span>}
                       </span>
                       {!s.done && <span style={{ fontSize: 12.5, fontWeight: 600, color: ORANGE }}>Do this →</span>}
                     </Link>
