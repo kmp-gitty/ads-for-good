@@ -207,7 +207,7 @@ export default function PromptEditor({
   };
 
   return (
-    <div style={{ padding: "24px 30px 60px", maxWidth: 640, margin: "0 auto" }}>
+    <div style={{ padding: "24px 30px 60px", maxWidth: 760, margin: "0 auto" }}>
       <BackLink clientKey={clientKey} />
       <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: "10px 0 18px" }}>
         {editing ? "Edit prompt" : "New prompt"}
