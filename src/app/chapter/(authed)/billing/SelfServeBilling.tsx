@@ -155,6 +155,17 @@ export default function SelfServeBilling({
               </div>
             )}
           </div>
+
+          {/* Manage plan (Phase 5 / Stripe) */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: FAINT, border: `1px dashed ${LINE}`, borderRadius: 8, padding: "8px 12px" }}>+ Add a tool — coming soon</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: FAINT, border: `1px dashed ${LINE}`, borderRadius: 8, padding: "8px 12px" }}>Change plan — coming soon</span>
+            </div>
+            <p style={{ fontSize: 11.5, color: FAINT, marginTop: 8, lineHeight: 1.4 }}>
+              Add or remove tools and change your plan here once billing is live.
+            </p>
+          </div>
         </div>
       </div>
     </div>
