@@ -799,9 +799,13 @@
  * ========================================================================== */
 
 /* Prevent any element from spilling past the viewport — the body has a dark
- * agency-site background that would otherwise show through on overflow. */
-.chapter-app { overflow-x: hidden; max-width: 100vw; }
-.chapter-app .main { min-width: 0; overflow-x: hidden; }
+ * agency-site background that would otherwise show through on overflow.
+ * Use `clip` (not `hidden`): it clips horizontal bleed the same way but does
+ * NOT establish a scroll container, so position: sticky descendants (e.g. the
+ * prompt editor's live preview) can follow the window scroll instead of being
+ * trapped and cut off. */
+.chapter-app { overflow-x: clip; max-width: 100vw; }
+.chapter-app .main { min-width: 0; overflow-x: clip; }
 
 /* Topbar dropdown + date-window subtitle. Stack the dropdown button on top
  * and a small date-range string (e.g. "Apr 16 – May 16, 2026") below it so

@@ -32,7 +32,7 @@ export type PreviewData = {
 
 export default function PromptPreview({ data }: { data: PreviewData }) {
   return (
-    <div style={{ position: "sticky", top: 20 }}>
+    <div style={{ position: "sticky", top: 20, maxHeight: "calc(100vh - 40px)", overflowY: "auto" }}>
       <div style={{ fontSize: 11, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 8 }}>
         Live preview
       </div>

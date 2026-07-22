@@ -214,7 +214,9 @@ export default function PromptEditor({
         {editing ? "Edit prompt" : "New prompt"}
       </h1>
 
-      <div style={{ display: "flex", gap: 36, alignItems: "flex-start", flexWrap: "wrap" }}>
+      {/* No alignItems:flex-start — let the preview column stretch to the form's
+          height so the sticky preview inside has room to follow the scroll. */}
+      <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
         {/* Left — form */}
         <div style={{ flex: "1 1 480px", minWidth: 0, maxWidth: 600 }}>
 
