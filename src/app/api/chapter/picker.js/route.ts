@@ -54,11 +54,11 @@ const SCRIPT = `(function () {
   panel.className = "chapter-picker-panel";
   panel.innerHTML = [
     '<h4>Chapter · pick an element</h4>',
-    '<p class="chapter-picker-instr">Navigate to any page, then hover and click the button or element your prompt should trigger on.</p>',
+    '<p class="chapter-picker-instr">Navigate to any page. Hover to highlight, then <strong>click the element</strong> you want — it locks in. Then press <strong>Use this element</strong>.</p>',
     '<div class="chapter-picker-selector" id="chapter-picker-out">Click an element…</div>',
     '<button id="chapter-picker-use" disabled>Use this element</button>',
     '<button class="chapter-picker-secondary" id="chapter-picker-cancel">Cancel</button>',
-    '<p class="chapter-picker-hint">Press <strong>Esc</strong> to cancel · <strong>Shift</strong>-hover to ignore an element.</p>',
+    '<p class="chapter-picker-hint">Press <strong>Esc</strong> to cancel · click a different element to re-pick.</p>',
   ].join("");
   document.body.appendChild(panel);
 
@@ -67,6 +67,8 @@ const SCRIPT = `(function () {
   var cancelBtn = panel.querySelector("#chapter-picker-cancel");
   var currentSelector = "";
   var lastHl = null;
+  var locked = false;
+  var instr = panel.querySelector(".chapter-picker-instr");
 
   function isInPanel(el) { return panel.contains(el); }
   function highlight(el) {
@@ -127,7 +129,7 @@ const SCRIPT = `(function () {
   function safeQuery(sel) { try { return document.querySelectorAll(sel); } catch (e) { return []; } }
 
   function onMove(e) {
-    if (e.shiftKey) return;
+    if (locked || e.shiftKey) return; // once locked (clicked), hovering no longer changes the selection
     var t = e.target;
     if (!t || isInPanel(t) || t === lastHl) return;
     highlight(t);
@@ -146,6 +148,10 @@ const SCRIPT = `(function () {
     out.textContent = sel || "(unable to derive)";
     useBtn.disabled = !sel;
     highlight(t);
+    if (sel) {
+      locked = true;
+      if (instr) instr.innerHTML = "Locked \\u2713 — press <strong>Use this element</strong>, or click a different element to change it.";
+    }
   }
   function onKey(e) { if (e.key === "Escape") cancel(); }
 

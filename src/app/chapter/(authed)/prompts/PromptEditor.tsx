@@ -328,7 +328,7 @@ export default function PromptEditor({
             <select value={inputMode} onChange={(e) => setInputMode(e.target.value as SelfServePromptInput["input_mode"])} style={inp}>
               <option value="email">Email</option>
               <option value="phone">Phone</option>
-              <option value="either">Email or phone</option>
+              <option value="either">Email and phone</option>
             </select>
             {inputMode !== "phone" && <input value={emailPlaceholder} onChange={(e) => setEmailPlaceholder(e.target.value)} placeholder="Email placeholder" style={{ ...inp, marginTop: 8 }} />}
             {inputMode !== "email" && <input value={phonePlaceholder} onChange={(e) => setPhonePlaceholder(e.target.value)} placeholder="Phone placeholder" style={{ ...inp, marginTop: 8 }} />}
@@ -406,7 +406,7 @@ export default function PromptEditor({
         {/* Right — live preview */}
         <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420 }}>
           <PromptPreview
-            data={{ presetType, headline, body, inputMode, emailPlaceholder, phonePlaceholder, buttonLabel, offerCode, cfContent, cfFields, notif, phone }}
+            data={{ presetType, headline, body, inputMode, emailPlaceholder, phonePlaceholder, buttonLabel, offerCode, successMessage, offerDescription, postSubmitAction, postSubmitUrl, postSubmitButtonLabel, cfContent, cfFields, notif, phone }}
           />
         </div>
       </div>{/* two-column */}

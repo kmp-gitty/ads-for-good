@@ -5,6 +5,7 @@
 // would roughly see it. Not pixel-identical to the runtime pixel — a directional
 // preview so the operator sees their prompt take shape as they type.
 
+import { useState } from "react";
 import type { ContentBlock, FormField, SelfServePresetType } from "./types";
 import type { NotificationConfig } from "@/app/internal/identity-prompts/[clientKey]/NotificationBuilder";
 import type { PhoneCallConfig } from "@/app/internal/identity-prompts/[clientKey]/PhoneCallBuilder";
@@ -13,6 +14,7 @@ const INK = "#1F2D43";
 const MUTED = "#5C6B82";
 const FAINT = "#9AA4B2";
 const ORANGE = "#E36410";
+const GREEN = "#2E7D5B";
 const LINE = "#E5E0D4";
 
 export type PreviewData = {
@@ -24,19 +26,46 @@ export type PreviewData = {
   phonePlaceholder: string;
   buttonLabel: string;
   offerCode: string;
+  successMessage: string;
+  offerDescription: string;
+  postSubmitAction: "message" | "button" | "redirect";
+  postSubmitUrl: string;
+  postSubmitButtonLabel: string;
   cfContent: ContentBlock[];
   cfFields: FormField[];
   notif: NotificationConfig;
   phone: PhoneCallConfig;
 };
 
+// Presets with a distinct post-submit ("after") state worth previewing.
+const HAS_SUCCESS: SelfServePresetType[] = ["email_exchange"];
+
 export default function PromptPreview({ data }: { data: PreviewData }) {
+  const [view, setView] = useState<"form" | "success">("form");
+  const showToggle = HAS_SUCCESS.includes(data.presetType);
+  const active = showToggle ? view : "form";
   return (
     <div style={{ position: "sticky", top: 20, maxHeight: "calc(100vh - 40px)", overflowY: "auto" }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 8 }}>
-        Live preview
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".1em" }}>
+          Live preview
+        </div>
+        {showToggle && (
+          <div style={{ display: "flex", gap: 3, background: "#F1EDE3", borderRadius: 999, padding: 2 }}>
+            {(["form", "success"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999, border: "none", cursor: "pointer", background: active === v ? "white" : "transparent", color: active === v ? INK : MUTED }}
+              >
+                {v === "form" ? "Before submit" : "After submit"}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      <Frame>{renderPrompt(data)}</Frame>
+      <Frame>{renderPrompt(data, active)}</Frame>
       <div style={{ fontSize: 11.5, color: FAINT, marginTop: 8, lineHeight: 1.4 }}>
         A rough preview — the real prompt inherits your site&rsquo;s look.
       </div>
@@ -55,18 +84,51 @@ function Frame({ children }: { children: React.ReactNode }) {
   );
 }
 
-function renderPrompt(data: PreviewData): React.ReactNode {
+function renderPrompt(data: PreviewData, view: "form" | "success"): React.ReactNode {
   if (data.presetType === "custom_notification") {
     return <Bubble position={data.notif.container.position}>{notificationContent(data)}</Bubble>;
   }
   return (
     <div style={{ position: "absolute", inset: 0, background: "rgba(20,26,38,.35)", display: "grid", placeItems: "center", padding: 16 }}>
       <Card>
-        {data.presetType === "email_exchange" && emailContent(data)}
-        {data.presetType === "custom_form" && formContent(data)}
-        {data.presetType === "phone_call" && phoneContent(data)}
+        {view === "success" && data.presetType === "email_exchange" ? (
+          successContent(data)
+        ) : (
+          <>
+            {data.presetType === "email_exchange" && emailContent(data)}
+            {data.presetType === "custom_form" && formContent(data)}
+            {data.presetType === "phone_call" && phoneContent(data)}
+          </>
+        )}
       </Card>
     </div>
+  );
+}
+
+function successContent(d: PreviewData) {
+  return (
+    <>
+      <div style={{ fontSize: 26, color: GREEN, textAlign: "center", marginBottom: 2 }}>✓</div>
+      <div style={{ fontSize: 14.5, fontWeight: 700, color: INK, textAlign: "center", marginBottom: 10, paddingRight: 12 }}>
+        {d.successMessage || "You're in — thanks!"}
+      </div>
+      {d.offerCode.trim() && (
+        <div style={{ background: "#FFF4EC", border: `1px solid ${ORANGE}44`, borderRadius: 8, padding: "10px 12px", textAlign: "center", marginBottom: 10 }}>
+          <div style={{ fontSize: 9.5, color: "#9A5B2E", textTransform: "uppercase", letterSpacing: ".1em", marginBottom: 3 }}>Your code</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: ORANGE, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{d.offerCode.trim()}</div>
+          {d.offerDescription.trim() && <div style={{ fontSize: 11, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>{d.offerDescription.trim()}</div>}
+        </div>
+      )}
+      {d.postSubmitAction === "button" && (
+        <>
+          <div style={{ background: ORANGE, color: "white", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, fontWeight: 600, textAlign: "center" }}>{d.postSubmitButtonLabel || "Claim it"}</div>
+          <div style={{ fontSize: 10, color: FAINT, textAlign: "center", marginTop: 5, wordBreak: "break-all" }}>→ {d.postSubmitUrl || "your URL"}</div>
+        </>
+      )}
+      {d.postSubmitAction === "redirect" && (
+        <div style={{ fontSize: 11, color: FAINT, textAlign: "center", lineHeight: 1.4, wordBreak: "break-all" }}>↪ Redirects to {d.postSubmitUrl || "your URL"}</div>
+      )}
+    </>
   );
 }
 
