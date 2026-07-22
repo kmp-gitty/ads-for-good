@@ -18,6 +18,7 @@ import {
   getCurrentChapterUser,
   getClientEntitlement,
 } from "@/app/lib/auth/chapter-user";
+import { createSupabaseServiceRoleClient } from "@/app/lib/auth/supabase-server";
 import { withSelfServeClient } from "@/app/lib/db/per-client";
 import type { SelfServePromptInput, ExistingPrompt } from "./types";
 
@@ -236,6 +237,66 @@ export async function getPrompt(id: string): Promise<ExistingPrompt | null> {
     `,
   );
   return rows[0] ?? null;
+}
+
+// ---------- Install & Activate (Phase 3b) ----------
+
+export type ActivationStatus = {
+  connected: boolean;
+  lastEventAt: string | null;
+  recentCount: number;
+  promptFired: boolean;
+  storefrontDomain: string | null;
+};
+
+// Reads pixel_events for the session's tenant to answer "has the pixel fired?".
+// Uses service_role with an explicit client_key filter (chapter_selfserve has no
+// grant on chapter_ingest); client_key comes from the session, never input.
+export async function getActivationStatus(): Promise<ActivationStatus> {
+  const t = await requireTenant();
+  if ("error" in t) {
+    return { connected: false, lastEventAt: null, recentCount: 0, promptFired: false, storefrontDomain: null };
+  }
+  const supabase = createSupabaseServiceRoleClient();
+  const ingest = supabase.schema("chapter_ingest");
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+
+  const [last, recent, promptFired, client] = await Promise.all([
+    ingest.from("pixel_events").select("ts").eq("client_key", t.clientKey).order("ts", { ascending: false }).limit(1).maybeSingle(),
+    ingest.from("pixel_events").select("*", { count: "exact", head: true }).eq("client_key", t.clientKey).gte("ts", since),
+    ingest.from("pixel_events").select("ts").eq("client_key", t.clientKey).eq("event_name", "identity_prompt_shown").limit(1).maybeSingle(),
+    supabase.schema("chapter_config").from("clients").select("storefront_domain").eq("client_key", t.clientKey).maybeSingle(),
+  ]);
+
+  return {
+    connected: !!last.data,
+    lastEventAt: (last.data?.ts as string) ?? null,
+    recentCount: recent.count ?? 0,
+    promptFired: !!promptFired.data,
+    storefrontDomain: (client.data?.storefront_domain as string) ?? null,
+  };
+}
+
+// Saves the tenant's website domain so the pixel is CORS-allowed on their site.
+// service_role update scoped by session client_key (chapter_selfserve can't
+// write chapter_config.clients). Only affects the tenant's own row.
+export async function setStorefrontDomain(domain: string): Promise<Result> {
+  const t = await requireTenant();
+  if ("error" in t) return { ok: false, error: t.error };
+
+  const clean = domain.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "").replace(/^www\./i, "").toLowerCase();
+  if (!/^([a-z0-9-]+\.)+[a-z]{2,}$/.test(clean)) {
+    return { ok: false, error: "Enter a valid domain, e.g. yourbrand.com" };
+  }
+  const supabase = createSupabaseServiceRoleClient();
+  const { error } = await supabase
+    .schema("chapter_config")
+    .from("clients")
+    .update({ storefront_domain: clean, updated_at: new Date().toISOString() })
+    .eq("client_key", t.clientKey);
+  if (error) return { ok: false, error: "Couldn’t save your domain. Please try again." };
+  revalidatePath("/chapter/prompts/install");
+  return { ok: true };
 }
 
 function friendlyDbError(e: unknown): string {

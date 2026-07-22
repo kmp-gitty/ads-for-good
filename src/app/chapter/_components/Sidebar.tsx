@@ -311,7 +311,7 @@ function SelfServeSidebar({
   const prompts: SelfServeNavItem[] = [
     { key: "prompts", label: "Prompts", icon: "observations" },
     { key: "prompts/responses", label: "Responses", icon: "journeys", disabled: true },
-    { key: "prompts/install", label: "Install", icon: "raw", disabled: true },
+    { key: "prompts/install", label: "Install", icon: "raw" },
   ];
   const links: SelfServeNavItem[] = [
     { key: "links", label: "Links", icon: "influence", disabled: true },
