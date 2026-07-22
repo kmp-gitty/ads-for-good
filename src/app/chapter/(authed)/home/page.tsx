@@ -1,14 +1,15 @@
-// Self-serve Home hub (Phase 2). The first-run landing for tools-only tenants:
-// a friendly welcome, live trial status, and a tile per enabled tool. Tool
-// setup surfaces (Prompts builder, Links builder) arrive in Phases 3–4; until
-// then the tiles explain the tool and show a "coming soon" state so the page
-// reads as onboarding, not a dead end.
+// Self-serve Home hub. Welcome + live trial status, tool tiles that link into
+// each enabled tool, and a Getting Started checklist that ticks off as the
+// tenant completes each step (all state read live from the DB).
 //
-// Rendered inside the (authed) dashboard chrome. Middleware rewrites the clean
-// URL /chapter/<client_key>/home → /chapter/home?client=<client_key>, so we
-// read the tenant from ?client. Access is already enforced by middleware.
+// Rendered inside (authed) chrome. Clean URL /chapter/<key>/home is rewritten
+// to /chapter/home?client=<key>, so we read the tenant from ?client. Access is
+// enforced by middleware.
 
+import Link from "next/link";
 import { getClientEntitlement } from "@/app/lib/auth/chapter-user";
+import { listPrompts, getActivationStatus } from "../prompts/_actions";
+import { listLinks } from "../links/_actions";
 
 export const metadata = { title: "Home" };
 export const dynamic = "force-dynamic";
@@ -17,32 +18,26 @@ const INK = "#1F2D43";
 const MUTED = "#5C6B82";
 const FAINT = "#8A98AD";
 const ORANGE = "#E36410";
+const GREEN = "#2E7D5B";
 const LINE = "#E5E0D4";
 const PANEL = "#FBFAF6";
 
-type Tool = {
-  key: string;
-  name: string;
-  blurb: string;
-  cta: string;
-};
-
-const TOOL_META: Record<string, Tool> = {
+const TOOL_META: Record<string, { name: string; blurb: string; slug: string; noun: string }> = {
   smart_prompts: {
-    key: "smart_prompts",
     name: "Smart Prompts",
-    blurb:
-      "On-site prompts that turn lost moments into conversions — capture an email, a form, or a sale at exactly the right time.",
-    cta: "Set up prompts",
+    blurb: "On-site prompts that turn lost moments into conversions — capture an email, a form, or a sale at the right time.",
+    slug: "prompts",
+    noun: "prompt",
   },
   smart_links: {
-    key: "smart_links",
     name: "Smart Links",
-    blurb:
-      "One link, many destinations. Route each visitor to the right page by device, location, time, or campaign — on your own domain.",
-    cta: "Set up links",
+    blurb: "One link, many destinations. Route each visitor to the right page by device, location, time, or campaign.",
+    slug: "links",
+    noun: "link",
   },
 };
+
+type Step = { label: string; href: string; done: boolean };
 
 export default async function HomePage({
   searchParams,
@@ -55,160 +50,128 @@ export default async function HomePage({
 
   const name = ent?.business_name || clientKey || "there";
   const tools = (ent?.tools_enabled || []).filter((t) => t !== "chapter");
+  const hasPrompts = tools.includes("smart_prompts");
+  const hasLinks = tools.includes("smart_links");
 
+  const [prompts, links, activation] = await Promise.all([
+    hasPrompts ? listPrompts() : Promise.resolve([]),
+    hasLinks ? listLinks() : Promise.resolve([]),
+    hasPrompts ? getActivationStatus() : Promise.resolve(null),
+  ]);
+
+  // Trial banner.
   let trialLine: string | null = null;
   if (ent?.billing_status === "trialing" && ent.trial_ends_at) {
-    const days = Math.max(
-      0,
-      Math.ceil((new Date(ent.trial_ends_at).getTime() - Date.now()) / 86_400_000),
-    );
-    const ends = new Date(ent.trial_ends_at).toLocaleDateString("en-US", {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-    });
+    const days = Math.max(0, Math.ceil((new Date(ent.trial_ends_at).getTime() - Date.now()) / 86_400_000));
+    const ends = new Date(ent.trial_ends_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
     trialLine = `Free trial · ${days} day${days === 1 ? "" : "s"} left (through ${ends})`;
   }
 
+  // Getting-started checklist — dynamic, tool-aware.
+  const steps: Step[] = [];
+  steps.push({ label: "Confirm your workspace details", href: `/chapter/${clientKey}/settings`, done: !!ent?.business_name });
+  if (hasPrompts) {
+    steps.push({ label: "Add your website", href: `/chapter/${clientKey}/prompts/install`, done: !!ent?.storefront_domain });
+    steps.push({ label: "Create your first prompt", href: `/chapter/${clientKey}/prompts/new`, done: prompts.length > 0 });
+    steps.push({ label: "Install your snippet & go live", href: `/chapter/${clientKey}/prompts/install`, done: !!activation?.connected });
+  }
+  if (hasLinks) {
+    steps.push({ label: "Create your first smart link", href: `/chapter/${clientKey}/links/new`, done: links.length > 0 });
+  }
+  const doneCount = steps.filter((s) => s.done).length;
+  const allDone = doneCount === steps.length && steps.length > 0;
+
+  const countFor = (slug: string) => (slug === "prompts" ? prompts.length : slug === "links" ? links.length : 0);
+
   return (
-    <div style={{ padding: "28px 30px", maxWidth: 900, margin: "0 auto" }}>
-      {/* Header + trial banner */}
+    <div style={{ padding: "28px 30px 60px", maxWidth: 900, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: INK, margin: "0 0 6px" }}>
-            Welcome, {name} 👋
-          </h1>
-          <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>
-            Your workspace is live. Here&rsquo;s what&rsquo;s included on your plan.
-          </p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: INK, margin: "0 0 6px" }}>Welcome, {name} 👋</h1>
+          <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>Your workspace is live. Here&rsquo;s what&rsquo;s included on your plan.</p>
         </div>
         {trialLine && (
-          <div
-            style={{
-              background: "#FFF4EC",
-              border: `1px solid ${ORANGE}33`,
-              color: ORANGE,
-              borderRadius: 999,
-              padding: "7px 14px",
-              fontSize: 12.5,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-            }}
-          >
+          <div style={{ background: "#FFF4EC", border: `1px solid ${ORANGE}33`, color: ORANGE, borderRadius: 999, padding: "7px 14px", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}>
             {trialLine}
           </div>
         )}
       </div>
 
-      {/* Tool tiles */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: tools.length > 1 ? "1fr 1fr" : "1fr",
-          gap: 16,
-          marginTop: 24,
-        }}
-      >
-        {tools.length === 0 && (
-          <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 20, color: MUTED, fontSize: 14 }}>
-            No tools are enabled on this workspace yet.
-          </div>
-        )}
+      {/* Tool tiles — link into each tool */}
+      <div style={{ display: "grid", gridTemplateColumns: tools.length > 1 ? "1fr 1fr" : "1fr", gap: 16, marginTop: 24 }}>
         {tools.map((t) => {
           const meta = TOOL_META[t];
           if (!meta) return null;
+          const n = countFor(meta.slug);
           return (
-            <div
-              key={t}
-              style={{
-                background: "white",
-                border: `1px solid ${LINE}`,
-                borderRadius: 12,
-                padding: 20,
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
+            <Link key={t} href={`/chapter/${clientKey}/${meta.slug}`} style={{ textDecoration: "none", display: "block", background: "white", border: `1px solid ${LINE}`, borderRadius: 12, padding: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <span style={{ fontSize: 16, fontWeight: 700, color: INK }}>{meta.name}</span>
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: FAINT,
-                    textTransform: "uppercase",
-                    letterSpacing: ".1em",
-                    border: `1px solid ${LINE}`,
-                    borderRadius: 999,
-                    padding: "2px 7px",
-                  }}
-                >
-                  0 live
+                <span style={{ fontSize: 10, color: FAINT, textTransform: "uppercase", letterSpacing: ".1em", border: `1px solid ${LINE}`, borderRadius: 999, padding: "2px 7px" }}>
+                  {n} {meta.noun}{n === 1 ? "" : "s"}
                 </span>
               </div>
-              <p style={{ fontSize: 13, color: MUTED, margin: "0 0 16px", lineHeight: 1.55, flex: 1 }}>
-                {meta.blurb}
-              </p>
-              <div
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: 600,
-                  color: FAINT,
-                  border: `1px dashed ${LINE}`,
-                  borderRadius: 8,
-                  padding: "9px 12px",
-                  textAlign: "center",
-                }}
-              >
-                {meta.cta} — coming soon
-              </div>
-            </div>
+              <p style={{ fontSize: 13, color: MUTED, margin: "0 0 14px", lineHeight: 1.55 }}>{meta.blurb}</p>
+              <span style={{ fontSize: 13, fontWeight: 600, color: ORANGE }}>
+                {n > 0 ? `Manage ${meta.name} →` : `Set up ${meta.name} →`}
+              </span>
+            </Link>
           );
         })}
       </div>
 
-      {/* Get started checklist */}
-      <div
-        style={{
-          background: PANEL,
-          border: `1px solid ${LINE}`,
-          borderRadius: 12,
-          padding: 20,
-          marginTop: 20,
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 700, color: INK, marginBottom: 12 }}>Getting started</div>
-        <ol style={{ margin: 0, paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-          {[
-            "Confirm your workspace details in Settings",
-            "Install your one-line snippet on your site (we’ll walk you through it)",
-            `Create your first ${tools.includes("smart_prompts") ? "prompt" : "link"} and go live`,
-          ].map((step, i) => (
-            <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+      {/* Getting-started checklist */}
+      <div style={{ background: PANEL, border: `1px solid ${LINE}`, borderRadius: 12, padding: 20, marginTop: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>Getting started</div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: allDone ? GREEN : FAINT }}>
+            {allDone ? "All set ✓" : `${doneCount} of ${steps.length} done`}
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {steps.map((s, i) => (
+            <Link
+              key={i}
+              href={s.href}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "10px 10px",
+                borderRadius: 8,
+                textDecoration: "none",
+                background: "transparent",
+              }}
+            >
               <span
                 style={{
                   flexShrink: 0,
                   width: 20,
                   height: 20,
                   borderRadius: 999,
-                  background: "white",
-                  border: `1px solid ${LINE}`,
-                  color: FAINT,
-                  fontSize: 11,
+                  background: s.done ? GREEN : "white",
+                  border: `1px solid ${s.done ? GREEN : LINE}`,
+                  color: "white",
+                  fontSize: 12,
                   fontWeight: 700,
                   display: "grid",
                   placeItems: "center",
                 }}
               >
-                {i + 1}
+                {s.done ? "✓" : ""}
               </span>
-              <span style={{ fontSize: 13.5, color: MUTED, lineHeight: 1.5 }}>{step}</span>
-            </li>
+              <span style={{ fontSize: 13.5, color: s.done ? FAINT : INK, textDecoration: s.done ? "line-through" : "none", flex: 1 }}>
+                {s.label}
+              </span>
+              {!s.done && <span style={{ fontSize: 12.5, fontWeight: 600, color: ORANGE }}>Do this →</span>}
+            </Link>
           ))}
-        </ol>
-        <p style={{ fontSize: 12.5, color: FAINT, margin: "14px 0 0", lineHeight: 1.5 }}>
-          We&rsquo;re putting the finishing touches on the setup tools — you&rsquo;ll get an email the moment they&rsquo;re
-          ready. Questions in the meantime? Use <strong style={{ color: MUTED }}>Support</strong> in the sidebar.
-        </p>
+        </div>
+        {allDone && (
+          <p style={{ fontSize: 12.5, color: MUTED, margin: "12px 2px 0", lineHeight: 1.5 }}>
+            You&rsquo;re live 🎉 Keep an eye on the <strong style={{ color: INK }}>Responses</strong> tab to see how your prompts perform.
+          </p>
+        )}
       </div>
     </div>
   );
