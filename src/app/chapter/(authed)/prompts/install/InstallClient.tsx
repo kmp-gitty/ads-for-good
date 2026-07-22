@@ -107,9 +107,21 @@ export default function InstallClient({
 
       {/* Step 1 — domain */}
       <StepCard n={1} title="Your website">
-        <p style={{ fontSize: 13, color: MUTED, margin: "0 0 10px", lineHeight: 1.5 }}>
+        <p style={{ fontSize: 13, color: MUTED, margin: "0 0 4px", lineHeight: 1.5 }}>
           The domain your prompts will run on. We use it to allow your site to talk to Chapter.
         </p>
+        <p style={{ fontSize: 12, color: FAINT, margin: "0 0 12px", lineHeight: 1.45 }}>
+          One website per workspace — saving a different domain replaces the current one.
+        </p>
+
+        {/* Currently saved */}
+        <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 10, background: PANEL, border: `1px solid ${LINE}`, borderRadius: 8, padding: "8px 12px" }}>
+          Currently saved:{" "}
+          {status.storefrontDomain
+            ? <strong style={{ color: INK, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{status.storefrontDomain}</strong>
+            : <span style={{ color: FAINT }}>nothing yet</span>}
+        </div>
+
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="yourbrand.com" style={{ ...inp, maxWidth: 280 }} />
           <button type="button" onClick={saveDomain} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
@@ -120,7 +132,7 @@ export default function InstallClient({
         </div>
         {status.storefrontDomain && (
           <div style={{ fontSize: 12, color: FAINT, marginTop: 8 }}>
-            Current: <strong style={{ color: MUTED }}>{status.storefrontDomain}</strong> · allow-listing can take a few minutes to propagate.
+            Allow-listing can take a few minutes to propagate after you save.
           </div>
         )}
       </StepCard>
