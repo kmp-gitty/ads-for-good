@@ -67,19 +67,38 @@ export default async function HomePage({
     trialLine = `Free trial · ${days} day${days === 1 ? "" : "s"} left (through ${ends})`;
   }
 
-  // Getting-started checklist — dynamic, tool-aware.
-  const steps: Step[] = [];
-  steps.push({ label: "Confirm your workspace details", href: `/chapter/${clientKey}/settings`, done: !!ent?.business_name });
+  // Getting-started checklist — dynamic + sectioned (General / per-tool). Each
+  // tool section only renders if the tool is enabled; future items get a clear
+  // home (payment → General, branded domain → Smart Links).
+  const sections: { title: string; steps: Step[] }[] = [
+    {
+      title: "General",
+      steps: [
+        { label: "Confirm your workspace details", href: `/chapter/${clientKey}/settings`, done: !!ent?.business_name },
+      ],
+    },
+  ];
   if (hasPrompts) {
-    steps.push({ label: "Add your website", href: `/chapter/${clientKey}/prompts/install`, done: !!ent?.storefront_domain });
-    steps.push({ label: "Create your first prompt", href: `/chapter/${clientKey}/prompts/new`, done: prompts.length > 0 });
-    steps.push({ label: "Install your snippet & go live", href: `/chapter/${clientKey}/prompts/install`, done: !!activation?.connected });
+    sections.push({
+      title: "Smart Prompts",
+      steps: [
+        { label: "Add your website", href: `/chapter/${clientKey}/prompts/install`, done: !!ent?.storefront_domain },
+        { label: "Create your first prompt", href: `/chapter/${clientKey}/prompts/new`, done: prompts.length > 0 },
+        { label: "Install your snippet & go live", href: `/chapter/${clientKey}/prompts/install`, done: !!activation?.connected },
+      ],
+    });
   }
   if (hasLinks) {
-    steps.push({ label: "Create your first smart link", href: `/chapter/${clientKey}/links/new`, done: links.length > 0 });
+    sections.push({
+      title: "Smart Links",
+      steps: [
+        { label: "Create your first smart link", href: `/chapter/${clientKey}/links/new`, done: links.length > 0 },
+      ],
+    });
   }
-  const doneCount = steps.filter((s) => s.done).length;
-  const allDone = doneCount === steps.length && steps.length > 0;
+  const allSteps = sections.flatMap((s) => s.steps);
+  const doneCount = allSteps.filter((s) => s.done).length;
+  const allDone = doneCount === allSteps.length && allSteps.length > 0;
 
   const countFor = (slug: string) => (slug === "prompts" ? prompts.length : slug === "links" ? links.length : 0);
 
@@ -125,47 +144,52 @@ export default async function HomePage({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>Getting started</div>
           <div style={{ fontSize: 12, fontWeight: 600, color: allDone ? GREEN : FAINT }}>
-            {allDone ? "All set ✓" : `${doneCount} of ${steps.length} done`}
+            {allDone ? "All set ✓" : `${doneCount} of ${allSteps.length} done`}
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {steps.map((s, i) => (
-            <Link
-              key={i}
-              href={s.href}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "10px 10px",
-                borderRadius: 8,
-                textDecoration: "none",
-                background: "transparent",
-              }}
-            >
-              <span
-                style={{
-                  flexShrink: 0,
-                  width: 20,
-                  height: 20,
-                  borderRadius: 999,
-                  background: s.done ? GREEN : "white",
-                  border: `1px solid ${s.done ? GREEN : LINE}`,
-                  color: "white",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  display: "grid",
-                  placeItems: "center",
-                }}
-              >
-                {s.done ? "✓" : ""}
-              </span>
-              <span style={{ fontSize: 13.5, color: s.done ? FAINT : INK, textDecoration: s.done ? "line-through" : "none", flex: 1 }}>
-                {s.label}
-              </span>
-              {!s.done && <span style={{ fontSize: 12.5, fontWeight: 600, color: ORANGE }}>Do this →</span>}
-            </Link>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {sections.map((sect) => {
+            const sDone = sect.steps.filter((x) => x.done).length;
+            return (
+              <div key={sect.title}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 4px 4px" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".08em" }}>{sect.title}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: sDone === sect.steps.length ? GREEN : FAINT }}>{sDone}/{sect.steps.length}</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {sect.steps.map((s, i) => (
+                    <Link
+                      key={i}
+                      href={s.href}
+                      style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 10px", borderRadius: 8, textDecoration: "none", background: "transparent" }}
+                    >
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          width: 20,
+                          height: 20,
+                          borderRadius: 999,
+                          background: s.done ? GREEN : "white",
+                          border: `1px solid ${s.done ? GREEN : LINE}`,
+                          color: "white",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          display: "grid",
+                          placeItems: "center",
+                        }}
+                      >
+                        {s.done ? "✓" : ""}
+                      </span>
+                      <span style={{ fontSize: 13.5, color: s.done ? FAINT : INK, textDecoration: s.done ? "line-through" : "none", flex: 1 }}>
+                        {s.label}
+                      </span>
+                      {!s.done && <span style={{ fontSize: 12.5, fontWeight: 600, color: ORANGE }}>Do this →</span>}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
         {allDone && (
           <p style={{ fontSize: 12.5, color: MUTED, margin: "12px 2px 0", lineHeight: 1.5 }}>
