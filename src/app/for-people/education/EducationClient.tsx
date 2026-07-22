@@ -2,37 +2,33 @@
 
 import { useState } from "react";
 import Link from "next/link";
-
-type Post = {
-  id: number;
-  title: string;
-  date: string;
-  category: string;
-  excerpt: string;
-};
+import { POSTS } from "./posts";
 
 const POSTS_PER_LOAD = 8;
 
-// Placeholder posts – edit these later
-const posts: Post[] = [
-  {
-    id: 1,
-    title: "First Post Coming Soon",
-    date: "Dec 08, 2025",
-    category: "Advertising Industry",
-    excerpt:
-      "A plain-language overview of the advertising industry: what that means, who makes it up, and how it impacts consumers.",
-  }
-];
+// Blog topic taxonomy (the filter chips). Keep in sync with BlogCategory.
+const CATEGORIES = ["Attribution Fundamentals", "Data & Tracking", "Measurement Strategy"];
 
 export default function EducationClient() {
   const [visibleCount, setVisibleCount] = useState(POSTS_PER_LOAD);
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
 
-  const visiblePosts = posts.slice(0, visibleCount);
-  const canLoadMore = visibleCount < posts.length;
+  const filteredPosts =
+    selectedTopics.length === 0 ? POSTS : POSTS.filter((p) => selectedTopics.includes(p.category));
+  const visiblePosts = filteredPosts.slice(0, visibleCount);
+  const canLoadMore = visibleCount < filteredPosts.length;
 
   const handleLoadMore = () => {
-    setVisibleCount((prev) => Math.min(prev + POSTS_PER_LOAD, posts.length));
+    setVisibleCount((prev) => Math.min(prev + POSTS_PER_LOAD, filteredPosts.length));
+  };
+
+  const toggleTopic = (cat: string) => {
+    setVisibleCount(POSTS_PER_LOAD);
+    setSelectedTopics((prev) => (prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]));
+  };
+  const clearTopics = () => {
+    setSelectedTopics([]);
+    setVisibleCount(POSTS_PER_LOAD);
   };
 
   return (
@@ -51,20 +47,28 @@ export default function EducationClient() {
           </header>
 
           {/* Tiles grid */}
+          {filteredPosts.length === 0 && (
+            <div className="rounded-3xl border-2 border-dashed border-orange-100 bg-orange-50/30 p-10 text-center text-sm text-neutral-600">
+              No articles in these topics yet — check back soon.
+            </div>
+          )}
           <div className="grid gap-6 md:grid-cols-2">
             {visiblePosts.map((post) => (
-              <article
-                key={post.id}
-                className="flex flex-col rounded-3xl bg-orange-50/40 border-2 border-orange-100 overflow-hidden shadow-sm"
+              <Link
+                key={post.slug}
+                href={`/for-people/education/${post.slug}`}
+                className="group flex flex-col rounded-3xl bg-orange-50/40 border-2 border-orange-100 overflow-hidden shadow-sm transition hover:shadow-md hover:border-orange-200"
               >
-                {/* Top media area (image placeholder) */}
+                {/* Top media area */}
                 <div className="relative bg-neutral-200/60 h-40">
-                  {/* You can swap this for a real <Image> later */}
-                  <div className="flex h-full w-full items-center justify-center text-xs text-neutral-600">
-                    Image / visual placeholder
-                  </div>
-
-                  {/* Small badge (like 99.9% uptime) */}
+                  {post.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={post.image} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs text-neutral-600">
+                      Image / visual placeholder
+                    </div>
+                  )}
                   <div className="absolute bottom-2 right-2 rounded-full bg-white/90 px-3 py-1 text-[10px] font-medium text-neutral-700 shadow-sm">
                     {post.category}
                   </div>
@@ -72,30 +76,16 @@ export default function EducationClient() {
 
                 {/* Bottom text area */}
                 <div className="flex flex-1 flex-col bg-white px-5 py-4">
-                  <p className="text-[11px] uppercase tracking-wide text-neutral-500">
-                    {post.date}
-                  </p>
-                  <h2 className="mt-1 text-base font-semibold text-neutral-900">
-                    {post.title}
-                  </h2>
-                  <p className="mt-2 text-sm text-neutral-700 line-clamp-3">
-                    {post.excerpt}
-                  </p>
+                  <p className="text-[11px] uppercase tracking-wide text-neutral-500">{post.date}</p>
+                  <h2 className="mt-1 text-base font-semibold text-neutral-900">{post.title}</h2>
+                  <p className="mt-2 text-sm text-neutral-700 line-clamp-3">{post.excerpt}</p>
 
-                  {/* Learn more row */}
                   <div className="mt-4 flex items-center justify-between">
-                    <Link
-                      href="#"
-                      className="text-sm font-medium text-orange-500 hover:underline"
-                    >
-                      Learn more
-                    </Link>
-                    <span className="text-lg" aria-hidden="true">
-                      →
-                    </span>
+                    <span className="text-sm font-medium text-orange-500 group-hover:underline">Learn more</span>
+                    <span className="text-lg transition group-hover:translate-x-0.5" aria-hidden="true">→</span>
                   </div>
                 </div>
-              </article>
+              </Link>
             ))}
           </div>
 
@@ -140,14 +130,34 @@ export default function EducationClient() {
           </div>
 
           <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 py-4">
-            <h3 className="text-sm font-semibold text-neutral-900">
-              Popular Topics
-            </h3>
-            <ul className="mt-2 space-y-1 text-xs text-neutral-700 list-disc list-inside">
-              <li>How advertising works</li>
-              <li>Privacy and data</li>
-              <li>Industry news and impact to consumers</li>
-            </ul>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-neutral-900">Filter by topic</h3>
+              {selectedTopics.length > 0 && (
+                <button onClick={clearTopics} className="text-xs font-medium text-orange-500 hover:underline">
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {CATEGORIES.map((cat) => {
+                const active = selectedTopics.includes(cat);
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => toggleTopic(cat)}
+                    aria-pressed={active}
+                    className={
+                      "rounded-full border px-3 py-1.5 text-xs font-medium transition " +
+                      (active
+                        ? "bg-orange-500 text-white border-orange-500"
+                        : "bg-white text-neutral-700 border-orange-200 hover:bg-orange-100")
+                    }
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </aside>
       </div>
