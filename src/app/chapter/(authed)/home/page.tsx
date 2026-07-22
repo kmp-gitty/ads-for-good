@@ -95,7 +95,7 @@ export default async function HomePage({
     sections.push({
       title: "Smart Links",
       steps: [
-        { label: "Set up a branded domain", href: `/chapter/${clientKey}/links/domain`, done: brandedVerified, optional: true },
+        { label: "Set up your branded domain", href: `/chapter/${clientKey}/links/domain`, done: brandedVerified },
         { label: "Create your first smart link", href: `/chapter/${clientKey}/links/new`, done: links.length > 0 },
       ],
     });
@@ -110,14 +110,16 @@ export default async function HomePage({
 
   // Smart next-action per tile. Smart Prompts gates on install (the pixel must
   // be live before a prompt can fire), so route to Install first, then create,
-  // then manage. Smart Links has no install step — create, then manage.
+  // then manage. Smart Links requires a branded domain first, then create,
+  // then manage.
   const ctaFor = (t: string): { href: string; label: string } => {
     if (t === "smart_prompts") {
       if (!activation?.connected) return { href: `/chapter/${clientKey}/prompts/install`, label: "Set up Smart Prompts →" };
       if (prompts.length === 0) return { href: `/chapter/${clientKey}/prompts/new`, label: "Create your first prompt →" };
       return { href: `/chapter/${clientKey}/prompts`, label: "Manage Smart Prompts →" };
     }
-    if (links.length === 0) return { href: `/chapter/${clientKey}/links/new`, label: "Set up Smart Links →" };
+    if (!brandedVerified) return { href: `/chapter/${clientKey}/links/domain`, label: "Set up Smart Links →" };
+    if (links.length === 0) return { href: `/chapter/${clientKey}/links/new`, label: "Create your first link →" };
     return { href: `/chapter/${clientKey}/links`, label: "Manage Smart Links →" };
   };
 

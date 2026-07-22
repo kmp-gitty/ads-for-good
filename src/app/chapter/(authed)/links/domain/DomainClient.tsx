@@ -89,9 +89,8 @@ export default function DomainClient({
     <div style={{ padding: "28px 30px 60px", maxWidth: 720, margin: "0 auto" }}>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: "0 0 4px" }}>Branded domain</h1>
       <p style={{ fontSize: 14, color: MUTED, margin: "0 0 22px", lineHeight: 1.5 }}>
-        Use your own domain for your links — <code style={mono}>go.yourbrand.com/spring-sale</code> instead of a generic
-        address. Your links work either way; this makes them yours. Three steps: create a subdomain, connect it here, then
-        make your first link.
+        Smart Links run on your own domain — <code style={mono}>go.yourbrand.com/spring-sale</code>. Set it up once in three
+        steps: create a subdomain, connect it here, then make your first link.
       </p>
 
       {/* ---------- Not connected: create subdomain + connect ---------- */}
