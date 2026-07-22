@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { getActivationStatus, setStorefrontDomain, type ActivationStatus } from "../_actions";
+import { getActivationStatus, setStorefrontDomain, emailInstallInstructions, type ActivationStatus } from "../_actions";
 
 const INK = "#1F2D43";
 const MUTED = "#5C6B82";
@@ -43,6 +43,10 @@ export default function InstallClient({
   const [copied, setCopied] = useState(false);
   const [checking, startCheck] = useTransition();
   const [saving, startSave] = useTransition();
+  const [techEmail, setTechEmail] = useState("");
+  const [techNote, setTechNote] = useState("");
+  const [sending, startSend] = useTransition();
+  const [sentMsg, setSentMsg] = useState<string | null>(null);
 
   const snippet = `<script\n  src="${PIXEL_ORIGIN}/api/chapter/pixel.js"\n  async\n  data-client-key="${clientKey}"\n  data-vertical="smart_prompts"\n></script>`;
 
@@ -63,6 +67,17 @@ export default function InstallClient({
       if (!res.ok) { setDomainMsg(res.error); return; }
       setDomainMsg("saved");
       setStatus((s) => ({ ...s, storefrontDomain: domain.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").toLowerCase() }));
+    });
+  };
+
+  const sendInstructions = () => {
+    setSentMsg(null);
+    startSend(async () => {
+      const res = await emailInstallInstructions(techEmail, techNote);
+      if (!res.ok) { setSentMsg(res.error); return; }
+      setSentMsg("sent");
+      setTechEmail("");
+      setTechNote("");
     });
   };
 
@@ -202,6 +217,34 @@ export default function InstallClient({
           <strong style={{ color: INK }}>{p.label}:</strong> {p.where}
         </p>
       </StepCard>
+
+      {/* Hand off to a web person */}
+      <div style={{ border: `1px dashed ${LINE}`, borderRadius: 12, padding: 20, marginBottom: 16, background: PANEL }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: INK, marginBottom: 4 }}>Not the technical one?</div>
+        <p style={{ fontSize: 13, color: MUTED, margin: "0 0 12px", lineHeight: 1.5 }}>
+          Email these steps to your web person and they can add the snippet for you. Replies come straight back to you.
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            type="email"
+            value={techEmail}
+            onChange={(e) => setTechEmail(e.target.value)}
+            placeholder="webmaster@yourbrand.com"
+            style={{ ...inp, maxWidth: 280 }}
+          />
+          <button type="button" onClick={sendInstructions} disabled={sending || !techEmail.trim()} style={{ ...btnPrimary, opacity: sending || !techEmail.trim() ? 0.6 : 1 }}>
+            {sending ? "Sending…" : "Email steps"}
+          </button>
+          {sentMsg === "sent" && <span style={{ fontSize: 12.5, color: GREEN, fontWeight: 600 }}>Sent ✓</span>}
+          {sentMsg && sentMsg !== "sent" && <span style={{ fontSize: 12.5, color: "#B3261E" }}>{sentMsg}</span>}
+        </div>
+        <input
+          value={techNote}
+          onChange={(e) => setTechNote(e.target.value)}
+          placeholder="Optional note to include (e.g. “Hi Sam — can you add this? Thanks!”)"
+          style={{ ...inp, marginTop: 8 }}
+        />
+      </div>
 
       <p style={{ fontSize: 12.5, color: FAINT, marginTop: 6, lineHeight: 1.5 }}>
         Once it&rsquo;s in, create a prompt on the <strong style={{ color: MUTED }}>Prompts</strong> tab (or turn one on),

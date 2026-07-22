@@ -14,6 +14,7 @@
 //     query param.
 
 import { revalidatePath } from "next/cache";
+import { Resend } from "resend";
 import {
   getCurrentChapterUser,
   getClientEntitlement,
@@ -315,6 +316,76 @@ export async function setStorefrontDomain(domain: string): Promise<Result> {
   if (error) return { ok: false, error: "Couldn’t save your domain. Please try again." };
   revalidatePath("/chapter/prompts/install");
   return { ok: true };
+}
+
+// Emails the pixel install steps to a recipient the owner chooses (their web
+// person). The snippet is derived from the SESSION tenant (never input), so a
+// caller can't email another workspace's key. Replies route to the owner.
+export async function emailInstallInstructions(recipient: string, note?: string): Promise<Result> {
+  const t = await requireTenant();
+  if ("error" in t) return { ok: false, error: t.error };
+
+  const to = recipient.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return { ok: false, error: "Enter a valid email address." };
+  }
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.FROM_EMAIL;
+  if (!apiKey || !from) {
+    return { ok: false, error: "Email isn’t set up right now — please copy the snippet instead." };
+  }
+
+  const snippet = `<script
+  src="https://www.ads4good.com/api/chapter/pixel.js"
+  async
+  data-client-key="${t.clientKey}"
+  data-vertical="smart_prompts"
+></script>`;
+
+  try {
+    const resend = new Resend(apiKey);
+    await resend.emails.send({
+      to,
+      from: `Chapter (via Ads for Good) <${from}>`,
+      replyTo: t.email, // replies reach the workspace owner, not a Chapter inbox
+      subject: "Install steps for Chapter Smart Prompts",
+      html: buildPromptsInstallEmail({ snippet, ownerEmail: t.email, note: note?.trim() || "" }),
+    });
+  } catch {
+    return { ok: false, error: "Couldn’t send the email. Please try again, or copy the snippet." };
+  }
+  return { ok: true };
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
+  );
+}
+
+function buildPromptsInstallEmail(a: { snippet: string; ownerEmail: string; note: string }): string {
+  const owner = a.ownerEmail ? escapeHtml(a.ownerEmail) : "A colleague";
+  const codeBlock = `<pre style="background:#0F1722;color:#E6EAF0;border-radius:10px;padding:16px;font-size:13px;line-height:1.6;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word;">${escapeHtml(a.snippet)}</pre>`;
+  return `
+  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1F2D43;">
+    <img src="https://www.ads4good.com/images/ads4Good_Logo_500x500.png" alt="Ads for Good" width="46" height="46" style="border-radius:8px;margin-bottom:16px;" />
+    <h2 style="font-size:19px;margin:0 0 6px;">Add Chapter to your website</h2>
+    <p style="font-size:14px;line-height:1.55;color:#5C6B82;margin:0 0 16px;">
+      ${owner} set up Chapter Smart Prompts and asked you to add the tracking snippet to their site. It takes about two minutes and doesn’t change how the site looks.
+    </p>
+    ${a.note ? `<div style="background:#FFF4EC;border:1px solid #E3641044;border-radius:8px;padding:12px 14px;font-size:13.5px;line-height:1.5;margin:0 0 16px;">${escapeHtml(a.note)}</div>` : ""}
+    <p style="font-size:14px;font-weight:600;margin:0 0 8px;">Paste this snippet right before the closing &lt;/head&gt; tag on every page:</p>
+    ${codeBlock}
+    <p style="font-size:13.5px;line-height:1.6;color:#5C6B82;margin:14px 0 6px;">
+      <strong>Shopify:</strong> Online Store → Themes → ⋯ → Edit code → <code>layout/theme.liquid</code> → paste before &lt;/head&gt; → Save.<br/>
+      <strong>WordPress:</strong> a headers plugin (WPCode / “Insert Headers and Footers”) → Header section.<br/>
+      <strong>Google Tag Manager:</strong> new Custom HTML tag → paste → trigger “All Pages” → publish.
+    </p>
+    <p style="font-size:13.5px;line-height:1.55;color:#5C6B82;margin:16px 0 0;">
+      That’s it — the prompts turn on automatically once it’s live. Questions? Just reply to this email and it’ll reach ${owner}.
+    </p>
+    <p style="font-size:12px;color:#8A98AD;margin:22px 0 0;">Sent via Chapter · Ads for Good</p>
+  </div>`;
 }
 
 function friendlyDbError(e: unknown): string {
