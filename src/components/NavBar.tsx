@@ -212,6 +212,7 @@ export function NavBar() {
                       >
                         <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
                         Smart Links
+                        <span className="text-[10px] font-semibold text-orange-500">Available Self-Serve</span>
                       </Link>
                     </li>
                     <li>
@@ -221,6 +222,7 @@ export function NavBar() {
                       >
                         <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
                         Smart Prompts
+                        <span className="text-[10px] font-semibold text-orange-500">Available Self-Serve</span>
                       </Link>
                     </li>
                     <li>
@@ -565,6 +567,7 @@ export function NavBar() {
                 className="pl-6 hover:text-orange-500"
               >
                 Smart Links
+                <span className="ml-2 text-[10px] font-semibold text-orange-500">Available Self-Serve</span>
               </Link>
               <Link
                 href="/for-businesses/smart-prompts"
@@ -572,6 +575,7 @@ export function NavBar() {
                 className="pl-6 hover:text-orange-500"
               >
                 Smart Prompts
+                <span className="ml-2 text-[10px] font-semibold text-orange-500">Available Self-Serve</span>
               </Link>
               <Link
                 href="/for-businesses/ad-monetization"

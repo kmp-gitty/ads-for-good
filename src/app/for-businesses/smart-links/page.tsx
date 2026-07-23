@@ -21,7 +21,7 @@ export default function ChapterLinksPage() {
 
           <div className="mt-3 flex gap-2 text-xs font-medium">
             <span className="bg-orange-100 text-orange-600 px-3 py-1 rounded-full">
-              Chapter Feature · Available Standalone
+              Chapter Feature · Available Standalone · Available Self-Serve
             </span>
           </div>
 
