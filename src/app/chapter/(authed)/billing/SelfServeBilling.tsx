@@ -5,7 +5,7 @@
 
 import { SubscribeButton, ManagePlanButton } from "./BillingActions";
 import type { TenantBilling } from "./_actions";
-import { ACTIVE_SUB_STATUSES } from "@/app/lib/stripe/config";
+import { ACTIVE_SUB_STATUSES, BILLABLE_TOOLS } from "@/app/lib/stripe/config";
 
 const INK = "#1F2D43";
 const MUTED = "#5C6B82";
@@ -77,6 +77,12 @@ export default function SelfServeBilling({
     statusDetail = `${days} day${days === 1 ? "" : "s"} left — renews ${trialEndsLabel}`;
   } else if (billingStatus === "active") {
     statusLabel = "Active";
+  } else if (billingStatus === "past_due") {
+    statusLabel = "Past due";
+    statusDetail = "Update your card in Manage plan to keep your tools live.";
+  } else if (billingStatus === "canceled") {
+    statusLabel = "No active plan";
+    statusDetail = "Subscribe below to turn your tools back on — your prompts and links are still saved.";
   }
 
   return (
@@ -101,7 +107,7 @@ export default function SelfServeBilling({
               <div>
                 <Label>Current plan</Label>
                 <div style={{ fontSize: 19, fontWeight: 700, color: INK }}>
-                  {plan || tools.map((t) => TOOL_INFO[t].name).join(" + ") || "Starter"}
+                  {plan || (tools.length ? tools.map((t) => TOOL_INFO[t].name).join(" + ") : isTrialing ? "Free trial" : "No active plan")}
                 </div>
               </div>
               <span style={{ background: isTrialing ? "#FFF4EC" : "#EEF6F1", color: isTrialing ? ORANGE : GREEN, border: `1px solid ${isTrialing ? ORANGE + "33" : GREEN + "33"}`, borderRadius: 999, padding: "6px 13px", fontSize: 12.5, fontWeight: 600 }}>
@@ -173,12 +179,11 @@ export default function SelfServeBilling({
           </Card>
         </div>
 
-        {/* RIGHT — what's included */}
+        {/* RIGHT — your tools (always show both so Subscribe is reachable) */}
         <div style={{ flex: "1 1 400px", minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: INK, marginBottom: 10 }}>What&rsquo;s included</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: INK, marginBottom: 10 }}>Your tools</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {tools.length === 0 && <Card><span style={{ fontSize: 13, color: MUTED }}>No tools on this workspace yet.</span></Card>}
-            {tools.map((t) => {
+            {BILLABLE_TOOLS.map((t) => {
               const info = TOOL_INFO[t];
               return (
                 <div key={t} style={{ background: "white", border: `1px solid ${LINE}`, borderRadius: 12, padding: 20 }}>
@@ -203,12 +208,6 @@ export default function SelfServeBilling({
                 </div>
               );
             })}
-            {tools.length > 1 && (
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", padding: "4px 20px" }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: MUTED }}>Total</span>
-                <span style={{ fontSize: 18, fontWeight: 700, color: INK }}>${total}<span style={{ fontSize: 12, color: FAINT, fontWeight: 500 }}>/mo</span></span>
-              </div>
-            )}
           </div>
 
           {/* Manage plan */}
