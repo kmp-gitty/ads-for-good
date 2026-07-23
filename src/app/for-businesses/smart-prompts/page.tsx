@@ -30,7 +30,7 @@ export default function SmartPromptsPage() {
 
           <div className="mt-3 flex gap-2 text-xs font-medium">
             <span className="bg-orange-100 text-orange-600 px-3 py-1 rounded-full">
-              Chapter Feature · Available Standalone
+              Chapter Feature · Available Standalone · Available Self-Serve
             </span>
           </div>
 
@@ -42,12 +42,12 @@ export default function SmartPromptsPage() {
 
           {/* CTA */}
           <section id="primary-cta" className="mt-8">
-            <InquiryLauncher
-              label="Talk To Us About Smart Prompts"
-              defaultServices={["Smart Prompts"]}
-              sourceLabel="Smart Prompts — Hero CTA"
+            <Link
+              href="/chapter/signup"
               className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
-            />
+            >
+              Start your 21 Day Free trial
+            </Link>
           </section>
         </div>
 

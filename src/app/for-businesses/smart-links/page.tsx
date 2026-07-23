@@ -3,9 +3,9 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import SmartLinkRoutingGraphic from "@/components/SmartLinkRoutingGraphic";
 
 export const metadata = {
-  title: "Chapter Links | Ads for Good",
+  title: "Smart Links | Ads for Good",
   description:
-    "Chapter Links wraps the links you already share — in emails, texts, ads, posts, and profiles — so you own the click, protect consent, and send the right person to the right place.",
+    "Smart Links wraps the links you already share — in emails, texts, ads, posts, and profiles — so you own the click, protect consent, and send the right person to the right place.",
 };
 
 export default function ChapterLinksPage() {
@@ -16,7 +16,7 @@ export default function ChapterLinksPage() {
         {/* Left: Hero copy */}
         <div className="flex-1 min-w-0 flex flex-col">
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-            Chapter Links: Control every click.
+            Smart Links: Control every click.
           </h1>
 
           <div className="mt-3 flex gap-2 text-xs font-medium">
@@ -26,19 +26,19 @@ export default function ChapterLinksPage() {
           </div>
 
           <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-            Chapter Links wraps the links you already share — in emails, texts,
+            Smart Links wraps the links you already share — in emails, texts,
             ads, posts, and profiles — so you own the click: protecting consent
             and sending the right person to the right place.
           </p>
 
           {/* CTA */}
           <section id="primary-cta" className="mt-8">
-            <InquiryLauncher
-              label="Talk To Us About Chapter Links"
-              defaultServices={["Smart Links"]}
-              sourceLabel="Chapter Links — Hero CTA"
+            <Link
+              href="/chapter/signup"
               className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
-            />
+            >
+              Start your 21 Day Free trial
+            </Link>
           </section>
         </div>
 
@@ -72,7 +72,7 @@ export default function ChapterLinksPage() {
           <div className="grid gap-8 md:grid-cols-2 md:items-center">
             <div>
               <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-                What you can do with Chapter Links.
+                What you can do with Smart Links.
               </h2>
               <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed">
                 The links you already share become smart, first-party, and fully
@@ -165,7 +165,7 @@ export default function ChapterLinksPage() {
             {[
               {
                 q: "Do I have to use all of Chapter?",
-                a: "No. Chapter Links works on its own; it's also part of the full Chapter platform.",
+                a: "No. Smart Links works on its own; it's also part of the full Chapter platform.",
               },
               {
                 q: "Does it work with my email or ad platform?",
@@ -207,7 +207,7 @@ export default function ChapterLinksPage() {
               {/* LEFT COLUMN */}
               <div>
                 <h2 className="text-2xl font-semibold text-neutral-900">
-                  Chapter Links is one piece of Chapter.
+                  Smart Links is one piece of Chapter.
                 </h2>
 
                 <p className="mt-3 text-sm sm:text-base text-neutral-800">
@@ -251,9 +251,9 @@ export default function ChapterLinksPage() {
 
                 <div className="mt-5">
                   <InquiryLauncher
-                    label="Talk To Us About Chapter Links"
+                    label="Talk To Us About Smart Links"
                     defaultServices={["Smart Links"]}
-                    sourceLabel="Chapter Links — Bottom CTA"
+                    sourceLabel="Smart Links — Bottom CTA"
                     className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
                   />
                 </div>
