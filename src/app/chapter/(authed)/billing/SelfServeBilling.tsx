@@ -1,10 +1,11 @@
 // Self-serve Billing view. Left column: plan summary → payment details →
 // invoices. Right column: per-tool breakdown (Smart Prompts / Smart Links) with
-// price + what's included. Real Stripe Checkout / Customer Portal / invoices
-// land in Phase 5; for now Payment + Invoices are honest placeholders.
-//
-// NOTE: prices below are PLACEHOLDERS — swap TOOL_INFO[...].price once Stripe
-// pricing is finalized. The feature lists are accurate.
+// price, what's included, and a Subscribe button. Stripe Checkout + Customer
+// Portal are live (Phase 5); invoices live in the portal.
+
+import { SubscribeButton, ManagePlanButton } from "./BillingActions";
+import type { TenantBilling } from "./_actions";
+import { ACTIVE_SUB_STATUSES } from "@/app/lib/stripe/config";
 
 const INK = "#1F2D43";
 const MUTED = "#5C6B82";
@@ -17,7 +18,7 @@ const PANEL = "#FBFAF6";
 const TOOL_INFO: Record<string, { name: string; price: number; blurb: string; features: string[] }> = {
   smart_prompts: {
     name: "Smart Prompts",
-    price: 29, // placeholder
+    price: 19,
     blurb: "On-site prompts that turn lost moments into conversions.",
     features: [
       "All 4 prompt types (Email Exchange, Custom Form, Notification, Phone Call)",
@@ -29,13 +30,13 @@ const TOOL_INFO: Record<string, { name: string; price: number; blurb: string; fe
   },
   smart_links: {
     name: "Smart Links",
-    price: 19, // placeholder
+    price: 9,
     blurb: "One link, many destinations — route each visitor to the right place.",
     features: [
       "Unlimited smart links",
       "Route by device, location, time, campaign, or referrer",
       "Click analytics per link",
-      "Branded domain — coming soon",
+      "Your own branded domain (go.yourbrand.com)",
     ],
   },
 };
@@ -46,16 +47,25 @@ export default function SelfServeBilling({
   billingStatus,
   trialEndsAt,
   toolsEnabled,
+  billing,
+  checkout,
 }: {
   businessName: string | null;
   plan: string | null;
   billingStatus: string | null;
   trialEndsAt: string | null;
   toolsEnabled: string[];
+  billing: TenantBilling;
+  checkout?: string;
 }) {
   const isTrialing = billingStatus === "trialing";
   const tools = toolsEnabled.filter((t) => t !== "chapter" && TOOL_INFO[t]);
   const total = tools.reduce((a, t) => a + TOOL_INFO[t].price, 0);
+  const subFor = (t: string) => billing.subs[t as keyof typeof billing.subs];
+  const isSubscribed = (t: string) => {
+    const s = subFor(t);
+    return !!s && ACTIVE_SUB_STATUSES.has(s.status);
+  };
 
   let statusLabel = billingStatus || "—";
   let statusDetail: string | null = null;
@@ -75,6 +85,12 @@ export default function SelfServeBilling({
       <p style={{ fontSize: 14, color: MUTED, margin: "0 0 22px" }}>
         {businessName ? `${businessName}'s plan and billing.` : "Your plan and billing."}
       </p>
+
+      {checkout === "success" && (
+        <div style={{ border: `1px solid ${GREEN}44`, background: "#EEF6F1", borderRadius: 10, padding: "12px 16px", marginBottom: 18, fontSize: 13.5, color: INK }}>
+          ✓ You&rsquo;re all set — your subscription is active. It can take a few seconds to reflect here.
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 32, alignItems: "flex-start", flexWrap: "wrap" }}>
         {/* LEFT — plan / payment / invoices */}
@@ -104,20 +120,26 @@ export default function SelfServeBilling({
           <Card>
             <Label>Payment method</Label>
             <div style={{ fontSize: 13.5, color: MUTED, margin: "6px 0 12px", lineHeight: 1.5 }}>
-              {isTrialing
-                ? "No card on file yet. Add one before your trial ends to keep your tools live — you won’t be charged until then."
-                : "No card on file."}
+              {billing.hasCustomer
+                ? "Your card and invoices live in the billing portal."
+                : isTrialing
+                  ? "No card on file yet. Subscribe to a tool to add one — you won’t be charged until your trial ends."
+                  : "No card on file. Subscribe to a tool below to add one."}
             </div>
-            <Placeholder>Add payment method — coming soon</Placeholder>
+            {billing.hasCustomer ? <ManagePlanButton subtle /> : <Placeholder>Added when you subscribe</Placeholder>}
           </Card>
 
           {/* Invoices */}
           <Card>
             <Label>Invoices</Label>
             <div style={{ border: `1px dashed ${LINE}`, borderRadius: 8, padding: "18px 14px", textAlign: "center", background: PANEL, marginTop: 8 }}>
-              <div style={{ fontSize: 13, color: MUTED }}>No invoices yet</div>
+              <div style={{ fontSize: 13, color: MUTED }}>
+                {billing.hasCustomer ? "Invoices are in the billing portal" : "No invoices yet"}
+              </div>
               <div style={{ fontSize: 11.5, color: FAINT, marginTop: 4, lineHeight: 1.4 }}>
-                Your first invoice appears after your trial converts to a paid plan.
+                {billing.hasCustomer
+                  ? "Open the portal to download receipts or update your card."
+                  : "Your first invoice appears after your trial converts to a paid plan."}
               </div>
             </div>
           </Card>
@@ -145,6 +167,11 @@ export default function SelfServeBilling({
                       </div>
                     ))}
                   </div>
+                  <div style={{ marginTop: 14 }}>
+                    {isSubscribed(t)
+                      ? <SubState sub={subFor(t)!} />
+                      : <SubscribeButton tool={t} label={`Subscribe · $${info.price}/mo`} />}
+                  </div>
                 </div>
               );
             })}
@@ -156,18 +183,42 @@ export default function SelfServeBilling({
             )}
           </div>
 
-          {/* Manage plan (Phase 5 / Stripe) */}
+          {/* Manage plan */}
           <div style={{ marginTop: 16 }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: FAINT, border: `1px dashed ${LINE}`, borderRadius: 8, padding: "8px 12px" }}>+ Add a tool — coming soon</span>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: FAINT, border: `1px dashed ${LINE}`, borderRadius: 8, padding: "8px 12px" }}>Change plan — coming soon</span>
-            </div>
-            <p style={{ fontSize: 11.5, color: FAINT, marginTop: 8, lineHeight: 1.4 }}>
-              Add or remove tools and change your plan here once billing is live.
-            </p>
+            {billing.hasCustomer ? (
+              <>
+                <ManagePlanButton />
+                <p style={{ fontSize: 11.5, color: FAINT, marginTop: 8, lineHeight: 1.4 }}>
+                  Update your card, download invoices, or cancel any time in the billing portal.
+                </p>
+              </>
+            ) : (
+              <p style={{ fontSize: 11.5, color: FAINT, lineHeight: 1.4 }}>
+                Subscribe to a tool above — you can manage your card, invoices, and cancellation in one place after that.
+              </p>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SubState({ sub }: { sub: { status: string; cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null } }) {
+  const date = sub.currentPeriodEnd
+    ? new Date(sub.currentPeriodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : null;
+  let text: string;
+  let tone: "green" | "orange" = "green";
+  if (sub.status === "past_due") { text = "Past due — update your card"; tone = "orange"; }
+  else if (sub.cancelAtPeriodEnd) { text = date ? `Cancels ${date}` : "Cancels at period end"; tone = "orange"; }
+  else if (sub.status === "trialing") { text = date ? `On trial — renews ${date}` : "On trial"; tone = "green"; }
+  else { text = "Subscribed"; tone = "green"; }
+  const c = tone === "green" ? { bg: "#EEF6F1", fg: GREEN } : { bg: "#FFF4EC", fg: ORANGE };
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: c.bg, color: c.fg, border: `1px solid ${c.fg}33`, borderRadius: 8, padding: "7px 12px", fontSize: 12.5, fontWeight: 600 }}>
+      <span>{tone === "green" ? "✓" : "!"}</span>
+      {text}
     </div>
   );
 }

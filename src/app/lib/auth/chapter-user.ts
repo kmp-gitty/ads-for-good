@@ -415,7 +415,7 @@ export async function provisionSelfServeTenant(
       p_company: company,
       p_secret: secret,
       p_tools: ["smart_prompts", "smart_links"],
-      p_trial_days: 30,
+      p_trial_days: 21,
     });
 
   if (error) {

@@ -12,6 +12,7 @@ import { createClient } from "@supabase/supabase-js";
 import BillingClient from "./BillingClient";
 import { getClientEntitlement, isToolsOnly } from "@/app/lib/auth/chapter-user";
 import SelfServeBilling from "./SelfServeBilling";
+import { getTenantBilling } from "./_actions";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -41,7 +42,7 @@ export type UsageSnapshot = {
 export default async function BillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ client?: string }>;
+  searchParams: Promise<{ client?: string; checkout?: string }>;
 }) {
   const sp = await searchParams;
   const clientKey = sp.client;
@@ -58,6 +59,7 @@ export default async function BillingPage({
   // trial/plan view instead of the operator transparency dashboard.
   const ent = await getClientEntitlement(clientKey);
   if (ent && (ent.self_serve || isToolsOnly(ent))) {
+    const billing = await getTenantBilling();
     return (
       <SelfServeBilling
         businessName={ent.business_name}
@@ -65,6 +67,8 @@ export default async function BillingPage({
         billingStatus={ent.billing_status}
         trialEndsAt={ent.trial_ends_at}
         toolsEnabled={ent.tools_enabled}
+        billing={billing}
+        checkout={sp.checkout}
       />
     );
   }
