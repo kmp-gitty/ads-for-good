@@ -12,6 +12,7 @@
 import { revalidatePath } from "next/cache";
 import { getCurrentChapterUser, getClientEntitlement } from "@/app/lib/auth/chapter-user";
 import { withSelfServeClient } from "@/app/lib/db/per-client";
+import { getBrandedDomain } from "./domain/_actions";
 import { RESERVED_SLUGS, type LinkInput, type LinkSummary, type LinkDetail } from "./types";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -57,6 +58,12 @@ function validate(input: LinkInput): string | null {
 export async function saveLink(input: LinkInput, isNew: boolean): Promise<Result> {
   const t = await requireTenant();
   if ("error" in t) return { ok: false, error: t.error };
+  // Hard gate: Smart Links go live on the tenant's own domain, so a verified
+  // branded domain is required before any link can be created or saved.
+  const domain = await getBrandedDomain();
+  if (domain?.status !== "verified") {
+    return { ok: false, error: "Connect your branded domain first — Smart Links go live on your own domain. Set it up under Links → Domain." };
+  }
   const err = validate(input);
   if (err) return { ok: false, error: err };
   const slug = input.slug.trim().toLowerCase();

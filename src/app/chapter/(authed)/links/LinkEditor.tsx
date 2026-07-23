@@ -71,6 +71,7 @@ export default function LinkEditor({ clientKey, link, brandedHost }: { clientKey
   const publicUrl = brandedHost
     ? `https://${brandedHost}/${slugForUrl}`
     : `${REDIRECT_ORIGIN}/r/${clientKey}/${slugForUrl}`;
+  const domainReady = !!brandedHost;
 
   return (
     <div style={{ padding: "24px 30px 60px", maxWidth: 680, margin: "0 auto" }}>
@@ -78,6 +79,15 @@ export default function LinkEditor({ clientKey, link, brandedHost }: { clientKey
         ← Back to links
       </button>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: "10px 0 18px" }}>{editing ? "Edit link" : "New link"}</h1>
+
+      {!domainReady && (
+        <div style={{ border: `1px solid ${ORANGE}44`, background: "#FFF4EC", borderRadius: 10, padding: "12px 16px", marginBottom: 18, fontSize: 13.5, color: INK, lineHeight: 1.5 }}>
+          Smart Links go live on your own domain. Connect a branded domain to save this link —{" "}
+          <button type="button" onClick={() => router.push(`/chapter/${clientKey}/links/domain`)} style={{ background: "none", border: "none", color: ORANGE, fontWeight: 600, cursor: "pointer", padding: 0, fontSize: 13.5 }}>
+            set up your domain →
+          </button>
+        </div>
+      )}
 
       {/* Name / URL */}
       <Section label="Link name" hint="Lowercase letters, digits, hyphens. This becomes the end of your link URL.">
@@ -135,7 +145,7 @@ export default function LinkEditor({ clientKey, link, brandedHost }: { clientKey
       {error && <div style={{ marginTop: 16, background: "#FDECEA", border: "1px solid #E7C9C6", color: "#B3261E", borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>{error}</div>}
 
       <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
-        <button type="button" disabled={pending} onClick={submit} style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, border: "none", borderRadius: 10, padding: "11px 22px", cursor: "pointer", opacity: pending ? 0.6 : 1 }}>
+        <button type="button" disabled={pending || !domainReady} onClick={submit} style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, border: "none", borderRadius: 10, padding: "11px 22px", cursor: domainReady ? "pointer" : "not-allowed", opacity: pending || !domainReady ? 0.6 : 1 }}>
           {pending ? "Saving…" : editing ? "Save changes" : "Create link"}
         </button>
         <button type="button" onClick={() => router.push(`/chapter/${clientKey}/links`)} style={{ background: "white", color: INK, fontSize: 14, fontWeight: 600, border: `1px solid ${LINE}`, borderRadius: 10, padding: "11px 22px", cursor: "pointer" }}>

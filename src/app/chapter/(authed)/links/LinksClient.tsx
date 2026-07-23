@@ -22,6 +22,7 @@ export default function LinksClient({ clientKey, links, brandedHost }: { clientK
   const [busy, setBusy] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
 
+  const domainReady = !!brandedHost;
   const linkUrl = (slug: string) =>
     brandedHost ? `https://${brandedHost}/${slug}` : `${REDIRECT_ORIGIN}/r/${clientKey}/${slug}`;
 
@@ -50,19 +51,32 @@ export default function LinksClient({ clientKey, links, brandedHost }: { clientK
           <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: "0 0 4px" }}>Smart Links</h1>
           <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>One link, many destinations — route each visitor to the right place.</p>
         </div>
-        <Link href={`/chapter/${clientKey}/links/new`} style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 18px", borderRadius: 10, whiteSpace: "nowrap" }}>
-          + New link
+        <Link href={domainReady ? `/chapter/${clientKey}/links/new` : `/chapter/${clientKey}/links/domain`} style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 18px", borderRadius: 10, whiteSpace: "nowrap" }}>
+          {domainReady ? "+ New link" : "Set up your domain →"}
         </Link>
       </div>
+
+      {!domainReady && (
+        <div style={{ border: `1px solid ${ORANGE}44`, background: "#FFF4EC", borderRadius: 12, padding: "14px 18px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 13.5, color: INK, lineHeight: 1.5 }}>
+            Smart Links go live on <strong>your own domain</strong>. Connect a branded domain to start creating links.
+          </div>
+          <Link href={`/chapter/${clientKey}/links/domain`} style={{ background: ORANGE, color: "white", fontSize: 13.5, fontWeight: 600, textDecoration: "none", padding: "8px 16px", borderRadius: 8, whiteSpace: "nowrap" }}>
+            Set up your domain →
+          </Link>
+        </div>
+      )}
 
       {links.length === 0 ? (
         <div style={{ border: `1px dashed ${LINE}`, borderRadius: 12, padding: "40px 24px", textAlign: "center", background: PANEL }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: INK, marginBottom: 6 }}>No links yet</div>
           <p style={{ fontSize: 13.5, color: MUTED, margin: "0 auto 18px", maxWidth: 380, lineHeight: 1.5 }}>
-            Create a smart link with a default destination, then add rules to route visitors by device, location, time, or campaign.
+            {domainReady
+              ? "Create a smart link with a default destination, then add rules to route visitors by device, location, time, or campaign."
+              : "First connect your branded domain — then create a smart link with a default destination and rules to route visitors by device, location, time, or campaign."}
           </p>
-          <Link href={`/chapter/${clientKey}/links/new`} style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 20px", borderRadius: 10, display: "inline-block" }}>
-            Create your first link
+          <Link href={domainReady ? `/chapter/${clientKey}/links/new` : `/chapter/${clientKey}/links/domain`} style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 20px", borderRadius: 10, display: "inline-block" }}>
+            {domainReady ? "Create your first link" : "Set up your domain →"}
           </Link>
         </div>
       ) : (
