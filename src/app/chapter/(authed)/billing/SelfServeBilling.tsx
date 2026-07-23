@@ -131,17 +131,45 @@ export default function SelfServeBilling({
 
           {/* Invoices */}
           <Card>
-            <Label>Invoices</Label>
-            <div style={{ border: `1px dashed ${LINE}`, borderRadius: 8, padding: "18px 14px", textAlign: "center", background: PANEL, marginTop: 8 }}>
-              <div style={{ fontSize: 13, color: MUTED }}>
-                {billing.hasCustomer ? "Invoices are in the billing portal" : "No invoices yet"}
+            <Label>Billing history</Label>
+            {billing.invoices.length === 0 ? (
+              <div style={{ border: `1px dashed ${LINE}`, borderRadius: 8, padding: "18px 14px", textAlign: "center", background: PANEL, marginTop: 8 }}>
+                <div style={{ fontSize: 13, color: MUTED }}>No charges yet</div>
+                <div style={{ fontSize: 11.5, color: FAINT, marginTop: 4, lineHeight: 1.4 }}>
+                  Your first invoice appears after your trial converts to a paid plan.
+                </div>
               </div>
-              <div style={{ fontSize: 11.5, color: FAINT, marginTop: 4, lineHeight: 1.4 }}>
-                {billing.hasCustomer
-                  ? "Open the portal to download receipts or update your card."
-                  : "Your first invoice appears after your trial converts to a paid plan."}
+            ) : (
+              <div style={{ marginTop: 8, maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                {billing.invoices.map((inv) => {
+                  const date = new Date(inv.created).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  const paid = inv.status === "paid";
+                  return (
+                    <a
+                      key={inv.id}
+                      href={inv.hostedUrl || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, textDecoration: "none", border: `1px solid ${LINE}`, borderRadius: 8, padding: "9px 12px", background: "white" }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>{date}</div>
+                        <div style={{ fontSize: 11, color: paid ? GREEN : FAINT, textTransform: "capitalize" }}>{inv.status}</div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, whiteSpace: "nowrap" }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 700, color: INK }}>${inv.amount.toFixed(2)}</span>
+                        <span style={{ fontSize: 12, color: ORANGE, fontWeight: 600 }}>View →</span>
+                      </div>
+                    </a>
+                  );
+                })}
               </div>
-            </div>
+            )}
+            {billing.hasCustomer && billing.invoices.length > 0 && (
+              <p style={{ fontSize: 11, color: FAINT, marginTop: 8, lineHeight: 1.4 }}>
+                Each opens its Stripe receipt. Full history + card management is in <strong style={{ color: MUTED }}>Manage plan</strong>.
+              </p>
+            )}
           </Card>
         </div>
 

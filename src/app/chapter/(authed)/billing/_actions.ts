@@ -52,14 +52,25 @@ async function ensureCustomer(t: Tenant): Promise<string> {
   return customer.id;
 }
 
+export type InvoiceRow = {
+  id: string;
+  created: string;
+  amount: number;
+  currency: string;
+  status: string;
+  hostedUrl: string | null;
+  number: string | null;
+};
+
 export type TenantBilling = {
   hasCustomer: boolean;
   subs: Partial<Record<BillableTool, { status: string; cancelAtPeriodEnd: boolean; currentPeriodEnd: string | null }>>;
+  invoices: InvoiceRow[];
 };
 
 export async function getTenantBilling(): Promise<TenantBilling> {
   const t = await requireTenant();
-  if ("error" in t) return { hasCustomer: false, subs: {} };
+  if ("error" in t) return { hasCustomer: false, subs: {}, invoices: [] };
   const supabase = createSupabaseServiceRoleClient();
   const { data } = await supabase
     .schema("chapter_config")
@@ -76,7 +87,25 @@ export async function getTenantBilling(): Promise<TenantBilling> {
       currentPeriodEnd: (r.current_period_end as string) ?? null,
     };
   }
-  return { hasCustomer: !!t.customerId, subs };
+
+  // Recent invoices straight from Stripe (each links to its hosted page).
+  let invoices: InvoiceRow[] = [];
+  if (t.customerId && stripeConfigured()) {
+    try {
+      const list = await getStripe().invoices.list({ customer: t.customerId, limit: 12 });
+      invoices = list.data.map((inv) => ({
+        id: inv.id ?? inv.number ?? String(inv.created),
+        created: new Date(inv.created * 1000).toISOString(),
+        amount: (inv.total ?? inv.amount_paid ?? 0) / 100,
+        currency: (inv.currency || "usd").toUpperCase(),
+        status: inv.status ?? "—",
+        hostedUrl: inv.hosted_invoice_url ?? null,
+        number: inv.number ?? null,
+      }));
+    } catch { /* leave empty on any Stripe error */ }
+  }
+
+  return { hasCustomer: !!t.customerId, subs, invoices };
 }
 
 export async function startCheckout(tool: string): Promise<UrlResult> {
