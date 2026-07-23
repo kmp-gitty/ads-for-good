@@ -130,7 +130,7 @@ export default function ChapterSignupPage() {
             ) : (
               <>
                 <p style={{ fontSize: 12, color: "#5C6B82", margin: "0 0 6px", lineHeight: 1.5 }}>
-                  We sent an activation link to <strong>{email}</strong>. Click it to start your 30-day free trial.
+                  We sent an activation link to <strong>{email}</strong>. Click it to start your 21-day free trial.
                 </p>
                 <p style={{ fontSize: 12, color: "#5C6B82", margin: 0, lineHeight: 1.5 }}>
                   The link is valid for 60 minutes. You can close this tab.
@@ -142,7 +142,7 @@ export default function ChapterSignupPage() {
           <>
             <h1 style={{ fontSize: 18, fontWeight: 600, color: "#1F2D43", margin: "0 0 4px" }}>Start your free trial</h1>
             <p style={{ fontSize: 12, color: "#5C6B82", margin: "0 0 16px", lineHeight: 1.5 }}>
-              30 days of Smart Prompts + Smart Links. No card required.
+              21 days of Smart Prompts + Smart Links. No card required.
             </p>
 
             <label style={labelStyle}>
