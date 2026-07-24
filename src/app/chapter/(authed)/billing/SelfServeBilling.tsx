@@ -18,7 +18,7 @@ const PANEL = "#FBFAF6";
 const TOOL_INFO: Record<string, { name: string; price: number; blurb: string; features: string[] }> = {
   smart_prompts: {
     name: "Smart Prompts",
-    price: 19,
+    price: 19.99, // fallback only — live price is read from Stripe (getToolPrices)
     blurb: "On-site prompts that turn lost moments into conversions.",
     features: [
       "All 4 prompt types (Email Exchange, Custom Form, Notification, Phone Call)",
@@ -30,7 +30,7 @@ const TOOL_INFO: Record<string, { name: string; price: number; blurb: string; fe
   },
   smart_links: {
     name: "Smart Links",
-    price: 9,
+    price: 9.99, // fallback only — live price is read from Stripe (getToolPrices)
     blurb: "One link, many destinations — route each visitor to the right place.",
     features: [
       "Unlimited smart links",
@@ -48,6 +48,7 @@ export default function SelfServeBilling({
   trialEndsAt,
   toolsEnabled,
   billing,
+  prices,
   checkout,
 }: {
   businessName: string | null;
@@ -56,11 +57,14 @@ export default function SelfServeBilling({
   trialEndsAt: string | null;
   toolsEnabled: string[];
   billing: TenantBilling;
+  prices: Record<string, number>;
   checkout?: string;
 }) {
   const isTrialing = billingStatus === "trialing";
   const tools = toolsEnabled.filter((t) => t !== "chapter" && TOOL_INFO[t]);
-  const total = tools.reduce((a, t) => a + TOOL_INFO[t].price, 0);
+  const priceOf = (t: string) => prices[t] ?? TOOL_INFO[t]?.price ?? 0;
+  const fmt = (n: number) => (n % 1 === 0 ? String(n) : n.toFixed(2));
+  const total = tools.reduce((a, t) => a + priceOf(t), 0);
   const subFor = (t: string) => billing.subs[t as keyof typeof billing.subs];
   const isSubscribed = (t: string) => {
     const s = subFor(t);
@@ -118,7 +122,7 @@ export default function SelfServeBilling({
             <div style={{ height: 1, background: LINE, margin: "16px 0" }} />
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
               <span style={{ fontSize: 13, color: MUTED }}>{isTrialing ? "After your trial" : "Monthly total"}</span>
-              <span style={{ fontSize: 18, fontWeight: 700, color: INK }}>${total}<span style={{ fontSize: 12, color: FAINT, fontWeight: 500 }}>/mo</span></span>
+              <span style={{ fontSize: 18, fontWeight: 700, color: INK }}>${fmt(total)}<span style={{ fontSize: 12, color: FAINT, fontWeight: 500 }}>/mo</span></span>
             </div>
           </Card>
 
@@ -189,7 +193,7 @@ export default function SelfServeBilling({
                 <div key={t} style={{ background: "white", border: `1px solid ${LINE}`, borderRadius: 12, padding: 20 }}>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
                     <span style={{ fontSize: 16, fontWeight: 700, color: INK }}>{info.name}</span>
-                    <span style={{ fontSize: 17, fontWeight: 700, color: INK, whiteSpace: "nowrap" }}>${info.price}<span style={{ fontSize: 12, color: FAINT, fontWeight: 500 }}>/mo</span></span>
+                    <span style={{ fontSize: 17, fontWeight: 700, color: INK, whiteSpace: "nowrap" }}>${fmt(priceOf(t))}<span style={{ fontSize: 12, color: FAINT, fontWeight: 500 }}>/mo</span></span>
                   </div>
                   <p style={{ fontSize: 12.5, color: MUTED, margin: "4px 0 12px", lineHeight: 1.5 }}>{info.blurb}</p>
                   <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
@@ -203,7 +207,7 @@ export default function SelfServeBilling({
                   <div style={{ marginTop: 14 }}>
                     {isSubscribed(t)
                       ? <SubState sub={subFor(t)!} />
-                      : <SubscribeButton tool={t} label={`Subscribe · $${info.price}/mo`} />}
+                      : <SubscribeButton tool={t} label={`Subscribe · $${fmt(priceOf(t))}/mo`} />}
                   </div>
                 </div>
               );

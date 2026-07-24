@@ -13,6 +13,7 @@ import BillingClient from "./BillingClient";
 import { getClientEntitlement, isToolsOnly } from "@/app/lib/auth/chapter-user";
 import SelfServeBilling from "./SelfServeBilling";
 import { getTenantBilling } from "./_actions";
+import { getToolPrices } from "@/app/lib/stripe/prices";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -59,7 +60,7 @@ export default async function BillingPage({
   // trial/plan view instead of the operator transparency dashboard.
   const ent = await getClientEntitlement(clientKey);
   if (ent && (ent.self_serve || isToolsOnly(ent))) {
-    const billing = await getTenantBilling();
+    const [billing, prices] = await Promise.all([getTenantBilling(), getToolPrices()]);
     return (
       <SelfServeBilling
         businessName={ent.business_name}
@@ -68,6 +69,7 @@ export default async function BillingPage({
         trialEndsAt={ent.trial_ends_at}
         toolsEnabled={ent.tools_enabled}
         billing={billing}
+        prices={prices}
         checkout={sp.checkout}
       />
     );
