@@ -19,6 +19,7 @@ import {
   type ExistingPrompt,
   type SelfServePresetType,
   type SelfServePromptInput,
+  type ConsentConfig,
 } from "./types";
 import SelfServeFormBuilder from "./SelfServeFormBuilder";
 import NotificationBuilder, {
@@ -158,6 +159,11 @@ export default function PromptEditor({
       ? (prompt.submit_actions_jsonb as { ack_message?: string } | null)?.ack_message || ""
       : "",
   );
+  const initConsent = (prompt?.consent_jsonb as ConsentConfig | null) || null;
+  const [consentMode, setConsentMode] = useState<ConsentConfig["mode"]>(initConsent?.mode || "off");
+  const [consentText, setConsentText] = useState(initConsent?.text || "");
+  const [consentDefaultChecked, setConsentDefaultChecked] = useState(!!initConsent?.default_checked);
+  const [consentRequired, setConsentRequired] = useState(initConsent?.required ?? true);
   const [phone, setPhone] = useState<PhoneCallConfig>(
     prompt?.preset_type === "phone_call"
       ? { content_blocks: (prompt.content_blocks_jsonb as PhoneCallConfig["content_blocks"]) || [] }
@@ -198,6 +204,15 @@ export default function PromptEditor({
       form_fields_jsonb: null,
       container_jsonb: null,
       submit_actions_jsonb: null,
+      consent_jsonb:
+        consentMode === "off"
+          ? null
+          : {
+              mode: consentMode,
+              text: consentText.trim() || (consentMode === "choice" ? "Do you agree?" : "I agree."),
+              default_checked: consentMode === "checkbox" ? consentDefaultChecked : false,
+              required: consentMode === "checkbox" ? consentRequired : true,
+            },
     };
 
     let input: SelfServePromptInput = base;
@@ -392,6 +407,67 @@ export default function PromptEditor({
       {presetType === "phone_call" && (
         <Section label="Phone call">
           <PhoneCallBuilder value={phone} onChange={setPhone} />
+        </Section>
+      )}
+
+      {/* Consent — for presets that capture a contact */}
+      {(presetType === "email_exchange" || presetType === "custom_form") && (
+        <Section label="Consent" hint="Optional. Records an opt-in with each captured lead — recommended if you'll email or text them, or create an account.">
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: consentMode === "off" ? 0 : 12 }}>
+            {([
+              ["off", "None"],
+              ["checkbox", "Checkbox"],
+              ["choice", "Ask Yes / No"],
+            ] as [ConsentConfig["mode"], string][]).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setConsentMode(m)}
+                style={{
+                  fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 8, cursor: "pointer",
+                  border: `1px solid ${consentMode === m ? "#E36410" : "#E5E0D4"}`,
+                  background: consentMode === m ? "#FFF4EC" : "white",
+                  color: consentMode === m ? "#E36410" : "#1F2D43",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {consentMode !== "off" && (
+            <>
+              <textarea
+                value={consentText}
+                onChange={(e) => setConsentText(e.target.value)}
+                rows={2}
+                placeholder={consentMode === "choice" ? "e.g. Can we email & text you occasional offers?" : "e.g. I agree to receive emails & texts."}
+                style={{ ...inp, resize: "vertical" }}
+              />
+              {consentMode === "checkbox" && (
+                <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "#1F2D43", cursor: "pointer" }}>
+                    <input type="checkbox" checked={consentRequired} onChange={(e) => setConsentRequired(e.target.checked)} />
+                    Must be checked to submit
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "#1F2D43", cursor: "pointer" }}>
+                    <input type="checkbox" checked={consentDefaultChecked} onChange={(e) => setConsentDefaultChecked(e.target.checked)} />
+                    Pre-checked by default
+                  </label>
+                  {consentDefaultChecked && (
+                    <div style={{ fontSize: 12, color: "#B3261E", lineHeight: 1.45, background: "#FDECEA", border: "1px solid #E7C9C6", borderRadius: 8, padding: "8px 10px" }}>
+                      Pre-checked consent isn&rsquo;t valid in the EU and is risky for SMS. For texts, prefer an unchecked box or the Yes/No option.
+                    </div>
+                  )}
+                </div>
+              )}
+              {consentMode === "choice" && (
+                <div style={{ fontSize: 12, color: "#8A98AD", marginTop: 8, lineHeight: 1.45 }}>
+                  The visitor must pick Yes or No to submit — the strongest, most compliant consent. A “No” lead is still captured, just flagged as declined so you don&rsquo;t add them to marketing.
+                </div>
+              )}
+            </>
+          )}
         </Section>
       )}
 

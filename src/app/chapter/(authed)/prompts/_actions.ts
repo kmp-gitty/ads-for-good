@@ -93,17 +93,18 @@ export async function createPrompt(input: SelfServePromptInput): Promise<Result>
       const ff = isComp && input.form_fields_jsonb ? tx.json(input.form_fields_jsonb) : null;
       const cont = isComp && input.container_jsonb ? tx.json(input.container_jsonb) : null;
       const sa = isComp && input.submit_actions_jsonb ? tx.json(input.submit_actions_jsonb) : null;
+      const consent = input.consent_jsonb && input.consent_jsonb.mode !== "off" ? tx.json(input.consent_jsonb) : null;
       return tx<{ id: string }[]>`
         INSERT INTO chapter_config.identity_prompts (
           client_key, preset_type, slug, trigger_jsonb,
-          content_blocks_jsonb, form_fields_jsonb, container_jsonb, submit_actions_jsonb,
+          content_blocks_jsonb, form_fields_jsonb, container_jsonb, submit_actions_jsonb, consent_jsonb,
           headline, body, input_mode, email_placeholder, phone_placeholder,
           button_label, success_message, offer_code, offer_description,
           post_submit_action, post_submit_url, post_submit_button_label,
           frequency, frequency_days, enabled, created_by
         ) VALUES (
           ${t.clientKey}, ${input.preset_type}, ${input.slug}, ${trig}::jsonb,
-          ${cb}::jsonb, ${ff}::jsonb, ${cont}::jsonb, ${sa}::jsonb,
+          ${cb}::jsonb, ${ff}::jsonb, ${cont}::jsonb, ${sa}::jsonb, ${consent}::jsonb,
           ${input.headline.trim()}, ${input.body.trim() || null}, ${input.input_mode},
           ${input.email_placeholder.trim() || "you@email.com"}, ${input.phone_placeholder.trim() || "(555) 555-5555"},
           ${input.button_label.trim() || "Submit"}, ${input.success_message.trim() || "Thanks!"},
@@ -135,6 +136,7 @@ export async function updatePrompt(id: string, input: SelfServePromptInput): Pro
       const ff = isComp && input.form_fields_jsonb ? tx.json(input.form_fields_jsonb) : null;
       const cont = isComp && input.container_jsonb ? tx.json(input.container_jsonb) : null;
       const sa = isComp && input.submit_actions_jsonb ? tx.json(input.submit_actions_jsonb) : null;
+      const consent = input.consent_jsonb && input.consent_jsonb.mode !== "off" ? tx.json(input.consent_jsonb) : null;
       // RLS already restricts to this tenant; the explicit client_key predicate
       // is belt + suspenders.
       return tx<{ id: string }[]>`
@@ -146,6 +148,7 @@ export async function updatePrompt(id: string, input: SelfServePromptInput): Pro
           form_fields_jsonb = ${ff}::jsonb,
           container_jsonb = ${cont}::jsonb,
           submit_actions_jsonb = ${sa}::jsonb,
+          consent_jsonb = ${consent}::jsonb,
           headline = ${input.headline.trim()},
           body = ${input.body.trim() || null},
           input_mode = ${input.input_mode},
@@ -214,7 +217,7 @@ export async function listPrompts(): Promise<ExistingPrompt[]> {
              offer_code, offer_description, post_submit_action, post_submit_url,
              post_submit_button_label, frequency, frequency_days, enabled,
              hit_count, submit_count, last_hit_at,
-             content_blocks_jsonb, form_fields_jsonb, container_jsonb, submit_actions_jsonb
+             content_blocks_jsonb, form_fields_jsonb, container_jsonb, submit_actions_jsonb, consent_jsonb
       FROM chapter_config.identity_prompts
       WHERE client_key = ${t.clientKey}
       ORDER BY created_at DESC
@@ -232,7 +235,7 @@ export async function getPrompt(id: string): Promise<ExistingPrompt | null> {
              offer_code, offer_description, post_submit_action, post_submit_url,
              post_submit_button_label, frequency, frequency_days, enabled,
              hit_count, submit_count, last_hit_at,
-             content_blocks_jsonb, form_fields_jsonb, container_jsonb, submit_actions_jsonb
+             content_blocks_jsonb, form_fields_jsonb, container_jsonb, submit_actions_jsonb, consent_jsonb
       FROM chapter_config.identity_prompts
       WHERE id = ${id} AND client_key = ${t.clientKey}
       LIMIT 1

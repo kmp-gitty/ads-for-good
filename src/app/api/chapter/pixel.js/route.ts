@@ -887,6 +887,73 @@ setInterval(function () {
   // Multi-page: Back + Next navigation, optional progress dots, accumulated
   // values across pages, identity hashing + POST run once at final Submit.
   //
+  // Builds the optional consent element from prompt.consent_jsonb. Returns
+  // { el, read(), validate() } or null when off. checkbox = single opt-in box
+  // (default unchecked unless configured), choice = explicit Yes/No (must pick).
+  function chapterBuildConsent(prompt) {
+    var cfg = prompt.consent_jsonb;
+    if (!cfg || !cfg.mode || cfg.mode === "off") return null;
+    var mode = cfg.mode;
+    var text = cfg.text || (mode === "choice" ? "Do you agree?" : "I agree.");
+    var wrap = document.createElement("div");
+    wrap.style.cssText = "margin:12px 0 2px;font-size:12.5px;color:#3A465A;line-height:1.45;text-align:left;";
+    var errEl = document.createElement("div");
+    errEl.style.cssText = "color:#B3261E;font-size:11.5px;margin-top:5px;display:none;";
+
+    if (mode === "checkbox") {
+      var label = document.createElement("label");
+      label.style.cssText = "display:flex;align-items:flex-start;gap:8px;cursor:pointer;";
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !!cfg.default_checked;
+      cb.style.cssText = "margin-top:2px;flex-shrink:0;";
+      var span = document.createElement("span");
+      span.textContent = text;
+      label.appendChild(cb);
+      label.appendChild(span);
+      wrap.appendChild(label);
+      wrap.appendChild(errEl);
+      return {
+        el: wrap,
+        read: function () { return { mode: mode, text: text, value: cb.checked ? "checked" : "unchecked" }; },
+        validate: function () {
+          if (cfg.required && !cb.checked) { errEl.textContent = "Please check this box to continue."; errEl.style.display = "block"; return false; }
+          errEl.style.display = "none"; return true;
+        }
+      };
+    }
+
+    // choice — explicit yes/no, no default, must pick one.
+    var q = document.createElement("div");
+    q.textContent = text;
+    q.style.cssText = "margin-bottom:7px;";
+    wrap.appendChild(q);
+    var row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:18px;";
+    var gname = "chapter_consent_" + Math.floor(Math.random() * 1e9);
+    function mk(val, lbl) {
+      var l = document.createElement("label");
+      l.style.cssText = "display:flex;align-items:center;gap:6px;cursor:pointer;";
+      var r = document.createElement("input"); r.type = "radio"; r.name = gname; r.value = val;
+      var s = document.createElement("span"); s.textContent = lbl;
+      l.appendChild(r); l.appendChild(s);
+      return { l: l, r: r };
+    }
+    var yes = mk("yes", "Yes");
+    var no = mk("no", "No");
+    row.appendChild(yes.l); row.appendChild(no.l);
+    wrap.appendChild(row);
+    wrap.appendChild(errEl);
+    return {
+      el: wrap,
+      read: function () { return { mode: mode, text: text, value: yes.r.checked ? "yes" : (no.r.checked ? "no" : null) }; },
+      validate: function () {
+        if (!yes.r.checked && !no.r.checked) { errEl.textContent = "Please choose an option to continue."; errEl.style.display = "block"; return false; }
+        errEl.style.display = "none"; return true;
+      }
+    };
+  }
+
   // Modal container only (drawer/bubble/inline land in Phase 4).
   // Field types: email, phone, text, textarea, single_choice, multi_choice.
   // Conditional branching between pages deferred to Phase 2B.1.
@@ -947,6 +1014,13 @@ setInterval(function () {
     errorEl.className = "chapter-prompt-error";
     errorEl.style.display = "none";
     form.appendChild(errorEl);
+
+    // Optional consent element — shown only on the last page (below).
+    var promptConsent = chapterBuildConsent(prompt);
+    var consentSlot = document.createElement("div");
+    consentSlot.style.display = "none";
+    if (promptConsent) consentSlot.appendChild(promptConsent.el);
+    form.appendChild(consentSlot);
 
     var navWrap = document.createElement("div");
     navWrap.style.cssText = "display:flex;gap:8px;align-items:center;margin-top:12px;";
@@ -1167,6 +1241,9 @@ setInterval(function () {
       var isFirst = idx === 0;
       var page = pages[idx];
 
+      // Consent element only on the final page (just before submit).
+      consentSlot.style.display = (isLast && promptConsent) ? "block" : "none";
+
       // Progress dots (multi-page only)
       if (isMultiPage && progressIndicator) {
         var dots = document.createElement("div");
@@ -1251,6 +1328,7 @@ setInterval(function () {
       }
 
       // Final submit — process accumulated values across all pages.
+      if (promptConsent && !promptConsent.validate()) return;
       var primaryBtn = navWrap.querySelector('button[type="submit"]');
       if (primaryBtn) { primaryBtn.disabled = true; primaryBtn.textContent = "Submitting…"; }
 
@@ -1333,6 +1411,7 @@ setInterval(function () {
             phone: rawPhone,
             identity_key: identityKey,
             responses: responses,
+            consent: promptConsent ? promptConsent.read() : null,
             hp_field: honeypotInput.value || "",
           });
         }
@@ -1706,6 +1785,8 @@ setInterval(function () {
     }
     form.appendChild(honeypotInput);
     form.appendChild(errorEl);
+    var v1Consent = chapterBuildConsent(prompt);
+    if (v1Consent) form.appendChild(v1Consent.el);
     form.appendChild(button);
 
     card.appendChild(closeBtn);
@@ -1750,6 +1831,8 @@ setInterval(function () {
         return showError("This prompt sends an email — please enter a valid email address.");
       }
 
+      if (v1Consent && !v1Consent.validate()) return;
+
       errorEl.style.display = "none";
       button.disabled = true;
       button.textContent = "Submitting…";
@@ -1788,6 +1871,7 @@ setInterval(function () {
             email: hasEmail ? emailVal : "",
             phone: hasPhone ? phoneVal : "",
             identity_key: leadKey,
+            consent: v1Consent ? v1Consent.read() : null,
             hp_field: honeypotInput.value || "",
           });
         }

@@ -57,6 +57,14 @@ export type NotificationContainer = {
   position: "bottom-right" | "bottom-left" | "top-right" | "top-left";
 };
 
+// Optional consent element captured with a lead (off / checkbox / Yes-No).
+export type ConsentConfig = {
+  mode: "off" | "checkbox" | "choice";
+  text: string;
+  default_checked: boolean;
+  required: boolean;
+};
+
 export type SubmitActions = {
   cta_type?: "dismiss_only" | "button" | "yes_no";
   cta_label?: string;
@@ -97,6 +105,7 @@ export type SelfServePromptInput = {
   form_fields_jsonb?: FormField[] | null;
   container_jsonb?: NotificationContainer | null;
   submit_actions_jsonb?: SubmitActions | null;
+  consent_jsonb?: ConsentConfig | null;
 };
 
 // Row shape read back for the list + edit surfaces.
@@ -127,6 +136,7 @@ export type ExistingPrompt = {
   form_fields_jsonb: FormField[] | null;
   container_jsonb: NotificationContainer | null;
   submit_actions_jsonb: SubmitActions | null;
+  consent_jsonb: ConsentConfig | null;
 };
 
 // A captured lead — the RAW contact (email/phone) a visitor submitted, plus the
