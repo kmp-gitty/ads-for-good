@@ -406,7 +406,6 @@ export async function POST(req: NextRequest) {
 
   let purchaseEventId: string | null = null;
   let deduped = false;
-  let resolvedIdentityKey: string = lookupKey;
 
   try {
     const result = await withClient(clientKey, async (tx) => {
@@ -469,7 +468,6 @@ export async function POST(req: NextRequest) {
     });
     purchaseEventId = result.id;
     deduped = result.deduped;
-    resolvedIdentityKey = result.resolved;
   } catch (err: any) {
     console.error("purchase insert failed:", err);
     return NextResponse.json(
@@ -482,30 +480,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "ok", deduped: true }, { status: 200 });
   }
 
-  // Phase 6: identify audit event. Independent of the purchase write — if this
-  // fails the purchase still committed.
-  if (resolvedIdentityKey) {
-    try {
-      await withClient(clientKey, async (tx) => {
-        await tx`
-          INSERT INTO chapter_ingest.pixel_events (
-            ts, client_key, journey_id, identity_key, event_name, props
-          ) VALUES (
-            ${eventTsIso}, ${clientKey}, ${null}, ${resolvedIdentityKey}, 'identify',
-            ${tx.json({
-              source: "purchase",
-              confidence: identityConfidence,
-              identity_reason: identityReason,
-              order_id: payload.order_id ?? null,
-              source_platform: payload.source_platform ?? null,
-            })}::jsonb
-          )
-        `;
-      });
-    } catch (auditErr) {
-      console.error("identify audit insert failed:", auditErr);
-    }
-  }
+  // Phase 6 REMOVED (2026-07-24). Was an "identify audit event" pixel_events
+  // INSERT that hardcoded journey_id = null, but pixel_events.journey_id is
+  // NOT NULL — every purchase since Fix #26 Part 2 (May 13, 2026) threw
+  // "null value in column journey_id" and the outer try/catch swallowed it.
+  // Zero rows ever landed (verified: 30-day sweep found 0 identify events
+  // with props.source='purchase').
+  //
+  // The identity-resolution audit trail this was trying to create is fully
+  // captured by the identity_aliases + identity_canon writes in Phases 1/2/3.5
+  // above. Nothing downstream reads event_name='identify' with props.source=
+  // 'purchase'. Removing the block eliminates the log noise + ~24 dead lines.
 
   return NextResponse.json(
     { status: "ok", purchase_event_id: purchaseEventId, deduped: false },

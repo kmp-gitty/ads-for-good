@@ -208,8 +208,10 @@ export async function POST(req: NextRequest) {
     console.error("identify phase 5 (journey backfill) failed:", err);
   }
 
-  // Phase 6: identify audit pixel_event. Unlike /api/purchase, we have a valid
-  // journey_id here so this insert actually succeeds.
+  // Phase 6: identify audit pixel_event. Valid journey_id in scope so the
+  // NOT NULL constraint is satisfied. (The equivalent audit block in /api/purchase
+  // was removed 2026-07-24 — it had journey_id hardcoded to null + threw on
+  // every write; verified 0 rows ever landed.)
   try {
     await withClient(client_key, async (tx) => {
       const props = traits ? tx.json({ traits }) : null;
