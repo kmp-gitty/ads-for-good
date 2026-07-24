@@ -200,6 +200,13 @@ export default function ChapterSignupPage() {
               {loading ? "Sending…" : "Email me an activation link"}
             </button>
 
+            <p style={{ fontSize: 11.5, color: "#8A98AD", margin: "10px 0 0", textAlign: "center", lineHeight: 1.5 }}>
+              By creating your account you agree to our{" "}
+              <a href="/terms-disclaimer" target="_blank" rel="noopener noreferrer" style={{ color: "#E36410", fontWeight: 600 }}>Terms of Service</a>{" "}
+              and{" "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "#E36410", fontWeight: 600 }}>Privacy Policy</a>.
+            </p>
+
             <p style={{ fontSize: 12, color: "#8A98AD", margin: "14px 0 0", textAlign: "center" }}>
               Already have an account?{" "}
               <a href="/chapter/login" style={{ color: "#E36410", fontWeight: 600 }}>Sign in</a>

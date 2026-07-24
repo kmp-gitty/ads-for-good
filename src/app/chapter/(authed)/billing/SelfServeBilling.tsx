@@ -210,6 +210,13 @@ export default function SelfServeBilling({
             })}
           </div>
 
+          <p style={{ fontSize: 11.5, color: FAINT, marginTop: 12, lineHeight: 1.5 }}>
+            Billed monthly, starting after your 21-day free trial. Cancel anytime. By subscribing you agree to our{" "}
+            <a href="/terms-disclaimer" target="_blank" rel="noopener noreferrer" style={{ color: ORANGE, fontWeight: 600 }}>Terms</a>{" "}
+            &amp;{" "}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: ORANGE, fontWeight: 600 }}>Privacy Policy</a>.
+          </p>
+
           {/* Manage plan */}
           <div style={{ marginTop: 16 }}>
             {billing.hasCustomer ? (
