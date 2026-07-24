@@ -36,7 +36,37 @@ export type PreviewData = {
   notif: NotificationConfig;
   notifAck: string;
   phone: PhoneCallConfig;
+  consentMode?: "off" | "checkbox" | "choice";
+  consentText?: string;
+  consentDefaultChecked?: boolean;
 };
+
+function ConsentPreview({ d }: { d: PreviewData }) {
+  if (!d.consentMode || d.consentMode === "off") return null;
+  const text = d.consentText?.trim() || (d.consentMode === "choice" ? "Do you agree?" : "I agree.");
+  if (d.consentMode === "checkbox") {
+    return (
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 11, color: MUTED, margin: "0 0 8px", lineHeight: 1.35 }}>
+        <span style={{ width: 12, height: 12, flexShrink: 0, border: `1px solid ${FAINT}`, borderRadius: 3, marginTop: 1, background: d.consentDefaultChecked ? ORANGE : "white", color: "white", fontSize: 9, textAlign: "center", lineHeight: "11px" }}>
+          {d.consentDefaultChecked ? "✓" : ""}
+        </span>
+        <span>{text}</span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ fontSize: 11, color: MUTED, margin: "0 0 8px", lineHeight: 1.35 }}>
+      <div style={{ marginBottom: 4 }}>{text}</div>
+      <div style={{ display: "flex", gap: 12 }}>
+        {["Yes", "No"].map((o) => (
+          <span key={o} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 11, height: 11, border: `1px solid ${FAINT}`, borderRadius: 999 }} />{o}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // Presets with a distinct post-submit ("after") state worth previewing.
 const HAS_SUCCESS: SelfServePresetType[] = ["email_exchange", "custom_form"];
@@ -215,6 +245,7 @@ function emailContent(d: PreviewData) {
       <Body text={d.body} />
       {d.inputMode !== "phone" && <MockInput placeholder={d.emailPlaceholder} />}
       {d.inputMode !== "email" && <MockInput placeholder={d.phonePlaceholder} />}
+      <ConsentPreview d={d} />
       <SubmitBtn label={d.buttonLabel} />
       {d.offerCode.trim() && (
         <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8, textAlign: "center" }}>🎁 Code “{d.offerCode.trim()}” shown after submit</div>
@@ -250,6 +281,7 @@ function formContent(d: PreviewData) {
       ) : (
         d.cfFields.map((f, i) => <div key={i}>{fieldMock(f)}</div>)
       )}
+      <ConsentPreview d={d} />
       <SubmitBtn label="Submit" />
     </>
   );

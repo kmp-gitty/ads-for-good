@@ -504,7 +504,7 @@ export default function PromptEditor({
         {/* Right — live preview */}
         <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420 }}>
           <PromptPreview
-            data={{ presetType, headline, body, inputMode, emailPlaceholder, phonePlaceholder, buttonLabel, offerCode, successMessage, offerDescription, postSubmitAction, postSubmitUrl, postSubmitButtonLabel, cfContent, cfFields, notif, notifAck, phone }}
+            data={{ presetType, headline, body, inputMode, emailPlaceholder, phonePlaceholder, buttonLabel, offerCode, successMessage, offerDescription, postSubmitAction, postSubmitUrl, postSubmitButtonLabel, cfContent, cfFields, notif, notifAck, phone, consentMode, consentText, consentDefaultChecked }}
           />
         </div>
       </div>{/* two-column */}
