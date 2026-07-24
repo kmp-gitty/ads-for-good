@@ -310,6 +310,7 @@ function SelfServeSidebar({
   const home: SelfServeNavItem[] = [{ key: "home", label: "Home", icon: "overview" }];
   const prompts: SelfServeNavItem[] = [
     { key: "prompts", label: "Prompts", icon: "observations" },
+    { key: "prompts/leads", label: "Leads", icon: "channels" },
     { key: "prompts/responses", label: "Responses", icon: "journeys" },
     { key: "prompts/install", label: "Install", icon: "raw" },
   ];

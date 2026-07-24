@@ -1256,12 +1256,15 @@ setInterval(function () {
 
       var identityTasks = [];
       var responses = {};
+      var rawEmail = "";
+      var rawPhone = "";
 
       Object.keys(accumulatedValues).forEach(function (fieldId) {
         var cfg = fieldConfigsById[fieldId];
         var val = accumulatedValues[fieldId];
         if (cfg && cfg.for_identity && val) {
           if (cfg.type === "email" && chapterValidEmail(val)) {
+            rawEmail = val;
             identityTasks.push(
               chapterHashEmail(val).then(function (h) {
                 if (h) {
@@ -1275,6 +1278,7 @@ setInterval(function () {
               })
             );
           } else if (cfg.type === "phone") {
+            rawPhone = val;
             identityTasks.push(
               chapterHashPhone(val).then(function (h) {
                 if (h) {
@@ -1320,6 +1324,19 @@ setInterval(function () {
           hp_field: honeypotInput.value || "",
         });
 
+        // Capture the RAW contact (email/phone) as a lead if one was given.
+        if (rawEmail || rawPhone) {
+          chapterPostLead({
+            prompt_id: prompt.id,
+            prompt_slug: prompt.slug,
+            email: rawEmail,
+            phone: rawPhone,
+            identity_key: identityKey,
+            responses: responses,
+            hp_field: honeypotInput.value || "",
+          });
+        }
+
         // Success state
         while (card.firstChild) card.removeChild(card.firstChild);
         card.appendChild(closeBtn);
@@ -1329,6 +1346,39 @@ setInterval(function () {
         card.appendChild(successMsg);
       });
     });
+  }
+
+  // Sends the RAW contact to /api/chapter/lead so the client can use it (Leads
+  // view, weekly CSV, later CRM/ESP/webhook). Identity is still hashed
+  // separately via /api/identify. Fire-and-forget. consent_* are null until the
+  // consent element ships.
+  function chapterPostLead(payload) {
+    var apiOrigin = getApiOrigin() || "https://ads4good.com";
+    try {
+      fetch(apiOrigin + "/api/chapter/lead", {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          client_key: clientKey,
+          prompt_id: payload.prompt_id,
+          prompt_slug: payload.prompt_slug,
+          email: payload.email || "",
+          phone: payload.phone || "",
+          identity_key: payload.identity_key || null,
+          anonymous_id: typeof cachedAnonId !== "undefined" ? cachedAnonId : null,
+          journey_id: typeof cachedJourneyId !== "undefined" ? cachedJourneyId : null,
+          page_url: window.location.href,
+          responses: payload.responses || {},
+          consent_mode: payload.consent ? payload.consent.mode : null,
+          consent_text: payload.consent ? payload.consent.text : null,
+          consent_value: payload.consent ? payload.consent.value : null,
+          session_token: chapterPromptSessionToken,
+          hp_field: payload.hp_field || "",
+        }),
+      }).catch(function () { /* fire-and-forget */ });
+    } catch (e) { /* noop */ }
   }
 
   function chapterPostPromptResponse(payload) {
@@ -1721,6 +1771,26 @@ setInterval(function () {
           });
         });
         api.track("identity_prompt_submitted", { prompt_slug: prompt.slug });
+
+        // Capture the RAW contact as a lead (identity is still hashed above).
+        if (hasEmail || hasPhone) {
+          var leadKey = null;
+          for (var li = 0; li < results.length; li++) {
+            if (results[li] && results[li].hash) {
+              var k = results[li].type === "email" ? "email_sha256:" + results[li].hash : "phone_sha256:" + results[li].hash;
+              if (results[li].type === "email") { leadKey = k; break; }
+              if (!leadKey) leadKey = k;
+            }
+          }
+          chapterPostLead({
+            prompt_id: prompt.id,
+            prompt_slug: prompt.slug,
+            email: hasEmail ? emailVal : "",
+            phone: hasPhone ? phoneVal : "",
+            identity_key: leadKey,
+            hp_field: honeypotInput.value || "",
+          });
+        }
 
         // Dispatch post-submit action.
         if (postAction === "redirect") {

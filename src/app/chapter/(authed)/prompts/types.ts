@@ -129,6 +129,24 @@ export type ExistingPrompt = {
   submit_actions_jsonb: SubmitActions | null;
 };
 
+// A captured lead — the RAW contact (email/phone) a visitor submitted, plus the
+// consent record + capture context. Short-term store (weekly CSV → purge).
+export type Lead = {
+  id: string;
+  captured_at: string;
+  prompt_slug: string | null;
+  email: string | null;
+  phone: string | null;
+  identity_key: string | null;
+  responses_jsonb: Record<string, unknown> | null;
+  consent_mode: string | null;
+  consent_value: string | null;
+  consent_declined: boolean;
+  consent_text: string | null;
+  page_url: string | null;
+  ip_country: string | null;
+};
+
 export type PromptResponse = {
   id: string;
   prompt_slug: string;

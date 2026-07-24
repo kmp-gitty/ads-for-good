@@ -21,7 +21,8 @@ import {
 } from "@/app/lib/auth/chapter-user";
 import { createSupabaseServiceRoleClient } from "@/app/lib/auth/supabase-server";
 import { withSelfServeClient } from "@/app/lib/db/per-client";
-import type { SelfServePromptInput, ExistingPrompt, PromptResponse } from "./types";
+import type { SelfServePromptInput, ExistingPrompt, PromptResponse, Lead } from "./types";
+import { toCsv, LEAD_COLUMNS } from "@/app/lib/leads/csv";
 
 type Result = { ok: true; id?: string } | { ok: false; error: string };
 
@@ -256,6 +257,50 @@ export async function listResponses(limit = 200): Promise<PromptResponse[]> {
       LIMIT ${cap}
     `,
   );
+}
+
+// ---------- Leads (raw captured contacts) ----------
+
+// captured_leads is RLS-covered for chapter_selfserve → scoped to the tenant.
+export async function listLeads(limit = 500): Promise<Lead[]> {
+  const t = await requireTenant();
+  if ("error" in t) return [];
+  const cap = Math.min(Math.max(1, limit), 2000);
+  return withSelfServeClient(t.clientKey, (tx) =>
+    tx<Lead[]>`
+      SELECT id::text AS id, captured_at, prompt_slug, email, phone, identity_key,
+             responses_jsonb, consent_mode, consent_value, consent_declined,
+             consent_text, page_url, ip_country
+      FROM chapter_engagement.captured_leads
+      WHERE client_key = ${t.clientKey}
+      ORDER BY captured_at DESC
+      LIMIT ${cap}
+    `,
+  );
+}
+
+// Returns CSV text the client component turns into a download. Journey columns
+// stay blank here (the weekly cron enriches those from the identity graph).
+export async function exportLeadsCsv(): Promise<
+  { ok: true; csv: string; filename: string } | { ok: false; error: string }
+> {
+  const t = await requireTenant();
+  if ("error" in t) return { ok: false, error: "Not authorized." };
+  const leads = await listLeads(2000);
+  const rows = leads.map((l) => ({
+    captured_at: l.captured_at,
+    email: l.email,
+    phone: l.phone,
+    prompt_slug: l.prompt_slug,
+    consent_value: l.consent_value,
+    consent_declined: l.consent_declined ? "yes" : "",
+    consent_text: l.consent_text,
+    responses: l.responses_jsonb && Object.keys(l.responses_jsonb).length ? l.responses_jsonb : "",
+    page_url: l.page_url,
+    ip_country: l.ip_country,
+  }));
+  const csv = toCsv(LEAD_COLUMNS, rows);
+  return { ok: true, csv, filename: `chapter-leads-${new Date().toISOString().slice(0, 10)}.csv` };
 }
 
 // ---------- Install & Activate (Phase 3b) ----------
