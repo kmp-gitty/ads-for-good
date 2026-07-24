@@ -145,6 +145,9 @@ export async function startCheckout(tool: string): Promise<UrlResult> {
       automatic_tax: { enabled: true },
       billing_address_collection: "required",
       customer_update: { address: "auto", name: "auto" },
+      // Stripe renders an "I agree to the Terms of Service" checkbox linking to
+      // the ToS URL set in Stripe settings, and records acceptance.
+      consent_collection: { terms_of_service: "required" },
       client_reference_id: t.clientKey,
       metadata: { client_key: t.clientKey, tool },
       allow_promotion_codes: true,
