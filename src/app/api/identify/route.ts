@@ -137,7 +137,19 @@ export async function POST(req: NextRequest) {
             'client_previous_identity', 85, false, 'explicit_identify_call',
             ${metadata}::jsonb
           )
-          ON CONFLICT (client_key, from_identity_key, to_identity_key) DO NOTHING
+          -- 2-col ON CONFLICT + last-wins (2026-07-24 fix). Was DO NOTHING against
+          -- the 3-col constraint, which meant collisions on (client_key,
+          -- from_identity_key) — the actually-enforced uniqueness — threw silently.
+          -- Now the newer identify call wins; trg_log_alias_conflict captures.
+          ON CONFLICT (client_key, from_identity_key)
+          DO UPDATE SET
+            to_identity_key = EXCLUDED.to_identity_key,
+            ts = EXCLUDED.ts,
+            method = EXCLUDED.method,
+            confidence = EXCLUDED.confidence,
+            is_deterministic = EXCLUDED.is_deterministic,
+            reason = EXCLUDED.reason,
+            metadata = EXCLUDED.metadata
         `;
         await tx`
           INSERT INTO chapter_identity.identity_canon (client_key, identity_key, canonical_identity_key, updated_at)

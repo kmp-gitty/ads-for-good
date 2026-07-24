@@ -4,9 +4,12 @@
 // identity_canon. Same shape as /api/alias's INSERT, but called server-side
 // from the redirect — no HMAC because this is process-internal.
 //
-// We always insert ON CONFLICT DO NOTHING so repeat clicks for the same
-// recipient are idempotent. The canon trigger handles transitive closure
-// (R -> email -> any future E_device).
+// Upsert semantic (2026-07-24 fix): last-wins on the 2-col unique constraint
+// (client_key, from_identity_key). Was previously an INSERT with a 23505
+// catch that silently dropped any second alias attempt from the same anon —
+// e.g. a household member re-clicking a redirect with a different recipient
+// token would have been lost. Now the newer stitch wins; trg_log_alias_conflict
+// captures the overwrite for post-hoc review.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -33,20 +36,27 @@ export async function stitchIdentity(
     const { error } = await supabase
       .schema("chapter_identity")
       .from("identity_aliases")
-      .insert({
-        ts: new Date().toISOString(),
-        client_key,
-        from_identity_key,
-        to_identity_key,
-        method: "redirect_handoff",
-        reason,
-        metadata: metadata ?? null,
-      });
-    // 23505 = unique_violation = row already exists; ignore (idempotent semantic).
-    if (error && (error as any).code !== "23505") {
-      console.warn(`[identity-stitch] insert failed (${reason}):`, error.message);
+      .upsert(
+        {
+          ts: new Date().toISOString(),
+          client_key,
+          from_identity_key,
+          to_identity_key,
+          method: "redirect_handoff",
+          reason,
+          metadata: metadata ?? null,
+        },
+        {
+          // Target the 2-col unique index (client_key, from_identity_key). The
+          // 3-col unique was dropped 2026-07-24 as strictly subsumed. Default
+          // ignoreDuplicates=false → last-wins UPDATE on conflict.
+          onConflict: "client_key,from_identity_key",
+        },
+      );
+    if (error) {
+      console.warn(`[identity-stitch] upsert failed (${reason}):`, error.message);
     }
   } catch (err) {
-    console.warn(`[identity-stitch] insert threw (${reason}):`, err);
+    console.warn(`[identity-stitch] upsert threw (${reason}):`, err);
   }
 }

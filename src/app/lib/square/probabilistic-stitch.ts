@@ -114,7 +114,25 @@ export async function attemptProbabilisticStitch({
           'probabilistic_time_window', ${confidence}, false,
           'square_booking_probabilistic_stitch', ${metadata}::jsonb
         )
-        ON CONFLICT (client_key, from_identity_key, to_identity_key) DO NOTHING
+        -- 2-col ON CONFLICT + last-wins (2026-07-24 fix). Was DO NOTHING against
+        -- the 3-col constraint (dropped as redundant). CAVEAT specific to this
+        -- site: this is a PROBABILISTIC stitch (is_deterministic=false,
+        -- confidence≤80). Under pure last-wins, a probabilistic match COULD
+        -- overwrite a prior deterministic mapping (confidence=100) — that would
+        -- be a quality regression. trg_log_alias_conflict captures every
+        -- overwrite; if the conflict table shows this pattern in practice,
+        -- add a confidence guard here:
+        --   ...DO UPDATE SET ... WHERE EXCLUDED.confidence >=
+        --     chapter_identity.identity_aliases.confidence
+        ON CONFLICT (client_key, from_identity_key)
+        DO UPDATE SET
+          to_identity_key = EXCLUDED.to_identity_key,
+          ts = EXCLUDED.ts,
+          method = EXCLUDED.method,
+          confidence = EXCLUDED.confidence,
+          is_deterministic = EXCLUDED.is_deterministic,
+          reason = EXCLUDED.reason,
+          metadata = EXCLUDED.metadata
       `;
 
       return {

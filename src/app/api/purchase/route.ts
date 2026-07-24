@@ -222,8 +222,14 @@ export async function POST(req: NextRequest) {
               (client_key, ts, from_identity_key, to_identity_key, confidence, is_deterministic, reason)
             VALUES
               (${clientKey}, ${aliasTs}, ${fromKey}, ${emailKey}, 100, true, 'purchase_identify_call')
-            ON CONFLICT (client_key, from_identity_key, to_identity_key)
+            -- ON CONFLICT names the 2-col unique index identity_aliases_from_unique.
+            -- The 3-col index was dropped 2026-07-24 because it was strictly subsumed
+            -- and caused silent-drop failures when app code named it here.
+            -- Last-wins: overwrite to_identity_key when the same anon later maps to
+            -- a different identity. trg_log_alias_conflict captures the overwrite.
+            ON CONFLICT (client_key, from_identity_key)
             DO UPDATE SET
+              to_identity_key = EXCLUDED.to_identity_key,
               ts = EXCLUDED.ts,
               confidence = EXCLUDED.confidence,
               is_deterministic = EXCLUDED.is_deterministic,
@@ -285,8 +291,10 @@ export async function POST(req: NextRequest) {
             (client_key, ts, from_identity_key, to_identity_key, confidence, is_deterministic, reason)
           VALUES
             (${clientKey}, ${aliasTs}, ${fromKey}, ${emailKey}, 100, true, 'purchase_cart_token_bridge')
-          ON CONFLICT (client_key, from_identity_key, to_identity_key)
+          -- See identity_aliases fix note above (Phase 1) — 2-col conflict, last-wins.
+          ON CONFLICT (client_key, from_identity_key)
           DO UPDATE SET
+            to_identity_key = EXCLUDED.to_identity_key,
             ts = EXCLUDED.ts,
             confidence = EXCLUDED.confidence,
             is_deterministic = EXCLUDED.is_deterministic,
@@ -361,8 +369,10 @@ export async function POST(req: NextRequest) {
             (client_key, ts, from_identity_key, to_identity_key, confidence, is_deterministic, reason)
           VALUES
             (${clientKey}, ${aliasTs}, ${phoneKey}, ${emailKey}, 100, true, 'purchase_phone_email_link')
-          ON CONFLICT (client_key, from_identity_key, to_identity_key)
+          -- See identity_aliases fix note above (Phase 1) — 2-col conflict, last-wins.
+          ON CONFLICT (client_key, from_identity_key)
           DO UPDATE SET
+            to_identity_key = EXCLUDED.to_identity_key,
             ts = EXCLUDED.ts,
             confidence = EXCLUDED.confidence,
             is_deterministic = EXCLUDED.is_deterministic,

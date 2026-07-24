@@ -13,7 +13,9 @@ import { unauthorizedIfNotCron } from "@/app/lib/monitoring/auth";
 //
 //   2. Inquiry submissions:  chapter_inquiries.threads where created_by_email
 //      matches a prospect's email. One interaction per new thread.
-//      type='inquiry_submitted', source='chapter_inquiry'.
+//      type='inquiry', source='chapter_inquiry'. (Note: the internal source
+//      label in results/GChat alerts below is still 'inquiry_submitted' —
+//      that's the branch label, distinct from the DB type value.)
 //
 // Both producers are idempotent via partial UNIQUE indexes on
 // metadata->>'journey_id' / metadata->>'thread_id'. Reruns are safe.
@@ -161,7 +163,11 @@ export async function GET(req: NextRequest) {
             (prospect_id, type, source, occurred_at, summary, metadata)
           SELECT
             ct.prospect_id,
-            'inquiry_submitted',
+            -- 'inquiry' matches crm.interactions.interactions_type_check
+            -- (nouns only: site_visit / gbp / yelp / inquiry / review / referral / other).
+            -- The producer was writing 'inquiry_submitted' since June 19, 2026, which
+            -- the CHECK constraint has silently rejected every night.
+            'inquiry',
             'chapter_inquiry',
             ct.created_at,
             'Inquiry: ' || ct.subject,
@@ -172,7 +178,7 @@ export async function GET(req: NextRequest) {
             )
           FROM candidate_threads ct
           ON CONFLICT (prospect_id, (metadata->>'thread_id'))
-            WHERE type = 'inquiry_submitted' AND metadata ? 'thread_id'
+            WHERE type = 'inquiry' AND metadata ? 'thread_id'
             DO NOTHING
           RETURNING 1
         )

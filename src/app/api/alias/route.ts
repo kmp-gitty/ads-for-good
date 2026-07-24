@@ -96,15 +96,23 @@ export async function POST(req: NextRequest) {
   try {
     await withClient(client_key, async (tx) => {
       const metadataParam = metadata ? tx.json(metadata) : null;
-      // Use ON CONFLICT DO NOTHING to match the original's "ignore dupes" semantic
-      // (the row-by-PK uniqueness here is on (client_key, from_identity_key, to_identity_key)).
+      // 2-col ON CONFLICT + last-wins (2026-07-24 fix). Was DO NOTHING against
+      // the 3-col constraint (which was strictly subsumed + dropped) — silent
+      // failure when the same anon was aliased to a different identity later.
+      // Now the manually-supplied alias wins; trg_log_alias_conflict captures.
       await tx`
         INSERT INTO chapter_identity.identity_aliases (
           ts, client_key, from_identity_key, to_identity_key, method, reason, metadata
         ) VALUES (
           ${now}, ${client_key}, ${from_identity_key}, ${to_identity_key}, ${method}, ${reason}, ${metadataParam}::jsonb
         )
-        ON CONFLICT (client_key, from_identity_key, to_identity_key) DO NOTHING
+        ON CONFLICT (client_key, from_identity_key)
+        DO UPDATE SET
+          to_identity_key = EXCLUDED.to_identity_key,
+          ts = EXCLUDED.ts,
+          method = EXCLUDED.method,
+          reason = EXCLUDED.reason,
+          metadata = EXCLUDED.metadata
       `;
     });
   } catch (err: any) {

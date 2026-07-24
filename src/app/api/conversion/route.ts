@@ -146,8 +146,14 @@ export async function POST(req: NextRequest) {
               (client_key, ts, from_identity_key, to_identity_key, confidence, is_deterministic, reason)
             VALUES
               (${clientKey}, ${aliasTs}, ${fromKey}, ${emailKey}, 100, true, 'explicit_identify_call')
-            ON CONFLICT (client_key, from_identity_key, to_identity_key)
+            -- 2-col ON CONFLICT + last-wins (2026-07-24 fix). The 3-col unique
+            -- index was strictly subsumed by (client_key, from_identity_key) and
+            -- was dropped; app code previously named it here and silently swallowed
+            -- collisions when the same anon later mapped to a different identity.
+            -- trg_log_alias_conflict captures the overwrite for post-hoc review.
+            ON CONFLICT (client_key, from_identity_key)
             DO UPDATE SET
+              to_identity_key = EXCLUDED.to_identity_key,
               ts = EXCLUDED.ts,
               confidence = EXCLUDED.confidence,
               is_deterministic = EXCLUDED.is_deterministic,
