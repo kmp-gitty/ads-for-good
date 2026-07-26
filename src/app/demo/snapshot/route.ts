@@ -1,4 +1,21 @@
 // /src/app/demo/snapshot/route.ts
+//
+// Serves the live event feed + session context for /internal/demo and
+// /internal/prompt-playground (both poll every 2s). Returns identity + consent +
+// last N events for the current journey (from cookies).
+//
+// The `dashboard_json` field in the response is a legacy shape. The RPC that
+// populated it (public.dashboard_snapshot_for_client) + its sibling view
+// (public.dashboard_snapshot_v1) + supporting view (chapter_attribution.
+// attribution_linear) were dropped 2026-07-26 — they were Fix #10 scaffolding
+// for a planned dashboard that shipped in June using different RPCs, then went
+// orphaned. Meanwhile the RPC had been throwing "relation does not exist" every
+// 2s while /demo was open, since May 7 when Fix #10 dropped its dependencies.
+//
+// No consumer of this route reads dashboard_json — the demo page renders only
+// anon_id / journey_id / session / events. Keeping the field in the response
+// as empty defaults for API-shape compat.
+
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { chapterSchemas } from "@/app/lib/chapter-db";
@@ -15,17 +32,10 @@ function channelFromUtm(utm: any) {
   return { utm_source: src, utm_medium: med, utm_campaign: camp };
 }
 
-function daysAgoIso(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString();
-}
-
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const client_key = searchParams.get("client_key")?.trim();
-    const lite = searchParams.get("lite") === "true";
 
     if (!client_key) {
       return NextResponse.json({ error: "Missing client_key" }, { status: 400 });
@@ -36,172 +46,21 @@ export async function GET(req: NextRequest) {
     const journey_id = req.cookies.get(journeyCookieName)?.value || null;
     const anon_id = req.cookies.get(anonCookieName)?.value || null;
 
-    const since = daysAgoIso(7);
-
-    let dashboard_json: any = {
-      kpi_tiles: {
-        revenue: null,
-        purchases: null,
-        leads: null,
-        aov: null,
-        currency: "USD",
-      },
+    // dashboard_json kept as empty-defaults for response-shape compat. The
+    // computation that used to fill it was Fix #10 scaffolding + is now dropped.
+    const dashboard_json: any = {
+      kpi_tiles: { revenue: null, purchases: null, leads: null, aov: null, currency: "USD" },
       journey_tiles: {
-        journey_count: null,
-        anon_journeys: null,
-        idd_journeys: null,
-        chapter_count: null,
-        avg_chapter_seconds: null,
-        avg_touchpoints: null,
-        avg_unique_channels: null,
+        journey_count: null, anon_journeys: null, idd_journeys: null,
+        chapter_count: null, avg_chapter_seconds: null,
+        avg_touchpoints: null, avg_unique_channels: null,
         recent_events_count: null,
       },
-      first_touch: [],
-      last_touch: [],
-      linear_attribution: [],
-      correlation_lift: [],
-      top5_chapter_paths: [],
-      top_event_names: [],
-      top_page_paths: [],
+      first_touch: [], last_touch: [], linear_attribution: [],
+      correlation_lift: [], top5_chapter_paths: [],
+      top_event_names: [], top_page_paths: [],
     };
-
-    let dashboard_error: string | null = null;
-
-    if (!lite) {
-      const { data: dash, error: dashErr } = await supabase
-        .rpc("dashboard_snapshot_for_client", { p_client_key: client_key })
-        .maybeSingle();
-
-      if (dashErr) {
-        dashboard_error = dashErr.message;
-      } else {
-        dashboard_json = (dash as any)?.dashboard_json ?? dashboard_json;
-      }
-    } else {
-      const journeyApi = chapterSchemas.journey(supabase);
-      const ingestApi = chapterSchemas.ingest(supabase);
-
-      const { data: journeyRows, error: journeyRowsErr } = await journeyApi
-      .from("journeys_filtered_v2")
-      .select("last_identity_key")
-      .eq("client_key", client_key)
-      .gte("first_seen", since)
-      .limit(100000);
-
-      const [
-        recentEventsRes,
-        topEventsRes,
-        topPagesRes,
-        topPixelRowsRes,
-      ] = await Promise.all([
-
-        ingestApi
-          .from("pixel_events")
-          .select("id", { count: "exact", head: true })
-          .eq("client_key", client_key)
-          .gte("ts", since)
-          .not("page_path", "ilike", "/account%")
-          .not("page_path", "ilike", "/challenge%")
-          .not("page_path", "ilike", "/register%")
-          .not("page_path", "ilike", "/login%"),
-
-        ingestApi
-          .from("pixel_events")
-          .select("event_name")
-          .eq("client_key", client_key)
-          .gte("ts", since)
-          .not("page_path", "ilike", "/account%")
-          .not("page_path", "ilike", "/challenge%")
-          .not("page_path", "ilike", "/register%")
-          .not("page_path", "ilike", "/login%")
-          .limit(5000),
-
-        ingestApi
-          .from("pixel_events")
-          .select("page_path")
-          .eq("client_key", client_key)
-          .gte("ts", since)
-          .not("page_path", "is", null)
-          .not("page_path", "ilike", "/account%")
-          .not("page_path", "ilike", "/challenge%")
-          .not("page_path", "ilike", "/register%")
-          .not("page_path", "ilike", "/login%")
-          .limit(5000),
-
-        ingestApi
-          .from("pixel_events")
-          .select("utm")
-          .eq("client_key", client_key)
-          .gte("ts", since)
-          .not("page_path", "ilike", "/account%")
-          .not("page_path", "ilike", "/challenge%")
-          .not("page_path", "ilike", "/register%")
-          .not("page_path", "ilike", "/login%")
-          .limit(5000),
-      ]);
-
-      const liteErrors = [
-        journeyRowsErr,
-        recentEventsRes.error,
-        topEventsRes.error,
-        topPagesRes.error,
-        topPixelRowsRes.error,
-      ].filter(Boolean);
-
-      if (liteErrors.length > 0) {
-        dashboard_error = liteErrors.map((e: any) => e.message).join(" | ");
-      }
-
-      const topEventsMap = new Map<string, number>();
-      for (const row of topEventsRes.data || []) {
-        const key = row.event_name || "(unknown)";
-        topEventsMap.set(key, (topEventsMap.get(key) || 0) + 1);
-      }
-      const topEventNames = [...topEventsMap.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([event_name, count]) => ({ event_name, count }));
-
-      const topPagesMap = new Map<string, number>();
-      for (const row of topPagesRes.data || []) {
-        const key = row.page_path || "(unknown)";
-        topPagesMap.set(key, (topPagesMap.get(key) || 0) + 1);
-      }
-      const topPagePaths = [...topPagesMap.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([page_path, count]) => ({ page_path, count }));
-
-      const topSourcesMap = new Map<string, number>();
-      for (const row of topPixelRowsRes.data || []) {
-        const src = row?.utm?.utm_source ? String(row.utm.utm_source) : "(direct)";
-        topSourcesMap.set(src, (topSourcesMap.get(src) || 0) + 1);
-      }
-      const topSources = [...topSourcesMap.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([channel, chapter_count]) => ({ channel, chapter_count }));
-
-      dashboard_json = {
-        ...dashboard_json,
-        journey_tiles: {
-          ...dashboard_json.journey_tiles,
-          journey_count: journeyRows?.length ?? 0,
-          anon_journeys: (journeyRows || []).filter((r: any) => !r.last_identity_key).length,
-          idd_journeys: (journeyRows || []).filter((r: any) => !!r.last_identity_key).length,
-          recent_events_count: recentEventsRes.count ?? 0,
-        },
-        first_touch: topSources,
-        last_touch: topEventNames.map((r) => ({
-          channel: r.event_name,
-          chapter_count: r.count,
-        })),
-        top_event_names: topEventNames,
-        top_page_paths: topPagePaths,
-      };
-
-      dashboard_error = dashboard_error || "Lite mode enabled; attribution queries skipped.";
-    }
+    const dashboard_error: string | null = null;
 
     let session: any = {
       journey_id,
