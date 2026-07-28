@@ -1,10 +1,35 @@
 "use client";
 
+// Internal (operator) redirect-rule builder — restyled June 2026 to match the
+// visual language of the self-serve link editor. Two-column layout with the
+// rule form on the left + live URL preview + token explainer + resolved-URL
+// tester on the right (sticky so operators can eyeball the effect as they
+// tweak).
+//
+// All business logic — 17-condition support (via ConditionBuilder), preset
+// destination templates, token dictionary, token-in-template diff, URL tester
+// simulator, create/update server-action wiring — preserved from the prior
+// Tailwind implementation.
+
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { createRule, updateRule, type RuleFormInput } from "../_actions";
 import ConditionBuilder from "./ConditionBuilder";
+import {
+  INK,
+  MUTED,
+  FAINT,
+  ORANGE,
+  LINE,
+  PANEL,
+  SUBTLE,
+  inp,
+  inpMono,
+  Section,
+  PrimaryButton,
+  ErrorBanner,
+} from "@/app/lib/ui/builder-primitives";
 
 export type RuleFormProps = {
   client_key: string;
@@ -19,17 +44,17 @@ export type RuleFormProps = {
   };
 };
 
-// Common destination-template patterns. Click to populate the field.
+// Common destination-template patterns. Click a chip to populate the field.
 const DESTINATION_PRESETS: { label: string; description: string; template: string }[] = [
   {
-    label: "Pass-through with UTM tracking",
-    description: "Land them at the URL passed in `?to=`, preserving UTM params. Used by outreach + Google Ads tracking template.",
+    label: "Pass-through with UTM",
+    description: "Land at the URL passed in `?to=`, preserving UTM params. Used by outreach + Google Ads tracking template.",
     template:
       "{q:to}?utm_source={q:utm_source}&utm_medium={q:utm_medium}&utm_campaign={q:utm_campaign}&utm_content={q:utm_content}&utm_term={q:utm_term}",
   },
   {
     label: "Fixed URL + UTM passthrough",
-    description: "Always land at a specific URL (override) but preserve the marketing UTM params from the inbound link. Use this for rules that override a catch-all but still want attribution.",
+    description: "Always land at a specific URL but preserve the marketing UTM params. Good for rules overriding a catch-all while keeping attribution.",
     template:
       "https://ads4good.com/landing?utm_source={q:utm_source}&utm_medium={q:utm_medium}&utm_campaign={q:utm_campaign}&utm_content={q:utm_content}&utm_term={q:utm_term}",
   },
@@ -40,17 +65,17 @@ const DESTINATION_PRESETS: { label: string; description: string; template: strin
   },
   {
     label: "Personalized by identity",
-    description: "Add the visitor's identity hash to the URL so the destination page can recognize them.",
+    description: "Add the visitor's identity hash so the destination page can recognize them.",
     template: "https://ads4good.com/welcome?id={identity_key}",
   },
   {
     label: "Geo-targeted (country)",
-    description: "Append visitor's country code. Useful for routing inside a multi-region landing page.",
+    description: "Append visitor's country code. Useful for multi-region landing pages.",
     template: "https://ads4good.com/lp?region={country}&utm_source={q:utm_source}",
   },
   {
     label: "Mobile vs desktop",
-    description: "Use {device_type} to vary which destination the visitor sees. Often paired with two priority-stacked rules.",
+    description: "Use {device_type} to vary destination. Often paired with priority-stacked rules.",
     template: "https://ads4good.com/mobile-landing?utm_source={q:utm_source}",
   },
 ];
@@ -58,8 +83,8 @@ const DESTINATION_PRESETS: { label: string; description: string; template: strin
 // Token glossary for the live explainer.
 const TOKEN_DOCS: { token: string; meaning: string }[] = [
   { token: "{q:NAME}", meaning: "Value of `?NAME=…` in the inbound URL (URL-encoded). Common: {q:to}, {q:utm_source}, {q:gclid}." },
-  { token: "{identity_key}", meaning: "The visitor's chapter identity key (their anonymous_id or canonical resolved key)." },
-  { token: "{country}", meaning: "Visitor's country code (US, GB, ...) from Vercel's geo headers." },
+  { token: "{identity_key}", meaning: "Visitor's Chapter identity key (anonymous_id or canonical resolved key)." },
+  { token: "{country}", meaning: "Visitor's country code (US, GB, …) from Vercel's geo headers." },
   { token: "{region}", meaning: "Visitor's region/state code." },
   { token: "{device_type}", meaning: "mobile / tablet / desktop / bot / unknown — from User-Agent parsing." },
   { token: "{os}", meaning: "ios / android / macos / windows / linux / unknown." },
@@ -73,13 +98,13 @@ export default function RuleForm({ client_key, initial }: RuleFormProps) {
   const [slug, setSlug] = useState(initial?.slug ?? "");
   const [priority, setPriority] = useState(String(initial?.rule_priority ?? 100));
   const [conditions, setConditions] = useState(
-    initial?.condition_jsonb ? JSON.stringify(initial.condition_jsonb, null, 2) : "{}"
+    initial?.condition_jsonb ? JSON.stringify(initial.condition_jsonb, null, 2) : "{}",
   );
   const [destination, setDestination] = useState(initial?.destination_template ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
 
-  // URL tester state
+  // URL tester
   const [testUrl, setTestUrl] = useState("");
 
   const tokensInDestination = useMemo(() => {
@@ -95,13 +120,12 @@ export default function RuleForm({ client_key, initial }: RuleFormProps) {
     try {
       const url = new URL(testUrl);
       let result = destination;
-      // {q:NAME} → URL-encoded value of inbound query
+      // {q:NAME} → URL-encoded value of inbound query (mirrors template.ts).
       result = result.replace(/\{q:([^}]+)\}/g, (_match, name) => {
         const v = url.searchParams.get(name) ?? "";
-        // URL-encode values that aren't themselves URLs (mirrors template.ts logic)
         return /^https?:\/\//i.test(v) ? v : encodeURIComponent(v);
       });
-      // Reserved vars — show placeholders (we can't simulate them without a real visitor)
+      // Reserved vars — placeholders since we can't simulate real visitors.
       result = result.replace(/\{identity_key\}/g, "anon-…");
       result = result.replace(/\{journey_id\}/g, "journey-…");
       result = result.replace(/\{country\}/g, "US");
@@ -143,177 +167,255 @@ export default function RuleForm({ client_key, initial }: RuleFormProps) {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Primer — shown only on the new-rule form to avoid clutter on edits */}
+    <form onSubmit={onSubmit} style={{ padding: 0 }}>
+      {/* Primer — new-rule form only, to avoid clutter on edits */}
       {!initial && (
-        <div className="rounded-2xl border border-orange-200 bg-orange-50/60 p-5 text-sm text-neutral-700">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-orange-800">
+        <div
+          style={{
+            border: `1px solid ${ORANGE}44`,
+            background: SUBTLE,
+            borderRadius: 12,
+            padding: "14px 18px",
+            marginBottom: 20,
+            fontSize: 13,
+            color: INK,
+            lineHeight: 1.55,
+          }}
+        >
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: ORANGE, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 6 }}>
             How a rule works
-          </h2>
-          <p className="mt-2 leading-relaxed">
-            When a visitor hits <code className="rounded bg-white px-1 py-0.5 text-xs">/r/{client_key}/SLUG</code>,
-            we walk all enabled rules in priority order (lower first). The first rule whose conditions match
-            gets used. Its <strong>destination template</strong> builds the final URL we 302 to.
+          </div>
+          <p style={{ margin: "0 0 8px" }}>
+            When a visitor hits{" "}
+            <code style={{ background: "white", padding: "1px 5px", borderRadius: 4, border: `1px solid ${LINE}`, fontSize: 12 }}>
+              /r/{client_key}/SLUG
+            </code>
+            , we walk all enabled rules in priority order (lower first). The first rule whose
+            conditions match gets used. Its <strong>destination template</strong> builds the final
+            URL we 302 to.
           </p>
-          <ul className="mt-2 list-disc pl-5 leading-relaxed">
-            <li><strong>Slug</strong> — appears in the URL. Group related rules with the same slug.</li>
-            <li><strong>Priority</strong> — lower wins. Use this when you have a specific rule + a fallback catch-all.</li>
-            <li><strong>Conditions</strong> — leave empty <code className="rounded bg-white px-1 py-0.5 text-xs">{"{}"}</code> for catch-all.</li>
-            <li><strong>Destination</strong> — use <code className="rounded bg-white px-1 py-0.5 text-xs">{"{q:NAME}"}</code> to pull from the inbound URL.</li>
+          <ul style={{ margin: "0 0 0 20px", padding: 0, listStyle: "disc", color: MUTED, fontSize: 12.5, lineHeight: 1.6 }}>
+            <li><strong>Slug</strong> — appears in the URL. Group related rules by slug.</li>
+            <li><strong>Priority</strong> — lower wins. Use for a specific rule + fallback catch-all.</li>
+            <li><strong>Conditions</strong> — leave empty for catch-all.</li>
+            <li><strong>Destination</strong> — use <code style={{ background: "white", padding: "0 4px", borderRadius: 3, border: `1px solid ${LINE}` }}>{"{q:NAME}"}</code> to pull from the inbound URL.</li>
           </ul>
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="space-y-6 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <div className="grid grid-cols-3 gap-4">
-          <label className="col-span-2 text-sm">
-            <span className="block font-semibold text-neutral-800">Slug</span>
-            <span className="block text-xs text-neutral-500">
-              URL component: /r/{client_key}/<strong>{slug || "<slug>"}</strong>
-            </span>
+      <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
+        {/* Left — form */}
+        <div style={{ flex: "1 1 480px", minWidth: 0, maxWidth: 640 }}>
+          {/* Slug + priority row */}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
+            <Section
+              label="Slug"
+              hint={
+                slug ? `URL: /r/${client_key}/${slug}` : `URL: /r/${client_key}/<slug>`
+              }
+            >
+              <input
+                type="text"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="booknow"
+                required
+                style={inpMono}
+              />
+            </Section>
+            <Section label="Priority" hint="Lower wins. 100 = default.">
+              <input
+                type="number"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                min={0}
+                required
+                style={inpMono}
+              />
+            </Section>
+          </div>
+
+          {/* Conditions (structured) */}
+          <Section
+            label="Conditions"
+            hint="Pick the visitor / time / context filters that must ALL match. No conditions = catch-all (always matches)."
+          >
+            <ConditionBuilder jsonValue={conditions} onChange={setConditions} />
+          </Section>
+
+          {/* Destination */}
+          <Section
+            label="Destination template"
+            hint="Click a preset to fill the field, or write your own. Tokens like {q:utm_source} are replaced when a visitor clicks."
+          >
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+              {DESTINATION_PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => setDestination(p.template)}
+                  title={p.description}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: INK,
+                    background: "white",
+                    border: `1px solid ${LINE}`,
+                    borderRadius: 8,
+                    padding: "6px 10px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
             <input
               type="text"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="booknow"
+              value={destination}
+              onChange={(e) => setDestination(e.target.value)}
+              placeholder="https://ads4good.com/landing?utm_source={q:utm_source}"
               required
-              className="mt-2 w-full rounded-md border border-neutral-300 px-3 py-2 font-mono text-sm"
+              style={inpMono}
             />
-          </label>
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Priority</span>
-            <span className="block text-xs text-neutral-500">Lower wins. 100 = default.</span>
+            {/* Live token explainer */}
+            {tokensInDestination.length > 0 && (
+              <div style={{ marginTop: 10, border: `1px solid ${LINE}`, background: PANEL, borderRadius: 8, padding: "10px 12px", fontSize: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>
+                  Tokens in this template
+                </div>
+                <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4 }}>
+                  {tokensInDestination.map((t) => {
+                    const meaning = t.startsWith("{q:")
+                      ? `Pulled from the inbound URL's ?${t.slice(3, -1)}=… param`
+                      : TOKEN_DOCS.find((d) => d.token === t)?.meaning ??
+                        "Unknown token — will render empty.";
+                    return (
+                      <li key={t} style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                        <code
+                          style={{
+                            background: "white",
+                            padding: "1px 5px",
+                            borderRadius: 4,
+                            border: `1px solid ${LINE}`,
+                            fontSize: 11.5,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {t}
+                        </code>
+                        <span style={{ color: MUTED }}>{meaning}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </Section>
+
+          {/* Description */}
+          <Section label="Description (optional)" hint="For operator clarity — not shown to visitors.">
             <input
-              type="number"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              min={0}
-              required
-              className="mt-2 w-full rounded-md border border-neutral-300 px-3 py-2 font-mono text-sm"
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Returning customers with an open cart → cart page with discount banner"
+              style={inp}
             />
+          </Section>
+
+          {/* Enabled */}
+          <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, fontSize: 14, color: INK, cursor: "pointer" }}>
+            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            Enabled
           </label>
+
+          <ErrorBanner message={error} />
+
+          <div style={{ display: "flex", gap: 10, marginTop: 22, alignItems: "center" }}>
+            <PrimaryButton type="submit" disabled={pending}>
+              {pending ? "Saving…" : initial ? "Save changes" : "Create rule"}
+            </PrimaryButton>
+            <Link
+              href={`/internal/redirect-rules/${client_key}`}
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: MUTED,
+                textDecoration: "none",
+                padding: "11px 10px",
+              }}
+            >
+              Cancel
+            </Link>
+          </div>
         </div>
 
-        <div>
-          <div className="text-sm font-semibold text-neutral-800">Conditions</div>
-          <div className="mb-2 text-xs text-neutral-500">
-            Pick the visitor / time / context filters that must ALL match for this rule to fire. No conditions = catch-all (always matches).
-          </div>
-          <ConditionBuilder jsonValue={conditions} onChange={setConditions} />
-        </div>
-
-        {/* Destination preset chips */}
-        <div className="space-y-2">
-          <div className="text-sm font-semibold text-neutral-800">Destination template</div>
-          <div className="text-xs text-neutral-500">
-            Click a preset to fill the field, or write your own. Tokens like <code className="rounded bg-neutral-100 px-1 py-0.5">{"{q:utm_source}"}</code> are replaced when a visitor clicks.
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {DESTINATION_PRESETS.map((p) => (
-              <button
-                key={p.label}
-                type="button"
-                onClick={() => setDestination(p.template)}
-                title={p.description}
-                className="rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-700 hover:border-orange-400 hover:bg-orange-50"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <input
-            type="text"
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-            placeholder="https://ads4good.com/landing?utm_source={q:utm_source}"
-            required
-            className="mt-2 w-full rounded-md border border-neutral-300 px-3 py-2 font-mono text-xs"
-          />
-
-          {/* Live token explainer — shows ONLY the tokens currently in the field */}
-          {tokensInDestination.length > 0 && (
-            <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs">
-              <div className="font-semibold text-neutral-700">Tokens in this template:</div>
-              <ul className="mt-1 space-y-1">
-                {tokensInDestination.map((t) => {
-                  const meaning =
-                    t.startsWith("{q:")
-                      ? `Pulled from the inbound URL's \`?${t.slice(3, -1)}=…\` param`
-                      : TOKEN_DOCS.find((d) => d.token === t)?.meaning ?? "Unknown token — will render empty.";
-                  return (
-                    <li key={t}>
-                      <code className="rounded bg-white px-1.5 py-0.5 text-[11px] font-mono">{t}</code>
-                      <span className="ml-2 text-neutral-600">{meaning}</span>
-                    </li>
-                  );
-                })}
-              </ul>
+        {/* Right — sticky URL tester + resolved-URL preview */}
+        <div style={{ flex: "1 1 300px", minWidth: 280, maxWidth: 420 }}>
+          <div style={{ position: "sticky", top: 20 }}>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: FAINT,
+                textTransform: "uppercase",
+                letterSpacing: ".1em",
+                marginBottom: 8,
+              }}
+            >
+              Test the rule
             </div>
-          )}
-        </div>
-
-        {/* URL tester */}
-        <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-xs">
-          <div className="text-sm font-semibold text-neutral-800">Test the rule</div>
-          <div className="mt-1 text-neutral-500">
-            Type a sample inbound URL (like what an ad click or outreach link would produce). We&rsquo;ll show what destination the rule would 302 to.
-          </div>
-          <input
-            type="text"
-            value={testUrl}
-            onChange={(e) => setTestUrl(e.target.value)}
-            placeholder={`https://ads4good.com/r/${client_key}/${slug || "slug"}?to=https://ads4good.com/about&utm_source=cold_email`}
-            className="mt-2 w-full rounded-md border border-neutral-300 px-3 py-2 font-mono text-xs"
-          />
-          {previewUrl && (
-            <div className="mt-2 rounded border border-orange-200 bg-orange-50 p-2 font-mono text-[11px] text-neutral-800 break-all">
-              → {previewUrl}
+            <div
+              style={{
+                border: `1px solid ${LINE}`,
+                borderRadius: 12,
+                overflow: "hidden",
+                background: "white",
+                boxShadow: "0 1px 3px rgba(31,45,67,.06)",
+                padding: "16px 18px",
+              }}
+            >
+              <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, lineHeight: 1.5 }}>
+                Type a sample inbound URL. We&rsquo;ll show what destination the rule would 302 to.
+              </div>
+              <input
+                type="text"
+                value={testUrl}
+                onChange={(e) => setTestUrl(e.target.value)}
+                placeholder={`https://ads4good.com/r/${client_key}/${slug || "slug"}?to=https://ads4good.com/about&utm_source=cold_email`}
+                style={{ ...inpMono, fontSize: 11.5 }}
+              />
+              {previewUrl && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    background: SUBTLE,
+                    border: `1px solid ${ORANGE}44`,
+                    borderRadius: 8,
+                    padding: "10px 12px",
+                    fontSize: 11.5,
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                    color: INK,
+                    wordBreak: "break-all",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  → {previewUrl}
+                </div>
+              )}
+              {!testUrl && (
+                <div style={{ marginTop: 10, fontSize: 11.5, color: FAINT, lineHeight: 1.4 }}>
+                  Live preview appears once you enter a sample URL above.
+                </div>
+              )}
             </div>
-          )}
+            <div style={{ marginTop: 10, fontSize: 11.5, color: FAINT, lineHeight: 1.4 }}>
+              Identity + geo tokens use placeholder values (real values come from the visitor).
+            </div>
+          </div>
         </div>
-
-        <label className="block text-sm">
-          <span className="block font-semibold text-neutral-800">Description (optional)</span>
-          <span className="block text-xs text-neutral-500">For operator clarity only — not shown to visitors.</span>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Returning customers with an open cart → cart page with discount banner"
-            className="mt-2 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </label>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
-            className="rounded"
-          />
-          <span className="font-semibold text-neutral-800">Enabled</span>
-        </label>
-
-        {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-        )}
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
-          >
-            {pending ? "Saving…" : initial ? "Save changes" : "Create rule"}
-          </button>
-          <Link
-            href={`/internal/redirect-rules/${client_key}`}
-            className="text-sm text-neutral-600 hover:text-neutral-900"
-          >
-            Cancel
-          </Link>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   );
 }

@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import PromptForm, { type ExistingPrompt } from "../../PromptForm";
 
+const INK = "#1F2D43";
+const MUTED = "#5C6B82";
+
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -30,24 +33,30 @@ export default async function EditPromptPage({
 
   if (!prompt) notFound();
 
-  return (
-    <div className="space-y-8">
-      <p className="text-sm text-neutral-500">
-        <Link href={`/internal/identity-prompts/${clientKey}`} className="hover:text-orange-700">
-          ← Back to {clientKey}
-        </Link>
-      </p>
+  const typed = prompt as ExistingPrompt;
 
-      <section>
-        <h2 className="text-lg font-semibold tracking-tight">
-          Edit prompt: <span className="font-mono">{(prompt as ExistingPrompt).slug}</span>
-        </h2>
-        <p className="mt-1 text-sm text-neutral-500">
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <Link
+        href={`/internal/identity-prompts/${clientKey}`}
+        style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}
+      >
+        ← Back to {clientKey}
+      </Link>
+
+      <div>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: "0 0 4px" }}>
+          Edit prompt:{" "}
+          <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", color: MUTED, fontSize: 18 }}>
+            {typed.slug}
+          </span>
+        </h1>
+        <p style={{ fontSize: 13.5, color: MUTED, margin: 0 }}>
           Changes take effect within ~30 seconds (CDN cache TTL).
         </p>
-      </section>
+      </div>
 
-      <PromptForm client_key={clientKey} prompt={prompt as ExistingPrompt} />
+      <PromptForm client_key={clientKey} prompt={typed} />
     </div>
   );
 }

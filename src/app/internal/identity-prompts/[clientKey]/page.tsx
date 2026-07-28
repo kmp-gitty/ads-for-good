@@ -11,6 +11,15 @@ const supabase = createClient(
 
 export const dynamic = "force-dynamic";
 
+const INK = "#1F2D43";
+const MUTED = "#5C6B82";
+const FAINT = "#8A98AD";
+const ORANGE = "#E36410";
+const LINE = "#E5E0D4";
+const PANEL = "#FBFAF6";
+const SUBTLE = "#FFF4EC";
+const GREEN = "#2E7D5B";
+
 type PromptRow = {
   id: string;
   slug: string;
@@ -33,20 +42,60 @@ type PromptRow = {
   last_hit_at: string | null;
 };
 
+const PRESET_LABELS: Record<string, string> = {
+  email_exchange: "Email Exchange",
+  custom_form: "Custom Form",
+  custom_notification: "Custom Notification",
+  phone_call: "Phone Call",
+  make_an_offer: "Make an Offer",
+  remind_me: "Remind Me",
+};
+
 function describeTrigger(t: PromptRow["trigger_jsonb"]): string {
   switch (t.type) {
     case "click_element":
-      return `Click on ${t.selector}`;
+      return `On click · ${t.selector ?? "?"}`;
     case "exit_intent":
-      return "Exit intent";
+      return "On exit intent";
     case "time_on_page":
-      return `After ${(t.delay_ms ?? 15000) / 1000}s on page`;
+      return `After ${Math.round((t.delay_ms ?? 15000) / 1000)}s on page`;
     case "scroll_depth":
-      return `After ${t.percent ?? 50}% scroll`;
+      return `At ${t.percent ?? 50}% scroll`;
     default:
       return JSON.stringify(t);
   }
 }
+
+const chip: React.CSSProperties = {
+  fontSize: 10.5,
+  color: ORANGE,
+  background: SUBTLE,
+  border: `1px solid ${ORANGE}33`,
+  borderRadius: 999,
+  padding: "2px 8px",
+  textTransform: "uppercase",
+  letterSpacing: ".06em",
+};
+
+const subChip: React.CSSProperties = {
+  fontSize: 11,
+  color: MUTED,
+  background: PANEL,
+  border: `1px solid ${LINE}`,
+  borderRadius: 999,
+  padding: "2px 8px",
+};
+
+const subNavLink: React.CSSProperties = {
+  fontSize: 12.5,
+  fontWeight: 600,
+  color: INK,
+  background: "white",
+  border: `1px solid ${LINE}`,
+  borderRadius: 8,
+  padding: "6px 12px",
+  textDecoration: "none",
+};
 
 export default async function ClientPromptsPage({
   params,
@@ -66,111 +115,107 @@ export default async function ClientPromptsPage({
   const promptList = (prompts as PromptRow[] | null) ?? [];
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-neutral-500">
-          <Link href="/internal/identity-prompts" className="hover:text-orange-700">← All clients</Link>
-        </p>
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/internal/identity-prompts/${clientKey}/templates`}
-            className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-          >
+    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+      {/* Top nav — back link + sub-route chips */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <Link
+          href="/internal/identity-prompts"
+          style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}
+        >
+          ← All clients
+        </Link>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link href={`/internal/identity-prompts/${clientKey}/templates`} style={subNavLink}>
             Email templates →
           </Link>
-          <Link
-            href={`/internal/identity-prompts/${clientKey}/responses`}
-            className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-          >
-            View responses →
+          <Link href={`/internal/identity-prompts/${clientKey}/responses`} style={subNavLink}>
+            Responses →
           </Link>
-          <Link
-            href={`/internal/identity-prompts/${clientKey}/offers`}
-            className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-          >
+          <Link href={`/internal/identity-prompts/${clientKey}/offers`} style={subNavLink}>
             Offers →
           </Link>
-          <Link
-            href={`/internal/identity-prompts/${clientKey}/offer-thresholds`}
-            className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-          >
+          <Link href={`/internal/identity-prompts/${clientKey}/offer-thresholds`} style={subNavLink}>
             Offer thresholds →
           </Link>
         </div>
       </div>
 
-      <section>
-        <h2 className="text-lg font-semibold tracking-tight">
-          <span className="font-mono">{clientKey}</span>
+      {/* Header */}
+      <div>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: INK, margin: "0 0 4px", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+          {clientKey}
         </h2>
-        <p className="mt-1 text-sm text-neutral-500">
-          Each prompt fires when its trigger condition matches. Submit captures the email via <code>/api/identify</code>.
+        <p style={{ fontSize: 13.5, color: MUTED, margin: 0, lineHeight: 1.5 }}>
+          Each prompt fires when its trigger condition matches. Submit captures identity via{" "}
+          <code style={{ background: PANEL, padding: "1px 4px", borderRadius: 4, border: `1px solid ${LINE}` }}>/api/identify</code>.
         </p>
-      </section>
+      </div>
 
+      {/* Create new prompt */}
       <section>
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-500">Create a new prompt</h3>
-        <div className="mt-3">
+        <div style={{ fontSize: 12, fontWeight: 700, color: FAINT, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 12 }}>
+          Create a new prompt
+        </div>
+        <div style={{ background: "white", border: `1px solid ${LINE}`, borderRadius: 14, padding: "24px 26px" }}>
           <PromptForm client_key={clientKey} />
         </div>
       </section>
 
+      {/* Existing prompts */}
       <section>
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-500">
+        <div style={{ fontSize: 12, fontWeight: 700, color: FAINT, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 12 }}>
           Existing prompts ({promptList.length})
-        </h3>
+        </div>
         {promptList.length === 0 ? (
-          <p className="mt-2 text-sm text-neutral-500">No prompts yet for this client.</p>
+          <div style={{ border: `1px dashed ${LINE}`, borderRadius: 12, padding: "40px 24px", textAlign: "center", background: PANEL }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: INK, marginBottom: 6 }}>No prompts yet for this client</div>
+            <p style={{ fontSize: 13.5, color: MUTED, margin: "0 auto", maxWidth: 360, lineHeight: 1.5 }}>
+              Use the form above to author your first prompt. Once saved, install the pixel on the client&apos;s storefront so it can fire.
+            </p>
+          </div>
         ) : (
-          <div className="mt-3 space-y-3">
-            {promptList.map(p => (
-              <div key={p.id} className="rounded-2xl border border-neutral-200 bg-white p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-sm font-semibold">{p.slug}</span>
-                      <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
-                        {p.preset_type ?? "email_exchange"}
-                      </span>
-                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
-                        {describeTrigger(p.trigger_jsonb)}
-                      </span>
-                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
-                        collect: {p.input_mode}
-                      </span>
-                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
-                        post-submit: {p.post_submit_action}
-                      </span>
-                      <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
-                        freq: {p.frequency}
-                      </span>
-                      {!p.enabled && (
-                        <span className="rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800">
-                          disabled
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {promptList.map((p) => {
+              const rate = p.hit_count > 0 ? Math.round((p.submit_count / p.hit_count) * 100) : null;
+              return (
+                <div key={p.id} style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 16, background: "white" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: INK, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{p.slug}</span>
+                        <span style={chip}>{PRESET_LABELS[p.preset_type] ?? p.preset_type}</span>
+                        <span style={{ fontSize: 11, color: p.enabled ? GREEN : FAINT, fontWeight: 600 }}>
+                          {p.enabled ? "● Live" : "○ Off"}
                         </span>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                        <span style={subChip}>{describeTrigger(p.trigger_jsonb)}</span>
+                        <span style={subChip}>collect: {p.input_mode}</span>
+                        <span style={subChip}>post-submit: {p.post_submit_action}</span>
+                        <span style={subChip}>freq: {p.frequency}</span>
+                      </div>
+                      {p.headline && (
+                        <p style={{ margin: "6px 0 0", fontSize: 13.5, fontWeight: 600, color: INK }}>{p.headline}</p>
                       )}
-                    </div>
-                    <p className="mt-2 text-sm font-medium text-neutral-800">{p.headline}</p>
-                    {p.body && <p className="mt-1 text-xs text-neutral-500">{p.body}</p>}
-                    {p.offer_code && (
-                      <p className="mt-2 text-xs text-neutral-600">
-                        Offer: <span className="font-mono font-semibold">{p.offer_code}</span>
-                        {p.offer_description && <span className="ml-1 text-neutral-500">— {p.offer_description}</span>}
+                      {p.body && (
+                        <p style={{ margin: "4px 0 0", fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>{p.body}</p>
+                      )}
+                      {p.offer_code && (
+                        <p style={{ margin: "8px 0 0", fontSize: 12, color: MUTED }}>
+                          Offer: <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontWeight: 700, color: INK }}>{p.offer_code}</span>
+                          {p.offer_description && <span style={{ color: FAINT }}> — {p.offer_description}</span>}
+                        </p>
+                      )}
+                      <p style={{ margin: "10px 0 0", fontSize: 11.5, color: FAINT, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                        Shown {p.hit_count}× · Submitted {p.submit_count}×
+                        {rate !== null && <span style={{ marginLeft: 8 }}>({rate}% conversion)</span>}
                       </p>
-                    )}
-                    <p className="mt-2 text-xs text-neutral-400 font-mono">
-                      Shown {p.hit_count}× · Submitted {p.submit_count}×
-                      {p.submit_count > 0 && p.hit_count > 0 && (
-                        <span className="ml-2">
-                          ({Math.round((p.submit_count / p.hit_count) * 100)}% conversion)
-                        </span>
-                      )}
-                    </p>
+                    </div>
+                    <RowActions id={p.id} client_key={clientKey} enabled={p.enabled} />
                   </div>
-                  <RowActions id={p.id} client_key={clientKey} enabled={p.enabled} />
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>

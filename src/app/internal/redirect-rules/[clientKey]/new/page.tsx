@@ -1,6 +1,9 @@
 import Link from "next/link";
 import RuleForm from "../RuleForm";
 
+const INK = "#1F2D43";
+const MUTED = "#5C6B82";
+
 export default async function NewRulePage({
   params,
 }: {
@@ -8,16 +11,20 @@ export default async function NewRulePage({
 }) {
   const { clientKey } = await params;
   return (
-    <>
-      <p className="text-sm text-neutral-500">
-        <Link href={`/internal/redirect-rules/${clientKey}`} className="hover:text-orange-700">
-          ← {clientKey} rules
-        </Link>
-      </p>
-      <h2 className="mt-1 text-lg font-semibold">New rule for <span className="font-mono">{clientKey}</span></h2>
-      <div className="mt-6">
-        <RuleForm client_key={clientKey} />
-      </div>
-    </>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <Link
+        href={`/internal/redirect-rules/${clientKey}`}
+        style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}
+      >
+        ← {clientKey} rules
+      </Link>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: 0 }}>
+        New rule for{" "}
+        <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", color: MUTED, fontSize: 18 }}>
+          {clientKey}
+        </span>
+      </h1>
+      <RuleForm client_key={clientKey} />
+    </div>
   );
 }

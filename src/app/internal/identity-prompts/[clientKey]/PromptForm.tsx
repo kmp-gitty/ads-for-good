@@ -1,5 +1,15 @@
 "use client";
 
+// Operator-facing identity-prompt builder (all 6 MI v2 presets).
+//
+// Visual language ported from the self-serve editor
+// (src/app/chapter/(authed)/prompts/PromptEditor.tsx). Shared primitives come
+// from `@/app/lib/ui/builder-primitives`. All business logic — server-action
+// contract (PromptFormInput), 5 post-submit actions, Email Exchange fields,
+// multi-page + recovery + notification + phone-call + make-an-offer builders,
+// edit-in-place, preset-locked-once-created — is preserved from the previous
+// Tailwind-styled version.
+
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPrompt, updatePrompt, type PromptFormInput } from "../_actions";
@@ -7,8 +17,29 @@ import CustomFormBuilder, { type ContentBlock, type FormField } from "./CustomFo
 import MultiPageBuilder, { type PagesConfig } from "./MultiPageBuilder";
 import RecoveryBuilder, { type RecoveryConfig } from "./RecoveryBuilder";
 import NotificationBuilder, { type NotificationConfig } from "./NotificationBuilder";
-import PhoneCallBuilder, { type PhoneCallConfig, type PhoneCta } from "./PhoneCallBuilder";
+import PhoneCallBuilder, { type PhoneCallConfig } from "./PhoneCallBuilder";
 import MakeAnOfferBuilder, { type MakeAnOfferConfig } from "./MakeAnOfferBuilder";
+import PromptPreview, {
+  type PreviewData,
+} from "@/app/chapter/(authed)/prompts/PromptPreview";
+import type { SelfServePresetType } from "@/app/chapter/(authed)/prompts/types";
+import {
+  INK,
+  MUTED,
+  FAINT,
+  ORANGE,
+  LINE,
+  SUBTLE,
+  PANEL,
+  inp,
+  inpMono,
+  Section,
+  NumRow,
+  PillButton,
+  PrimaryButton,
+  SecondaryButton,
+  ErrorBanner,
+} from "@/app/lib/ui/builder-primitives";
 
 type TriggerType = PromptFormInput["trigger_type"];
 type Frequency = PromptFormInput["frequency"];
@@ -60,26 +91,22 @@ export type ExistingPrompt = {
   } | null;
 };
 
-// Phase 1C — Preset roadmap. Email Exchange is the current v1.5 path.
-// Other presets render through chapterRenderPromptComposable (pixel widget
-// Phase 1B stub) and need their composable form builders to come online
-// before they're useful here.
+// Preset roadmap. Email Exchange / Custom Form / Custom Notification / Phone
+// Call / Make an Offer are all built. Remind Me is queued for Phase 6.
 const PRESET_OPTIONS: {
   value: PresetType;
   label: string;
   description: string;
   phase: number;
+  available: boolean;
 }[] = [
-  { value: "email_exchange",      label: "Email Exchange",      description: "Email field + button + offer reveal on submit. The existing v1 prompt type.",                       phase: 1 },
-  { value: "custom_form",         label: "Custom Form",         description: "Multi-field capture. Lead enrichment + qualification.",                                              phase: 2 },
-  { value: "custom_notification", label: "Custom Notification", description: "Lightweight corner-bubble (Intercom-style). Yes/no, single CTA, soft offers.",                     phase: 4 },
-  { value: "make_an_offer",       label: "Make an Offer",       description: "Cart-recovery bidding with operator-defined thresholds + counter-offer state machine.",            phase: 5 },
-  { value: "phone_call",          label: "Phone Call",          description: "CTA-style click-to-call options. No identity capture — analytics-only.",                            phase: 4 },
-  { value: "remind_me",           label: "Remind Me",           description: "Persistent monitoring (price drops, restocks). Hourly evaluation + notification on trigger.",      phase: 6 },
+  { value: "email_exchange",      label: "Email Exchange",      description: "Email field + button + offer reveal on submit. The v1 prompt type.",                      phase: 1, available: true  },
+  { value: "custom_form",         label: "Custom Form",         description: "Multi-field capture. Lead enrichment + qualification.",                                    phase: 2, available: true  },
+  { value: "custom_notification", label: "Custom Notification", description: "Lightweight corner-bubble (Intercom-style). Yes/no, single CTA, soft offers.",           phase: 4, available: true  },
+  { value: "phone_call",          label: "Phone Call",          description: "CTA-style click-to-call options. No identity capture — analytics-only.",                  phase: 4, available: true  },
+  { value: "make_an_offer",       label: "Make an Offer",       description: "Cart-recovery bidding with operator-defined thresholds + counter-offer state machine.", phase: 5, available: true  },
+  { value: "remind_me",           label: "Remind Me",           description: "Persistent monitoring (price drops, restocks). Hourly evaluation + notification.",       phase: 6, available: false },
 ];
-
-const inputCls =
-  "mt-2 w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder-neutral-400";
 
 export default function PromptForm({
   client_key,
@@ -157,8 +184,8 @@ export default function PromptForm({
     (trig.type as TriggerType) || "click_element",
   );
   const [triggerSelector, setTriggerSelector] = useState(trig.selector ?? "");
-  const [triggerDelayMs, setTriggerDelayMs] = useState(String(trig.delay_ms ?? 15000));
-  const [triggerPercent, setTriggerPercent] = useState(String(trig.percent ?? 50));
+  const [triggerDelayMs, setTriggerDelayMs] = useState(Number(trig.delay_ms ?? 15000));
+  const [triggerPercent, setTriggerPercent] = useState(Number(trig.percent ?? 50));
   const [headline, setHeadline] = useState(prompt?.headline ?? "");
   const [body, setBody] = useState(prompt?.body ?? "");
   const [inputMode, setInputMode] = useState<InputMode>(
@@ -182,15 +209,13 @@ export default function PromptForm({
   const [frequency, setFrequency] = useState<Frequency>(
     (prompt?.frequency as Frequency) || "session",
   );
-  const [frequencyDays, setFrequencyDays] = useState(String(prompt?.frequency_days ?? 90));
+  const [frequencyDays, setFrequencyDays] = useState(Number(prompt?.frequency_days ?? 90));
   const [enabled, setEnabled] = useState(prompt?.enabled ?? true);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    // Phase 4: when notification or phone_call selected, content_blocks comes
-    // from the respective builder (not the form-fields builder).
     let effectiveContentBlocks = multiPageEnabled ? [] : contentBlocks;
     let effectiveContainer: PromptFormInput["container_jsonb"] = null;
     let effectiveSubmitActions: PromptFormInput["submit_actions_jsonb"] = null;
@@ -225,8 +250,8 @@ export default function PromptForm({
       slug: slug.trim().toLowerCase().replace(/\s+/g, "_"),
       trigger_type: triggerType,
       trigger_selector: triggerSelector,
-      trigger_delay_ms: parseInt(triggerDelayMs, 10),
-      trigger_percent: parseInt(triggerPercent, 10),
+      trigger_delay_ms: triggerDelayMs,
+      trigger_percent: triggerPercent,
       headline,
       body,
       input_mode: inputMode,
@@ -242,7 +267,7 @@ export default function PromptForm({
       email_subject: emailSubject,
       email_body: emailBody,
       frequency,
-      frequency_days: parseInt(frequencyDays, 10),
+      frequency_days: frequencyDays,
       enabled,
     };
 
@@ -268,821 +293,568 @@ export default function PromptForm({
     });
   }
 
+  const isAvailable = (v: PresetType) =>
+    !!PRESET_OPTIONS.find((o) => o.value === v)?.available;
+
+  // Which sub-builder should render for the current preset.
+  const showsEmailExchange = presetType === "email_exchange";
+  const showsCustomForm = presetType === "custom_form";
+  const showsNotification = presetType === "custom_notification";
+  const showsPhoneCall = presetType === "phone_call";
+  const showsMakeAnOffer = presetType === "make_an_offer";
+  const showsRemindMe = presetType === "remind_me";
+
   return (
-    <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-      {/* MI v2 Phase 1C — preset picker. Email Exchange is the only fully-
-       *  built path today; other presets are visible-but-disabled with phase
-       *  badges so operators see the roadmap without authoring half-configured
-       *  prompts. Each phase unlocks its tile. */}
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
-          Preset
-        </p>
-        <p className="mt-1 text-xs text-neutral-500">
-          Email Exchange is the v1 prompt type. New preset types unlock as they ship.
-        </p>
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {PRESET_OPTIONS.map((opt) => {
-            const isCurrent = presetType === opt.value;
-            const isAvailable =
-              opt.value === "email_exchange" ||
-              opt.value === "custom_form" ||
-              opt.value === "custom_notification" ||
-              opt.value === "phone_call" ||
-              opt.value === "make_an_offer";
-            const disabled = !isAvailable || (isEdit && opt.value !== presetType);
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                disabled={disabled}
-                onClick={() => !disabled && setPresetType(opt.value)}
-                className={
-                  "rounded-md border p-3 text-left transition " +
-                  (isCurrent
-                    ? "border-orange-500 bg-orange-50"
-                    : isAvailable
-                    ? "border-neutral-300 bg-white hover:bg-neutral-50"
-                    : "border-neutral-200 bg-neutral-50 cursor-not-allowed opacity-60")
-                }
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-semibold text-neutral-900">{opt.label}</span>
-                  {!isAvailable && (
-                    <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-mono text-neutral-600">
-                      Phase {opt.phase}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-xs leading-snug text-neutral-600">
-                  {opt.description}
-                </p>
-              </button>
-            );
-          })}
-        </div>
-        {isEdit && presetType !== "email_exchange" && (
-          <p className="mt-2 text-xs text-orange-700">
-            Preset is locked while editing — change requires creating a new prompt.
-          </p>
-        )}
-      </div>
-
-      {presetType === "custom_form" ? (
-        <>
-        <div className="grid grid-cols-2 gap-4">
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Slug</span>
-            <input
-              type="text"
-              value={slug}
-              onChange={e => setSlug(e.target.value)}
-              placeholder="lead_capture"
-              required
-              className={inputCls + " font-mono"}
-            />
-          </label>
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Trigger type</span>
-            <select
-              value={triggerType}
-              onChange={e => setTriggerType(e.target.value as TriggerType)}
-              className={inputCls}
-            >
-              <option value="click_element">Click element (CSS selector)</option>
-              <option value="exit_intent">Exit intent (mouse leaves viewport)</option>
-              <option value="time_on_page">Time on page</option>
-              <option value="scroll_depth">Scroll depth</option>
-            </select>
-          </label>
-        </div>
-        {triggerType === "click_element" && (
-          <label className="block text-sm">
-            <span className="block font-semibold text-neutral-800">CSS selector</span>
-            <input
-              type="text"
-              value={triggerSelector}
-              onChange={e => setTriggerSelector(e.target.value)}
-              placeholder=".cta-button, #book-now"
-              className={inputCls + " font-mono"}
-            />
-          </label>
-        )}
-        {triggerType === "time_on_page" && (
-          <label className="block text-sm">
-            <span className="block font-semibold text-neutral-800">Delay (ms)</span>
-            <input
-              type="number"
-              value={triggerDelayMs}
-              onChange={e => setTriggerDelayMs(e.target.value)}
-              min={0}
-              className={inputCls + " font-mono"}
-            />
-          </label>
-        )}
-        {triggerType === "scroll_depth" && (
-          <label className="block text-sm">
-            <span className="block font-semibold text-neutral-800">Scroll percent</span>
-            <input
-              type="number"
-              value={triggerPercent}
-              onChange={e => setTriggerPercent(e.target.value)}
-              min={1} max={100}
-              className={inputCls + " font-mono"}
-            />
-          </label>
-        )}
-
-        <div className="rounded-md border border-neutral-300 bg-white p-3">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={multiPageEnabled}
-              onChange={e => setMultiPageEnabled(e.target.checked)}
-            />
-            <span className="font-semibold text-neutral-800">Multi-page form</span>
-            <span className="text-xs text-neutral-500">
-              Break the form into ordered pages with Next / Back navigation
-            </span>
-          </label>
-        </div>
-
-        {multiPageEnabled ? (
-          <MultiPageBuilder value={pagesConfig} onChange={setPagesConfig} />
-        ) : (
-          <CustomFormBuilder
-            contentBlocks={contentBlocks}
-            formFields={formFields}
-            onChange={(next) => {
-              setContentBlocks(next.contentBlocks);
-              setFormFields(next.formFields);
-            }}
-          />
-        )}
-
-        <RecoveryBuilder value={recoveryConfig} onChange={setRecoveryConfig} />
-
-        <div className="grid grid-cols-2 gap-4">
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Frequency</span>
-            <select
-              value={frequency}
-              onChange={e => setFrequency(e.target.value as Frequency)}
-              className={inputCls}
-            >
-              <option value="session">Once per session</option>
-              <option value="visitor">Once per visitor</option>
-              <option value="every_visit">Every visit (no throttle)</option>
-            </select>
-          </label>
-          {frequency === "visitor" && (
-            <label className="text-sm">
-              <span className="block font-semibold text-neutral-800">Days</span>
-              <input
-                type="number"
-                value={frequencyDays}
-                onChange={e => setFrequencyDays(e.target.value)}
-                min={1}
-                className={inputCls + " font-mono"}
-              />
-            </label>
-          )}
-        </div>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={e => setEnabled(e.target.checked)}
-          />
-          <span className="font-semibold text-neutral-800">Enabled</span>
-        </label>
-
-        {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
-        >
-          {pending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create prompt")}
-        </button>
-        </>
-      ) : presetType === "custom_notification" || presetType === "phone_call" ? (
-        <>
-        <div className="grid grid-cols-2 gap-4">
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Slug</span>
-            <input
-              type="text"
-              value={slug}
-              onChange={e => setSlug(e.target.value)}
-              placeholder={presetType === "phone_call" ? "talk_to_sales" : "got_a_question"}
-              required
-              className={inputCls + " font-mono"}
-            />
-          </label>
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Trigger type</span>
-            <select
-              value={triggerType}
-              onChange={e => setTriggerType(e.target.value as TriggerType)}
-              className={inputCls}
-            >
-              <option value="click_element">Click element (CSS selector)</option>
-              <option value="exit_intent">Exit intent (mouse leaves viewport)</option>
-              <option value="time_on_page">Time on page</option>
-              <option value="scroll_depth">Scroll depth</option>
-            </select>
-          </label>
-        </div>
-        {triggerType === "click_element" && (
-          <label className="block text-sm">
-            <span className="block font-semibold text-neutral-800">CSS selector</span>
-            <input
-              type="text"
-              value={triggerSelector}
-              onChange={e => setTriggerSelector(e.target.value)}
-              placeholder=".help-bubble"
-              className={inputCls + " font-mono"}
-            />
-          </label>
-        )}
-        {triggerType === "time_on_page" && (
-          <label className="block text-sm">
-            <span className="block font-semibold text-neutral-800">Delay (ms)</span>
-            <input
-              type="number"
-              value={triggerDelayMs}
-              onChange={e => setTriggerDelayMs(e.target.value)}
-              min={0}
-              className={inputCls + " font-mono"}
-            />
-          </label>
-        )}
-        {triggerType === "scroll_depth" && (
-          <label className="block text-sm">
-            <span className="block font-semibold text-neutral-800">Scroll percent</span>
-            <input
-              type="number"
-              value={triggerPercent}
-              onChange={e => setTriggerPercent(e.target.value)}
-              min={1} max={100}
-              className={inputCls + " font-mono"}
-            />
-          </label>
-        )}
-
-        {presetType === "custom_notification" ? (
-          <NotificationBuilder value={notificationConfig} onChange={setNotificationConfig} />
-        ) : (
-          <PhoneCallBuilder value={phoneCallConfig} onChange={setPhoneCallConfig} />
-        )}
-
-        <div className="grid grid-cols-2 gap-4">
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Frequency</span>
-            <select
-              value={frequency}
-              onChange={e => setFrequency(e.target.value as Frequency)}
-              className={inputCls}
-            >
-              <option value="session">Once per session</option>
-              <option value="visitor">Once per visitor</option>
-              <option value="every_visit">Every visit (no throttle)</option>
-            </select>
-          </label>
-          {frequency === "visitor" && (
-            <label className="text-sm">
-              <span className="block font-semibold text-neutral-800">Days</span>
-              <input
-                type="number"
-                value={frequencyDays}
-                onChange={e => setFrequencyDays(e.target.value)}
-                min={1}
-                className={inputCls + " font-mono"}
-              />
-            </label>
-          )}
-        </div>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={e => setEnabled(e.target.checked)}
-          />
-          <span className="font-semibold text-neutral-800">Enabled</span>
-        </label>
-
-        {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
-        >
-          {pending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create prompt")}
-        </button>
-        </>
-      ) : presetType === "make_an_offer" ? (
-        <>
-        <div className="grid grid-cols-2 gap-4">
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Slug</span>
-            <input
-              type="text"
-              value={slug}
-              onChange={e => setSlug(e.target.value)}
-              placeholder="make_offer_hoodie"
-              required
-              className={inputCls + " font-mono"}
-            />
-          </label>
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Trigger type</span>
-            <select
-              value={triggerType}
-              onChange={e => setTriggerType(e.target.value as TriggerType)}
-              className={inputCls}
-            >
-              <option value="click_element">Click element (CSS selector)</option>
-              <option value="exit_intent">Exit intent (mouse leaves viewport)</option>
-              <option value="time_on_page">Time on page</option>
-              <option value="scroll_depth">Scroll depth</option>
-            </select>
-          </label>
-        </div>
-        {triggerType === "click_element" && (
-          <label className="block text-sm">
-            <span className="block font-semibold text-neutral-800">CSS selector</span>
-            <input
-              type="text"
-              value={triggerSelector}
-              onChange={e => setTriggerSelector(e.target.value)}
-              placeholder=".make-offer-btn"
-              className={inputCls + " font-mono"}
-            />
-          </label>
-        )}
-        {triggerType === "time_on_page" && (
-          <label className="block text-sm">
-            <span className="block font-semibold text-neutral-800">Delay (ms)</span>
-            <input
-              type="number"
-              value={triggerDelayMs}
-              onChange={e => setTriggerDelayMs(e.target.value)}
-              min={0}
-              className={inputCls + " font-mono"}
-            />
-          </label>
-        )}
-        {triggerType === "scroll_depth" && (
-          <label className="block text-sm">
-            <span className="block font-semibold text-neutral-800">Scroll percent</span>
-            <input
-              type="number"
-              value={triggerPercent}
-              onChange={e => setTriggerPercent(e.target.value)}
-              min={1} max={100}
-              className={inputCls + " font-mono"}
-            />
-          </label>
-        )}
-
-        <label className="block text-sm">
-          <span className="block font-semibold text-neutral-800">Submit button label</span>
-          <input
-            type="text"
-            value={buttonLabel}
-            onChange={e => setButtonLabel(e.target.value)}
-            placeholder="Send offer"
-            className={inputCls}
-          />
-        </label>
-
-        <MakeAnOfferBuilder value={makeAnOfferConfig} onChange={setMakeAnOfferConfig} />
-
-        <div className="grid grid-cols-2 gap-4">
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Frequency</span>
-            <select
-              value={frequency}
-              onChange={e => setFrequency(e.target.value as Frequency)}
-              className={inputCls}
-            >
-              <option value="session">Once per session</option>
-              <option value="visitor">Once per visitor</option>
-              <option value="every_visit">Every visit (no throttle)</option>
-            </select>
-          </label>
-          {frequency === "visitor" && (
-            <label className="text-sm">
-              <span className="block font-semibold text-neutral-800">Days</span>
-              <input
-                type="number"
-                value={frequencyDays}
-                onChange={e => setFrequencyDays(e.target.value)}
-                min={1}
-                className={inputCls + " font-mono"}
-              />
-            </label>
-          )}
-        </div>
-
-        <p className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-          Auto-accept + counter-offer decisions read from{" "}
-          <em>Offer thresholds</em> (product / collection / global scope). Set
-          them at the client&apos;s{" "}
-          <span className="font-mono">Offer thresholds →</span> page — without a
-          threshold row and no list price the bid is routed to manual review.
-        </p>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={e => setEnabled(e.target.checked)}
-          />
-          <span className="font-semibold text-neutral-800">Enabled</span>
-        </label>
-
-        {error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
-        >
-          {pending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create prompt")}
-        </button>
-        </>
-      ) : presetType !== "email_exchange" ? (
-        <div className="rounded-md border border-dashed border-neutral-300 bg-neutral-50 p-6 text-center">
-          <p className="text-sm font-semibold text-neutral-700">
-            {PRESET_OPTIONS.find(p => p.value === presetType)?.label}
-          </p>
-          <p className="mt-2 text-xs text-neutral-500">
-            Configuration UI ships in Phase {PRESET_OPTIONS.find(p => p.value === presetType)?.phase}.
-            Schema is already live — you&apos;ll be able to author this preset as soon as the
-            composable form builder lands.
-          </p>
-          {error && (
-            <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-          )}
-        </div>
-      ) : (
-      <>
-      <div className="grid grid-cols-2 gap-4">
-        <label className="text-sm">
-          <span className="block font-semibold text-neutral-800">Slug</span>
-          <input
-            type="text"
-            value={slug}
-            onChange={e => setSlug(e.target.value)}
-            placeholder="winback_book_now"
-            required
-            className={inputCls + " font-mono"}
-          />
-        </label>
-        <label className="text-sm">
-          <span className="block font-semibold text-neutral-800">Trigger type</span>
-          <select
-            value={triggerType}
-            onChange={e => setTriggerType(e.target.value as TriggerType)}
-            className={inputCls}
+    <form onSubmit={onSubmit} style={{ padding: 0 }}>
+      <div style={{ display: "flex", gap: 36, flexWrap: "wrap" }}>
+        {/* Left — form */}
+        <div style={{ flex: "1 1 480px", minWidth: 0, maxWidth: 640 }}>
+          {/* Preset picker — 3-col grid, locked once created */}
+          <Section
+            label="Preset"
+            hint="Email Exchange is the v1 path. New presets unlock as they ship."
           >
-            <option value="click_element">Click element (CSS selector)</option>
-            <option value="exit_intent">Exit intent (mouse leaves viewport)</option>
-            <option value="time_on_page">Time on page</option>
-            <option value="scroll_depth">Scroll depth</option>
-          </select>
-        </label>
-      </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+              {PRESET_OPTIONS.map((opt) => {
+                const on = presetType === opt.value;
+                const disabled = !opt.available || (isEdit && opt.value !== presetType);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => !disabled && setPresetType(opt.value)}
+                    style={{
+                      border: `1.5px solid ${on ? ORANGE : LINE}`,
+                      background: on ? SUBTLE : opt.available ? "white" : PANEL,
+                      color: disabled && !on ? FAINT : INK,
+                      borderRadius: 10,
+                      padding: "10px 12px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      textAlign: "left",
+                      cursor: disabled ? "not-allowed" : "pointer",
+                      opacity: disabled && !on ? 0.65 : 1,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                      <span>{opt.label}</span>
+                      {!opt.available && (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: FAINT, background: LINE, padding: "1px 6px", borderRadius: 999, letterSpacing: ".04em" }}>
+                          Phase {opt.phase}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ marginTop: 4, fontSize: 11.5, fontWeight: 400, color: MUTED, lineHeight: 1.35 }}>
+                      {opt.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {isEdit && (
+              <div style={{ marginTop: 8, fontSize: 11.5, color: FAINT }}>
+                Preset is locked once created — change requires creating a new prompt.
+              </div>
+            )}
+          </Section>
 
-      {triggerType === "click_element" && (
-        <label className="block text-sm">
-          <span className="block font-semibold text-neutral-800">CSS selector</span>
-          <span className="block text-xs text-neutral-500">
-            Any element matching this selector. Click is intercepted; prompt fires. Don&apos;t know the selector? Use the <a href="/internal/identity-prompts" className="text-orange-700 underline">Chapter picker bookmarklet</a> to capture one from any storefront.
-          </span>
-          <input
-            type="text"
-            value={triggerSelector}
-            onChange={e => setTriggerSelector(e.target.value)}
-            placeholder="#book-now, .book-cta, a[href*='book']"
-            className={inputCls + " font-mono"}
-          />
-        </label>
-      )}
-      {triggerType === "exit_intent" && (
-        <p className="text-xs text-neutral-500">
-          Fires when the visitor moves their cursor toward the top of the viewport (toward tabs/address bar) — the standard &ldquo;leaving the page&rdquo; signal. Sideways and downward exits are ignored.
-        </p>
-      )}
-      {triggerType === "time_on_page" && (
-        <label className="block text-sm">
-          <span className="block font-semibold text-neutral-800">Delay (ms)</span>
-          <input
-            type="number"
-            value={triggerDelayMs}
-            onChange={e => setTriggerDelayMs(e.target.value)}
-            min={0}
-            className={inputCls + " font-mono"}
-          />
-        </label>
-      )}
-      {triggerType === "scroll_depth" && (
-        <label className="block text-sm">
-          <span className="block font-semibold text-neutral-800">Scroll percent threshold</span>
-          <input
-            type="number"
-            value={triggerPercent}
-            onChange={e => setTriggerPercent(e.target.value)}
-            min={1} max={100}
-            className={inputCls + " font-mono"}
-          />
-        </label>
-      )}
-
-      <label className="block text-sm">
-        <span className="block font-semibold text-neutral-800">Headline</span>
-        <input
-          type="text"
-          value={headline}
-          onChange={e => setHeadline(e.target.value)}
-          required
-          placeholder="Want 10% off your first cut?"
-          className={inputCls}
-        />
-      </label>
-
-      <label className="block text-sm">
-        <span className="block font-semibold text-neutral-800">Body</span>
-        <textarea
-          value={body}
-          onChange={e => setBody(e.target.value)}
-          rows={2}
-          placeholder="Drop your email and we'll text the code."
-          className={inputCls}
-        />
-      </label>
-
-      <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-700">
-          What to collect
-        </p>
-        <p className="mt-1 text-xs text-neutral-600">
-          Pick what the modal asks for. Either-or shows two fields and accepts either.
-        </p>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {(["email","phone","either"] as InputMode[]).map(m => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setInputMode(m)}
-              className={`rounded-md border px-3 py-2 text-xs font-medium ${
-                inputMode === m
-                  ? "border-orange-500 bg-orange-50 text-orange-800"
-                  : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50"
-              }`}
-            >
-              {m === "email" && "Email only"}
-              {m === "phone" && "Phone only"}
-              {m === "either" && "Email or phone"}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          {(inputMode === "email" || inputMode === "either") && (
-            <label className="text-sm">
-              <span className="block font-semibold text-neutral-800">Email placeholder</span>
-              <input
-                type="text"
-                value={emailPlaceholder}
-                onChange={e => setEmailPlaceholder(e.target.value)}
-                placeholder="you@email.com"
-                className={inputCls}
-              />
-            </label>
-          )}
-          {(inputMode === "phone" || inputMode === "either") && (
-            <label className="text-sm">
-              <span className="block font-semibold text-neutral-800">Phone placeholder</span>
-              <input
-                type="text"
-                value={phonePlaceholder}
-                onChange={e => setPhonePlaceholder(e.target.value)}
-                placeholder="(555) 555-5555"
-                className={inputCls}
-              />
-            </label>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <label className="text-sm">
-          <span className="block font-semibold text-neutral-800">Button label</span>
-          <input
-            type="text"
-            value={buttonLabel}
-            onChange={e => setButtonLabel(e.target.value)}
-            className={inputCls}
-          />
-        </label>
-        <label className="text-sm">
-          <span className="block font-semibold text-neutral-800">Success message</span>
-          <input
-            type="text"
-            value={successMessage}
-            onChange={e => setSuccessMessage(e.target.value)}
-            className={inputCls}
-          />
-        </label>
-      </div>
-
-      <div className="rounded-md border border-orange-200 bg-orange-50/50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-orange-800">
-          Offer (shown post-submit, depending on action below)
-        </p>
-        <p className="mt-1 text-xs text-orange-900/80">
-          For <strong>display message</strong>: offer appears in the modal&apos;s success state.
-          For <strong>send email</strong>: offer is what the email contains.
-          For <strong>button</strong> / <strong>redirect</strong>: include the code in the URL if your landing page needs it (e.g. <code className="rounded bg-white px-1">?promo=WELCOME10</code>).
-        </p>
-        <div className="mt-3 grid grid-cols-2 gap-4">
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Offer code (optional)</span>
+          {/* Slug */}
+          <Section label="Slug" hint="Lowercase letters, digits, underscores. Used internally (e.g. welcome_offer).">
             <input
               type="text"
-              value={offerCode}
-              onChange={e => setOfferCode(e.target.value.toUpperCase())}
-              placeholder="WELCOME10"
-              className={inputCls + " font-mono"}
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              placeholder={
+                showsPhoneCall ? "talk_to_sales" :
+                showsNotification ? "got_a_question" :
+                showsCustomForm ? "lead_capture" :
+                showsMakeAnOffer ? "make_offer_hoodie" :
+                "winback_book_now"
+              }
+              required
+              style={inpMono}
             />
-          </label>
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Offer description</span>
-            <input
-              type="text"
-              value={offerDescription}
-              onChange={e => setOfferDescription(e.target.value)}
-              placeholder="Use at checkout for 10% off"
-              className={inputCls}
-            />
-          </label>
-        </div>
-      </div>
+          </Section>
 
-      <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-neutral-700">
-          What happens after the visitor submits
-        </p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {([
-            { v: "message", label: "Display message + offer" },
-            { v: "email", label: "Send email with offer" },
-            { v: "email_message", label: "Send email message" },
-            { v: "button", label: "Show a button" },
-            { v: "redirect", label: "Redirect immediately" },
-          ] as { v: PostSubmitAction; label: string }[]).map(opt => (
-            <button
-              key={opt.v}
-              type="button"
-              onClick={() => setPostSubmitAction(opt.v)}
-              className={`rounded-md border px-3 py-2 text-xs font-medium text-left ${
-                postSubmitAction === opt.v
-                  ? "border-orange-500 bg-orange-50 text-orange-800"
-                  : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50"
-              }`}
+          {/* Trigger — common to all presets */}
+          <Section label="When it appears">
+            <select
+              value={triggerType}
+              onChange={(e) => setTriggerType(e.target.value as TriggerType)}
+              style={inp}
             >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+              <option value="click_element">When an element is clicked</option>
+              <option value="exit_intent">On exit intent (mouse leaves the page)</option>
+              <option value="time_on_page">After time on page</option>
+              <option value="scroll_depth">At a scroll depth</option>
+            </select>
 
-        {(postSubmitAction === "button" || postSubmitAction === "redirect") && (
-          <div className="mt-4 space-y-3">
-            <label className="block text-sm">
-              <span className="block font-semibold text-neutral-800">Destination URL</span>
-              <input
-                type="url"
-                value={postSubmitUrl}
-                onChange={e => setPostSubmitUrl(e.target.value)}
-                placeholder="https://ads4good.com/welcome?promo=WELCOME10"
-                className={inputCls}
-              />
-            </label>
-            {postSubmitAction === "button" && (
-              <label className="block text-sm">
-                <span className="block font-semibold text-neutral-800">Button label</span>
+            {triggerType === "click_element" && (
+              <div style={{ marginTop: 8 }}>
                 <input
                   type="text"
-                  value={postSubmitButtonLabel}
-                  onChange={e => setPostSubmitButtonLabel(e.target.value)}
-                  placeholder="Claim it"
-                  className={inputCls}
+                  value={triggerSelector}
+                  onChange={(e) => setTriggerSelector(e.target.value)}
+                  placeholder="#book-now, .book-cta, a[href*='book']"
+                  style={inpMono}
                 />
-              </label>
+                <div style={{ marginTop: 6, fontSize: 11.5, color: FAINT, lineHeight: 1.4 }}>
+                  Any element matching this selector. Click is intercepted; prompt fires. Don&apos;t know the selector? Use the{" "}
+                  <a href="/internal/identity-prompts" style={{ color: ORANGE, textDecoration: "underline" }}>
+                    picker bookmarklet
+                  </a>{" "}
+                  to capture one from any storefront.
+                </div>
+              </div>
+            )}
+            {triggerType === "exit_intent" && (
+              <div style={{ marginTop: 8, fontSize: 11.5, color: FAINT, lineHeight: 1.4 }}>
+                Fires when the visitor moves their cursor toward the top of the viewport (toward tabs/address bar) — the standard &ldquo;leaving the page&rdquo; signal. Sideways and downward exits are ignored.
+              </div>
+            )}
+            {triggerType === "time_on_page" && (
+              <div style={{ marginTop: 8 }}>
+                <NumRow label="Delay (ms)" value={triggerDelayMs} onChange={setTriggerDelayMs} min={0} width={140} />
+              </div>
+            )}
+            {triggerType === "scroll_depth" && (
+              <div style={{ marginTop: 8 }}>
+                <NumRow label="Percent" value={triggerPercent} onChange={setTriggerPercent} min={1} max={100} />
+              </div>
+            )}
+          </Section>
+
+          {/* Preset-specific bodies */}
+          {showsEmailExchange && (
+            <>
+              <Section label="Headline">
+                <input
+                  type="text"
+                  value={headline}
+                  onChange={(e) => setHeadline(e.target.value)}
+                  required
+                  placeholder="Want 10% off your first cut?"
+                  style={inp}
+                />
+              </Section>
+
+              <Section label="Body" hint="Optional supporting line.">
+                <textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  rows={2}
+                  placeholder="Drop your email and we'll text the code."
+                  style={{ ...inp, resize: "vertical" }}
+                />
+              </Section>
+
+              <Section label="What to collect" hint="Pick what the modal asks for. Either-or shows two fields and accepts either.">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+                  {(["email", "phone", "either"] as InputMode[]).map((m) => (
+                    <PillButton key={m} on={inputMode === m} onClick={() => setInputMode(m)}>
+                      {m === "email" && "Email only"}
+                      {m === "phone" && "Phone only"}
+                      {m === "either" && "Email or phone"}
+                    </PillButton>
+                  ))}
+                </div>
+                {(inputMode === "email" || inputMode === "either") && (
+                  <input
+                    type="text"
+                    value={emailPlaceholder}
+                    onChange={(e) => setEmailPlaceholder(e.target.value)}
+                    placeholder="Email placeholder"
+                    style={{ ...inp, marginTop: 6 }}
+                  />
+                )}
+                {(inputMode === "phone" || inputMode === "either") && (
+                  <input
+                    type="text"
+                    value={phonePlaceholder}
+                    onChange={(e) => setPhonePlaceholder(e.target.value)}
+                    placeholder="Phone placeholder"
+                    style={{ ...inp, marginTop: 8 }}
+                  />
+                )}
+              </Section>
+
+              <Section label="Button label">
+                <input
+                  type="text"
+                  value={buttonLabel}
+                  onChange={(e) => setButtonLabel(e.target.value)}
+                  style={inp}
+                />
+              </Section>
+
+              <Section label="Success message" hint="Shown in the modal for the display-message post-submit action.">
+                <input
+                  type="text"
+                  value={successMessage}
+                  onChange={(e) => setSuccessMessage(e.target.value)}
+                  style={inp}
+                />
+              </Section>
+
+              <Section
+                label="Offer"
+                hint="Optional. Shown post-submit, depending on action below. For send-email: this is the code the email contains. For button/redirect: include the code in the URL if your landing page needs it."
+              >
+                <input
+                  type="text"
+                  value={offerCode}
+                  onChange={(e) => setOfferCode(e.target.value.toUpperCase())}
+                  placeholder="WELCOME10"
+                  style={inpMono}
+                />
+                {offerCode.trim() && (
+                  <input
+                    type="text"
+                    value={offerDescription}
+                    onChange={(e) => setOfferDescription(e.target.value)}
+                    placeholder="Use at checkout for 10% off"
+                    style={{ ...inp, marginTop: 8 }}
+                  />
+                )}
+              </Section>
+
+              <Section label="After they submit">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {([
+                    { v: "message", label: "Display message + offer" },
+                    { v: "email", label: "Send email with offer" },
+                    { v: "email_message", label: "Send email message" },
+                    { v: "button", label: "Show a button" },
+                    { v: "redirect", label: "Redirect immediately" },
+                  ] as { v: PostSubmitAction; label: string }[]).map((opt) => (
+                    <PillButton
+                      key={opt.v}
+                      on={postSubmitAction === opt.v}
+                      onClick={() => setPostSubmitAction(opt.v)}
+                      block
+                    >
+                      {opt.label}
+                    </PillButton>
+                  ))}
+                </div>
+
+                {(postSubmitAction === "button" || postSubmitAction === "redirect") && (
+                  <div style={{ marginTop: 10 }}>
+                    <input
+                      type="url"
+                      value={postSubmitUrl}
+                      onChange={(e) => setPostSubmitUrl(e.target.value)}
+                      placeholder="https://ads4good.com/welcome?promo=WELCOME10"
+                      style={inp}
+                    />
+                    {postSubmitAction === "button" && (
+                      <input
+                        type="text"
+                        value={postSubmitButtonLabel}
+                        onChange={(e) => setPostSubmitButtonLabel(e.target.value)}
+                        placeholder="Button label"
+                        style={{ ...inp, marginTop: 8 }}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {(postSubmitAction === "email" || postSubmitAction === "email_message") && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 8, lineHeight: 1.4 }}>
+                      Sent via Resend. From <strong>ads for Good</strong>, reply-to{" "}
+                      <code style={{ background: PANEL, padding: "1px 4px", borderRadius: 4 }}>katoa@ads4good.com</code>.
+                      {postSubmitAction === "email" && " The offer code (above) renders in a styled box below your body text."}
+                      {postSubmitAction === "email_message" && " No offer code required — just send your subject + body. (Any offer code set above is ignored for this action.)"}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: INK, marginBottom: 4 }}>
+                      Email subject{postSubmitAction === "email_message" ? <span style={{ color: ORANGE, marginLeft: 4 }}>*</span> : null}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 6 }}>
+                      {postSubmitAction === "email" ? (
+                        <>Use <code style={{ background: PANEL, padding: "1px 4px", borderRadius: 4 }}>{`{offer_code}`}</code> to insert the code. Default: <code style={{ background: PANEL, padding: "1px 4px", borderRadius: 4 }}>{`Your code: {offer_code}`}</code>.</>
+                      ) : (
+                        <>Plain text subject line.</>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      placeholder={postSubmitAction === "email" ? "Your code: {offer_code}" : "Thanks for reaching out"}
+                      style={inp}
+                    />
+                    <div style={{ fontSize: 12, fontWeight: 600, color: INK, marginTop: 10, marginBottom: 4 }}>
+                      Email body{postSubmitAction === "email_message" ? <span style={{ color: ORANGE, marginLeft: 4 }}>*</span> : null}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 6 }}>
+                      {postSubmitAction === "email"
+                        ? "Plain text. Newlines become paragraph breaks. The offer code + description render in a styled box below your body."
+                        : "Plain text. Newlines become paragraph breaks. Required for this action."}
+                    </div>
+                    <textarea
+                      value={emailBody}
+                      onChange={(e) => setEmailBody(e.target.value)}
+                      rows={6}
+                      placeholder="Thanks for signing up — here's your code:"
+                      style={{ ...inp, resize: "vertical" }}
+                    />
+                  </div>
+                )}
+              </Section>
+            </>
+          )}
+
+          {showsCustomForm && (
+            <>
+              <Section label="Form">
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: INK, cursor: "pointer", marginBottom: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={multiPageEnabled}
+                    onChange={(e) => setMultiPageEnabled(e.target.checked)}
+                  />
+                  <span style={{ fontWeight: 600 }}>Multi-page form</span>
+                  <span style={{ color: FAINT, fontWeight: 400 }}>— Break the form into ordered pages with Next / Back navigation</span>
+                </label>
+
+                {multiPageEnabled ? (
+                  <MultiPageBuilder value={pagesConfig} onChange={setPagesConfig} />
+                ) : (
+                  <CustomFormBuilder
+                    contentBlocks={contentBlocks}
+                    formFields={formFields}
+                    onChange={(next) => {
+                      setContentBlocks(next.contentBlocks);
+                      setFormFields(next.formFields);
+                    }}
+                  />
+                )}
+              </Section>
+
+              <Section label="Recovery flow" hint="Show a second-chance capture form when the visitor tries to close without submitting.">
+                <RecoveryBuilder value={recoveryConfig} onChange={setRecoveryConfig} />
+              </Section>
+            </>
+          )}
+
+          {showsNotification && (
+            <Section label="Notification">
+              <NotificationBuilder value={notificationConfig} onChange={setNotificationConfig} />
+            </Section>
+          )}
+
+          {showsPhoneCall && (
+            <Section label="Phone call">
+              <PhoneCallBuilder value={phoneCallConfig} onChange={setPhoneCallConfig} />
+            </Section>
+          )}
+
+          {showsMakeAnOffer && (
+            <>
+              <Section label="Submit button label">
+                <input
+                  type="text"
+                  value={buttonLabel}
+                  onChange={(e) => setButtonLabel(e.target.value)}
+                  placeholder="Send offer"
+                  style={inp}
+                />
+              </Section>
+
+              <Section label="Offer">
+                <MakeAnOfferBuilder value={makeAnOfferConfig} onChange={setMakeAnOfferConfig} />
+              </Section>
+
+              <div style={{ border: `1px dashed ${LINE}`, background: PANEL, borderRadius: 10, padding: "10px 12px", fontSize: 11.5, color: MUTED, lineHeight: 1.5, marginBottom: 16 }}>
+                Auto-accept + counter-offer decisions read from <em>Offer thresholds</em> (product / collection / global scope). Set them at the client&apos;s{" "}
+                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>Offer thresholds →</span> page — without a threshold row and no list price the bid is routed to manual review.
+              </div>
+            </>
+          )}
+
+          {showsRemindMe && (
+            <div style={{ border: `1px dashed ${LINE}`, background: PANEL, borderRadius: 12, padding: 24, textAlign: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>Remind Me</div>
+              <div style={{ marginTop: 6, fontSize: 12, color: MUTED, lineHeight: 1.5 }}>
+                Configuration UI ships in Phase 6. Schema is already live — you&apos;ll be able to author this preset as soon as the subscription monitor + hourly evaluation cron lands.
+              </div>
+            </div>
+          )}
+
+          {/* Frequency — common to all presets */}
+          <Section label="How often per visitor">
+            <select
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value as Frequency)}
+              style={inp}
+            >
+              <option value="session">Once per session</option>
+              <option value="visitor">Once every N days</option>
+              <option value="every_visit">Every visit (no throttle)</option>
+            </select>
+            {frequency === "visitor" && (
+              <div style={{ marginTop: 8 }}>
+                <NumRow label="Days" value={frequencyDays} onChange={setFrequencyDays} min={1} />
+              </div>
+            )}
+          </Section>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, fontSize: 14, color: INK, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+            />
+            Live (visitors can see this prompt)
+          </label>
+
+          <ErrorBanner message={error} />
+
+          <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
+            <PrimaryButton type="submit" disabled={pending || !isAvailable(presetType)}>
+              {pending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create prompt")}
+            </PrimaryButton>
+            {isEdit && (
+              <SecondaryButton onClick={() => router.push(`/internal/identity-prompts/${client_key}`)}>
+                Cancel
+              </SecondaryButton>
             )}
           </div>
-        )}
+        </div>{/* left form column */}
 
-        {(postSubmitAction === "email" || postSubmitAction === "email_message") && (
-          <div className="mt-4 space-y-3">
-            <p className="text-xs text-neutral-600">
-              Sent via Resend. From <strong>ads for Good</strong>, reply-to <code className="rounded bg-white px-1">katoa@ads4good.com</code>.
-              {postSubmitAction === "email" && " The offer code (above) renders in a styled box below your body text."}
-              {postSubmitAction === "email_message" && " No offer code required — just send your subject + body. (Any offer code set above is ignored for this action.)"}
-            </p>
-            <label className="block text-sm">
-              <span className="block font-semibold text-neutral-800">Email subject{postSubmitAction === "email_message" ? <span className="ml-1 text-orange-500">*</span> : null}</span>
-              <span className="block text-xs text-neutral-500">
-                {postSubmitAction === "email"
-                  ? <>Use <code className="rounded bg-white px-1">{`{offer_code}`}</code> to insert the code. Default: <code className="rounded bg-white px-1">{`Your code: {offer_code}`}</code>.</>
-                  : <>Plain text subject line.</>}
-              </span>
-              <input
-                type="text"
-                value={emailSubject}
-                onChange={e => setEmailSubject(e.target.value)}
-                placeholder={postSubmitAction === "email" ? "Your code: {offer_code}" : "Thanks for reaching out"}
-                className={inputCls}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="block font-semibold text-neutral-800">Email body{postSubmitAction === "email_message" ? <span className="ml-1 text-orange-500">*</span> : null}</span>
-              <span className="block text-xs text-neutral-500">
-                {postSubmitAction === "email"
-                  ? "Plain text. Newlines become paragraph breaks. The offer code + description render in a styled box below your body."
-                  : "Plain text. Newlines become paragraph breaks. Required for this action."}
-              </span>
-              <textarea
-                value={emailBody}
-                onChange={e => setEmailBody(e.target.value)}
-                rows={6}
-                placeholder={"Thanks for signing up — here's your code:"}
-                className={inputCls}
-              />
-            </label>
+        {/* Right — live preview. Uses self-serve PromptPreview for the 4
+            presets it supports (email_exchange / custom_form single-page /
+            custom_notification / phone_call). For multi-page Custom Form,
+            Make an Offer, and Remind Me we render a preset-specific
+            placeholder card — those presets' runtime pixel shape isn't
+            covered by the self-serve preview. Operators still get real-time
+            confirmation of what they're building via the "Currently building"
+            summary on the placeholder cards. */}
+        <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420 }}>
+          {(() => {
+            // Self-serve PromptPreview handles single-page custom_form only —
+            // multi-page has its own state shape (pages_jsonb) with per-page
+            // fields that PromptPreview doesn't render.
+            const previewable =
+              presetType === "email_exchange" ||
+              presetType === "custom_notification" ||
+              presetType === "phone_call" ||
+              (presetType === "custom_form" && !multiPageEnabled);
+
+            if (!previewable) {
+              return (
+                <PreviewPlaceholder
+                  presetLabel={PRESET_OPTIONS.find((o) => o.value === presetType)?.label ?? presetType}
+                  slug={slug}
+                  headline={headline}
+                  note={
+                    presetType === "custom_form" && multiPageEnabled
+                      ? "Multi-page forms don't preview inline — the pixel runtime paints each page as the visitor navigates."
+                      : presetType === "make_an_offer"
+                        ? "Make an Offer's modal shape depends on runtime product + threshold lookups. Test with a real product on your storefront."
+                        : "Remind Me isn't shipped yet (Phase 6). Preview will land with the composable builder."
+                  }
+                />
+              );
+            }
+
+            const previewData: PreviewData = {
+              presetType: presetType as SelfServePresetType,
+              headline,
+              body,
+              inputMode,
+              emailPlaceholder,
+              phonePlaceholder,
+              buttonLabel,
+              offerCode,
+              successMessage,
+              offerDescription,
+              // PreviewData only supports message | button | redirect. Email
+              // actions render as "message" post-submit so the preview shows
+              // the success-with-code card the visitor sees BEFORE the email
+              // arrives — accurate for the modal view.
+              postSubmitAction:
+                postSubmitAction === "email" || postSubmitAction === "email_message"
+                  ? "message"
+                  : (postSubmitAction as "message" | "button" | "redirect"),
+              postSubmitUrl,
+              postSubmitButtonLabel,
+              cfContent: contentBlocks,
+              cfFields: formFields,
+              notif: notificationConfig,
+              notifAck: "",
+              phone: phoneCallConfig,
+              consentMode: "off",
+            };
+            return <PromptPreview data={previewData} />;
+          })()}
+        </div>
+      </div>
+    </form>
+  );
+}
+
+// Small preset-summary card shown in the preview column when the self-serve
+// PromptPreview doesn't cover this preset's runtime shape (multi-page form,
+// Make an Offer, Remind Me). Sticky so it stays visible as the operator
+// scrolls the form.
+function PreviewPlaceholder({
+  presetLabel,
+  slug,
+  headline,
+  note,
+}: {
+  presetLabel: string;
+  slug: string;
+  headline: string;
+  note: string;
+}) {
+  return (
+    <div style={{ position: "sticky", top: 20 }}>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: FAINT,
+          textTransform: "uppercase",
+          letterSpacing: ".1em",
+          marginBottom: 8,
+        }}
+      >
+        Preview
+      </div>
+      <div
+        style={{
+          border: `1px solid ${LINE}`,
+          borderRadius: 12,
+          overflow: "hidden",
+          background: "white",
+          boxShadow: "0 1px 3px rgba(31,45,67,.06)",
+          padding: "18px 20px",
+          minHeight: 180,
+        }}
+      >
+        <div style={{ fontSize: 12, color: FAINT, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 6 }}>
+          Currently building
+        </div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: INK }}>{presetLabel}</div>
+        {slug && (
+          <div style={{ marginTop: 4, fontSize: 12, color: MUTED, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+            {slug}
           </div>
         )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <label className="text-sm">
-          <span className="block font-semibold text-neutral-800">Frequency</span>
-          <select
-            value={frequency}
-            onChange={e => setFrequency(e.target.value as Frequency)}
-            className={inputCls}
-          >
-            <option value="session">Once per session</option>
-            <option value="visitor">Once per visitor</option>
-            <option value="every_visit">Every visit (no throttle)</option>
-          </select>
-        </label>
-        {frequency === "visitor" && (
-          <label className="text-sm">
-            <span className="block font-semibold text-neutral-800">Visitor frequency window (days)</span>
-            <input
-              type="number"
-              value={frequencyDays}
-              onChange={e => setFrequencyDays(e.target.value)}
-              min={1}
-              className={inputCls + " font-mono"}
-            />
-          </label>
+        {headline && (
+          <div style={{ marginTop: 10, fontSize: 13, color: INK, lineHeight: 1.4 }}>
+            <em>&ldquo;{headline}&rdquo;</em>
+          </div>
         )}
+        <div style={{ marginTop: 14, fontSize: 12, color: MUTED, lineHeight: 1.5 }}>{note}</div>
       </div>
-
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={e => setEnabled(e.target.checked)}
-        />
-        <span className="font-semibold text-neutral-800">Enabled</span>
-      </label>
-
-      {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-full bg-orange-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-orange-600 disabled:opacity-50"
-      >
-        {pending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create prompt")}
-      </button>
-      </>
-      )}
-    </form>
+      <div style={{ fontSize: 11.5, color: FAINT, marginTop: 8, lineHeight: 1.4 }}>
+        Test end-to-end by opening the client&apos;s storefront with the pixel installed.
+      </div>
+    </div>
   );
 }

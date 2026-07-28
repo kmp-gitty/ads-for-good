@@ -1,8 +1,32 @@
 "use client";
 
+// Per-row action buttons on the internal identity-prompts list. Same visual
+// vocabulary as the self-serve prompt list (small white pill buttons for
+// non-destructive actions, red-outlined pill for delete on the right edge).
+
 import { useTransition } from "react";
 import Link from "next/link";
 import { togglePrompt, deletePrompt } from "../_actions";
+
+const INK = "#1F2D43";
+const LINE = "#E5E0D4";
+const DANGER = "#B3261E";
+const DANGER_LINE = "#E7C9C6";
+
+function btnStyle(danger: boolean): React.CSSProperties {
+  return {
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: danger ? DANGER : INK,
+    background: "white",
+    border: `1px solid ${danger ? DANGER_LINE : LINE}`,
+    borderRadius: 8,
+    padding: "6px 12px",
+    textDecoration: "none",
+    cursor: "pointer",
+    display: "inline-block",
+  };
+}
 
 export default function RowActions({
   id,
@@ -28,30 +52,20 @@ export default function RowActions({
     });
   }
 
+  const disabledStyle = pending ? { opacity: 0.55, cursor: "not-allowed" as const } : {};
+
   return (
-    <div className="flex items-center gap-2 text-xs">
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
       <Link
         href={`/internal/identity-prompts/${client_key}/${id}/edit`}
-        className="text-orange-700 hover:text-orange-900"
+        style={btnStyle(false)}
       >
         Edit
       </Link>
-      <span className="text-neutral-300">·</span>
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={pending}
-        className="text-neutral-600 hover:text-orange-700 disabled:opacity-50"
-      >
-        {enabled ? "Disable" : "Enable"}
+      <button type="button" onClick={onToggle} disabled={pending} style={{ ...btnStyle(false), ...disabledStyle }}>
+        {enabled ? "Turn off" : "Turn on"}
       </button>
-      <span className="text-neutral-300">·</span>
-      <button
-        type="button"
-        onClick={onDelete}
-        disabled={pending}
-        className="text-red-600 hover:text-red-800 disabled:opacity-50"
-      >
+      <button type="button" onClick={onDelete} disabled={pending} style={{ ...btnStyle(true), ...disabledStyle }}>
         Delete
       </button>
     </div>

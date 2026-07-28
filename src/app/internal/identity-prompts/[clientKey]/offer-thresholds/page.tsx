@@ -47,42 +47,50 @@ export default async function OfferThresholdsPage({
 
   if (error) {
     return (
-      <main style={{ padding: 24 }}>
-        <h1>Offer thresholds</h1>
-        <pre style={{ color: "crimson" }}>Query failed: {error.message}</pre>
-      </main>
+      <div style={{ border: "1px solid #E7C9C6", background: "#FDECEA", color: "#B3261E", borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>
+        Query failed: {error.message}
+      </div>
     );
   }
 
   const rows = ((data ?? []) as ThresholdRow[]).sort((a, b) => rank(a) - rank(b));
 
   return (
-    <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-        <h1 style={{ margin: 0 }}>Offer thresholds — {clientKey}</h1>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
         <Link
           href={`/internal/identity-prompts/${clientKey}`}
-          style={{ color: "#8B95A6", textDecoration: "none", fontSize: 14 }}
+          style={{ color: "#5C6B82", textDecoration: "none", fontSize: 13 }}
         >
-          ← All prompts
+          ← Back to {clientKey}
         </Link>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1F2D43", margin: "6px 0 4px" }}>
+          Offer thresholds —{" "}
+          <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 18, color: "#5C6B82" }}>
+            {clientKey}
+          </span>
+        </h1>
+        <p style={{ color: "#5C6B82", margin: 0, fontSize: 13.5, maxWidth: 720, lineHeight: 1.5 }}>
+          Auto-accept thresholds for Make-an-Offer bids. Evaluator checks product-specific first,
+          then collection, then the global default. Without a match it falls back to{" "}
+          <strong>90% of list price</strong>. Set <strong>threshold %</strong> against list price
+          or an absolute floor — if both are set, the stricter one wins.
+        </p>
       </div>
 
-      <p style={{ color: "#8B95A6", marginTop: 8, maxWidth: 720 }}>
-        Auto-accept thresholds for Make-an-Offer bids. Evaluator checks
-        product-specific first, then collection, then the global default. Without
-        a match it falls back to <strong>90% of list price</strong>. Set{" "}
-        <strong>threshold %</strong> against list price or an absolute floor — if
-        both are set, the stricter one wins.
-      </p>
-
-      <section style={{ marginTop: 24 }}>
-        <h2 style={{ fontSize: 16, marginBottom: 12 }}>Add threshold</h2>
-        <ThresholdForm clientKey={clientKey} />
+      <section>
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: "#1F2D43", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 12px" }}>
+          Add threshold
+        </h2>
+        <div style={{ background: "white", border: "1px solid #E5E0D4", borderRadius: 12, padding: "20px 22px" }}>
+          <ThresholdForm clientKey={clientKey} />
+        </div>
       </section>
 
-      <section style={{ marginTop: 32 }}>
-        <h2 style={{ fontSize: 16, marginBottom: 12 }}>Configured thresholds</h2>
+      <section>
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: "#1F2D43", textTransform: "uppercase", letterSpacing: ".1em", margin: "0 0 12px" }}>
+          Configured thresholds
+        </h2>
         {rows.length === 0 ? (
           <div style={{ padding: 16, color: "#8B95A6", background: "#F4F5F7", borderRadius: 6 }}>
             No thresholds configured. Fallback = 90% of list price.
@@ -127,7 +135,7 @@ export default async function OfferThresholdsPage({
           </table>
         )}
       </section>
-    </main>
+    </div>
   );
 }
 

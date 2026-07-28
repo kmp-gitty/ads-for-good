@@ -29,12 +29,17 @@ import PhoneCallBuilder, {
   type PhoneCallConfig,
 } from "@/app/internal/identity-prompts/[clientKey]/PhoneCallBuilder";
 import PromptPreview from "./PromptPreview";
-
-const INK = "#1F2D43";
-const MUTED = "#5C6B82";
-const FAINT = "#8A98AD";
-const ORANGE = "#E36410";
-const LINE = "#E5E0D4";
+import {
+  INK,
+  MUTED,
+  FAINT,
+  ORANGE,
+  LINE,
+  inp,
+  Section,
+  NumRow,
+  BackLink,
+} from "@/app/lib/ui/builder-primitives";
 
 const ALL_PRESETS: SelfServePresetType[] = [
   "email_exchange",
@@ -267,7 +272,7 @@ export default function PromptEditor({
 
   return (
     <div style={{ padding: "24px 30px 60px" }}>
-      <BackLink clientKey={clientKey} />
+      <BackLink href={`/chapter/${clientKey}/prompts`} label="Back to prompts" />
       <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: "10px 0 18px" }}>
         {editing ? "Edit prompt" : "New prompt"}
       </h1>
@@ -512,41 +517,5 @@ export default function PromptEditor({
   );
 }
 
-const inp: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  fontSize: 14,
-  color: INK,
-  background: "white",
-  border: `1px solid ${LINE}`,
-  borderRadius: 8,
-  padding: "9px 11px",
-};
-
-function Section({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: INK, marginBottom: hint ? 2 : 6 }}>{label}</div>
-      {hint && <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 6, lineHeight: 1.4 }}>{hint}</div>}
-      {children}
-    </div>
-  );
-}
-
-function NumRow({ label, value, onChange, min, max }: { label: string; value: number; onChange: (v: number) => void; min?: number; max?: number }) {
-  return (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: MUTED }}>
-      <span style={{ width: 60 }}>{label}</span>
-      <input type="number" value={value} min={min} max={max} onChange={(e) => onChange(Number(e.target.value))} style={{ ...inp, width: 110 }} />
-    </label>
-  );
-}
-
-function BackLink({ clientKey }: { clientKey: string }) {
-  const router = useRouter();
-  return (
-    <button type="button" onClick={() => router.push(`/chapter/${clientKey}/prompts`)} style={{ background: "none", border: "none", color: MUTED, fontSize: 13, cursor: "pointer", padding: 0 }}>
-      ← Back to prompts
-    </button>
-  );
-}
+// Shared UI primitives (INK / MUTED / FAINT / ORANGE / LINE / inp / Section /
+// NumRow / BackLink) live in `src/app/lib/ui/builder-primitives.tsx`.

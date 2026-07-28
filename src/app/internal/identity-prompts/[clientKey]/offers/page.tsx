@@ -62,10 +62,9 @@ export default async function OffersAdminPage({ params, searchParams }: PageProp
   const { data, error } = await query;
   if (error) {
     return (
-      <main style={{ padding: 24 }}>
-        <h1>Offers</h1>
-        <pre style={{ color: "crimson" }}>Query failed: {error.message}</pre>
-      </main>
+      <div style={{ border: "1px solid #E7C9C6", background: "#FDECEA", color: "#B3261E", borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>
+        Query failed: {error.message}
+      </div>
     );
   }
 
@@ -84,33 +83,41 @@ export default async function OffersAdminPage({ params, searchParams }: PageProp
   }
 
   return (
-    <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
-        <h1 style={{ margin: 0 }}>Offers — {clientKey}</h1>
-        <Link
-          href={`/internal/identity-prompts/${clientKey}`}
-          style={{ color: "#8B95A6", textDecoration: "none", fontSize: 14 }}
-        >
-          ← All prompts
-        </Link>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <Link
+            href={`/internal/identity-prompts/${clientKey}`}
+            style={{ color: "#5C6B82", textDecoration: "none", fontSize: 13 }}
+          >
+            ← Back to {clientKey}
+          </Link>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1F2D43", margin: "6px 0 4px" }}>
+            Offers —{" "}
+            <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 18, color: "#5C6B82" }}>
+              {clientKey}
+            </span>
+          </h1>
+          <p style={{ color: "#5C6B82", margin: 0, fontSize: 13.5 }}>
+            Make-an-Offer submissions from the pixel. Pending review → operator decides.
+          </p>
+        </div>
       </div>
 
-      <p style={{ color: "#8B95A6", marginTop: 8 }}>
-        Make-an-Offer submissions from the pixel. Pending review → operator decides.
-      </p>
-
-      <nav style={{ display: "flex", gap: 8, margin: "16px 0", flexWrap: "wrap" }}>
+      <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {["all", "pending_review", "auto_accepted", "manually_accepted", "countered", "declined", "expired", "redeemed"].map(
           (s) => (
             <Link
               key={s}
               href={`/internal/identity-prompts/${clientKey}/offers?status=${s}`}
               style={{
-                padding: "4px 12px",
+                padding: "5px 12px",
                 borderRadius: 999,
-                fontSize: 13,
+                fontSize: 12.5,
+                fontWeight: 600,
                 textDecoration: "none",
-                background: s === statusFilter ? "#E36410" : "#F4F5F7",
+                background: s === statusFilter ? "#E36410" : "white",
+                border: `1px solid ${s === statusFilter ? "#E36410" : "#E5E0D4"}`,
                 color: s === statusFilter ? "white" : "#1F2D43",
               }}
             >
@@ -137,7 +144,7 @@ export default async function OffersAdminPage({ params, searchParams }: PageProp
           created_at: r.created_at,
         }))}
       />
-    </main>
+    </div>
   );
 }
 

@@ -9,13 +9,17 @@ import { useRouter } from "next/navigation";
 import { saveLink } from "./_actions";
 import SmartLinkConditions from "./SmartLinkConditions";
 import type { LinkDetail, SmartRule } from "./types";
-
-const INK = "#1F2D43";
-const MUTED = "#5C6B82";
-const FAINT = "#8A98AD";
-const ORANGE = "#E36410";
-const LINE = "#E5E0D4";
-const PANEL = "#FBFAF6";
+import {
+  INK,
+  MUTED,
+  FAINT,
+  ORANGE,
+  LINE,
+  PANEL,
+  inp,
+  miniBtn,
+  Section,
+} from "@/app/lib/ui/builder-primitives";
 
 const REDIRECT_ORIGIN = "https://www.ads4good.com";
 
@@ -156,36 +160,5 @@ export default function LinkEditor({ clientKey, link, brandedHost }: { clientKey
   );
 }
 
-const inp: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  fontSize: 14,
-  color: INK,
-  background: "white",
-  border: `1px solid ${LINE}`,
-  borderRadius: 8,
-  padding: "9px 11px",
-};
-
-const miniBtn: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 700,
-  color: INK,
-  background: "white",
-  border: `1px solid ${LINE}`,
-  borderRadius: 6,
-  width: 26,
-  height: 26,
-  cursor: "pointer",
-  lineHeight: 1,
-};
-
-function Section({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: INK, marginBottom: hint ? 2 : 6 }}>{label}</div>
-      {hint && <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 6, lineHeight: 1.4 }}>{hint}</div>}
-      {children}
-    </div>
-  );
-}
+// Shared UI primitives (INK / MUTED / FAINT / ORANGE / LINE / PANEL / inp /
+// miniBtn / Section) live in `src/app/lib/ui/builder-primitives.tsx`.

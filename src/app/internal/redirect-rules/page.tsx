@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
+const INK = "#1F2D43";
+const MUTED = "#5C6B82";
+const FAINT = "#8A98AD";
+const ORANGE = "#E36410";
+const LINE = "#E5E0D4";
+const PANEL = "#FBFAF6";
+
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -16,7 +23,6 @@ type RuleCount = {
 };
 
 export default async function RedirectRulesIndex() {
-  // Get all active clients + per-client rule counts.
   const [{ data: clients }, { data: rules }] = await Promise.all([
     supabase
       .schema("chapter_config")
@@ -45,49 +51,75 @@ export default async function RedirectRulesIndex() {
   }));
 
   return (
-    <>
-      <p className="text-sm text-neutral-700">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>
         Click a client to manage their redirect rules.
       </p>
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-[0.12em] text-neutral-600">
-            <tr>
-              <th className="px-4 py-3">client_key</th>
-              <th className="px-4 py-3">Storefront</th>
-              <th className="px-4 py-3 text-right">Rules (enabled / total)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.client_key} className="border-t border-neutral-100 hover:bg-orange-50">
-                <td className="px-4 py-3">
-                  <Link
-                    href={`/internal/redirect-rules/${r.client_key}`}
-                    className="font-mono text-orange-700 hover:underline"
-                  >
-                    {r.client_key}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-neutral-700">
-                  {r.storefront_domain ?? <span className="text-neutral-400">—</span>}
-                </td>
-                <td className="px-4 py-3 text-right font-mono text-neutral-700">
-                  {r.counts.enabled_count} / {r.counts.total_count}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {rows.length === 0 ? (
+        <div style={{ border: `1px dashed ${LINE}`, background: PANEL, borderRadius: 12, padding: "32px 24px", textAlign: "center", fontSize: 13.5, color: MUTED }}>
+          No clients configured yet.
+        </div>
+      ) : (
+        <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, background: "white", overflow: "hidden" }}>
+          {rows.map((r, i) => (
+            <Link
+              key={r.client_key}
+              href={`/internal/redirect-rules/${r.client_key}`}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 200px",
+                gap: 12,
+                padding: "14px 18px",
+                borderTop: i === 0 ? "none" : `1px solid ${LINE}`,
+                textDecoration: "none",
+                background: "white",
+                alignItems: "center",
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, color: FAINT, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em" }}>
+                  Client
+                </div>
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: ORANGE,
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                    marginTop: 2,
+                  }}
+                >
+                  {r.client_key}
+                </div>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, color: FAINT, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em" }}>
+                  Storefront
+                </div>
+                <div style={{ fontSize: 13, color: INK, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {r.storefront_domain ?? <span style={{ color: FAINT }}>—</span>}
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 10.5, color: FAINT, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em" }}>
+                  Rules
+                </div>
+                <div style={{ marginTop: 2, fontSize: 13, color: INK, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                  {r.counts.enabled_count} enabled / {r.counts.total_count} total
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
-      <p className="mt-6 text-xs text-neutral-500">
+      <div style={{ fontSize: 12, color: FAINT }}>
         Need a new client?{" "}
-        <Link href="/internal/client-portal-config/new" className="text-orange-700 hover:underline">
+        <Link href="/internal/client-portal-config/new" style={{ color: ORANGE, textDecoration: "underline" }}>
           Add via Client Portal Config →
         </Link>
-      </p>
-    </>
+      </div>
+    </div>
   );
 }

@@ -2,6 +2,14 @@ import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import PickerBookmarklet from "./PickerBookmarklet";
 
+const INK = "#1F2D43";
+const MUTED = "#5C6B82";
+const FAINT = "#8A98AD";
+const ORANGE = "#E36410";
+const LINE = "#E5E0D4";
+const PANEL = "#FBFAF6";
+const SUBTLE = "#FFF4EC";
+
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -35,67 +43,131 @@ export default async function IdentityPromptsIndex() {
 
   if (clientList.length === 0) {
     return (
-      <p className="text-sm text-neutral-500">
+      <p style={{ fontSize: 14, color: MUTED }}>
         No clients configured. Provision a client first via SQL or the onboarding flow.
       </p>
     );
   }
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-2xl border border-orange-200 bg-orange-50/50 p-5">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-orange-800">
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+      {/* Picker bookmarklet section */}
+      <section
+        style={{
+          border: `1px solid ${ORANGE}44`,
+          background: SUBTLE,
+          borderRadius: 12,
+          padding: "18px 20px",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: ORANGE,
+            textTransform: "uppercase",
+            letterSpacing: ".1em",
+          }}
+        >
           Picker bookmarklet
-        </h3>
-        <p className="mt-1 text-sm text-neutral-700">
-          For <strong>Click-element</strong> triggers, drag this link to your bookmarks bar.
-          Then visit any client storefront, click the bookmarklet, and hover/click any element
-          to capture its CSS selector. Press Esc to exit.
-        </p>
-        <div className="mt-4 flex items-center gap-3">
-          <PickerBookmarklet />
-          <span className="text-xs text-neutral-500">
-            ↑ drag this to your bookmarks bar
-          </span>
         </div>
-        <p className="mt-3 text-xs text-neutral-600">
-          Works on any page where the Chapter pixel is installed (or really, any page at all —
-          the picker runs purely client-side). Requires running on a storefront whose origin is
-          on the Chapter CORS allowlist if you want the resulting prompt to actually fire there.
+        <p style={{ margin: "6px 0 0", fontSize: 13.5, color: INK, lineHeight: 1.5 }}>
+          For <strong>Click-element</strong> triggers, drag this link to your bookmarks bar. Then
+          visit any client storefront, click the bookmarklet, and hover/click any element to
+          capture its CSS selector. Press Esc to exit.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+          <PickerBookmarklet />
+          <span style={{ fontSize: 12, color: MUTED }}>↑ drag this to your bookmarks bar</span>
+        </div>
+        <p style={{ margin: "10px 0 0", fontSize: 12, color: MUTED, lineHeight: 1.5 }}>
+          Runs purely client-side. To make the resulting prompt actually fire, the storefront&apos;s
+          origin needs to be on the Chapter CORS allowlist.
         </p>
       </section>
 
-      <div className="rounded-2xl border border-neutral-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
-            <tr>
-              <th className="px-4 py-3 text-left">Client</th>
-              <th className="px-4 py-3 text-right">Prompts</th>
-              <th className="px-4 py-3 text-right">Enabled</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {clientList.map(c => {
-              const k = counts.get(c.client_key) ?? { total: 0, enabled: 0 };
-              return (
-                <tr key={c.client_key} className="border-b border-neutral-100 last:border-0">
-                  <td className="px-4 py-3 font-mono">{c.client_key}</td>
-                  <td className="px-4 py-3 text-right font-mono">{k.total}</td>
-                  <td className="px-4 py-3 text-right font-mono">{k.enabled}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/internal/identity-prompts/${c.client_key}`}
-                      className="text-orange-700 hover:underline text-xs"
-                    >
-                      View / configure →
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* Client list */}
+      <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, background: "white", overflow: "hidden" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 90px 90px 140px",
+            gap: 12,
+            padding: "10px 18px",
+            background: PANEL,
+            borderBottom: `1px solid ${LINE}`,
+            fontSize: 10.5,
+            fontWeight: 700,
+            color: FAINT,
+            textTransform: "uppercase",
+            letterSpacing: ".1em",
+          }}
+        >
+          <div>Client</div>
+          <div style={{ textAlign: "right" }}>Prompts</div>
+          <div style={{ textAlign: "right" }}>Enabled</div>
+          <div />
+        </div>
+        {clientList.map((c, i) => {
+          const k = counts.get(c.client_key) ?? { total: 0, enabled: 0 };
+          return (
+            <div
+              key={c.client_key}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 90px 90px 140px",
+                gap: 12,
+                padding: "12px 18px",
+                borderTop: i === 0 ? "none" : `1px solid ${LINE}`,
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: INK,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                }}
+              >
+                {c.client_key}
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: INK,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  textAlign: "right",
+                }}
+              >
+                {k.total}
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: INK,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  textAlign: "right",
+                }}
+              >
+                {k.enabled}
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <Link
+                  href={`/internal/identity-prompts/${c.client_key}`}
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    color: ORANGE,
+                    textDecoration: "none",
+                  }}
+                >
+                  View / configure →
+                </Link>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
