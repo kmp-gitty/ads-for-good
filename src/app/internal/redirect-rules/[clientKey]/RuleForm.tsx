@@ -31,6 +31,15 @@ import {
   ErrorBanner,
 } from "@/app/lib/ui/builder-primitives";
 
+export type ExistingRuleSummary = {
+  id: string;
+  slug: string;
+  rule_priority: number;
+  condition_jsonb: Record<string, unknown>;
+  destination_template: string;
+  enabled: boolean;
+};
+
 export type RuleFormProps = {
   client_key: string;
   initial?: {
@@ -42,6 +51,11 @@ export type RuleFormProps = {
     description: string | null;
     enabled: boolean;
   };
+  // All rules that exist today for this client. Used to (a) offer a picker
+  // of existing slugs next to the Slug field, (b) show the sibling rules
+  // for whichever slug is currently typed so the operator can see the rule
+  // chain they're extending while they build.
+  existingRules?: ExistingRuleSummary[];
 };
 
 // Common destination-template patterns. Click a chip to populate the field.
@@ -90,7 +104,22 @@ const TOKEN_DOCS: { token: string; meaning: string }[] = [
   { token: "{os}", meaning: "ios / android / macos / windows / linux / unknown." },
 ];
 
-export default function RuleForm({ client_key, initial }: RuleFormProps) {
+// Human-readable one-liner for a rule's conditions. Empty/{} → "(catch-all)".
+function summarizeConditions(cond: Record<string, unknown>): string {
+  const keys = Object.keys(cond ?? {});
+  if (keys.length === 0) return "(catch-all — always matches)";
+  return keys
+    .map((k) => {
+      const v = cond[k];
+      if (typeof v === "boolean") return `${k} = ${v ? "yes" : "no"}`;
+      if (typeof v === "string" || typeof v === "number") return `${k} = ${v}`;
+      if (Array.isArray(v)) return `${k} ∈ [${v.slice(0, 3).join(", ")}${v.length > 3 ? "…" : ""}]`;
+      return k;
+    })
+    .join(" · ");
+}
+
+export default function RuleForm({ client_key, initial, existingRules = [] }: RuleFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +135,27 @@ export default function RuleForm({ client_key, initial }: RuleFormProps) {
 
   // URL tester
   const [testUrl, setTestUrl] = useState("");
+
+  // Distinct slugs from existing rules (excluding the one being edited so the
+  // operator can't "pick" the slug they're already editing). Sorted alpha.
+  const existingSlugs = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of existingRules) {
+      if (initial && r.id === initial.id) continue;
+      set.add(r.slug);
+    }
+    return Array.from(set).sort();
+  }, [existingRules, initial]);
+
+  // Rules that share the currently-typed slug (excluding this rule if editing).
+  // Powers the "existing rules for this slug" panel.
+  const siblingRules = useMemo(() => {
+    const s = slug.trim();
+    if (!s) return [];
+    return existingRules
+      .filter((r) => r.slug === s && (!initial || r.id !== initial.id))
+      .sort((a, b) => a.rule_priority - b.rule_priority);
+  }, [existingRules, slug, initial]);
 
   const tokensInDestination = useMemo(() => {
     const set = new Set<string>();
@@ -212,6 +262,32 @@ export default function RuleForm({ client_key, initial }: RuleFormProps) {
               label="Slug"
               hint={
                 slug ? `URL: /r/${client_key}/${slug}` : `URL: /r/${client_key}/<slug>`
+              }
+              right={
+                existingSlugs.length > 0 ? (
+                  <select
+                    value={existingSlugs.includes(slug) ? slug : ""}
+                    onChange={(e) => {
+                      if (e.target.value) setSlug(e.target.value);
+                    }}
+                    style={{
+                      fontSize: 11.5,
+                      color: MUTED,
+                      background: "white",
+                      border: `1px solid ${LINE}`,
+                      borderRadius: 6,
+                      padding: "3px 6px",
+                      cursor: "pointer",
+                      maxWidth: 180,
+                    }}
+                    title="Pick an existing slug to add another rule to that chain"
+                  >
+                    <option value="">Pick existing…</option>
+                    {existingSlugs.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                ) : null
               }
             >
               <input
@@ -413,6 +489,91 @@ export default function RuleForm({ client_key, initial }: RuleFormProps) {
             <div style={{ marginTop: 10, fontSize: 11.5, color: FAINT, lineHeight: 1.4 }}>
               Identity + geo tokens use placeholder values (real values come from the visitor).
             </div>
+
+            {/* Sibling rules panel — appears once slug matches an existing set.
+                Shows the priority-ordered chain so operator sees what they're
+                extending / where their new rule slots in. */}
+            {siblingRules.length > 0 && (
+              <div style={{ marginTop: 22 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: FAINT,
+                    textTransform: "uppercase",
+                    letterSpacing: ".1em",
+                    marginBottom: 8,
+                  }}
+                >
+                  Existing rules for {" "}
+                  <code style={{ background: "white", padding: "1px 5px", borderRadius: 4, border: `1px solid ${LINE}`, fontSize: 11, color: INK }}>
+                    /r/{client_key}/{slug}
+                  </code>
+                </div>
+                <div
+                  style={{
+                    border: `1px solid ${LINE}`,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    background: "white",
+                    boxShadow: "0 1px 3px rgba(31,45,67,.06)",
+                  }}
+                >
+                  {siblingRules.map((r, i) => (
+                    <div
+                      key={r.id}
+                      style={{
+                        padding: "12px 14px",
+                        borderTop: i === 0 ? "none" : `1px solid ${LINE}`,
+                        fontSize: 12,
+                        color: INK,
+                        lineHeight: 1.5,
+                        opacity: r.enabled ? 1 : 0.55,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <span
+                          style={{
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            color: ORANGE,
+                            background: SUBTLE,
+                            border: `1px solid ${ORANGE}44`,
+                            borderRadius: 4,
+                            padding: "1px 6px",
+                            letterSpacing: ".05em",
+                          }}
+                        >
+                          P{r.rule_priority}
+                        </span>
+                        {!r.enabled && (
+                          <span style={{ fontSize: 10.5, color: MUTED, fontStyle: "italic" }}>
+                            disabled
+                          </span>
+                        )}
+                        <span style={{ fontSize: 11.5, color: MUTED }}>
+                          {summarizeConditions(r.condition_jsonb)}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                          fontSize: 11,
+                          color: MUTED,
+                          wordBreak: "break-all",
+                        }}
+                      >
+                        → {r.destination_template}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: FAINT, lineHeight: 1.4 }}>
+                  Your new rule will slot in at priority <strong style={{ color: INK }}>{priority}</strong>{" "}
+                  — lower wins. Empty conditions = catch-all (put it last).
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import RuleForm from "../RuleForm";
+import RuleForm, { type ExistingRuleSummary } from "../RuleForm";
 
 const INK = "#1F2D43";
 const MUTED = "#5C6B82";
@@ -21,13 +21,23 @@ export default async function EditRulePage({
 }) {
   const { clientKey, ruleId } = await params;
 
-  const { data: rule, error } = await supabase
-    .schema("chapter_config")
-    .from("redirect_rules")
-    .select("id, slug, rule_priority, condition_jsonb, destination_template, description, enabled")
-    .eq("id", ruleId)
-    .eq("client_key", clientKey)
-    .maybeSingle();
+  const [{ data: rule, error }, { data: allRules }] = await Promise.all([
+    supabase
+      .schema("chapter_config")
+      .from("redirect_rules")
+      .select("id, slug, rule_priority, condition_jsonb, destination_template, description, enabled")
+      .eq("id", ruleId)
+      .eq("client_key", clientKey)
+      .maybeSingle(),
+    supabase
+      .schema("chapter_config")
+      .from("redirect_rules")
+      .select("id, slug, rule_priority, condition_jsonb, destination_template, enabled")
+      .eq("client_key", clientKey)
+      .order("slug")
+      .order("rule_priority"),
+  ]);
+  const existingRules = (allRules ?? []) as ExistingRuleSummary[];
 
   if (error) {
     return (
@@ -63,6 +73,7 @@ export default async function EditRulePage({
           description: rule.description,
           enabled: rule.enabled,
         }}
+        existingRules={existingRules}
       />
     </div>
   );
