@@ -18,7 +18,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
-import { selectCrmAdapter } from "@/app/lib/crm-adapter/selector";
 import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
 import { verifyPromptSession } from "@/app/lib/auth/prompt-session";
 import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
@@ -212,29 +211,10 @@ export async function POST(req: NextRequest) {
       user_agent_snippet: req.headers.get("user-agent")?.slice(0, 200) ?? null,
       request_id: req.headers.get("x-vercel-id") ?? null,
     });
-    // Fire-and-forget: forward the captured lead to whichever CRM this client
-    // has configured (chapter_config.clients.crm_provider). Null-provider
-    // returns null adapter → this call becomes a no-op. Failures never break
-    // the visitor-facing response.
-    void (async () => {
-      try {
-        const adapter = await selectCrmAdapter(clientKey);
-        if (!adapter) return;
-        const referer = req.headers.get("referer") ?? null;
-        await adapter.upsertLead({
-          client_key: clientKey,
-          prompt_slug: slug,
-          email: recipient,
-          page_url: referer,
-          ip_country: req.headers.get("x-vercel-ip-country") ?? null,
-        });
-      } catch (err) {
-        console.warn(
-          "[identity-prompt-email] CRM upsert failed:",
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-    })();
+    // CRM mirroring for this submission happens via /api/chapter/lead — the
+    // pixel fires both endpoints for Email Exchange submits. See the CRM
+    // adapter dispatch in /api/chapter/lead/route.ts. Adding it here would
+    // create a duplicate metadata.submissions[] entry per prospect.
     return withCors(req, NextResponse.json({ sent: true }, { status: 200 }));
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown";

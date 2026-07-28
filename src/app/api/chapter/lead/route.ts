@@ -14,6 +14,7 @@ import { createClient } from "@supabase/supabase-js";
 import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
 import { verifyPromptSession } from "@/app/lib/auth/prompt-session";
 import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
+import { selectCrmAdapter } from "@/app/lib/crm-adapter/selector";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -165,6 +166,52 @@ export async function POST(req: NextRequest) {
     user_agent_snippet: req.headers.get("user-agent")?.slice(0, 200) ?? null,
     request_id: req.headers.get("x-vercel-id") ?? null,
   });
+
+  // Fire-and-forget: forward the captured lead to whichever CRM this client
+  // has configured (chapter_config.clients.crm_provider). Null-provider →
+  // adapter is null → this is a no-op. This covers ALL identifying-submit
+  // paths that call chapterPostLead in the pixel: Email Exchange (email +
+  // phone modes) and Custom Form (identity fields). One central intercept
+  // instead of wiring every endpoint. Failures log + swallow — never blocks
+  // the visitor response.
+  //
+  // Only fires when we actually have raw email (crm.prospects has no unique
+  // key that dedups on phone alone). Phone-only leads land in captured_leads
+  // above but aren't mirrored to CRM until we add phone-dedup logic to the
+  // internal adapter (or a client uses an external CRM that keys on phone).
+  if (email) {
+    const consentDeclined = mode ? declined : false;
+    void (async () => {
+      try {
+        const adapter = await selectCrmAdapter(clientKey);
+        if (!adapter) return;
+        if (consentDeclined) {
+          // Visitor picked "No" on a yes/no consent → still logged to
+          // captured_leads for the audit trail, but we don't push into
+          // marketing-oriented systems. Skip the CRM mirror.
+          return;
+        }
+        await adapter.upsertLead({
+          client_key: clientKey,
+          prompt_slug: promptSlug,
+          email,
+          phone: phone || undefined,
+          contact_name: undefined, // captured_leads doesn't currently split out contact_name; extend if operator asks
+          responses:
+            body.responses && typeof body.responses === "object"
+              ? (body.responses as Record<string, unknown>)
+              : null,
+          page_url: body.page_url || null,
+          ip_country: req.headers.get("x-vercel-ip-country") ?? null,
+        });
+      } catch (err) {
+        console.warn(
+          "[lead] CRM upsert failed:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    })();
+  }
 
   return withCors(req, NextResponse.json({ stored: true }, { status: 200 }));
 }
