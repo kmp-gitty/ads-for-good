@@ -182,7 +182,7 @@ export default function UrlBuilder({
             </select>
           </Field>
 
-          <Field label="Prospect" required hint="Search by business name, contact, email, or prospect_key">
+          <Field label="Prospect" hint="Optional. With a prospect: click stitches to their CRM identity via ?rid. Without: anonymous 1P wrapped link (still logs clicks + sets cookies).">
             {prospect ? (
               <div className="flex items-center justify-between rounded-md border border-orange-300 bg-orange-50 px-3 py-2">
                 <div>
@@ -248,7 +248,7 @@ export default function UrlBuilder({
             )}
           </Field>
 
-          <Field label="Destination" required hint="Where the prospect lands after the redirect">
+          <Field label="Destination" required hint="Where the visitor lands after the redirect">
             <div className="flex flex-wrap gap-2 mb-2">
               {QUICK_DESTINATIONS.map((d) => (
                 <button
@@ -275,16 +275,39 @@ export default function UrlBuilder({
           </Field>
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="UTM source" required>
-              <select
+            <Field label="UTM source" hint="Optional. Pick a preset or type your own (e.g. instagram_bio, meta_paid).">
+              <div className="flex flex-wrap gap-2 mb-2">
+                {UTM_SOURCES.map((u) => (
+                  <button
+                    key={u.value}
+                    type="button"
+                    onClick={() => setUtmSource(u.value)}
+                    className={`rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+                      utmSource === u.value
+                        ? "border-orange-500 bg-orange-50 text-orange-800"
+                        : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {u.label}
+                  </button>
+                ))}
+                {utmSource && (
+                  <button
+                    type="button"
+                    onClick={() => setUtmSource("")}
+                    className="rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs font-medium text-neutral-500 transition hover:bg-neutral-50"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
                 value={utmSource}
                 onChange={(e) => setUtmSource(e.target.value)}
                 className={inputCls}
-              >
-                {UTM_SOURCES.map((u) => (
-                  <option key={u.value} value={u.value}>{u.label}</option>
-                ))}
-              </select>
+                placeholder="none, or type a custom source"
+              />
             </Field>
 
             <Field label="UTM campaign" hint="Optional · e.g. q2_outreach">
@@ -318,7 +341,7 @@ export default function UrlBuilder({
           <button
             type="button"
             onClick={copyUrl}
-            disabled={!prospect}
+            disabled={!destination}
             className="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {copied ? "Copied!" : "Copy"}
@@ -327,11 +350,13 @@ export default function UrlBuilder({
         <div className="mt-3 break-all rounded border border-neutral-200 bg-white px-3 py-2 font-mono text-xs text-neutral-800">
           {finalUrl}
         </div>
-        {!prospect && (
-          <p className="mt-2 text-xs text-orange-700">
-            Pick a prospect to enable identity stitching on the click.
-          </p>
-        )}
+        <p className="mt-2 text-xs text-orange-700">
+          {prospect ? (
+            <>Click will stitch to <span className="font-medium">{prospect.business_name}</span> via <code className="rounded bg-white px-1">?rid</code>.</>
+          ) : (
+            <>Anonymous 1P wrapped link — click logs + cookies set, no CRM stitch (visitor's identity resolves later if they identify on-site).</>
+          )}
+        </p>
       </div>
     </div>
   );
