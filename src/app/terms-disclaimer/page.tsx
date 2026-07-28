@@ -121,6 +121,27 @@ export default function TermsOfServicePage() {
             notice; changes apply to your next billing cycle.
           </P>
           <P>
+            <span className="font-semibold">Billable metric: verified customer journeys.</span> Your plan tier
+            is measured against <em>verified customer journeys</em> per calendar month &mdash; sessions
+            that Chapter&rsquo;s bot-detection classifier scores as human traffic. Suspected bot activity
+            and low-signal single-event sessions are excluded from your billable count at no cost. The
+            classifier version used to compute each month&rsquo;s bill is preserved on your Billing page
+            for audit.
+          </P>
+          <P>
+            <span className="font-semibold">Tier ceilings &amp; fair use.</span> Each tier includes a
+            monthly ceiling of verified journeys: Standard 25,000 &middot; Growth 75,000 &middot;
+            Pro 150,000. One-off spikes (holiday sales, campaign launches, viral moments) are absorbed
+            without per-journey overage fees. Sustained overage &mdash; two consecutive months above
+            your tier ceiling &mdash; prompts a tier-upgrade conversation before any change to your bill.
+          </P>
+          <P>
+            <span className="font-semibold">Billing transparency.</span> Your Billing page shows the
+            raw session count Chapter processed, how many were classified as verified journeys (counted
+            toward plan), and how many were excluded (not counted). You always see exactly what
+            you&rsquo;re paying for and why.
+          </P>
+          <P>
             <span className="font-semibold">Cancellation.</span> You may cancel anytime from your billing settings or the
             customer portal; cancellation takes effect at the end of the current billing period, and you retain access
             until then. We may suspend or terminate accounts for non-payment or breach of these Terms.

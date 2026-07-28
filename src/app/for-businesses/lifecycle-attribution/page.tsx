@@ -358,6 +358,14 @@ export default function LifecycleAttributionPage() {
             Chapter pricing is designed around journey volume, access level, and
             how much custom interpretation you need from us. Meaning: visitors to your site, what they do, and how much you want our involvement.
           </p>
+          <p className="mt-3 text-sm leading-7 text-neutral-500">
+            All tiers exclude bot &amp; low-signal traffic from your billable journey count &mdash; you only
+            pay for verified customer activity. See our{" "}
+            <a href="/terms-disclaimer#saas" className="underline hover:text-neutral-800">
+              Terms
+            </a>{" "}
+            for details.
+          </p>
         </div>
 
         <div className="mt-10 grid gap-6 md:grid-cols-3">
@@ -369,7 +377,7 @@ export default function LifecycleAttributionPage() {
             <p className="text-sm text-neutral-600">/month</p>
 
             <ul className="mt-6 space-y-3 text-sm text-neutral-800">
-              <li>Up to 25K journeys</li>
+              <li>Up to 25K verified customer journeys</li>
               <li>Basic attribution: first, last, linear</li>
               <li>Dashboard-only access</li>
               <li>30 day retention</li>
@@ -393,7 +401,7 @@ export default function LifecycleAttributionPage() {
             <p className="text-sm text-neutral-600">/month</p>
 
             <ul className="mt-6 space-y-3 text-sm text-neutral-800">
-              <li>Up to 100K journeys</li>
+              <li>Up to 75K verified customer journeys</li>
               <li>Basic attribution + 1 custom model</li>
               <li>Dashboard access + weekly insights (async)</li>
               <li>60 day retention</li>
@@ -414,7 +422,7 @@ export default function LifecycleAttributionPage() {
             <p className="text-sm text-neutral-600">/month</p>
 
             <ul className="mt-6 space-y-3 text-sm text-neutral-800">
-              <li>Up to 200K journeys</li>
+              <li>Up to 150K verified customer journeys</li>
               <li>Basic + Custom + Advanced attribution</li>
               <li>Dashboard + consulting insights & meetings</li>
               <li>60 day retention</li>
