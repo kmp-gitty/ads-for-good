@@ -704,6 +704,7 @@ setInterval(function () {
     if (presetType === "custom_notification") return chapterRenderPromptBubble(prompt);
     if (presetType === "phone_call") return chapterRenderPromptPhoneCall(prompt);
     if (presetType === "make_an_offer") return chapterRenderPromptMakeAnOffer(prompt);
+    if (presetType === "remind_me") return chapterRenderPromptRemindMe(prompt);
     return chapterRenderPromptComposable(prompt);
   }
 
@@ -1677,6 +1678,215 @@ setInterval(function () {
         target: payload.target,
         identity_key: payload.identity_key,
         recipient_email: payload.recipient_email,
+        page_url: window.location.href,
+      }),
+    })
+      .then(function (res) { return res.json().catch(function () { return { error: "invalid_json" }; }); })
+      .catch(function (e) { return { error: String(e) }; });
+  }
+
+  // MI v2 Phase 6b — Remind Me preset renderer. Modal captures email + creates
+  // a subscription row (chapter_engagement.subscriptions) via /api/chapter/
+  // subscription-create. Notifications fire later from the hourly cron
+  // /api/internal/cron/evaluate-subscriptions (Phase 6c) — this renderer only
+  // captures intent.
+  function chapterRenderPromptRemindMe(prompt) {
+    chapterInjectPromptStyles();
+    var remindMe = (prompt.container_jsonb && prompt.container_jsonb.remind_me) || {};
+    var target = remindMe.target || null;
+    var trigger = remindMe.trigger || { type: "back_in_stock" };
+    var maxNotifications = remindMe.max_notifications;
+    var contentBlocks = Array.isArray(prompt.content_blocks_jsonb) ? prompt.content_blocks_jsonb : [];
+
+    var backdrop = document.createElement("div");
+    backdrop.className = "chapter-prompt-backdrop";
+    var card = document.createElement("div");
+    card.className = "chapter-prompt-card";
+
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "chapter-prompt-close";
+    closeBtn.textContent = "×";
+    closeBtn.setAttribute("aria-label", "Close");
+    card.appendChild(closeBtn);
+
+    function dismiss(method) {
+      try { backdrop.remove(); } catch (e) { /* noop */ }
+      api.track("identity_prompt_dismissed", {
+        prompt_slug: prompt.slug,
+        preset_type: prompt.preset_type,
+        dismiss_method: method,
+      });
+    }
+    closeBtn.addEventListener("click", function () { dismiss("close_button"); });
+    backdrop.addEventListener("click", function (e) { if (e.target === backdrop) dismiss("backdrop"); });
+
+    // Operator-configured content blocks (headline + body). Falls back to a
+    // default headline if none provided so the modal always has anchor text.
+    var hasHeadline = false;
+    for (var i = 0; i < contentBlocks.length; i++) {
+      var block = contentBlocks[i] || {};
+      if (block.type === "headline") {
+        var h = document.createElement("h3");
+        h.className = "chapter-prompt-headline";
+        h.textContent = String(block.text || "");
+        card.appendChild(h);
+        hasHeadline = true;
+      } else if (block.type === "body") {
+        var p = document.createElement("p");
+        p.className = "chapter-prompt-body";
+        p.textContent = String(block.text || "");
+        card.appendChild(p);
+      }
+    }
+    if (!hasHeadline) {
+      var defaultH = document.createElement("h3");
+      defaultH.className = "chapter-prompt-headline";
+      defaultH.textContent = trigger.type === "price_below"
+        ? "Notify me when the price drops"
+        : "Notify me when it's back in stock";
+      card.appendChild(defaultH);
+    }
+
+    // Product summary + trigger clause. Helps the visitor confirm they're
+    // subscribing to the right thing before they commit.
+    if (target) {
+      var meta = document.createElement("div");
+      meta.className = "chapter-prompt-body";
+      var displayName = target.variant_name
+        ? (target.product_name ? target.product_name + " · " + target.variant_name : target.variant_name)
+        : (target.product_name || target.product_id || "this item");
+      var clause = "";
+      if (trigger.type === "back_in_stock") {
+        clause = "We'll email you the moment " + displayName + " is back in stock.";
+      } else if (trigger.type === "price_below") {
+        var thresholdText = trigger.threshold != null ? "$" + Number(trigger.threshold).toFixed(2) : "the target price";
+        clause = "We'll email you when " + displayName + " drops below " + thresholdText + ".";
+      }
+      meta.textContent = clause;
+      card.appendChild(meta);
+    }
+
+    var form = document.createElement("form");
+    form.style.display = "grid";
+    form.style.gap = "10px";
+    form.style.marginTop = "12px";
+
+    var emailInput = document.createElement("input");
+    emailInput.type = "email";
+    emailInput.name = "email";
+    emailInput.required = true;
+    emailInput.placeholder = prompt.email_placeholder || "you@example.com";
+    emailInput.className = "chapter-prompt-input";
+    form.appendChild(emailInput);
+
+    var honeypotInput = document.createElement("input");
+    honeypotInput.type = "text";
+    honeypotInput.name = "hp_field";
+    honeypotInput.tabIndex = -1;
+    honeypotInput.setAttribute("aria-hidden", "true");
+    honeypotInput.style.cssText = "position:absolute;left:-9999px;width:1px;height:1px;opacity:0";
+    form.appendChild(honeypotInput);
+
+    var submitBtn = document.createElement("button");
+    submitBtn.type = "submit";
+    submitBtn.className = "chapter-prompt-submit";
+    submitBtn.textContent = prompt.button_label || "Notify me";
+    form.appendChild(submitBtn);
+
+    var errBox = document.createElement("div");
+    errBox.style.color = "#B04A00";
+    errBox.style.fontSize = "13px";
+    errBox.style.display = "none";
+    form.appendChild(errBox);
+
+    card.appendChild(form);
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      errBox.style.display = "none";
+      var email = String(emailInput.value || "").trim().toLowerCase();
+      if (!email || email.indexOf("@") < 0) {
+        errBox.textContent = "Please enter a valid email.";
+        errBox.style.display = "block";
+        return;
+      }
+      if (!target) {
+        errBox.textContent = "This prompt is missing product config. Contact support.";
+        errBox.style.display = "block";
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Subscribing…";
+
+      chapterHashEmail(email).then(function (hash) {
+        var identityKey = "email_sha256:" + hash;
+        try { api.identify(identityKey, {}, {}); } catch (e2) { /* noop */ }
+
+        chapterPostSubscriptionCreate({
+          prompt_id: prompt.id,
+          identity_key: identityKey,
+          recipient_email: email,
+          target: target,
+          trigger: trigger,
+          max_notifications: maxNotifications,
+          hp_field: honeypotInput.value || "",
+        }).then(function (result) {
+          submitBtn.disabled = false;
+          if (!result || result.error) {
+            errBox.textContent = "Something went wrong. Please try again.";
+            errBox.style.display = "block";
+            submitBtn.textContent = prompt.button_label || "Notify me";
+            return;
+          }
+          api.track("identity_prompt_submitted", {
+            prompt_slug: prompt.slug,
+            preset_type: prompt.preset_type,
+            subscription_id: result.subscription_id,
+            subscription_created: result.created !== false,
+          });
+          // Success state.
+          form.style.display = "none";
+          var successBox = document.createElement("div");
+          successBox.className = "chapter-prompt-body";
+          successBox.style.marginTop = "12px";
+          if (result.created === false) {
+            successBox.textContent = "You're already on the list — we'll email you when it's time.";
+          } else {
+            successBox.textContent = prompt.success_message || "You're subscribed — we'll email you the moment it's time.";
+          }
+          card.appendChild(successBox);
+        }).catch(function () {
+          submitBtn.disabled = false;
+          errBox.textContent = "Network error. Please try again.";
+          errBox.style.display = "block";
+          submitBtn.textContent = prompt.button_label || "Notify me";
+        });
+      });
+    });
+
+    backdrop.appendChild(card);
+    document.body.appendChild(backdrop);
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type, container: "modal" });
+  }
+
+  function chapterPostSubscriptionCreate(payload) {
+    var apiOrigin = getApiOrigin() || "https://ads4good.com";
+    var url = apiOrigin + "/api/chapter/subscription-create";
+    return fetch(url, {
+      method: "POST",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_key: clientKey,
+        prompt_id: payload.prompt_id,
+        session_token: chapterPromptSessionToken,
+        hp_field: payload.hp_field,
+        identity_key: payload.identity_key,
+        recipient_email: payload.recipient_email,
+        target: payload.target,
+        trigger: payload.trigger,
+        max_notifications: payload.max_notifications,
         page_url: window.location.href,
       }),
     })

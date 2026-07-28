@@ -19,6 +19,7 @@ import RecoveryBuilder, { type RecoveryConfig } from "./RecoveryBuilder";
 import NotificationBuilder, { type NotificationConfig } from "./NotificationBuilder";
 import PhoneCallBuilder, { type PhoneCallConfig } from "./PhoneCallBuilder";
 import MakeAnOfferBuilder, { type MakeAnOfferConfig } from "./MakeAnOfferBuilder";
+import RemindMeBuilder, { type RemindMeConfig } from "./RemindMeBuilder";
 import PromptPreview, {
   type PreviewData,
 } from "@/app/chapter/(authed)/prompts/PromptPreview";
@@ -80,6 +81,11 @@ export type ExistingPrompt = {
       | { type: "product"; product_id: string; product_name?: string; list_price?: number }
       | { type: "collection"; collection_id: string; collection_name?: string }
       | { type: "storewide" };
+    remind_me?: {
+      target: RemindMeConfig["target"];
+      trigger: RemindMeConfig["trigger"];
+      max_notifications?: number;
+    };
   } | null;
   submit_actions_jsonb: {
     cta_type?: "dismiss_only" | "button" | "yes_no";
@@ -101,7 +107,7 @@ export type ExistingPrompt = {
 type ConsentMode = "off" | "checkbox" | "choice";
 
 // Preset roadmap. Email Exchange / Custom Form / Custom Notification / Phone
-// Call / Make an Offer are all built. Remind Me is queued for Phase 6.
+// Call / Make an Offer / Remind Me all built end-to-end.
 const PRESET_OPTIONS: {
   value: PresetType;
   label: string;
@@ -114,7 +120,7 @@ const PRESET_OPTIONS: {
   { value: "custom_notification", label: "Custom Notification", description: "Lightweight corner-bubble (Intercom-style). Yes/no, single CTA, soft offers.",           phase: 4, available: true  },
   { value: "phone_call",          label: "Phone Call",          description: "CTA-style click-to-call options. No identity capture — analytics-only.",                  phase: 4, available: true  },
   { value: "make_an_offer",       label: "Make an Offer",       description: "Cart-recovery bidding with operator-defined thresholds + counter-offer state machine.", phase: 5, available: true  },
-  { value: "remind_me",           label: "Remind Me",           description: "Persistent monitoring (price drops, restocks). Hourly evaluation + notification.",       phase: 6, available: false },
+  { value: "remind_me",           label: "Remind Me",           description: "Persistent monitoring (price drops, restocks). Hourly evaluation + email notification via /api/internal/cron/evaluate-subscriptions.", phase: 6, available: true  },
 ];
 
 export default function PromptForm({
@@ -186,6 +192,33 @@ export default function PromptForm({
     return {
       content_blocks: prompt?.content_blocks_jsonb ?? [],
       target: t ?? { type: "storewide" },
+    };
+  });
+  // Remind Me stashes its target + trigger + max_notifications inside
+  // container_jsonb (repurposing the existing composable slot). Runtime pixel
+  // path reads container_jsonb.remind_me on submit to construct the
+  // subscription-create payload.
+  const [remindMeConfig, setRemindMeConfig] = useState<RemindMeConfig>(() => {
+    if (prompt?.preset_type === "remind_me") {
+      const c = prompt.container_jsonb as {
+        remind_me?: {
+          target?: RemindMeConfig["target"];
+          trigger?: RemindMeConfig["trigger"];
+          max_notifications?: number;
+        };
+      } | null;
+      return {
+        content_blocks: prompt.content_blocks_jsonb ?? [],
+        target: c?.remind_me?.target ?? { type: "product", product_id: "" },
+        trigger: c?.remind_me?.trigger ?? { type: "back_in_stock" },
+        max_notifications: c?.remind_me?.max_notifications,
+      };
+    }
+    return {
+      content_blocks: [],
+      target: { type: "product", product_id: "" },
+      trigger: { type: "back_in_stock" },
+      max_notifications: undefined,
     };
   });
   const [slug, setSlug] = useState(prompt?.slug ?? "");
@@ -263,6 +296,19 @@ export default function PromptForm({
     } else if (presetType === "make_an_offer") {
       effectiveContentBlocks = makeAnOfferConfig.content_blocks;
       effectiveContainer = { type: "modal", target: makeAnOfferConfig.target };
+    } else if (presetType === "remind_me") {
+      // Remind Me stashes target + trigger + max_notifications inside
+      // container_jsonb.remind_me. Pixel reads this on prompt fetch to know
+      // which product to subscribe to + what trigger to send with the submit.
+      effectiveContentBlocks = remindMeConfig.content_blocks;
+      effectiveContainer = {
+        type: "modal",
+        remind_me: {
+          target: remindMeConfig.target,
+          trigger: remindMeConfig.trigger,
+          max_notifications: remindMeConfig.max_notifications,
+        },
+      } as PromptFormInput["container_jsonb"];
     }
 
     const input: PromptFormInput = {
@@ -272,7 +318,8 @@ export default function PromptForm({
       form_fields_jsonb:
         presetType === "custom_notification" ||
         presetType === "phone_call" ||
-        presetType === "make_an_offer"
+        presetType === "make_an_offer" ||
+        presetType === "remind_me"
           ? []
           : multiPageEnabled
             ? []
@@ -742,12 +789,36 @@ export default function PromptForm({
           )}
 
           {showsRemindMe && (
-            <div style={{ border: `1px dashed ${LINE}`, background: PANEL, borderRadius: 12, padding: 24, textAlign: "center", marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>Remind Me</div>
-              <div style={{ marginTop: 6, fontSize: 12, color: MUTED, lineHeight: 1.5 }}>
-                Configuration UI ships in Phase 6. Schema is already live — you&apos;ll be able to author this preset as soon as the subscription monitor + hourly evaluation cron lands.
+            <>
+              <Section label="Submit button label">
+                <input
+                  type="text"
+                  value={buttonLabel}
+                  onChange={(e) => setButtonLabel(e.target.value)}
+                  placeholder="Notify me"
+                  style={inp}
+                />
+              </Section>
+
+              <Section label="Success message">
+                <input
+                  type="text"
+                  value={successMessage}
+                  onChange={(e) => setSuccessMessage(e.target.value)}
+                  placeholder="You're subscribed — we'll email you the moment it's back."
+                  style={inp}
+                />
+              </Section>
+
+              <Section label="Reminder">
+                <RemindMeBuilder value={remindMeConfig} onChange={setRemindMeConfig} />
+              </Section>
+
+              <div style={{ border: `1px dashed ${LINE}`, background: PANEL, borderRadius: 10, padding: "10px 12px", fontSize: 11.5, color: MUTED, lineHeight: 1.5, marginBottom: 16 }}>
+                Subscriptions are evaluated hourly via <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>/api/internal/cron/evaluate-subscriptions</span>. Notification email content is authored per client at{" "}
+                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>Email templates →</span> (template_types <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>back_in_stock</span> and <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>price_drop</span>). Auto-cancel on purchase happens via <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>/api/purchase</span> hook — subscribers who buy the target product get their subscription flipped to <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>canceled_at</span> automatically.
               </div>
-            </div>
+            </>
           )}
 
           {/* Consent — for presets that capture a contact. Self-serve parity. */}
@@ -943,7 +1014,7 @@ export default function PromptForm({
                       ? "Multi-page forms don't preview inline — the pixel runtime paints each page as the visitor navigates."
                       : presetType === "make_an_offer"
                         ? "Make an Offer's modal shape depends on runtime product + threshold lookups. Test with a real product on your storefront."
-                        : "Remind Me isn't shipped yet (Phase 6). Preview will land with the composable builder."
+                        : "Remind Me preview needs live product state to render honestly — subscribe → cron-detects-transition → notification is a server-side flow. Test end-to-end via the SQL toggle in chapter_config.mock_products."
                   }
                 />
               );

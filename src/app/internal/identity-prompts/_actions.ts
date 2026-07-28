@@ -73,6 +73,19 @@ export type PromptFormInput = {
       | { type: "product"; product_id: string; product_name?: string; list_price?: number }
       | { type: "collection"; collection_id: string; collection_name?: string }
       | { type: "storewide" };
+    // MI v2 Phase 6b — Remind Me config nested here to reuse the existing
+    // composable jsonb slot instead of adding a new column. The pixel reads
+    // container_jsonb.remind_me on prompt fetch to know which product to
+    // subscribe against + what trigger to submit.
+    remind_me?: {
+      target:
+        | { type: "product"; product_id: string; product_name?: string; list_price?: number; product_url?: string }
+        | { type: "variant"; product_id: string; variant_id: string; variant_name?: string; product_name?: string; list_price?: number; product_url?: string };
+      trigger:
+        | { type: "back_in_stock" }
+        | { type: "price_below"; threshold: number };
+      max_notifications?: number;
+    };
   } | null;
   submit_actions_jsonb?: {
     cta_type?: "dismiss_only" | "button" | "yes_no";
