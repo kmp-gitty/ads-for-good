@@ -56,20 +56,32 @@ async function refreshDynamicOrigins(): Promise<void> {
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("clients")
-    .select("storefront_domain, redirect_host");
+    .select("storefront_domain, redirect_host, links_host, legacy_host");
   // On error, leave the existing cache in place — the seed still covers everyone.
   if (error || !data) return;
 
+  const addHost = (set: Set<string>, raw: string | null) => {
+    if (!raw) return;
+    const rh = String(raw).trim().replace(/\/+$/, "");
+    if (/^https?:\/\//i.test(rh)) set.add(rh.replace(/^http:\/\//i, "https://"));
+    else if (rh) set.add(`https://${rh.toLowerCase()}`);
+  };
+
   const next = new Set<string>();
-  for (const row of data as Array<{ storefront_domain: string | null; redirect_host: string | null }>) {
+  for (const row of data as Array<{
+    storefront_domain: string | null;
+    redirect_host: string | null;
+    links_host: string | null;
+    legacy_host: string | null;
+  }>) {
     if (row.storefront_domain) {
       for (const o of domainToOrigins(row.storefront_domain)) next.add(o);
     }
-    if (row.redirect_host) {
-      const rh = String(row.redirect_host).trim().replace(/\/+$/, "");
-      if (/^https?:\/\//i.test(rh)) next.add(rh.replace(/^http:\/\//i, "https://"));
-      else if (rh) next.add(`https://${rh.toLowerCase()}`);
-    }
+    // links_host is the new canonical column; redirect_host + legacy_host both
+    // stay in the allowlist so mid-migration + backward-compat URLs still pass.
+    addHost(next, row.links_host);
+    addHost(next, row.redirect_host);
+    addHost(next, row.legacy_host);
   }
   _dynamicOrigins = next;
   _lastLoad = Date.now();

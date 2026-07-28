@@ -12,7 +12,11 @@ export type ClientOption = {
   // Per-client 1P redirect host. NULL falls back to the global redirectOrigin
   // (NEXT_PUBLIC_APP_URL / ads4good.com). Set when a client has 1P pixel
   // installed at a dedicated subdomain (e.g. NSC at chapter.notsocavalier.com).
+  // links_host is the new canonical column (e.g. go.eosfabrics.com); it wins
+  // over redirect_host when both are set so mid-migration clients render URLs
+  // against the new hostname first.
   redirect_host: string | null;
+  links_host: string | null;
 };
 
 const UTM_SOURCES = [
@@ -59,10 +63,13 @@ export default function UrlBuilder({
   const [clientKey, setClientKey] = useState(defaultClientKey);
   const availableSlugs = slugsByClient[clientKey] ?? [];
   const currentClient = clients.find(c => c.client_key === clientKey);
-  // Use the per-client redirect_host when set (e.g. NSC's chapter.notsocavalier.com
-  // — required for cookies to land on the right eTLD+1). Falls back to the
-  // global origin for adsforgood_prod, which IS the Chapter deployment apex.
-  const effectiveOrigin = currentClient?.redirect_host || redirectOrigin;
+  // Use the per-client host when set (e.g. NSC's chapter.notsocavalier.com or
+  // EOS's go.eosfabrics.com — required for cookies to land on the right eTLD+1).
+  // Prefer links_host (new canonical column) over redirect_host so clients that
+  // have opted into the new hostname split render URLs against it. Falls back to
+  // the global origin for adsforgood_prod, which IS the Chapter deployment apex.
+  const effectiveOrigin =
+    currentClient?.links_host || currentClient?.redirect_host || redirectOrigin;
   // "" means generic 1P link — no slug-rule matching, just identity + UTM tracking.
   const [slug, setSlug] = useState<string>("");
   const [query, setQuery] = useState("");
