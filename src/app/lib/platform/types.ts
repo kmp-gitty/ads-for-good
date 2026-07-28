@@ -31,11 +31,15 @@ export type PlatformFeature =
 export type ProductInfo = {
   id: string;
   name: string;
-  price: number;         // In the store's currency, decimal (e.g. 59.99)
-  currency: string;      // ISO code (USD, EUR, etc.)
+  price: number;              // In the store's currency, decimal (e.g. 59.99)
+  currency: string;           // ISO code (USD, EUR, etc.)
   in_stock: boolean;
+  inventory_count?: number;   // Explicit stock count when the platform exposes it
+                              // (Shopify: yes, Square: sometimes, custom: usually not).
+                              // Optional so adapters can populate only in_stock and
+                              // the Remind Me evaluator still works.
   image_url?: string;
-  handle?: string;       // URL slug when the platform uses one (Shopify handle)
+  handle?: string;            // URL slug when the platform uses one (Shopify handle)
 };
 
 export type DiscountCodeConfig = {
