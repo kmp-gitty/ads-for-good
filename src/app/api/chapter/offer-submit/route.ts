@@ -24,6 +24,7 @@ import { selectAdapter } from "@/app/lib/platform/selector";
 import { evaluateOffer } from "@/app/lib/offers/evaluator";
 import { sendEmail } from "@/app/lib/email-send";
 import type { OfferTargetResource } from "@/app/lib/offers/types";
+import { selectCrmAdapter } from "@/app/lib/crm-adapter/selector";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -298,6 +299,40 @@ export async function POST(req: NextRequest) {
     user_agent_snippet: req.headers.get("user-agent")?.slice(0, 200) ?? null,
     request_id: req.headers.get("x-vercel-id") ?? null,
   });
+
+  // Fire-and-forget CRM mirror — same pattern as /api/chapter/lead. Null-provider
+  // → no-op. Captures the bidder's raw email into crm.prospects for tenants that
+  // opted in via chapter_config.clients.crm_provider (adsforgood_prod today).
+  // No Make an Offer prompt is live on any real customer-facing page today —
+  // this is preventive plumbing so it works out-of-the-box when one activates.
+  if (recipientEmail) {
+    void (async () => {
+      try {
+        const adapter = await selectCrmAdapter(clientKey);
+        if (!adapter) return;
+        await adapter.upsertLead({
+          client_key: clientKey,
+          prompt_slug: (prompt as { slug: string }).slug,
+          email: recipientEmail,
+          // Bid amount + decision land in responses so operator can see
+          // what the visitor offered + whether it auto-accepted / countered /
+          // declined / routed to review, alongside their contact info.
+          responses: {
+            bid_amount: bidAmount,
+            decision: decision.action,
+            counter_amount: counter_amount ?? null,
+          },
+          page_url: body.page_url || null,
+          ip_country: req.headers.get("x-vercel-ip-country") ?? null,
+        });
+      } catch (err) {
+        console.warn(
+          "[offer-submit] CRM upsert failed:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    })();
+  }
 
   return withCors(
     req,
