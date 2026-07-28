@@ -973,9 +973,11 @@ export default function PromptForm({
               cfContent: contentBlocks,
               cfFields: formFields,
               notif: notificationConfig,
-              notifAck: "",
+              notifAck,
               phone: phoneCallConfig,
-              consentMode: "off",
+              consentMode,
+              consentText,
+              consentDefaultChecked,
             };
             return <PromptPreview data={previewData} />;
           })()}
