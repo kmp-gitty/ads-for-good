@@ -88,8 +88,17 @@ export type ExistingPrompt = {
     yes_label?: string;
     yes_url?: string;
     no_label?: string;
+    ack_message?: string;
+  } | null;
+  consent_jsonb: {
+    mode: "off" | "checkbox" | "choice";
+    text: string;
+    default_checked: boolean;
+    required: boolean;
   } | null;
 };
+
+type ConsentMode = "off" | "checkbox" | "choice";
 
 // Preset roadmap. Email Exchange / Custom Form / Custom Notification / Phone
 // Call / Make an Offer are all built. Remind Me is queued for Phase 6.
@@ -212,6 +221,22 @@ export default function PromptForm({
   const [frequencyDays, setFrequencyDays] = useState(Number(prompt?.frequency_days ?? 90));
   const [enabled, setEnabled] = useState(prompt?.enabled ?? true);
 
+  // Consent (self-serve parity). Applies to email_exchange + custom_form.
+  // Off / Checkbox / Yes-No mirror the self-serve pattern exactly.
+  const initConsent = prompt?.consent_jsonb;
+  const [consentMode, setConsentMode] = useState<ConsentMode>(initConsent?.mode ?? "off");
+  const [consentText, setConsentText] = useState(initConsent?.text ?? "");
+  const [consentDefaultChecked, setConsentDefaultChecked] = useState(
+    !!initConsent?.default_checked,
+  );
+  const [consentRequired, setConsentRequired] = useState(initConsent?.required ?? true);
+
+  // Ack message for Custom Notification (shown after yes/button click when the
+  // CTA doesn't open a link). Read from submit_actions_jsonb.ack_message.
+  const [notifAck, setNotifAck] = useState(
+    prompt?.submit_actions_jsonb?.ack_message ?? "",
+  );
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -222,7 +247,16 @@ export default function PromptForm({
     if (presetType === "custom_notification") {
       effectiveContentBlocks = notificationConfig.content_blocks;
       effectiveContainer = notificationConfig.container;
-      effectiveSubmitActions = notificationConfig.submit_actions;
+      // Merge ack_message into submit_actions when the CTA type warrants it
+      // (yes_no or button — dismiss_only never shows an ack).
+      const cta = notificationConfig.submit_actions?.cta_type;
+      effectiveSubmitActions = {
+        ...notificationConfig.submit_actions,
+        ack_message:
+          (cta === "yes_no" || cta === "button") && notifAck.trim()
+            ? notifAck.trim()
+            : undefined,
+      };
     } else if (presetType === "phone_call") {
       effectiveContentBlocks = phoneCallConfig.content_blocks as ContentBlock[];
       effectiveContainer = { type: "modal" };
@@ -269,6 +303,22 @@ export default function PromptForm({
       frequency,
       frequency_days: frequencyDays,
       enabled,
+      // Consent: only meaningful for contact-capturing presets. The server
+      // action's shapePayload also gates on preset_type, but we send null for
+      // Off here so the DB row is explicit either way.
+      consent_jsonb:
+        (presetType === "email_exchange" || presetType === "custom_form") &&
+        consentMode !== "off"
+          ? {
+              mode: consentMode,
+              text:
+                consentText.trim() ||
+                (consentMode === "choice" ? "Do you agree?" : "I agree."),
+              default_checked:
+                consentMode === "checkbox" ? consentDefaultChecked : false,
+              required: consentMode === "checkbox" ? consentRequired : true,
+            }
+          : null,
     };
 
     startTransition(async () => {
@@ -640,9 +690,26 @@ export default function PromptForm({
           )}
 
           {showsNotification && (
-            <Section label="Notification">
-              <NotificationBuilder value={notificationConfig} onChange={setNotificationConfig} />
-            </Section>
+            <>
+              <Section label="Notification">
+                <NotificationBuilder value={notificationConfig} onChange={setNotificationConfig} />
+              </Section>
+              {(notificationConfig.submit_actions?.cta_type === "yes_no" ||
+                notificationConfig.submit_actions?.cta_type === "button") && (
+                <Section
+                  label="Acknowledgement message"
+                  hint="Shown in the bubble after they click, when the CTA doesn't open a link. Optional."
+                >
+                  <input
+                    type="text"
+                    value={notifAck}
+                    onChange={(e) => setNotifAck(e.target.value)}
+                    placeholder="Thanks — check your inbox!"
+                    style={inp}
+                  />
+                </Section>
+              )}
+            </>
           )}
 
           {showsPhoneCall && (
@@ -681,6 +748,128 @@ export default function PromptForm({
                 Configuration UI ships in Phase 6. Schema is already live — you&apos;ll be able to author this preset as soon as the subscription monitor + hourly evaluation cron lands.
               </div>
             </div>
+          )}
+
+          {/* Consent — for presets that capture a contact. Self-serve parity. */}
+          {(showsEmailExchange || showsCustomForm) && (
+            <Section
+              label="Consent"
+              hint="Optional. Records an opt-in with each captured lead — recommended if you'll email or text them, or create an account."
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  flexWrap: "wrap",
+                  marginBottom: consentMode === "off" ? 0 : 12,
+                }}
+              >
+                {([
+                  ["off", "None"],
+                  ["checkbox", "Checkbox"],
+                  ["choice", "Ask Yes / No"],
+                ] as [ConsentMode, string][]).map(([m, label]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setConsentMode(m)}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      padding: "7px 14px",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      border: `1px solid ${consentMode === m ? ORANGE : LINE}`,
+                      background: consentMode === m ? "#FFF4EC" : "white",
+                      color: consentMode === m ? ORANGE : INK,
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {consentMode !== "off" && (
+                <>
+                  <textarea
+                    value={consentText}
+                    onChange={(e) => setConsentText(e.target.value)}
+                    rows={2}
+                    placeholder={
+                      consentMode === "choice"
+                        ? "e.g. Can we email & text you occasional offers?"
+                        : "e.g. I agree to receive emails & texts."
+                    }
+                    style={{ ...inp, resize: "vertical" }}
+                  />
+                  {consentMode === "checkbox" && (
+                    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 13.5,
+                          color: INK,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={consentRequired}
+                          onChange={(e) => setConsentRequired(e.target.checked)}
+                        />
+                        Must be checked to submit
+                      </label>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          fontSize: 13.5,
+                          color: INK,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={consentDefaultChecked}
+                          onChange={(e) => setConsentDefaultChecked(e.target.checked)}
+                        />
+                        Pre-checked by default
+                      </label>
+                      {consentDefaultChecked && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "#B3261E",
+                            lineHeight: 1.45,
+                            background: "#FDECEA",
+                            border: "1px solid #E7C9C6",
+                            borderRadius: 8,
+                            padding: "8px 10px",
+                          }}
+                        >
+                          Pre-checked consent isn&rsquo;t valid in the EU and is risky for SMS. For texts, prefer an unchecked box or the Yes/No option.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {consentMode === "choice" && (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: FAINT,
+                        marginTop: 8,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      The visitor must pick Yes or No to submit — the strongest, most compliant consent. A &ldquo;No&rdquo; lead is still captured, just flagged as declined so you don&rsquo;t add them to marketing.
+                    </div>
+                  )}
+                </>
+              )}
+            </Section>
           )}
 
           {/* Frequency — common to all presets */}

@@ -81,6 +81,18 @@ export type PromptFormInput = {
     yes_label?: string;
     yes_url?: string;
     no_label?: string;
+    // Custom Notification only — shown in the bubble after yes/button click
+    // when the CTA doesn't open a link. Same field self-serve uses.
+    ack_message?: string;
+  } | null;
+  // Optional consent element captured with a lead (self-serve parity — Phase 2/3).
+  // Applies to presets that capture a contact: email_exchange + custom_form.
+  // null = no consent element rendered.
+  consent_jsonb?: {
+    mode: "off" | "checkbox" | "choice";
+    text: string;
+    default_checked: boolean;
+    required: boolean;
   } | null;
 };
 
@@ -164,6 +176,13 @@ function shapePayload(input: PromptFormInput) {
     frequency: input.frequency,
     frequency_days: input.frequency === "visitor" ? input.frequency_days : null,
     enabled: input.enabled,
+    // Consent applies only to presets that capture contact info.
+    // For other presets (notification / phone_call / make_an_offer / remind_me)
+    // we always write null so the pixel doesn't render a stray consent element.
+    consent_jsonb:
+      input.preset_type === "email_exchange" || input.preset_type === "custom_form"
+        ? input.consent_jsonb ?? null
+        : null,
   };
 }
 
