@@ -128,6 +128,9 @@ export default async function ClientPromptsPage({
           <Link href={`/internal/identity-prompts/${clientKey}/templates`} style={subNavLink}>
             Email templates →
           </Link>
+          <Link href={`/internal/identity-prompts/${clientKey}/leads`} style={subNavLink}>
+            Leads →
+          </Link>
           <Link href={`/internal/identity-prompts/${clientKey}/responses`} style={subNavLink}>
             Responses →
           </Link>
