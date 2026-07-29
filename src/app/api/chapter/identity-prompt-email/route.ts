@@ -90,6 +90,16 @@ export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsPreflightHeaders(req) });
 }
 
+type CartItem = {
+  variant_id?: string | number | null;
+  product_title?: string | null;
+  variant_title?: string | null;
+  quantity?: number | null;
+  line_price_cents?: number | null;
+  currency?: string | null;
+  url?: string | null;
+};
+
 export async function POST(req: NextRequest) {
   let body: {
     client_key?: string;
@@ -97,6 +107,8 @@ export async function POST(req: NextRequest) {
     recipient?: string;
     session_token?: string;
     hp_field?: string;  // honeypot — should always be empty
+    cart_token?: string | null;
+    cart_items?: CartItem[] | null;
   };
   try {
     body = await req.json();
@@ -148,13 +160,23 @@ export async function POST(req: NextRequest) {
     return reject(req, "rate_limited", clientKey, 429, "rate_limited");
   }
 
-  const { data: prompt, error: lookupErr } = await supabase
-    .schema("chapter_config")
-    .from("identity_prompts")
-    .select("post_submit_action, offer_code, offer_description, email_subject, email_body, enabled")
-    .eq("client_key", clientKey)
-    .eq("slug", slug)
-    .maybeSingle();
+  // Fetch prompt + client's storefront_domain in parallel — the latter powers
+  // the {cart_url} + {cart_items_list} merge tokens for cart-abandon prompts.
+  const [{ data: prompt, error: lookupErr }, { data: client }] = await Promise.all([
+    supabase
+      .schema("chapter_config")
+      .from("identity_prompts")
+      .select("post_submit_action, offer_code, offer_description, email_subject, email_body, enabled")
+      .eq("client_key", clientKey)
+      .eq("slug", slug)
+      .maybeSingle(),
+    supabase
+      .schema("chapter_config")
+      .from("clients")
+      .select("storefront_domain")
+      .eq("client_key", clientKey)
+      .maybeSingle(),
+  ]);
 
   if (lookupErr || !prompt) {
     return reject(req, "prompt_not_found", clientKey, 404, "prompt_not_found");
@@ -162,6 +184,7 @@ export async function POST(req: NextRequest) {
   if (!prompt.enabled) {
     return reject(req, "prompt_disabled", clientKey, 400, "prompt_disabled");
   }
+  const storefrontDomain = (client as { storefront_domain: string | null } | null)?.storefront_domain ?? null;
   const action = prompt.post_submit_action;
   if (action !== "email" && action !== "email_message") {
     return reject(req, "wrong_action", clientKey, 400, "wrong_action");
@@ -181,13 +204,31 @@ export async function POST(req: NextRequest) {
   const resend = new Resend(RESEND_API_KEY);
   const offerCode = prompt.offer_code || "";
   const offerDescription = prompt.offer_description || "";
+
+  // Cart merge tokens ({cart_url} + {cart_items_list}) — populated when the
+  // pixel sent cart_token or cart_items and we know the client's storefront
+  // domain. Both fall back to empty string if missing so operators never see
+  // literal `{cart_url}` in a delivered email.
+  const cartUrl = buildCartUrl(storefrontDomain, body.cart_token, body.cart_items);
+  const cartItemsListText = buildCartItemsListText(body.cart_items);
+  const cartItemsListHtml = buildCartItemsListHtml(body.cart_items);
+
   const subjectDefault = action === "email" ? "Your code: {offer_code}" : "A message for you";
   const subjectTemplate = (prompt.email_subject || subjectDefault).trim();
-  const subject = subjectTemplate.replace(/\{offer_code\}/g, offerCode);
+  const subject = substituteTokens(subjectTemplate, {
+    offer_code: offerCode,
+    cart_url: cartUrl,
+    cart_items_list: cartItemsListText,  // plain text in subject
+  });
   const bodyDefault = action === "email"
     ? "Thanks for signing up — here's your code:"
     : "Thanks for signing up!";
-  const bodyText = (prompt.email_body || bodyDefault).trim();
+  const bodyTextRaw = (prompt.email_body || bodyDefault).trim();
+  const bodyText = substituteTokens(bodyTextRaw, {
+    offer_code: offerCode,
+    cart_url: cartUrl,
+    cart_items_list: cartItemsListText,
+  });
   const showOfferBox = action === "email";
 
   try {
@@ -196,7 +237,12 @@ export async function POST(req: NextRequest) {
       to: recipient,
       replyTo: REPLY_TO,
       subject,
-      html: buildHtmlBody(bodyText, showOfferBox ? offerCode : "", showOfferBox ? offerDescription : ""),
+      html: buildHtmlBody(
+        bodyTextRaw,
+        showOfferBox ? offerCode : "",
+        showOfferBox ? offerDescription : "",
+        { cart_url: cartUrl, cart_items_list_html: cartItemsListHtml, cart_items_list_text: cartItemsListText, offer_code: offerCode },
+      ),
       text: buildTextBody(bodyText, showOfferBox ? offerCode : "", showOfferBox ? offerDescription : ""),
     });
     if (result.error) {
@@ -223,14 +269,39 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function buildHtmlBody(bodyText: string, code: string, description: string): string {
+function buildHtmlBody(
+  bodyText: string,
+  code: string,
+  description: string,
+  tokens: { cart_url: string; cart_items_list_html: string; cart_items_list_text: string; offer_code: string },
+): string {
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   // Operator's body is plain text. Split on blank lines into paragraphs;
   // single newlines become <br/> within a paragraph.
+  // {cart_url} — wraps as an <a> tag automatically for HTML.
+  // {cart_items_list} — rendered as an HTML <ul> so the email shows the cart.
+  // Body may contain [link text]({cart_url}) — we render those as anchors.
   const paragraphs = bodyText
     .split(/\n{2,}/)
-    .map(p => `<p style="font-size: 14px; line-height: 1.5; margin: 0 0 12px;">${esc(p).replace(/\n/g, "<br/>")}</p>`)
+    .map((p) => {
+      // 1. Handle markdown-style [label](token) → <a href="tokenValue">label</a> for {cart_url}
+      let out = p.replace(/\[([^\]]+)\]\(\{cart_url\}\)/g, (_m, label) => {
+        if (!tokens.cart_url) return esc(label);
+        return `<a href="${esc(tokens.cart_url)}" style="color: #C2410C; font-weight: 600; text-decoration: underline;">${esc(label)}</a>`;
+      });
+      // 2. Escape remaining text
+      out = esc(out);
+      // 3. Substitute standalone {cart_url} → bare URL text
+      out = out.replace(/\{cart_url\}/g, esc(tokens.cart_url));
+      // 4. Substitute {cart_items_list} → HTML list (pre-escaped in the helper)
+      out = out.replace(/\{cart_items_list\}/g, tokens.cart_items_list_html);
+      // 5. Offer code substitution (in case operator inline-referenced it)
+      out = out.replace(/\{offer_code\}/g, esc(tokens.offer_code));
+      // 6. Newlines → <br/>
+      out = out.replace(/\n/g, "<br/>");
+      return `<p style="font-size: 14px; line-height: 1.5; margin: 0 0 12px;">${out}</p>`;
+    })
     .join("");
   const offerBlock = code
     ? `<p style="font-family: ui-monospace, SFMono-Regular, monospace; font-size: 28px; font-weight: 700; letter-spacing: 0.08em; padding: 16px 24px; background: #FFF7ED; border: 1px solid #FED7AA; border-radius: 12px; display: inline-block; color: #C2410C; margin: 8px 0;">${esc(code)}</p>${description ? `<p style="font-size: 14px; color: #5C6B82;">${esc(description)}</p>` : ""}`
@@ -241,6 +312,80 @@ function buildHtmlBody(bodyText: string, code: string, description: string): str
   ${offerBlock}
   <p style="font-size: 12px; color: #9CA3AF; margin-top: 32px;">— ${esc(SENDER_NAME)}</p>
 </body></html>`;
+}
+
+// Substitute {token} pairs. Never leaves literal tokens in output; missing
+// values render as empty string so operators don't see `{cart_url}` in a
+// delivered email when the cart isn't available.
+function substituteTokens(input: string, tokens: Record<string, string>): string {
+  return input.replace(/\{([a-z_]+)\}/g, (_match, key: string) =>
+    Object.prototype.hasOwnProperty.call(tokens, key) ? tokens[key] : "",
+  );
+}
+
+// {cart_url}: prefers cart_token (Shopify's persistent recovery URL, ~14d),
+// falls back to a permalink built from line items (variant_id:qty pairs).
+// Returns empty string when neither is available OR storefront_domain isn't set.
+function buildCartUrl(
+  storefrontDomain: string | null,
+  cartToken: string | null | undefined,
+  items: CartItem[] | null | undefined,
+): string {
+  if (!storefrontDomain) return "";
+  const domain = storefrontDomain.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  if (!domain) return "";
+  if (cartToken) {
+    // Shopify's built-in cart-recovery URL — /cart/c/<token> restores the cart.
+    return `https://${domain}/cart/c/${encodeURIComponent(cartToken)}`;
+  }
+  if (items && items.length > 0) {
+    // Fallback permalink — /cart/<variant1>:<qty1>,<variant2>:<qty2>
+    // Works even if the visitor's original cart_token has expired.
+    const parts = items
+      .filter((it) => it.variant_id && Number(it.quantity) > 0)
+      .map((it) => `${it.variant_id}:${Math.max(1, Number(it.quantity) || 1)}`);
+    if (parts.length === 0) return "";
+    return `https://${domain}/cart/${parts.join(",")}`;
+  }
+  return "";
+}
+
+function formatMoney(cents: number | null | undefined, currency: string): string {
+  const value = (Number(cents) || 0) / 100;
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(2)}`;
+  }
+}
+
+function buildCartItemsListText(items: CartItem[] | null | undefined): string {
+  if (!items || items.length === 0) return "";
+  return items
+    .map((it) => {
+      const title = it.product_title || "";
+      const variant = it.variant_title ? ` (${it.variant_title})` : "";
+      const qty = Number(it.quantity) || 1;
+      const price = formatMoney(it.line_price_cents ?? null, it.currency || "USD");
+      return `  • ${title}${variant} × ${qty} — ${price}`;
+    })
+    .join("\n");
+}
+
+function buildCartItemsListHtml(items: CartItem[] | null | undefined): string {
+  if (!items || items.length === 0) return "";
+  const esc = (s: string) =>
+    String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const rows = items
+    .map((it) => {
+      const title = it.product_title || "";
+      const variant = it.variant_title ? ` <span style="color:#5C6B82;">(${esc(it.variant_title)})</span>` : "";
+      const qty = Number(it.quantity) || 1;
+      const price = formatMoney(it.line_price_cents ?? null, it.currency || "USD");
+      return `<li style="margin: 4px 0; font-size: 14px; color: #1F2D43;"><strong>${esc(title)}</strong>${variant} × ${qty} — <span style="color:#5C6B82;">${esc(price)}</span></li>`;
+    })
+    .join("");
+  return `<ul style="padding-left: 20px; margin: 12px 0;">${rows}</ul>`;
 }
 
 function buildTextBody(bodyText: string, code: string, description: string): string {

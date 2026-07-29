@@ -52,7 +52,7 @@ export type ExistingPrompt = {
   id: string;
   slug: string;
   preset_type: string;
-  trigger_jsonb: { type?: string; selector?: string; delay_ms?: number; percent?: number };
+  trigger_jsonb: { type?: string; selector?: string; delay_ms?: number; percent?: number; pages?: number };
   headline: string;
   body: string | null;
   input_mode: string;
@@ -236,6 +236,7 @@ export default function PromptForm({
   const [triggerSelector, setTriggerSelector] = useState(trig.selector ?? "");
   const [triggerDelayMs, setTriggerDelayMs] = useState(Number(trig.delay_ms ?? 15000));
   const [triggerPercent, setTriggerPercent] = useState(Number(trig.percent ?? 50));
+  const [triggerPages, setTriggerPages] = useState(Number(trig.pages ?? 3));
   // Page-URL gating (targeting_jsonb.page_match). Empty value = fire everywhere.
   const initPageMatch = prompt?.targeting_jsonb?.page_match;
   const [pageMatchMode, setPageMatchMode] = useState<PageMatchMode>(
@@ -347,6 +348,7 @@ export default function PromptForm({
       trigger_selector: triggerSelector,
       trigger_delay_ms: triggerDelayMs,
       trigger_percent: triggerPercent,
+      trigger_pages: triggerPages,
       page_match_mode: pageMatchMode,
       page_match_value: pageMatchValue,
       headline,
@@ -501,6 +503,7 @@ export default function PromptForm({
               <option value="exit_intent">On exit intent (mouse leaves the page)</option>
               <option value="time_on_page">After time on page</option>
               <option value="scroll_depth">At a scroll depth</option>
+              <option value="page_depth">After N pages this session</option>
             </select>
 
             {triggerType === "click_element" && (
@@ -534,6 +537,14 @@ export default function PromptForm({
             {triggerType === "scroll_depth" && (
               <div style={{ marginTop: 8 }}>
                 <NumRow label="Percent" value={triggerPercent} onChange={setTriggerPercent} min={1} max={100} />
+              </div>
+            )}
+            {triggerType === "page_depth" && (
+              <div style={{ marginTop: 8 }}>
+                <NumRow label="Pages" value={triggerPages} onChange={setTriggerPages} min={1} max={50} width={140} />
+                <div style={{ marginTop: 6, fontSize: 11.5, color: FAINT, lineHeight: 1.4 }}>
+                  Fires when the visitor has viewed this many pages or more in the current session. Counter resets when the browser tab closes.
+                </div>
               </div>
             )}
           </Section>

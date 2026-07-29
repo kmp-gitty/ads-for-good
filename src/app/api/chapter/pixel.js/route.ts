@@ -2151,20 +2151,74 @@ setInterval(function () {
   function chapterSendPromptEmail(slug, recipient, hpField) {
     var apiOrigin = getApiOrigin() || "https://ads4good.com";
     var url = new URL("/api/chapter/identity-prompt-email", apiOrigin);
+
+    // Best-effort cart snapshot for {cart_url} + {cart_items_list} merge tokens
+    // in the email body. Shopify's /cart.js returns the current visitor's cart
+    // regardless of what page they're on. Fetch fails gracefully on non-Shopify
+    // storefronts — server just skips the merge tokens.
+    function postEmail(cartToken, cartItems) {
+      try {
+        fetch(url.toString(), {
+          method: "POST",
+          credentials: "omit",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_key: clientKey,
+            prompt_slug: slug,
+            recipient: recipient,
+            session_token: chapterPromptSessionToken,
+            hp_field: hpField,
+            cart_token: cartToken || null,
+            cart_items: cartItems || null,
+          }),
+        }).catch(function () { /* fire-and-forget */ });
+      } catch (e) { /* noop */ }
+    }
+
+    // Try /cart.js (Shopify) — same-origin fetch, doesn't need CORS.
+    // Time-box the fetch so we never delay email send more than 800ms.
+    var completed = false;
+    var timer = setTimeout(function () {
+      if (completed) return;
+      completed = true;
+      postEmail(null, null);
+    }, 800);
+
     try {
-      fetch(url.toString(), {
-        method: "POST",
-        credentials: "omit",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_key: clientKey,
-          prompt_slug: slug,
-          recipient: recipient,
-          session_token: chapterPromptSessionToken,
-          hp_field: hpField,
-        }),
-      }).catch(function () { /* fire-and-forget */ });
-    } catch (e) { /* noop */ }
+      fetch("/cart.js", { credentials: "same-origin" })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .catch(function () { return null; })
+        .then(function (cart) {
+          if (completed) return;
+          completed = true;
+          clearTimeout(timer);
+          var token = null;
+          var items = null;
+          if (cart && typeof cart === "object") {
+            token = cart.token ? String(cart.token).split("?")[0] : null;
+            if (Array.isArray(cart.items) && cart.items.length > 0) {
+              items = cart.items.map(function (it) {
+                return {
+                  variant_id: it.variant_id != null ? String(it.variant_id) : (it.id != null ? String(it.id) : null),
+                  product_title: it.product_title || it.title || "",
+                  variant_title: it.variant_title || null,
+                  quantity: Number(it.quantity) || 1,
+                  line_price_cents: Number(it.line_price) || 0,
+                  currency: cart.currency || "USD",
+                  url: it.url || null,
+                };
+              });
+            }
+          }
+          postEmail(token, items);
+        });
+    } catch (e) {
+      if (!completed) {
+        completed = true;
+        clearTimeout(timer);
+        postEmail(null, null);
+      }
+    }
   }
 
   // Page-URL gating (targeting_jsonb.page_match). Checked at FIRE-time (not
@@ -2233,6 +2287,36 @@ setInterval(function () {
     }, { passive: true });
   }
 
+  // Page-depth trigger: fires once when the visitor's session page-view count
+  // meets or exceeds the operator's threshold. Counter is incremented ONCE per
+  // pixel load (see chapterBumpPageDepth below) + persisted in sessionStorage,
+  // so a fresh tab resets to 0. Frequency (session/visitor) still gates re-fires.
+  function chapterRegisterPageDepthTrigger(prompt) {
+    var threshold = (prompt.trigger_jsonb && prompt.trigger_jsonb.pages) || 3;
+    var current = chapterGetPageDepth();
+    if (current < threshold) return;               // not yet — wait for next load
+    if (chapterIsPromptThrottled(prompt)) return;
+    if (!chapterMatchesPagePattern(prompt)) return;
+    // Fire after a tiny delay so page render settles + other pixel work runs.
+    setTimeout(function () { chapterRenderPrompt(prompt); }, 250);
+  }
+
+  // Session page counter. Increments on pixel init (once per real page load).
+  var chapterPageDepthKey = "chapter_page_depth";
+  function chapterBumpPageDepth() {
+    try {
+      var n = parseInt(sessionStorage.getItem(chapterPageDepthKey) || "0", 10) || 0;
+      n += 1;
+      sessionStorage.setItem(chapterPageDepthKey, String(n));
+    } catch (e) { /* sessionStorage blocked; page_depth trigger will no-op */ }
+  }
+  function chapterGetPageDepth() {
+    try {
+      return parseInt(sessionStorage.getItem(chapterPageDepthKey) || "0", 10) || 0;
+    } catch (e) { return 0; }
+  }
+  chapterBumpPageDepth();
+
   // Session token from the prompts GET response. Required by the email-send
   // endpoint as proof that this visitor's browser actually loaded the config
   // (defense against direct-POST attackers).
@@ -2257,6 +2341,7 @@ setInterval(function () {
           else if (trig.type === "exit_intent") chapterRegisterExitIntentTrigger(prompt);
           else if (trig.type === "time_on_page") chapterRegisterTimeOnPageTrigger(prompt);
           else if (trig.type === "scroll_depth") chapterRegisterScrollDepthTrigger(prompt);
+          else if (trig.type === "page_depth") chapterRegisterPageDepthTrigger(prompt);
         });
       })
       .catch(function () {});

@@ -13,10 +13,13 @@ export type PromptFormInput = {
   client_key: string;
   preset_type: "email_exchange" | "custom_form" | "custom_notification" | "make_an_offer" | "phone_call" | "remind_me" | "custom";
   slug: string;
-  trigger_type: "click_element" | "exit_intent" | "time_on_page" | "scroll_depth";
+  trigger_type: "click_element" | "exit_intent" | "time_on_page" | "scroll_depth" | "page_depth";
   trigger_selector?: string;
   trigger_delay_ms?: number;
   trigger_percent?: number;
+  // page_depth: minimum session page views before this prompt fires.
+  // Threshold of 3 means "after visitor has viewed 3+ pages this session."
+  trigger_pages?: number;
   headline: string;
   body: string;
   input_mode: "email" | "phone" | "either";
@@ -126,6 +129,8 @@ function buildTriggerJsonb(input: PromptFormInput): Record<string, unknown> {
       return { type: "time_on_page", delay_ms: input.trigger_delay_ms || 15000 };
     case "scroll_depth":
       return { type: "scroll_depth", percent: input.trigger_percent || 50 };
+    case "page_depth":
+      return { type: "page_depth", pages: Math.max(1, input.trigger_pages || 3) };
   }
 }
 
