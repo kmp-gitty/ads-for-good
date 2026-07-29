@@ -25,7 +25,7 @@
 //   - Rate limiting: handled at the Vercel edge level
 
 import { NextRequest, NextResponse, after } from "next/server";
-import { fetchRules, fetchAbExperiments, incrementRuleHitCount } from "@/app/lib/redirect/rules";
+import { fetchRules, fetchAbExperiments, fetchClientRedirectConfig, incrementRuleHitCount } from "@/app/lib/redirect/rules";
 import { resolveIdentity, applyIdentityCookies } from "@/app/lib/redirect/identity";
 import { resolveGeo } from "@/app/lib/redirect/geo";
 import { classifyUA } from "@/app/lib/redirect/device";
@@ -117,14 +117,29 @@ export async function GET(
     }
   }
 
-  // Fallback chain: ?to= query param → 404.
+  // Fallback chain: ?to= query param → client-level default → 404.
+  //
+  // Client-level default (default_redirect_destination on chapter_config.clients)
+  // is the safety net that prevents 404s on unmatched-rule paths. Set once per
+  // client (e.g. https://eosfabrics.com for eos_fabrics) — any /r/<client>/<slug>
+  // that misses every rule + has no ?to= param falls back to it. Per-slug
+  // catch-alls still override when the slug's specific fallback should differ
+  // from the client-wide default.
   if (!destination || !isValidDestination(destination)) {
     const fallback = query.to;
     if (fallback && isValidDestination(fallback)) {
       destination = fallback;
     } else {
-      console.warn(`[redirect] no destination for ${client_key}/${slug}; rules=${rules.length}`);
-      return new NextResponse("not_found", { status: 404 });
+      const clientConfig = await fetchClientRedirectConfig(client_key);
+      if (
+        clientConfig.default_redirect_destination &&
+        isValidDestination(clientConfig.default_redirect_destination)
+      ) {
+        destination = clientConfig.default_redirect_destination;
+      } else {
+        console.warn(`[redirect] no destination for ${client_key}/${slug}; rules=${rules.length}`);
+        return new NextResponse("not_found", { status: 404 });
+      }
     }
   }
 

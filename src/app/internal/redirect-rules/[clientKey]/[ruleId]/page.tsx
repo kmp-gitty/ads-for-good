@@ -21,7 +21,7 @@ export default async function EditRulePage({
 }) {
   const { clientKey, ruleId } = await params;
 
-  const [{ data: rule, error }, { data: allRules }] = await Promise.all([
+  const [{ data: rule, error }, { data: allRules }, { data: client }] = await Promise.all([
     supabase
       .schema("chapter_config")
       .from("redirect_rules")
@@ -36,8 +36,15 @@ export default async function EditRulePage({
       .eq("client_key", clientKey)
       .order("slug")
       .order("rule_priority"),
+    supabase
+      .schema("chapter_config")
+      .from("clients")
+      .select("default_redirect_destination")
+      .eq("client_key", clientKey)
+      .maybeSingle(),
   ]);
   const existingRules = (allRules ?? []) as ExistingRuleSummary[];
+  const clientDefault = (client as { default_redirect_destination: string | null } | null)?.default_redirect_destination ?? null;
 
   if (error) {
     return (
@@ -74,6 +81,7 @@ export default async function EditRulePage({
           enabled: rule.enabled,
         }}
         existingRules={existingRules}
+        clientDefaultDestination={clientDefault}
       />
     </div>
   );

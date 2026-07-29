@@ -62,6 +62,10 @@ export type RuleFormProps = {
   // hint pre-set, empty conditions, operator only fills destination.
   initialSlug?: string;
   isCatchAllPreFill?: boolean;
+  // Client-level default_redirect_destination (chapter_config.clients).
+  // When set, "missing catch-all" is a soft warning ("falls back to X")
+  // instead of a 404 warning. NULL = no client default → 404 on miss.
+  clientDefaultDestination?: string | null;
 };
 
 // Common destination-template patterns. Click a chip to populate the field.
@@ -131,6 +135,7 @@ export default function RuleForm({
   existingRules = [],
   initialSlug,
   isCatchAllPreFill = false,
+  clientDefaultDestination = null,
 }: RuleFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -473,15 +478,17 @@ export default function RuleForm({
           <ErrorBanner message={error} />
 
           {/* Missing catch-all warning — fires when the slug has a specific
-              rule (this one) but no fallback. Post-save we auto-route to a
-              pre-filled catch-all form so operator can close the gap in one
-              extra click. Warning is informational, not blocking. */}
+              rule (this one) but no fallback. Copy varies based on whether a
+              client-level default_redirect_destination is set:
+              - No client default → visitors 404 on miss (loud warning)
+              - Client default set → visitors fall back to it (soft note)
+              Post-save routing to pre-filled catch-all form runs either way. */}
           {willLackCatchAll && (
             <div
               style={{
                 marginTop: 16,
-                border: `1px solid ${ORANGE}66`,
-                background: SUBTLE,
+                border: `1px solid ${clientDefaultDestination ? LINE : ORANGE + "66"}`,
+                background: clientDefaultDestination ? PANEL : SUBTLE,
                 borderRadius: 10,
                 padding: "12px 14px",
                 fontSize: 13,
@@ -494,20 +501,30 @@ export default function RuleForm({
                   style={{
                     fontSize: 10.5,
                     fontWeight: 700,
-                    color: ORANGE,
+                    color: clientDefaultDestination ? MUTED : ORANGE,
                     letterSpacing: ".08em",
                     textTransform: "uppercase",
                   }}
                 >
-                  Heads up · no catch-all
+                  {clientDefaultDestination ? "FYI · no per-slug catch-all" : "Heads up · no catch-all"}
                 </span>
               </div>
               <div style={{ color: MUTED }}>
                 <code style={{ background: "white", padding: "1px 5px", borderRadius: 4, border: `1px solid ${LINE}`, fontSize: 12, color: INK }}>
                   /r/{client_key}/{slug}
                 </code>{" "}
-                doesn&apos;t have a catch-all rule yet. Visitors who don&apos;t match this rule&apos;s conditions will hit a 404.
-                We&apos;ll take you to add one right after you save.
+                doesn&apos;t have a per-slug catch-all yet.{" "}
+                {clientDefaultDestination ? (
+                  <>
+                    Visitors who don&apos;t match this rule&apos;s conditions will fall back to the client-level default (
+                    <code style={{ background: "white", padding: "1px 5px", borderRadius: 4, border: `1px solid ${LINE}`, fontSize: 12, color: INK }}>
+                      {clientDefaultDestination}
+                    </code>
+                    ). Add a per-slug catch-all if you want a slug-specific fallback instead — we&apos;ll take you there after save.
+                  </>
+                ) : (
+                  <>Visitors who don&apos;t match this rule&apos;s conditions will hit a 404. We&apos;ll take you to add one right after you save.</>
+                )}
               </div>
             </div>
           )}

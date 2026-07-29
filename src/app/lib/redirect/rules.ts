@@ -75,6 +75,54 @@ export function clearRulesCache(client_key?: string, slug?: string): void {
   }
 }
 
+// ─── Per-client config (default redirect destination, etc.) ────────────────
+// Small hot fields that drive the redirect fallback chain. 5-min TTL matches
+// the rules cache — operators editing client config accept the same staleness
+// window. Same pattern as fetchRules.
+export type ClientRedirectConfig = {
+  default_redirect_destination: string | null;
+};
+
+type ClientConfigEntry = { config: ClientRedirectConfig; fetchedAt: number };
+const clientConfigCache = new Map<string, ClientConfigEntry>();
+
+export async function fetchClientRedirectConfig(
+  client_key: string,
+): Promise<ClientRedirectConfig> {
+  const now = Date.now();
+  const cached = clientConfigCache.get(client_key);
+  if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.config;
+  }
+
+  const { data, error } = await supabase
+    .schema("chapter_config")
+    .from("clients")
+    .select("default_redirect_destination")
+    .eq("client_key", client_key)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[redirect-client-config] lookup failed:", error);
+    return { default_redirect_destination: null };
+  }
+
+  const config: ClientRedirectConfig = {
+    default_redirect_destination: (data as { default_redirect_destination: string | null } | null)
+      ?.default_redirect_destination ?? null,
+  };
+  clientConfigCache.set(client_key, { config, fetchedAt: now });
+  return config;
+}
+
+export function clearClientRedirectConfigCache(client_key?: string): void {
+  if (client_key) {
+    clientConfigCache.delete(client_key);
+  } else {
+    clientConfigCache.clear();
+  }
+}
+
 // ─── A/B experiments ────────────────────────────────────────────────────────
 // Same caching pattern. Used by the ab_bucket condition evaluator.
 

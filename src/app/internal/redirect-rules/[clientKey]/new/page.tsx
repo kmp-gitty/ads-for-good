@@ -28,6 +28,16 @@ async function fetchExistingRules(clientKey: string): Promise<ExistingRuleSummar
   return (data ?? []) as ExistingRuleSummary[];
 }
 
+async function fetchClientDefaultDestination(clientKey: string): Promise<string | null> {
+  const { data } = await supabase
+    .schema("chapter_config")
+    .from("clients")
+    .select("default_redirect_destination")
+    .eq("client_key", clientKey)
+    .maybeSingle();
+  return (data as { default_redirect_destination: string | null } | null)?.default_redirect_destination ?? null;
+}
+
 export default async function NewRulePage({
   params,
   searchParams,
@@ -37,7 +47,10 @@ export default async function NewRulePage({
 }) {
   const { clientKey } = await params;
   const sp = await searchParams;
-  const existingRules = await fetchExistingRules(clientKey);
+  const [existingRules, clientDefault] = await Promise.all([
+    fetchExistingRules(clientKey),
+    fetchClientDefaultDestination(clientKey),
+  ]);
 
   // Catch-all pre-fill mode: reached from a save-with-missing-catch-all
   // redirect. Pre-fills the slug + a sensible priority + a description hint
@@ -78,6 +91,7 @@ export default async function NewRulePage({
         existingRules={existingRules}
         initialSlug={preFillSlug}
         isCatchAllPreFill={isCatchAllMode}
+        clientDefaultDestination={clientDefault}
       />
     </div>
   );
