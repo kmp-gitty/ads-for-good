@@ -531,7 +531,16 @@ export default function PromptForm({
             )}
             {triggerType === "time_on_page" && (
               <div style={{ marginTop: 8 }}>
-                <NumRow label="Delay (ms)" value={triggerDelayMs} onChange={setTriggerDelayMs} min={0} width={140} />
+                <NumRow
+                  label="Seconds"
+                  value={Math.round(triggerDelayMs / 1000)}
+                  onChange={(secs) => setTriggerDelayMs(Math.max(0, secs) * 1000)}
+                  min={0}
+                  width={140}
+                />
+                <div style={{ marginTop: 6, fontSize: 11.5, color: FAINT, lineHeight: 1.4 }}>
+                  Fires this many seconds after the visitor lands on a matching page.
+                </div>
               </div>
             )}
             {triggerType === "scroll_depth" && (
