@@ -56,6 +56,12 @@ export type RuleFormProps = {
   // for whichever slug is currently typed so the operator can see the rule
   // chain they're extending while they build.
   existingRules?: ExistingRuleSummary[];
+  // Optional pre-fills for the new-rule form. Used by the missing-catch-all
+  // redirect flow: operator saves a specific rule → we route them to
+  // ?slug=X&catch_all=1 → this form opens with slug + priority + description
+  // hint pre-set, empty conditions, operator only fills destination.
+  initialSlug?: string;
+  isCatchAllPreFill?: boolean;
 };
 
 // Common destination-template patterns. Click a chip to populate the field.
@@ -119,18 +125,30 @@ function summarizeConditions(cond: Record<string, unknown>): string {
     .join(" · ");
 }
 
-export default function RuleForm({ client_key, initial, existingRules = [] }: RuleFormProps) {
+export default function RuleForm({
+  client_key,
+  initial,
+  existingRules = [],
+  initialSlug,
+  isCatchAllPreFill = false,
+}: RuleFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [slug, setSlug] = useState(initial?.slug ?? "");
-  const [priority, setPriority] = useState(String(initial?.rule_priority ?? 100));
+  const [slug, setSlug] = useState(initial?.slug ?? initialSlug ?? "");
+  // Catch-all pre-fill defaults: priority 200 (checked after the specific rule),
+  // description hinting operator purpose. Editable — operator can override.
+  const [priority, setPriority] = useState(
+    String(initial?.rule_priority ?? (isCatchAllPreFill ? 200 : 100)),
+  );
   const [conditions, setConditions] = useState(
     initial?.condition_jsonb ? JSON.stringify(initial.condition_jsonb, null, 2) : "{}",
   );
   const [destination, setDestination] = useState(initial?.destination_template ?? "");
-  const [description, setDescription] = useState(initial?.description ?? "");
+  const [description, setDescription] = useState(
+    initial?.description ?? (isCatchAllPreFill ? "Catch-all fallback for /r/" + client_key + "/" + (initialSlug ?? "") : ""),
+  );
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
 
   // URL tester
@@ -156,6 +174,42 @@ export default function RuleForm({ client_key, initial, existingRules = [] }: Ru
       .filter((r) => r.slug === s && (!initial || r.id !== initial.id))
       .sort((a, b) => a.rule_priority - b.rule_priority);
   }, [existingRules, slug, initial]);
+
+  // Catch-all detection — warns the operator when saving a rule with conditions
+  // would leave the slug without any fallback. Prevents the 404 footgun where
+  // a visitor doesn't match the specific rule + there's no catch-all + no ?to=
+  // param on the inbound URL → visitor gets a 404.
+  //
+  // Three conditions to warn:
+  // 1. Slug is typed
+  // 2. Current form conditions are NON-empty (this rule isn't itself a catch-all)
+  // 3. No OTHER enabled rule on this slug is a catch-all (empty conditions_jsonb)
+  const currentConditionsAreCatchAll = useMemo(() => {
+    try {
+      const parsed = JSON.parse(conditions);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) && Object.keys(parsed).length === 0;
+    } catch {
+      return false;
+    }
+  }, [conditions]);
+
+  const slugHasEnabledCatchAll = useMemo(() => {
+    const s = slug.trim();
+    if (!s) return false;
+    return existingRules.some(
+      (r) =>
+        r.slug === s &&
+        r.enabled &&
+        (!initial || r.id !== initial.id) &&
+        Object.keys(r.condition_jsonb).length === 0,
+    );
+  }, [existingRules, slug, initial]);
+
+  const willLackCatchAll = useMemo(() => {
+    if (!slug.trim()) return false;
+    if (currentConditionsAreCatchAll) return false;
+    return !slugHasEnabledCatchAll;
+  }, [slug, currentConditionsAreCatchAll, slugHasEnabledCatchAll]);
 
   const tokensInDestination = useMemo(() => {
     const set = new Set<string>();
@@ -204,6 +258,12 @@ export default function RuleForm({ client_key, initial, existingRules = [] }: Ru
       enabled,
     };
 
+    // Snapshot the missing-catch-all state at save time (state may not update
+    // between transition kick-off + resolve). If missing, redirect to a
+    // pre-filled new-rule form so operator immediately fills the catch-all.
+    const shouldOfferCatchAll = willLackCatchAll;
+    const savedSlug = input.slug;
+
     startTransition(async () => {
       const res = initial
         ? await updateRule(initial.id, input)
@@ -212,7 +272,11 @@ export default function RuleForm({ client_key, initial, existingRules = [] }: Ru
         setError(res.error ?? "save failed");
         return;
       }
-      router.push(`/internal/redirect-rules/${client_key}`);
+      if (shouldOfferCatchAll) {
+        router.push(`/internal/redirect-rules/${client_key}/new?slug=${encodeURIComponent(savedSlug)}&catch_all=1`);
+      } else {
+        router.push(`/internal/redirect-rules/${client_key}`);
+      }
     });
   }
 
@@ -407,6 +471,46 @@ export default function RuleForm({ client_key, initial, existingRules = [] }: Ru
           </label>
 
           <ErrorBanner message={error} />
+
+          {/* Missing catch-all warning — fires when the slug has a specific
+              rule (this one) but no fallback. Post-save we auto-route to a
+              pre-filled catch-all form so operator can close the gap in one
+              extra click. Warning is informational, not blocking. */}
+          {willLackCatchAll && (
+            <div
+              style={{
+                marginTop: 16,
+                border: `1px solid ${ORANGE}66`,
+                background: SUBTLE,
+                borderRadius: 10,
+                padding: "12px 14px",
+                fontSize: 13,
+                color: INK,
+                lineHeight: 1.5,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    color: ORANGE,
+                    letterSpacing: ".08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Heads up · no catch-all
+                </span>
+              </div>
+              <div style={{ color: MUTED }}>
+                <code style={{ background: "white", padding: "1px 5px", borderRadius: 4, border: `1px solid ${LINE}`, fontSize: 12, color: INK }}>
+                  /r/{client_key}/{slug}
+                </code>{" "}
+                doesn&apos;t have a catch-all rule yet. Visitors who don&apos;t match this rule&apos;s conditions will hit a 404.
+                We&apos;ll take you to add one right after you save.
+              </div>
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: 10, marginTop: 22, alignItems: "center" }}>
             <PrimaryButton type="submit" disabled={pending}>
