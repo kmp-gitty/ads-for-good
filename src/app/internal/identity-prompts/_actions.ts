@@ -107,6 +107,11 @@ export type PromptFormInput = {
     default_checked: boolean;
     required: boolean;
   } | null;
+  // Page-URL gating (v1: single rule). Empty value = fire on all pages.
+  // Modes: starts_with / contains / ends_with / exact / not_contains.
+  // Stored inside targeting_jsonb.page_match. v2 will support multiple rules.
+  page_match_mode?: "starts_with" | "contains" | "ends_with" | "exact" | "not_contains";
+  page_match_value?: string;
 };
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -157,6 +162,19 @@ function validate(input: PromptFormInput): string | null {
   return null;
 }
 
+function buildTargetingJsonb(input: PromptFormInput): Record<string, unknown> | null {
+  // Page-URL gating applies to ALL preset types (unlike composable-only columns).
+  // Empty value → no gating; return null so we don't write a stray row.
+  const value = (input.page_match_value ?? "").trim();
+  if (!value || !input.page_match_mode) return null;
+  return {
+    page_match: {
+      mode: input.page_match_mode,
+      value,
+    },
+  };
+}
+
 function shapePayload(input: PromptFormInput) {
   // Composable jsonb columns are populated only for non-Email-Exchange presets.
   // Email Exchange continues writing the v1.5 dedicated columns; the composable
@@ -166,6 +184,8 @@ function shapePayload(input: PromptFormInput) {
     preset_type: input.preset_type,
     slug: input.slug,
     trigger_jsonb: buildTriggerJsonb(input),
+    // targeting_jsonb is preset-agnostic — page gating applies universally.
+    targeting_jsonb: buildTargetingJsonb(input),
     content_blocks_jsonb: isComposable ? (input.content_blocks_jsonb ?? null) : null,
     form_fields_jsonb: isComposable ? (input.form_fields_jsonb ?? null) : null,
     pages_jsonb: isComposable ? (input.pages_jsonb ?? null) : null,

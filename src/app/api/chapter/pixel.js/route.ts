@@ -2167,11 +2167,31 @@ setInterval(function () {
     } catch (e) { /* noop */ }
   }
 
+  // Page-URL gating (targeting_jsonb.page_match). Checked at FIRE-time (not
+  // registration) so SPA navigations honor gating without re-registering.
+  // Modes: starts_with / contains / ends_with / exact / not_contains.
+  // Empty/missing config = pass (fire on all pages).
+  function chapterMatchesPagePattern(prompt) {
+    var pm = prompt && prompt.targeting_jsonb && prompt.targeting_jsonb.page_match;
+    if (!pm || !pm.value) return true;
+    var path = window.location.pathname || "";
+    var value = String(pm.value);
+    switch (pm.mode) {
+      case "starts_with":  return path.indexOf(value) === 0;
+      case "contains":     return path.indexOf(value) !== -1;
+      case "ends_with":    return path.length >= value.length && path.lastIndexOf(value) === path.length - value.length;
+      case "exact":        return path === value;
+      case "not_contains": return path.indexOf(value) === -1;
+      default:             return true; // unknown mode → don't block (fail-open)
+    }
+  }
+
   function chapterRegisterClickElementTrigger(prompt) {
     var selector = prompt.trigger_jsonb && prompt.trigger_jsonb.selector;
     if (!selector) return;
     document.addEventListener("click", function (e) {
       if (chapterIsPromptThrottled(prompt)) return;
+      if (!chapterMatchesPagePattern(prompt)) return;
       var hit = e.target.closest(selector);
       if (!hit) return;
       e.preventDefault();
@@ -2182,6 +2202,7 @@ setInterval(function () {
   function chapterRegisterExitIntentTrigger(prompt) {
     document.addEventListener("mouseout", function (e) {
       if (chapterIsPromptThrottled(prompt)) return;
+      if (!chapterMatchesPagePattern(prompt)) return;
       if (e.relatedTarget) return; // mouse moved to another element, not out of viewport
       if (e.clientY > 0) return;   // exit was sideways/below, not top
       chapterRenderPrompt(prompt);
@@ -2192,6 +2213,7 @@ setInterval(function () {
     var delay = (prompt.trigger_jsonb && prompt.trigger_jsonb.delay_ms) || 15000;
     setTimeout(function () {
       if (chapterIsPromptThrottled(prompt)) return;
+      if (!chapterMatchesPagePattern(prompt)) return;
       chapterRenderPrompt(prompt);
     }, delay);
   }
@@ -2202,6 +2224,7 @@ setInterval(function () {
     window.addEventListener("scroll", function () {
       if (fired) return;
       if (chapterIsPromptThrottled(prompt)) return;
+      if (!chapterMatchesPagePattern(prompt)) return;
       var pct = getScrollPercent();
       if (pct >= threshold) {
         fired = true;

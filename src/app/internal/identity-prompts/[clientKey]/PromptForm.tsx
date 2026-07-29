@@ -102,7 +102,15 @@ export type ExistingPrompt = {
     default_checked: boolean;
     required: boolean;
   } | null;
+  targeting_jsonb: {
+    page_match?: {
+      mode: "starts_with" | "contains" | "ends_with" | "exact" | "not_contains";
+      value: string;
+    };
+  } | null;
 };
+
+type PageMatchMode = NonNullable<NonNullable<ExistingPrompt["targeting_jsonb"]>["page_match"]>["mode"];
 
 type ConsentMode = "off" | "checkbox" | "choice";
 
@@ -228,6 +236,12 @@ export default function PromptForm({
   const [triggerSelector, setTriggerSelector] = useState(trig.selector ?? "");
   const [triggerDelayMs, setTriggerDelayMs] = useState(Number(trig.delay_ms ?? 15000));
   const [triggerPercent, setTriggerPercent] = useState(Number(trig.percent ?? 50));
+  // Page-URL gating (targeting_jsonb.page_match). Empty value = fire everywhere.
+  const initPageMatch = prompt?.targeting_jsonb?.page_match;
+  const [pageMatchMode, setPageMatchMode] = useState<PageMatchMode>(
+    initPageMatch?.mode ?? "starts_with",
+  );
+  const [pageMatchValue, setPageMatchValue] = useState(initPageMatch?.value ?? "");
   const [headline, setHeadline] = useState(prompt?.headline ?? "");
   const [body, setBody] = useState(prompt?.body ?? "");
   const [inputMode, setInputMode] = useState<InputMode>(
@@ -333,6 +347,8 @@ export default function PromptForm({
       trigger_selector: triggerSelector,
       trigger_delay_ms: triggerDelayMs,
       trigger_percent: triggerPercent,
+      page_match_mode: pageMatchMode,
+      page_match_value: pageMatchValue,
       headline,
       body,
       input_mode: inputMode,
@@ -518,6 +534,44 @@ export default function PromptForm({
             {triggerType === "scroll_depth" && (
               <div style={{ marginTop: 8 }}>
                 <NumRow label="Percent" value={triggerPercent} onChange={setTriggerPercent} min={1} max={100} />
+              </div>
+            )}
+          </Section>
+
+          {/* Page-URL gating — applies to all trigger types + all presets */}
+          <Section label="Where it appears (optional)">
+            <div style={{ fontSize: 11.5, color: FAINT, lineHeight: 1.4, marginBottom: 8 }}>
+              Restrict this prompt to specific pages. Empty value = fires on all pages. Matches against the URL pathname (the part after the domain, e.g. <code style={{ background: "#F5F1E8", padding: "0 3px", borderRadius: 3 }}>/cart</code>).
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 8 }}>
+              <select
+                value={pageMatchMode}
+                onChange={(e) => setPageMatchMode(e.target.value as PageMatchMode)}
+                style={inp}
+              >
+                <option value="starts_with">URL starts with</option>
+                <option value="contains">URL contains</option>
+                <option value="ends_with">URL ends with</option>
+                <option value="exact">URL is exactly</option>
+                <option value="not_contains">URL does NOT contain</option>
+              </select>
+              <input
+                type="text"
+                value={pageMatchValue}
+                onChange={(e) => setPageMatchValue(e.target.value)}
+                placeholder="/cart"
+                style={inpMono}
+              />
+            </div>
+            {pageMatchValue.trim() && (
+              <div style={{ marginTop: 8, fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>
+                Fires when the URL pathname{" "}
+                {pageMatchMode === "starts_with" && <>begins with <code style={{ background: "#F5F1E8", padding: "0 3px", borderRadius: 3 }}>{pageMatchValue}</code></>}
+                {pageMatchMode === "contains" && <>contains <code style={{ background: "#F5F1E8", padding: "0 3px", borderRadius: 3 }}>{pageMatchValue}</code></>}
+                {pageMatchMode === "ends_with" && <>ends with <code style={{ background: "#F5F1E8", padding: "0 3px", borderRadius: 3 }}>{pageMatchValue}</code></>}
+                {pageMatchMode === "exact" && <>is exactly <code style={{ background: "#F5F1E8", padding: "0 3px", borderRadius: 3 }}>{pageMatchValue}</code></>}
+                {pageMatchMode === "not_contains" && <>does NOT contain <code style={{ background: "#F5F1E8", padding: "0 3px", borderRadius: 3 }}>{pageMatchValue}</code></>}
+                .
               </div>
             )}
           </Section>
