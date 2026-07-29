@@ -1428,37 +1428,94 @@ setInterval(function () {
     });
   }
 
+  // Shared cart snapshot cache — chapterPostLead + chapterSendPromptEmail both
+  // fire on Email Exchange submit within milliseconds. Reuse the same /cart.js
+  // fetch across both to avoid a duplicate request. 5-second TTL handles the
+  // case where multiple submits happen in quick succession.
+  var chapterCartSnapshotPromise = null;
+  var chapterCartSnapshotAt = 0;
+  function chapterFetchCartSnapshot() {
+    var now = Date.now();
+    if (chapterCartSnapshotPromise && (now - chapterCartSnapshotAt) < 5000) {
+      return chapterCartSnapshotPromise;
+    }
+    chapterCartSnapshotAt = now;
+    chapterCartSnapshotPromise = new Promise(function (resolve) {
+      var timer = setTimeout(function () { resolve({ token: null, items: null }); }, 800);
+      try {
+        fetch("/cart.js", { credentials: "same-origin" })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .catch(function () { return null; })
+          .then(function (cart) {
+            clearTimeout(timer);
+            if (!cart || typeof cart !== "object") {
+              resolve({ token: null, items: null });
+              return;
+            }
+            var token = cart.token ? String(cart.token).split("?")[0] : null;
+            var items = Array.isArray(cart.items) && cart.items.length > 0
+              ? cart.items.map(function (it) {
+                  return {
+                    variant_id: it.variant_id != null ? String(it.variant_id) : (it.id != null ? String(it.id) : null),
+                    product_title: it.product_title || it.title || "",
+                    variant_title: it.variant_title || null,
+                    quantity: Number(it.quantity) || 1,
+                    line_price_cents: Number(it.line_price) || 0,
+                    currency: cart.currency || "USD",
+                    url: it.url || null,
+                  };
+                })
+              : null;
+            resolve({ token: token, items: items });
+          });
+      } catch (e) {
+        clearTimeout(timer);
+        resolve({ token: null, items: null });
+      }
+    });
+    return chapterCartSnapshotPromise;
+  }
+
   // Sends the RAW contact to /api/chapter/lead so the client can use it (Leads
   // view, weekly CSV, later CRM/ESP/webhook). Identity is still hashed
   // separately via /api/identify. Fire-and-forget. consent_* are null until the
   // consent element ships.
+  //
+  // Now includes cart snapshot (token + line items) at submit time — captured
+  // via /cart.js on Shopify, persisted to chapter_engagement.captured_leads
+  // so operators can see what visitors abandoned + drive cart-recovery
+  // outreach from CRM/ESP integrations later.
   function chapterPostLead(payload) {
     var apiOrigin = getApiOrigin() || "https://ads4good.com";
-    try {
-      fetch(apiOrigin + "/api/chapter/lead", {
-        method: "POST",
-        credentials: "omit",
-        headers: { "Content-Type": "application/json" },
-        keepalive: true,
-        body: JSON.stringify({
-          client_key: clientKey,
-          prompt_id: payload.prompt_id,
-          prompt_slug: payload.prompt_slug,
-          email: payload.email || "",
-          phone: payload.phone || "",
-          identity_key: payload.identity_key || null,
-          anonymous_id: typeof cachedAnonId !== "undefined" ? cachedAnonId : null,
-          journey_id: typeof cachedJourneyId !== "undefined" ? cachedJourneyId : null,
-          page_url: window.location.href,
-          responses: payload.responses || {},
-          consent_mode: payload.consent ? payload.consent.mode : null,
-          consent_text: payload.consent ? payload.consent.text : null,
-          consent_value: payload.consent ? payload.consent.value : null,
-          session_token: chapterPromptSessionToken,
-          hp_field: payload.hp_field || "",
-        }),
-      }).catch(function () { /* fire-and-forget */ });
-    } catch (e) { /* noop */ }
+    chapterFetchCartSnapshot().then(function (cart) {
+      try {
+        fetch(apiOrigin + "/api/chapter/lead", {
+          method: "POST",
+          credentials: "omit",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({
+            client_key: clientKey,
+            prompt_id: payload.prompt_id,
+            prompt_slug: payload.prompt_slug,
+            email: payload.email || "",
+            phone: payload.phone || "",
+            identity_key: payload.identity_key || null,
+            anonymous_id: typeof cachedAnonId !== "undefined" ? cachedAnonId : null,
+            journey_id: typeof cachedJourneyId !== "undefined" ? cachedJourneyId : null,
+            page_url: window.location.href,
+            responses: payload.responses || {},
+            consent_mode: payload.consent ? payload.consent.mode : null,
+            consent_text: payload.consent ? payload.consent.text : null,
+            consent_value: payload.consent ? payload.consent.value : null,
+            session_token: chapterPromptSessionToken,
+            hp_field: payload.hp_field || "",
+            cart_token: (cart && cart.token) || null,
+            cart_items: (cart && cart.items) || null,
+          }),
+        }).catch(function () { /* fire-and-forget */ });
+      } catch (e) { /* noop */ }
+    });
   }
 
   function chapterPostPromptResponse(payload) {
@@ -2152,11 +2209,10 @@ setInterval(function () {
     var apiOrigin = getApiOrigin() || "https://ads4good.com";
     var url = new URL("/api/chapter/identity-prompt-email", apiOrigin);
 
-    // Best-effort cart snapshot for {cart_url} + {cart_items_list} merge tokens
-    // in the email body. Shopify's /cart.js returns the current visitor's cart
-    // regardless of what page they're on. Fetch fails gracefully on non-Shopify
-    // storefronts — server just skips the merge tokens.
-    function postEmail(cartToken, cartItems) {
+    // Reuse the shared cart snapshot (same fetch as chapterPostLead so we
+    // don't hit /cart.js twice on the same submit). {cart_url} +
+    // {cart_items_list} merge tokens resolve server-side.
+    chapterFetchCartSnapshot().then(function (cart) {
       try {
         fetch(url.toString(), {
           method: "POST",
@@ -2168,57 +2224,12 @@ setInterval(function () {
             recipient: recipient,
             session_token: chapterPromptSessionToken,
             hp_field: hpField,
-            cart_token: cartToken || null,
-            cart_items: cartItems || null,
+            cart_token: (cart && cart.token) || null,
+            cart_items: (cart && cart.items) || null,
           }),
         }).catch(function () { /* fire-and-forget */ });
       } catch (e) { /* noop */ }
-    }
-
-    // Try /cart.js (Shopify) — same-origin fetch, doesn't need CORS.
-    // Time-box the fetch so we never delay email send more than 800ms.
-    var completed = false;
-    var timer = setTimeout(function () {
-      if (completed) return;
-      completed = true;
-      postEmail(null, null);
-    }, 800);
-
-    try {
-      fetch("/cart.js", { credentials: "same-origin" })
-        .then(function (res) { return res.ok ? res.json() : null; })
-        .catch(function () { return null; })
-        .then(function (cart) {
-          if (completed) return;
-          completed = true;
-          clearTimeout(timer);
-          var token = null;
-          var items = null;
-          if (cart && typeof cart === "object") {
-            token = cart.token ? String(cart.token).split("?")[0] : null;
-            if (Array.isArray(cart.items) && cart.items.length > 0) {
-              items = cart.items.map(function (it) {
-                return {
-                  variant_id: it.variant_id != null ? String(it.variant_id) : (it.id != null ? String(it.id) : null),
-                  product_title: it.product_title || it.title || "",
-                  variant_title: it.variant_title || null,
-                  quantity: Number(it.quantity) || 1,
-                  line_price_cents: Number(it.line_price) || 0,
-                  currency: cart.currency || "USD",
-                  url: it.url || null,
-                };
-              });
-            }
-          }
-          postEmail(token, items);
-        });
-    } catch (e) {
-      if (!completed) {
-        completed = true;
-        clearTimeout(timer);
-        postEmail(null, null);
-      }
-    }
+    });
   }
 
   // Page-URL gating (targeting_jsonb.page_match). Checked at FIRE-time (not

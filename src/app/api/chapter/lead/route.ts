@@ -60,6 +60,16 @@ export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, { status: 204, headers: corsPreflightHeaders(req) });
 }
 
+type CartItemInput = {
+  variant_id?: string | number | null;
+  product_title?: string | null;
+  variant_title?: string | null;
+  quantity?: number | null;
+  line_price_cents?: number | null;
+  currency?: string | null;
+  url?: string | null;
+};
+
 export async function POST(req: NextRequest) {
   let body: {
     client_key?: string;
@@ -77,6 +87,11 @@ export async function POST(req: NextRequest) {
     consent_mode?: string;
     consent_text?: string;
     consent_value?: string;
+    // Cart snapshot from Shopify /cart.js at submit time — enables Cart
+    // Recovery view in the Leads dashboard + downstream CRM sync. Both
+    // null for non-Shopify tenants or empty-cart visitors.
+    cart_token?: string | null;
+    cart_items?: CartItemInput[] | null;
   };
   try {
     body = await req.json();
@@ -152,6 +167,9 @@ export async function POST(req: NextRequest) {
       consent_declined: mode ? declined : false,
       page_url: body.page_url || null,
       ip_country: req.headers.get("x-vercel-ip-country") ?? null,
+      cart_token: body.cart_token || null,
+      cart_items_jsonb:
+        Array.isArray(body.cart_items) && body.cart_items.length > 0 ? body.cart_items : null,
     });
   if (insertErr) {
     console.warn("[lead] insert failed:", insertErr.message);
