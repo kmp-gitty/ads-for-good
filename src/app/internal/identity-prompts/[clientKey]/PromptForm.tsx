@@ -795,6 +795,16 @@ export default function PromptForm({
                 )}
               </Section>
 
+              <Section label="Success message" hint="Shown in the modal after the visitor submits.">
+                <input
+                  type="text"
+                  value={successMessage}
+                  onChange={(e) => setSuccessMessage(e.target.value)}
+                  placeholder="Thanks!"
+                  style={inp}
+                />
+              </Section>
+
               <Section label="Recovery flow" hint="Show a second-chance capture form when the visitor tries to close without submitting.">
                 <RecoveryBuilder value={recoveryConfig} onChange={setRecoveryConfig} />
               </Section>
@@ -821,6 +831,16 @@ export default function PromptForm({
                   />
                 </Section>
               )}
+
+              <Section label="Success message" hint="Shown in the bubble after the visitor interacts (dismiss or click). Optional — leave blank to just close on interaction.">
+                <input
+                  type="text"
+                  value={successMessage}
+                  onChange={(e) => setSuccessMessage(e.target.value)}
+                  placeholder="Thanks!"
+                  style={inp}
+                />
+              </Section>
             </>
           )}
 
@@ -1058,6 +1078,10 @@ export default function PromptForm({
             confirmation of what they're building via the "Currently building"
             summary on the placeholder cards. */}
         <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420 }}>
+          {/* Sticky wrapper — keeps the preview + Before/After toggle in view
+              while the operator scrolls through a long form. Matches the
+              RuleForm URL-tester pattern. */}
+          <div style={{ position: "sticky", top: 20 }}>
           {(() => {
             // Self-serve PromptPreview handles single-page custom_form only —
             // multi-page has its own state shape (pages_jsonb) with per-page
@@ -1117,6 +1141,7 @@ export default function PromptForm({
             };
             return <PromptPreview data={previewData} />;
           })()}
+          </div>{/* sticky wrapper */}
         </div>
       </div>
     </form>

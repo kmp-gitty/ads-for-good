@@ -231,16 +231,50 @@ export default function CustomFormBuilder({
                       Identity field
                     </label>
                   )}
-                  {supportsOptions && (
-                    <input
-                      type="text"
-                      value={(field.options ?? []).join(", ")}
-                      onChange={e => updateField(idx, { options: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
-                      placeholder="Options (comma-separated)"
-                      className={inputCls + " flex-1"}
-                    />
-                  )}
                 </div>
+                {supportsOptions && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                      Options
+                    </div>
+                    {(field.options ?? []).map((opt, optIdx) => (
+                      <div key={optIdx} className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={opt}
+                          onChange={(e) => {
+                            const next = [...(field.options ?? [])];
+                            next[optIdx] = e.target.value;
+                            updateField(idx, { options: next });
+                          }}
+                          placeholder={`Option ${optIdx + 1}`}
+                          className={inputCls + " flex-1"}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = (field.options ?? []).filter((_, i) => i !== optIdx);
+                            updateField(idx, { options: next });
+                          }}
+                          className="rounded border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
+                          title="Delete option"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = [...(field.options ?? []), ""];
+                        updateField(idx, { options: next });
+                      }}
+                      className="self-start rounded border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 hover:bg-orange-100"
+                    >
+                      + Add option
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
