@@ -15,6 +15,7 @@ import {
 import { getDashboardFreshnessByClient } from "@/app/lib/dashboard/freshness";
 import { getInquiryUnreadCount } from "@/app/lib/inquiries/actions";
 import { CLIENTS, type Client } from "../_components/mockdata";
+import PendingDeletion from "./_components/PendingDeletion";
 
 // Stable-ish accent color for a self-serve tenant (not in the operator mock).
 const SELFSERVE_COLORS = ["#E36410", "#5868D6", "#2E7D5B", "#8E5DA8", "#C9550B"];
@@ -62,6 +63,20 @@ export default async function ChapterAuthedLayout({ children }: { children: Reac
   let selfServeClient: Client | null = null;
   if (chapterUser?.role === "client_employee" && chapterUser.client_key) {
     const ent = await getClientEntitlement(chapterUser.client_key);
+
+    // Account scheduled for deletion → swap the whole tool surface for the
+    // pending-deletion / reactivate screen (access off; live serving continues
+    // until the day-30 purge cron runs).
+    if (ent?.deletion_requested_at) {
+      return (
+        <div className="chapter-app">
+          <PendingDeletion
+            businessName={ent.business_name || chapterUser.client_key}
+            requestedAt={ent.deletion_requested_at}
+          />
+        </div>
+      );
+    }
     if (ent) {
       entitlement = {
         toolsEnabled: ent.tools_enabled,

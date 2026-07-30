@@ -97,6 +97,7 @@ export type ClientEntitlement = {
   billing_status: string | null;
   trial_ends_at: string | null;
   storefront_domain: string | null;
+  deletion_requested_at: string | null;
 };
 
 // 5-min in-memory cache. Keyed by client_key. Entitlement changes rarely
@@ -125,7 +126,7 @@ export async function getClientEntitlement(clientKey: string): Promise<ClientEnt
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("clients")
-    .select("client_key, business_name, plan, tools_enabled, self_serve, billing_status, trial_ends_at, storefront_domain")
+    .select("client_key, business_name, plan, tools_enabled, self_serve, billing_status, trial_ends_at, storefront_domain, deletion_requested_at")
     .eq("client_key", key)
     .maybeSingle();
 
@@ -149,6 +150,7 @@ export async function getClientEntitlement(clientKey: string): Promise<ClientEnt
         billing_status: (data.billing_status as string) ?? null,
         trial_ends_at: (data.trial_ends_at as string) ?? null,
         storefront_domain: (data.storefront_domain as string) ?? null,
+        deletion_requested_at: (data.deletion_requested_at as string) ?? null,
       }
     : null;
 

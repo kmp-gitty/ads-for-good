@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { updateSettings } from "./_actions";
+import { requestAccountDeletion } from "./_delete-actions";
 
 const INK = "#1F2D43";
 const MUTED = "#5C6B82";
@@ -101,6 +103,82 @@ export default function SettingsClient({
           <span style={{ fontSize: 14, color: INK, fontWeight: 500, textTransform: "capitalize" }}>{planLabel}</span>
         </div>
       </div>
+
+      <DangerZone businessName={initialBusiness || clientKey} />
+    </div>
+  );
+}
+
+const DANGER = "#B3261E";
+
+function DangerZone({ businessName }: { businessName: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState("");
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const matches = confirm.trim().toLowerCase() === businessName.trim().toLowerCase();
+
+  function onDelete() {
+    setError(null);
+    start(async () => {
+      const res = await requestAccountDeletion(confirm);
+      if (res.ok) router.refresh(); // layout gate swaps in the pending-deletion screen
+      else setError(res.error);
+    });
+  }
+
+  return (
+    <div style={{ background: "white", border: `1px solid #E7C9C4`, borderRadius: 12, padding: "18px 22px", marginTop: 28 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: DANGER, marginBottom: 4 }}>Delete account</div>
+      <p style={{ fontSize: 13, color: MUTED, lineHeight: 1.6, margin: "0 0 12px" }}>
+        We&rsquo;ll email you a full export of your leads, submissions, and links, stop billing, and turn off your
+        workspace. Your account and all data are permanently erased <strong>30 days</strong> later — you can reactivate
+        anytime before then.
+      </p>
+
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          style={{ background: "white", color: DANGER, fontSize: 13.5, fontWeight: 600, border: `1px solid #E7C9C4`, borderRadius: 9, padding: "9px 16px", cursor: "pointer" }}
+        >
+          Delete my account…
+        </button>
+      ) : (
+        <div>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: INK, marginBottom: 6 }}>
+            Type <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{businessName}</span> to confirm
+          </div>
+          <input
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder={businessName}
+            autoFocus
+            style={{ ...inp, borderColor: "#E7C9C4" }}
+          />
+          {error && <div style={{ fontSize: 12.5, color: DANGER, marginTop: 8 }}>{error}</div>}
+          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+            <button
+              type="button"
+              disabled={!matches || pending}
+              onClick={onDelete}
+              style={{ background: DANGER, color: "white", fontSize: 13.5, fontWeight: 600, border: "none", borderRadius: 9, padding: "9px 16px", cursor: matches && !pending ? "pointer" : "not-allowed", opacity: matches && !pending ? 1 : 0.5 }}
+            >
+              {pending ? "Scheduling…" : "Schedule deletion"}
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => { setOpen(false); setConfirm(""); setError(null); }}
+              style={{ background: "white", color: MUTED, fontSize: 13.5, fontWeight: 600, border: `1px solid ${LINE}`, borderRadius: 9, padding: "9px 16px", cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
