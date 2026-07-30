@@ -66,13 +66,22 @@ export default async function ResponsesPage({
   const { clientKey } = await params;
   const { slug } = await searchParams;
 
-  // Fetch list of prompts for filter dropdown
-  const { data: promptList } = await supabase
-    .schema("chapter_config")
-    .from("identity_prompts")
-    .select("id, slug, preset_type")
-    .eq("client_key", clientKey)
-    .order("created_at", { ascending: false });
+  // Fetch list of prompts for filter dropdown + engagement summary
+  const [{ data: promptList }, { data: engagement }] = await Promise.all([
+    supabase
+      .schema("chapter_config")
+      .from("identity_prompts")
+      .select("id, slug, preset_type")
+      .eq("client_key", clientKey)
+      .order("created_at", { ascending: false }),
+    supabase.schema("chapter_reporting").rpc("prompt_engagement", { p_client_key: clientKey }),
+  ]);
+  const engMap = new Map<string, { shown: number; submitted: number; dismissed: number }>(
+    ((engagement as { slug: string; shown: number; submitted: number; dismissed: number }[] | null) ?? []).map((e) => [
+      e.slug,
+      { shown: Number(e.shown), submitted: Number(e.submitted), dismissed: Number(e.dismissed) },
+    ]),
+  );
 
   let query = supabase
     .schema("chapter_engagement")
@@ -97,13 +106,60 @@ export default async function ResponsesPage({
         </Link>
       </p>
 
+      {/* Engagement — every prompt, from the live event stream. Covers presets
+          that don't capture contact (e.g. Custom Notification), which never
+          appear in the responses table below. */}
+      <section>
+        <h2 className="text-lg font-semibold tracking-tight">Engagement</h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          Shows, submits, and dismissals for every prompt — straight from the pixel event stream. Works for all preset
+          types, including notifications that promote an offer without capturing contact info.
+        </p>
+        {(promptList ?? []).length === 0 ? (
+          <div className="mt-3 rounded-md border border-dashed border-neutral-300 bg-neutral-50 p-6 text-center text-xs text-neutral-500">
+            No prompts for this client yet.
+          </div>
+        ) : (
+          <div className="mt-3 overflow-x-auto rounded-md border border-neutral-200">
+            <table className="min-w-full text-sm">
+              <thead className="bg-neutral-50 text-xs uppercase tracking-wider text-neutral-600">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Prompt</th>
+                  <th className="px-3 py-2 text-left font-semibold">Type</th>
+                  <th className="px-3 py-2 text-right font-semibold">Shown</th>
+                  <th className="px-3 py-2 text-right font-semibold">Submitted</th>
+                  <th className="px-3 py-2 text-right font-semibold">Dismissed</th>
+                  <th className="px-3 py-2 text-right font-semibold">Submit rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {(promptList ?? []).map((p) => {
+                  const e = engMap.get(p.slug) ?? { shown: 0, submitted: 0, dismissed: 0 };
+                  const rate = e.shown > 0 ? Math.round((e.submitted / e.shown) * 100) : null;
+                  return (
+                    <tr key={p.id} className="hover:bg-neutral-50">
+                      <td className="px-3 py-2"><code className="text-xs">{p.slug}</code></td>
+                      <td className="px-3 py-2 text-xs text-neutral-500">{p.preset_type}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{e.shown.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-neutral-800">{e.submitted.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-neutral-500">{e.dismissed.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{rate !== null ? `${rate}%` : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       <section>
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold tracking-tight">Prompt responses</h2>
             <p className="mt-1 text-sm text-neutral-500">
-              Custom Form submissions captured to <code>chapter_engagement.prompt_responses</code>.
-              Identity fields auto-stitch via <code>/api/identify</code> and are hashed in transit.
+              Contact-capturing submissions (Custom Form / Email Exchange) stored to <code>chapter_engagement.prompt_responses</code>.
+              Notification-style prompts that don&apos;t collect contact info won&apos;t appear here — see Engagement above.
             </p>
           </div>
           <form method="get" className="flex items-center gap-2">

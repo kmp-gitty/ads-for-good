@@ -103,7 +103,7 @@ export default async function ClientPromptsPage({
   params: Promise<{ clientKey: string }>;
 }) {
   const { clientKey } = await params;
-  const [{ data: prompts }, { data: client }] = await Promise.all([
+  const [{ data: prompts }, { data: client }, { data: engagement }] = await Promise.all([
     supabase
       .schema("chapter_config")
       .from("identity_prompts")
@@ -118,10 +118,20 @@ export default async function ClientPromptsPage({
       .select("storefront_domain")
       .eq("client_key", clientKey)
       .maybeSingle(),
+    // Real engagement derived from the pixel event stream (shown/submitted/
+    // dismissed) — accurate for every preset, incl. Custom Notification. The
+    // hit_count/submit_count columns aren't incremented, so we don't use them.
+    supabase.schema("chapter_reporting").rpc("prompt_engagement", { p_client_key: clientKey }),
   ]);
 
   const promptList = (prompts as PromptRow[] | null) ?? [];
   const storefrontDomain = (client as { storefront_domain: string | null } | null)?.storefront_domain ?? null;
+  const engMap = new Map<string, { shown: number; submitted: number; dismissed: number }>(
+    ((engagement as { slug: string; shown: number; submitted: number; dismissed: number }[] | null) ?? []).map((e) => [
+      e.slug,
+      { shown: Number(e.shown), submitted: Number(e.submitted), dismissed: Number(e.dismissed) },
+    ]),
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
@@ -188,7 +198,8 @@ export default async function ClientPromptsPage({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {promptList.map((p) => {
-              const rate = p.hit_count > 0 ? Math.round((p.submit_count / p.hit_count) * 100) : null;
+              const eng = engMap.get(p.slug) ?? { shown: 0, submitted: 0, dismissed: 0 };
+              const rate = eng.shown > 0 ? Math.round((eng.submitted / eng.shown) * 100) : null;
               return (
                 <div key={p.id} style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: 16, background: "white" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
@@ -219,8 +230,8 @@ export default async function ClientPromptsPage({
                         </p>
                       )}
                       <p style={{ margin: "10px 0 0", fontSize: 11.5, color: FAINT, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                        Shown {p.hit_count}× · Submitted {p.submit_count}×
-                        {rate !== null && <span style={{ marginLeft: 8 }}>({rate}% conversion)</span>}
+                        Shown {eng.shown}× · Submitted {eng.submitted}× · Dismissed {eng.dismissed}×
+                        {rate !== null && <span style={{ marginLeft: 8 }}>({rate}% submit rate)</span>}
                       </p>
                     </div>
                     <RowActions id={p.id} client_key={clientKey} enabled={p.enabled} />
