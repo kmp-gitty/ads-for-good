@@ -90,4 +90,16 @@ export async function recomputeEntitlement(clientKey: string): Promise<void> {
     .update({ tools_enabled: toolsEnabled, billing_status: billingStatus, updated_at: new Date().toISOString() })
     .eq("client_key", clientKey);
   clearClientEntitlementCache(clientKey);
+
+  // Once a tenant has any subscription, permanently close out the welcome
+  // sequence — mark every remaining step "skipped" so onboarding/trial emails
+  // can never resume if they later cancel. (canceled subs are removed from
+  // tenant_subscriptions, so a non-empty list means "has subscribed".)
+  // ignoreDuplicates keeps already-'sent' rows intact.
+  if ((subsRes.data ?? []).length > 0) {
+    await cfg.from("welcome_sequence_sent").upsert(
+      [0, 1, 2, 3, 4, 5, 6].map((step) => ({ client_key: clientKey, step, status: "skipped" })),
+      { onConflict: "client_key,step", ignoreDuplicates: true },
+    );
+  }
 }
