@@ -15,6 +15,7 @@ import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
 import { verifyPromptSession } from "@/app/lib/auth/prompt-session";
 import { logAuthAttempt, hashIp, getClientIp } from "@/app/lib/audit/auth";
 import { selectCrmAdapter } from "@/app/lib/crm-adapter/selector";
+import { getClientEntitlement } from "@/app/lib/auth/chapter-user";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -137,6 +138,17 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (lookupErr || !prompt) return reject(req, "prompt_not_found", clientKey, 404, "prompt_not_found");
   if (!prompt.enabled) return reject(req, "prompt_disabled", clientKey, 400, "prompt_disabled");
+
+  // Entitlement gate: a self-serve tenant must have an active Smart Prompts
+  // entitlement to capture leads. Paused / cancelled (tools_enabled lacks
+  // 'smart_prompts') or pending-deletion → skip capture (200, no error, so the
+  // visitor UX is unaffected). Full-Chapter clients (tools include 'chapter')
+  // and unknown/erroring lookups (ent null) are unaffected — fail open.
+  const ent = await getClientEntitlement(clientKey);
+  const toolsOnly = !!ent && !ent.tools_enabled.includes("chapter");
+  if (ent && toolsOnly && (ent.deletion_requested_at || !ent.tools_enabled.includes("smart_prompts"))) {
+    return withCors(req, NextResponse.json({ stored: false, reason: "inactive" }, { status: 200 }));
+  }
 
   const email = typeof body.email === "string" ? body.email.trim() : "";
   const phone = typeof body.phone === "string" ? body.phone.trim() : "";

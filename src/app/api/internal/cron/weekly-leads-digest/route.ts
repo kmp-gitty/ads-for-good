@@ -55,8 +55,21 @@ export async function GET(req: NextRequest) {
   try {
     await sql`SET statement_timeout = '4min'`;
 
+    // Only active tenants get the digest. Full-Chapter clients (tools include
+    // 'chapter', or legacy null tools) always; self-serve only while their
+    // Smart Prompts entitlement is live. Paused / cancelled (tools_enabled
+    // lacks 'smart_prompts') and pending-deletion tenants are skipped — their
+    // leads stay frozen until they reactivate (or are purged on deletion).
     const tenants = await sql<{ client_key: string }[]>`
-      SELECT DISTINCT client_key FROM chapter_engagement.captured_leads
+      SELECT DISTINCT l.client_key
+      FROM chapter_engagement.captured_leads l
+      JOIN chapter_config.clients c ON c.client_key = l.client_key
+      WHERE c.deletion_requested_at IS NULL
+        AND (
+          c.tools_enabled IS NULL
+          OR 'chapter' = ANY(c.tools_enabled)
+          OR 'smart_prompts' = ANY(c.tools_enabled)
+        )
     `;
 
     for (const t of tenants) {
