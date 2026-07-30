@@ -107,9 +107,10 @@ export default function LinksClient({ clientKey, links, brandedHost }: { clientK
                       Default → {l.default_destination.length > 48 ? l.default_destination.slice(0, 48) + "…" : l.default_destination}
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, color: FAINT, whiteSpace: "nowrap" }}>{l.total_hits} clicks</div>
+                  <Link href={`/chapter/${clientKey}/links/${l.slug}`} style={{ fontSize: 12, color: FAINT, whiteSpace: "nowrap", textDecoration: "none" }}>{l.total_hits} clicks →</Link>
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 14, borderTop: `1px solid ${LINE}`, paddingTop: 12 }}>
+                  <Link href={`/chapter/${clientKey}/links/${l.slug}`} style={btn(false)}>Stats</Link>
                   <Link href={`/chapter/${clientKey}/links/${l.slug}/edit`} style={btn(false)}>Edit</Link>
                   <button type="button" disabled={isBusy} onClick={() => act(l.slug, () => setLinkEnabled(l.slug, !l.enabled))} style={btn(false)}>
                     {l.enabled ? "Turn off" : "Turn on"}

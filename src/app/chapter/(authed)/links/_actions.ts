@@ -11,9 +11,10 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentChapterUser, getClientEntitlement } from "@/app/lib/auth/chapter-user";
+import { createSupabaseServiceRoleClient } from "@/app/lib/auth/supabase-server";
 import { withSelfServeClient } from "@/app/lib/db/per-client";
 import { getBrandedDomain } from "./domain/_actions";
-import { RESERVED_SLUGS, type LinkInput, type LinkSummary, type LinkDetail } from "./types";
+import { RESERVED_SLUGS, type LinkInput, type LinkSummary, type LinkDetail, type LinkStats } from "./types";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -208,4 +209,22 @@ export async function getLink(slug: string): Promise<LinkDetail | null> {
       destination: r.destination_template,
     })),
   };
+}
+
+// Per-link analytics (last 30 days). Reads redirect_click events + prompt
+// fulfillment across chapter_ingest/chapter_engagement, which the self-serve
+// role can't reach — so this goes through service_role, gated on the
+// session-owned client_key by requireTenant (client_key never comes from input).
+export async function getLinkStats(slug: string): Promise<LinkStats | null> {
+  const t = await requireTenant();
+  if ("error" in t) return null;
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .schema("chapter_reporting")
+    .rpc("smart_link_stats", { p_client_key: t.clientKey, p_slug: slug.trim().toLowerCase(), p_days: 30 });
+  if (error) {
+    console.error("[links] getLinkStats failed:", error.message);
+    return null;
+  }
+  return data as LinkStats;
 }

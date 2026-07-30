@@ -41,5 +41,19 @@ export type LinkDetail = {
   enabled: boolean;
 };
 
+export type StatBar = { label: string; clicks: number };
+
+export type LinkStats = {
+  window_days: number;
+  totals: { clicks: number; unique: number; scanner: number; raw: number; clicks_all_time: number };
+  timeseries: { day: string; clicks: number }[];
+  by_destination: { rule_label: string; is_default: boolean; destination: string; clicks: number }[];
+  by_device: StatBar[];
+  by_os: StatBar[];
+  by_country: StatBar[];
+  by_source: StatBar[];
+  fulfillment: { visitors: number; converted: number };
+};
+
 // Reserved slugs that would collide with static routes under /links.
 export const RESERVED_SLUGS = new Set(["new", "domain"]);
