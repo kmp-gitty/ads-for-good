@@ -18,6 +18,8 @@ import {
   provisionSelfServeTenant,
   defaultLandingSlug,
 } from "@/app/lib/auth/chapter-user";
+import { getWelcomeState } from "@/app/lib/welcome/state";
+import { sendWelcomeStep } from "@/app/lib/welcome/send";
 import type { EmailOtpType } from "@supabase/supabase-js";
 
 export async function GET(req: NextRequest) {
@@ -78,6 +80,13 @@ export async function GET(req: NextRequest) {
     if (!chapterUser && isSignup) {
       const provisioned = await provisionSelfServeTenant(email, authUser.id);
       if (provisioned) {
+        // Fire the instant welcome email (step 0). Fire-and-forget — never
+        // blocks the redirect; the daily cron handles steps 1–6.
+        void (async () => {
+          const state = await getWelcomeState(provisioned.client_key);
+          if (state) await sendWelcomeStep(state, 0);
+        })().catch((e) => console.error("[welcome] step 0 failed:", e instanceof Error ? e.message : e));
+
         return NextResponse.redirect(
           new URL(`/chapter/${provisioned.client_key}/welcome`, req.url),
         );

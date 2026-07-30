@@ -132,7 +132,7 @@ export async function emailAccountExport(opts: {
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
       to: toEmail,
-      from: `Chapter (via Ads for Good) <${from}>`,
+      from: `Chapter by Ads for Good <${from}>`,
       replyTo: "katoa@ads4good.com",
       subject: `Your Chapter data export — ${businessName}`,
       html: exportEmailHtml(businessName, counts),
