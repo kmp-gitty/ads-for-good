@@ -20,6 +20,9 @@ const LINE = "#E5E0D4";
 const PANEL = "#FBFAF6";
 const GREEN = "#2E7D5B";
 
+// Recommended subdomain prefixes (short, brandable, redirect-flavoured).
+const PREFIXES = ["go", "try", "click", "link", "get", "on"];
+
 export default function DomainClient({
   clientKey,
   initial,
@@ -28,7 +31,8 @@ export default function DomainClient({
   initial: BrandedDomainInfo | null;
 }) {
   const [info, setInfo] = useState<BrandedDomainInfo | null>(initial);
-  const [host, setHost] = useState("");
+  const [prefix, setPrefix] = useState("go");
+  const [domain, setDomain] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [connecting, startConnect] = useTransition();
   const [refreshing, startRefresh] = useTransition();
@@ -40,17 +44,21 @@ export default function DomainClient({
   const [sending, startSend] = useTransition();
   const [sentMsg, setSentMsg] = useState<string | null>(null);
 
-  const cleanHost = normalizeHost(host);
+  // Compose the subdomain from a recommended prefix + the site's own domain.
+  const cleanDomain = domain.trim().toLowerCase()
+    .replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").replace(/\.+$/, "");
+  const composedHost = cleanDomain ? `${prefix}.${cleanDomain}` : "";
+  const cleanHost = normalizeHost(composedHost);
   const hostValid = isLikelyHost(cleanHost) && !cleanHost.endsWith(".vercel.app") && cleanHost !== "ads4good.com";
   const previewDns = hostValid ? previewDnsRecords(cleanHost) : [];
 
   const connect = () => {
     setError(null);
     startConnect(async () => {
-      const res = await connectBrandedDomain(host);
+      const res = await connectBrandedDomain(composedHost);
       if (!res.ok) { setError(res.error); return; }
       setInfo(res.info);
-      setHost("");
+      setDomain("");
     });
   };
   const refresh = () => {
@@ -90,24 +98,49 @@ export default function DomainClient({
       <h1 style={{ fontSize: 22, fontWeight: 700, color: INK, margin: "0 0 4px" }}>Branded domain</h1>
       <p style={{ fontSize: 14, color: MUTED, margin: "0 0 22px", lineHeight: 1.5 }}>
         Smart Links run on your own domain — <code style={mono}>go.yourbrand.com/spring-sale</code>. Set it up once in three
-        steps: create a subdomain, connect it here, then make your first link.
+        steps: choose a subdomain, add a DNS record, then connect.
       </p>
 
-      {/* ---------- Not connected: create subdomain + connect ---------- */}
+      {/* ---------- Not connected: choose → DNS → connect ---------- */}
       {!info && (
         <>
-          <StepCard n={1} title="Create your subdomain">
-            <p style={{ fontSize: 13, color: MUTED, margin: "0 0 10px", lineHeight: 1.5 }}>
-              Pick a subdomain of a site you own — we recommend <code style={mono}>go.</code>, e.g.{" "}
-              <code style={mono}>go.yourbrand.com</code>. Then add the DNS record below at your domain provider to create it.
+          <StepCard n={1} title="Choose your subdomain">
+            <p style={{ fontSize: 13, color: MUTED, margin: "0 0 12px", lineHeight: 1.5 }}>
+              Pick a short prefix and enter a domain you own — we recommend <code style={mono}>go</code>.
             </p>
-            <input value={host} onChange={(e) => setHost(e.target.value)} placeholder="go.yourbrand.com" style={{ ...inp, maxWidth: 320 }} />
-
-            {hostValid ? (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: INK, marginBottom: 6 }}>
-                  Add this record at your DNS provider:
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <select value={prefix} onChange={(e) => setPrefix(e.target.value)} style={selectStyle}>
+                {PREFIXES.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+              <span style={{ fontSize: 18, color: FAINT, fontWeight: 700 }}>.</span>
+              <input
+                value={domain}
+                onChange={(e) => setDomain(e.target.value)}
+                placeholder="yourbrand.com"
+                style={{ ...inp, flex: 1, minWidth: 200, maxWidth: 300 }}
+              />
+            </div>
+            {composedHost && (
+              hostValid ? (
+                <div style={{ fontSize: 13, color: INK, marginTop: 12 }}>
+                  Your subdomain: <code style={{ ...mono, color: ORANGE, fontWeight: 700 }}>{cleanHost}</code>
                 </div>
+              ) : (
+                cleanDomain.length > 0 && (
+                  <div style={{ fontSize: 12.5, color: FAINT, marginTop: 10 }}>
+                    Enter a domain you own, like <code style={mono}>yourbrand.com</code>.
+                  </div>
+                )
+              )
+            )}
+          </StepCard>
+
+          <StepCard n={2} title="Add your DNS record">
+            {hostValid ? (
+              <>
+                <p style={{ fontSize: 13, color: MUTED, margin: "0 0 10px", lineHeight: 1.5 }}>
+                  At your domain provider, add this record to create <code style={mono}>{cleanHost}</code>:
+                </p>
                 <DnsTable dns={previewDns} copied={copied} onCopy={copyVal} />
                 <RegistrarTips host={cleanHost} />
                 <HandoffBlock
@@ -119,17 +152,15 @@ export default function DomainClient({
                   onNote={(n) => setTechNote(n)}
                   onSend={sendInstructions}
                 />
-              </div>
+              </>
             ) : (
-              cleanHost.length > 0 && (
-                <div style={{ fontSize: 12.5, color: FAINT, marginTop: 8 }}>
-                  Enter a full subdomain like <code style={mono}>go.yourbrand.com</code>.
-                </div>
-              )
+              <p style={{ fontSize: 13, color: FAINT, margin: 0, lineHeight: 1.5 }}>
+                Choose your subdomain above and the exact DNS record to add will appear here.
+              </p>
             )}
           </StepCard>
 
-          <StepCard n={2} title="Connect it here">
+          <StepCard n={3} title="Connect">
             <p style={{ fontSize: 13, color: MUTED, margin: "0 0 12px", lineHeight: 1.5 }}>
               Added the record (or ready to)? Connect and we&rsquo;ll register your subdomain and check the DNS. You can
               connect right away — DNS can finish propagating in the background.
@@ -137,6 +168,7 @@ export default function DomainClient({
             <button type="button" onClick={connect} disabled={connecting || !hostValid} style={{ ...btnPrimary, opacity: connecting || !hostValid ? 0.6 : 1 }}>
               {connecting ? "Connecting…" : "Connect subdomain"}
             </button>
+            {!hostValid && <span style={{ fontSize: 12, color: FAINT, marginLeft: 10 }}>Choose a subdomain first.</span>}
             {error && <div style={{ fontSize: 12.5, color: "#B3261E", marginTop: 10 }}>{error}</div>}
           </StepCard>
         </>
@@ -311,6 +343,10 @@ const card: React.CSSProperties = { border: `1px solid ${LINE}`, borderRadius: 1
 const inp: React.CSSProperties = {
   boxSizing: "border-box", width: "100%", fontSize: 14, color: INK, background: "white",
   border: `1px solid ${LINE}`, borderRadius: 8, padding: "9px 11px",
+};
+const selectStyle: React.CSSProperties = {
+  fontSize: 14, fontWeight: 600, color: INK, background: "white",
+  border: `1px solid ${LINE}`, borderRadius: 8, padding: "9px 11px", cursor: "pointer",
 };
 const btn: React.CSSProperties = {
   fontSize: 12.5, fontWeight: 600, color: INK, background: "white",
