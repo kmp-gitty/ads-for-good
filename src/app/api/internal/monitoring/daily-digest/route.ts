@@ -276,6 +276,36 @@ async function checkSquareTokenHealth(): Promise<SquareAuthHealth[]> {
   return results;
 }
 
+// Self-serve signup abuse summary (added 2026-07-30). Counts blocked
+// (success=false) attempts on the open signup endpoint over the digest window,
+// grouped by failure_reason. Catches the low-and-slow pattern that stays under
+// the 15-min attack-alert threshold. Attack-shaped reasons (honeypot_filled /
+// rate_limited / turnstile_*) are the ones that matter; invalid_email etc. are
+// benign typos, shown for completeness.
+type SignupAbuse = { total: number; byReason: { reason: string; count: number }[] };
+
+async function checkSignupAbuse(sinceIso: string): Promise<SignupAbuse> {
+  const { data, error } = await supabase
+    .schema("chapter_audit")
+    .from("api_auth_attempts")
+    .select("failure_reason")
+    .eq("endpoint", "/api/chapter-auth/signup")
+    .eq("success", false)
+    .gte("ts", sinceIso);
+
+  if (error || !data) return { total: 0, byReason: [] };
+
+  const m = new Map<string, number>();
+  for (const r of data as Array<{ failure_reason: string | null }>) {
+    const k = r.failure_reason || "unknown";
+    m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  const byReason = Array.from(m.entries())
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count);
+  return { total: data.length, byReason };
+}
+
 export async function GET(req: NextRequest) {
   const unauthorized = unauthorizedIfNotCron(req);
   if (unauthorized) return unauthorized;
@@ -433,6 +463,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const signupAbuse = await checkSignupAbuse(since);
+  lines.push("", "*Self-serve signup abuse (24h):*");
+  if (signupAbuse.total === 0) {
+    lines.push("  ✅ no blocked signup attempts");
+  } else {
+    lines.push(`  ⚠ ${signupAbuse.total} blocked signup attempt(s):`);
+    for (const r of signupAbuse.byReason.slice(0, 8)) {
+      lines.push(`    • \`${r.reason}\` — ${r.count}`);
+    }
+  }
+
   try {
     await postToGChat({ text: lines.join("\n") });
   } catch (err) {
@@ -449,6 +490,7 @@ export async function GET(req: NextRequest) {
     ok_count: ok.length,
     failed_count: failed.length,
     running_count: running.length,
+    signup_abuse: signupAbuse,
     mv_staleness: mvStaleness,
     mv_stale_count: staleMvs.length,
     mv_error_count: erroredMvs.length,
