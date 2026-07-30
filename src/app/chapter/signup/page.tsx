@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 // Self-serve signup page. Sits outside the (authed) layout group (no dashboard
 // chrome) and is whitelisted in middleware so unauthed visitors can render it.
@@ -39,10 +39,61 @@ export default function ChapterSignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Abuse hardening (2026-07-30). Honeypot: a hidden field real users never
+  // touch — if it's filled, the server silently drops the submission. Turnstile:
+  // Cloudflare CAPTCHA token, rendered only when NEXT_PUBLIC_TURNSTILE_SITE_KEY
+  // is configured, required for submit once it is. Both ride in the POST body.
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const [hpField, setHpField] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const widgetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!turnstileSiteKey) return;
+    const SCRIPT_ID = "cf-turnstile-script";
+    function render() {
+      const ts = (window as unknown as { turnstile?: {
+        render: (el: HTMLElement, opts: Record<string, unknown>) => void;
+      } }).turnstile;
+      if (!ts || !widgetRef.current || widgetRef.current.childElementCount > 0) return;
+      ts.render(widgetRef.current, {
+        sitekey: turnstileSiteKey,
+        callback: (token: string) => setTurnstileToken(token),
+        "expired-callback": () => setTurnstileToken(""),
+        "error-callback": () => setTurnstileToken(""),
+      });
+    }
+    if ((window as unknown as { turnstile?: unknown }).turnstile) {
+      render();
+      return;
+    }
+    let script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
+    if (!script) {
+      script = document.createElement("script");
+      script.id = SCRIPT_ID;
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      script.async = true;
+      script.defer = true;
+      script.addEventListener("load", render);
+      document.head.appendChild(script);
+    } else {
+      script.addEventListener("load", render);
+    }
+  }, [turnstileSiteKey]);
+
   const keyPreview = useMemo(
     () => (company.trim() ? previewClientKey(company) : ""),
     [company],
   );
+
+  // Block submit until the CAPTCHA is solved — but only when it's configured,
+  // so the form stays usable before the Turnstile keys are provisioned.
+  const submitDisabled =
+    loading ||
+    !fullName ||
+    !email ||
+    !company ||
+    (Boolean(turnstileSiteKey) && !turnstileToken);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,6 +108,8 @@ export default function ChapterSignupPage() {
           phone: phone.trim(),
           email: email.trim(),
           company: company.trim(),
+          hp_field: hpField,
+          turnstile_token: turnstileToken,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -112,6 +165,18 @@ export default function ChapterSignupPage() {
           boxShadow: "0 1px 2px rgba(31,45,67,.04)",
         }}
       >
+        {/* Honeypot — hidden from real users; bots that autofill it get silently dropped server-side. */}
+        <input
+          type="text"
+          name="hp_field"
+          value={hpField}
+          onChange={(e) => setHpField(e.target.value)}
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+          style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
+        />
+
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
           <div style={{ width: 30, height: 30, background: "#E36410", color: "white", borderRadius: 8, display: "grid", placeItems: "center", fontWeight: 700 }}>C</div>
           <div style={{ fontSize: 15, fontWeight: 600, color: "#1F2D43" }}>
@@ -178,11 +243,13 @@ export default function ChapterSignupPage() {
               )}
             </div>
 
+            {turnstileSiteKey && <div ref={widgetRef} style={{ marginTop: 14 }} />}
+
             {error && <div style={{ marginTop: 12, fontSize: 12, color: "#B2452F" }}>{error}</div>}
 
             <button
               type="submit"
-              disabled={loading || !fullName || !email || !company}
+              disabled={submitDisabled}
               style={{
                 marginTop: 16,
                 width: "100%",
@@ -193,8 +260,8 @@ export default function ChapterSignupPage() {
                 border: "none",
                 fontWeight: 600,
                 fontSize: 14,
-                cursor: loading || !fullName || !email || !company ? "not-allowed" : "pointer",
-                opacity: loading || !fullName || !email || !company ? 0.6 : 1,
+                cursor: submitDisabled ? "not-allowed" : "pointer",
+                opacity: submitDisabled ? 0.6 : 1,
               }}
             >
               {loading ? "Sending…" : "Email me an activation link"}
