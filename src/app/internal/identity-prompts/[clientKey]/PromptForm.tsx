@@ -10,7 +10,7 @@
 // edit-in-place, preset-locked-once-created — is preserved from the previous
 // Tailwind-styled version.
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPrompt, updatePrompt, type PromptFormInput } from "../_actions";
 import CustomFormBuilder, { type ContentBlock, type FormField } from "./CustomFormBuilder";
@@ -108,6 +108,8 @@ export type ExistingPrompt = {
       value: string;
     };
   } | null;
+  theme_button_bg_color: string | null;
+  expires_at: string | null;
 };
 
 type PageMatchMode = NonNullable<NonNullable<ExistingPrompt["targeting_jsonb"]>["page_match"]>["mode"];
@@ -134,9 +136,14 @@ const PRESET_OPTIONS: {
 export default function PromptForm({
   client_key,
   prompt,
+  storefrontDomain,
 }: {
   client_key: string;
   prompt?: ExistingPrompt;
+  // Passed from server. Enables "Pick color from my site" button — opens the
+  // storefront in a new tab with #__chapter_pick_color, picker.js activates
+  // in color mode, postMessage returns the hex here.
+  storefrontDomain?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -243,6 +250,42 @@ export default function PromptForm({
     initPageMatch?.mode ?? "starts_with",
   );
   const [pageMatchValue, setPageMatchValue] = useState(initPageMatch?.value ?? "");
+  // Appearance — optional hex color for the primary CTA button.
+  const [themeButtonColor, setThemeButtonColor] = useState<string>(prompt?.theme_button_bg_color ?? "");
+  // Scheduling — optional shut-off datetime. Stored UTC ISO; input is local.
+  const [expiresAt, setExpiresAt] = useState<string>(() => {
+    if (!prompt?.expires_at) return "";
+    // Convert UTC ISO to local datetime-local input value ("YYYY-MM-DDTHH:mm")
+    const d = new Date(prompt.expires_at);
+    if (Number.isNaN(d.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
+
+  // Color picker — listens for postMessage from picker.js running on
+  // storefront in color mode. Filters strictly by type + source origin.
+  const colorPickerWindowRef = useRef<Window | null>(null);
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      // Only accept messages from the picker window we opened.
+      if (colorPickerWindowRef.current && e.source !== colorPickerWindowRef.current) return;
+      if (!e.data || typeof e.data !== "object") return;
+      const data = e.data as { type?: string; hex?: string };
+      if (data.type !== "chapter_pick_color") return;
+      if (!data.hex || !/^#[0-9a-fA-F]{6}$/.test(data.hex)) return;
+      setThemeButtonColor(data.hex.toUpperCase());
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  function openColorPicker() {
+    if (!storefrontDomain) return;
+    const domain = storefrontDomain.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+    if (!domain) return;
+    const url = `https://${domain}/#__chapter_pick_color`;
+    colorPickerWindowRef.current = window.open(url, "_blank", "noopener=false");
+  }
   const [headline, setHeadline] = useState(prompt?.headline ?? "");
   const [body, setBody] = useState(prompt?.body ?? "");
   const [inputMode, setInputMode] = useState<InputMode>(
@@ -351,6 +394,10 @@ export default function PromptForm({
       trigger_pages: triggerPages,
       page_match_mode: pageMatchMode,
       page_match_value: pageMatchValue,
+      theme_button_bg_color: themeButtonColor || null,
+      // Convert local datetime-local input value → UTC ISO for DB storage.
+      // Empty input → null (no expiration).
+      expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
       headline,
       body,
       input_mode: inputMode,
@@ -592,6 +639,130 @@ export default function PromptForm({
                 {pageMatchMode === "exact" && <>is exactly <code style={{ background: "#F5F1E8", padding: "0 3px", borderRadius: 3 }}>{pageMatchValue}</code></>}
                 {pageMatchMode === "not_contains" && <>does NOT contain <code style={{ background: "#F5F1E8", padding: "0 3px", borderRadius: 3 }}>{pageMatchValue}</code></>}
                 .
+              </div>
+            )}
+          </Section>
+
+          {/* Appearance — theme color for the primary CTA button */}
+          <Section
+            label="Appearance (optional)"
+            hint="Optional hex color for the primary CTA button. Overrides the default Chapter orange. Leave blank to keep the default."
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  border: `1px solid ${LINE}`,
+                  background: themeButtonColor || "#E36410",
+                  boxShadow: themeButtonColor ? "0 0 0 1px rgba(0,0,0,0.05)" : "none",
+                  flexShrink: 0,
+                }}
+                aria-hidden
+              />
+              <input
+                type="text"
+                value={themeButtonColor}
+                onChange={(e) => setThemeButtonColor(e.target.value.trim())}
+                placeholder="#E36410"
+                style={{ ...inpMono, maxWidth: 160 }}
+              />
+              <input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(themeButtonColor) ? themeButtonColor : "#E36410"}
+                onChange={(e) => setThemeButtonColor(e.target.value.toUpperCase())}
+                style={{ width: 36, height: 36, padding: 0, border: `1px solid ${LINE}`, borderRadius: 8, background: "white", cursor: "pointer" }}
+                title="Pick color"
+              />
+              {storefrontDomain && (
+                <button
+                  type="button"
+                  onClick={openColorPicker}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: ORANGE,
+                    background: "white",
+                    border: `1px solid ${ORANGE}66`,
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={`Opens ${storefrontDomain} in a new tab in color-picker mode. Hover any element to see its background color; click to lock; press "Use this color" to send it back here.`}
+                >
+                  Pick color from site →
+                </button>
+              )}
+              {themeButtonColor && (
+                <button
+                  type="button"
+                  onClick={() => setThemeButtonColor("")}
+                  style={{
+                    fontSize: 12,
+                    color: MUTED,
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "8px 4px",
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {themeButtonColor && !/^#[0-9a-fA-F]{6}$/.test(themeButtonColor) && (
+              <div style={{ marginTop: 6, fontSize: 11.5, color: "#B3261E" }}>
+                Must be a 6-digit hex like <code>#E36410</code>
+              </div>
+            )}
+          </Section>
+
+          {/* Scheduling — optional shut-off datetime */}
+          <Section
+            label="Auto shut-off (optional)"
+            hint="Set an end date + time to automatically disable this prompt. Times are in your local timezone. Leave blank for no expiration."
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input
+                type="datetime-local"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                style={{ ...inp, maxWidth: 260 }}
+              />
+              {expiresAt && (
+                <button
+                  type="button"
+                  onClick={() => setExpiresAt("")}
+                  style={{
+                    fontSize: 12,
+                    color: MUTED,
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: "8px 4px",
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {expiresAt && (
+              <div style={{ marginTop: 6, fontSize: 11.5, color: MUTED }}>
+                {(() => {
+                  const d = new Date(expiresAt);
+                  if (Number.isNaN(d.getTime())) return "Invalid date";
+                  const now = new Date();
+                  if (d < now) {
+                    return (
+                      <span style={{ color: "#B3261E" }}>
+                        ⚠️ Set to a past date — this prompt will never fire after save. Update or clear the value.
+                      </span>
+                    );
+                  }
+                  return `Shuts off ${d.toLocaleString()}`;
+                })()}
               </div>
             )}
           </Section>

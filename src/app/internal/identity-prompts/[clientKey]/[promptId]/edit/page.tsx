@@ -21,19 +21,28 @@ export default async function EditPromptPage({
 }) {
   const { clientKey, promptId } = await params;
 
-  const { data: prompt } = await supabase
-    .schema("chapter_config")
-    .from("identity_prompts")
-    .select(
-      "id, slug, preset_type, trigger_jsonb, targeting_jsonb, headline, body, input_mode, email_placeholder, phone_placeholder, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, post_submit_button_label, email_subject, email_body, frequency, frequency_days, enabled, content_blocks_jsonb, form_fields_jsonb, pages_jsonb, recovery_jsonb, container_jsonb, submit_actions_jsonb, consent_jsonb",
-    )
-    .eq("id", promptId)
-    .eq("client_key", clientKey)
-    .maybeSingle();
+  const [{ data: prompt }, { data: client }] = await Promise.all([
+    supabase
+      .schema("chapter_config")
+      .from("identity_prompts")
+      .select(
+        "id, slug, preset_type, trigger_jsonb, targeting_jsonb, headline, body, input_mode, email_placeholder, phone_placeholder, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, post_submit_button_label, email_subject, email_body, frequency, frequency_days, enabled, content_blocks_jsonb, form_fields_jsonb, pages_jsonb, recovery_jsonb, container_jsonb, submit_actions_jsonb, consent_jsonb, theme_button_bg_color, expires_at",
+      )
+      .eq("id", promptId)
+      .eq("client_key", clientKey)
+      .maybeSingle(),
+    supabase
+      .schema("chapter_config")
+      .from("clients")
+      .select("storefront_domain")
+      .eq("client_key", clientKey)
+      .maybeSingle(),
+  ]);
 
   if (!prompt) notFound();
 
   const typed = prompt as ExistingPrompt;
+  const storefrontDomain = (client as { storefront_domain: string | null } | null)?.storefront_domain ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -56,7 +65,7 @@ export default async function EditPromptPage({
         </p>
       </div>
 
-      <PromptForm client_key={clientKey} prompt={typed} />
+      <PromptForm client_key={clientKey} prompt={typed} storefrontDomain={storefrontDomain} />
     </div>
   );
 }

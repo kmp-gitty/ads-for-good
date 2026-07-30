@@ -103,16 +103,25 @@ export default async function ClientPromptsPage({
   params: Promise<{ clientKey: string }>;
 }) {
   const { clientKey } = await params;
-  const { data: prompts } = await supabase
-    .schema("chapter_config")
-    .from("identity_prompts")
-    .select(
-      "id, slug, preset_type, trigger_jsonb, headline, body, input_mode, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, frequency, frequency_days, enabled, hit_count, submit_count, last_hit_at",
-    )
-    .eq("client_key", clientKey)
-    .order("created_at", { ascending: false });
+  const [{ data: prompts }, { data: client }] = await Promise.all([
+    supabase
+      .schema("chapter_config")
+      .from("identity_prompts")
+      .select(
+        "id, slug, preset_type, trigger_jsonb, headline, body, input_mode, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, frequency, frequency_days, enabled, hit_count, submit_count, last_hit_at",
+      )
+      .eq("client_key", clientKey)
+      .order("created_at", { ascending: false }),
+    supabase
+      .schema("chapter_config")
+      .from("clients")
+      .select("storefront_domain")
+      .eq("client_key", clientKey)
+      .maybeSingle(),
+  ]);
 
   const promptList = (prompts as PromptRow[] | null) ?? [];
+  const storefrontDomain = (client as { storefront_domain: string | null } | null)?.storefront_domain ?? null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
@@ -160,7 +169,7 @@ export default async function ClientPromptsPage({
           Create a new prompt
         </div>
         <div style={{ background: "white", border: `1px solid ${LINE}`, borderRadius: 14, padding: "24px 26px" }}>
-          <PromptForm client_key={clientKey} />
+          <PromptForm client_key={clientKey} storefrontDomain={storefrontDomain} />
         </div>
       </section>
 

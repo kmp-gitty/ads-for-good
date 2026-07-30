@@ -31,12 +31,18 @@ export async function GET(req: NextRequest) {
     return withCors(req, NextResponse.json({ error: "missing_client_key" }, { status: 400 }));
   }
 
+  // Server-side expiration filter: prompts with expires_at in the past are
+  // dropped here rather than shipped to the pixel. Two benefits: (a) less
+  // bandwidth, (b) no client-clock-drift issue. NULL expires_at = never
+  // expires.
+  const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("identity_prompts")
-    .select("id, slug, preset_type, trigger_jsonb, headline, body, input_mode, email_placeholder, phone_placeholder, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, post_submit_button_label, frequency, frequency_days, container_jsonb, content_blocks_jsonb, form_fields_jsonb, pages_jsonb, recovery_jsonb, submit_actions_jsonb, targeting_jsonb, variant_jsonb, enabled_devices, email_mechanism_override, consent_jsonb")
+    .select("id, slug, preset_type, trigger_jsonb, headline, body, input_mode, email_placeholder, phone_placeholder, button_label, success_message, offer_code, offer_description, post_submit_action, post_submit_url, post_submit_button_label, frequency, frequency_days, container_jsonb, content_blocks_jsonb, form_fields_jsonb, pages_jsonb, recovery_jsonb, submit_actions_jsonb, targeting_jsonb, variant_jsonb, enabled_devices, email_mechanism_override, consent_jsonb, theme_button_bg_color, expires_at")
     .eq("client_key", clientKey)
-    .eq("enabled", true);
+    .eq("enabled", true)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
 
   if (error) {
     console.warn("[identity-prompts] fetch failed:", error.message);

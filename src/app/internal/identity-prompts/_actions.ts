@@ -115,6 +115,11 @@ export type PromptFormInput = {
   // Stored inside targeting_jsonb.page_match. v2 will support multiple rules.
   page_match_mode?: "starts_with" | "contains" | "ends_with" | "exact" | "not_contains";
   page_match_value?: string;
+  // Appearance: optional hex color for the primary CTA button. NULL = default orange.
+  theme_button_bg_color?: string | null;
+  // Scheduling: optional shut-off timestamp. Server filters at fetch time.
+  // Value is an ISO string (UTC) — form component converts from local input.
+  expires_at?: string | null;
 };
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -163,6 +168,9 @@ function validate(input: PromptFormInput): string | null {
   }
   if (input.post_submit_action === "email_message" && !input.email_body.trim()) {
     return "'Send email message' requires an email body";
+  }
+  if (input.theme_button_bg_color && !/^#[0-9a-fA-F]{6}$/.test(input.theme_button_bg_color)) {
+    return "theme_button_bg_color must be a 6-digit hex like #E36410";
   }
   return null;
 }
@@ -214,6 +222,8 @@ function shapePayload(input: PromptFormInput) {
     frequency: input.frequency,
     frequency_days: input.frequency === "visitor" ? input.frequency_days : null,
     enabled: input.enabled,
+    theme_button_bg_color: input.theme_button_bg_color || null,
+    expires_at: input.expires_at || null,
     // Consent applies only to presets that capture contact info.
     // For other presets (notification / phone_call / make_an_offer / remind_me)
     // we always write null so the pixel doesn't render a stray consent element.

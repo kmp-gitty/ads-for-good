@@ -708,6 +708,18 @@ setInterval(function () {
     return chapterRenderPromptComposable(prompt);
   }
 
+  // Apply operator-configured button color to CTA buttons. Inline style
+  // overrides the CSS class background. Hover state stays the CSS default —
+  // acceptable trade-off vs restructuring all button styles to CSS variables.
+  // Also applied to link buttons + yes-buttons in yes/no CTAs.
+  function chapterApplyThemeButtonColor(el, prompt) {
+    if (!el || !prompt || !prompt.theme_button_bg_color) return;
+    var color = String(prompt.theme_button_bg_color);
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) return;
+    el.style.background = color;
+    el.style.borderColor = color;
+  }
+
   // MI v2 Phase 4 — bubble container (Custom Notification preset).
   // Fixed corner position, no backdrop, slide-in animation, dismissible.
   // Supports content blocks (headline, body) + a single CTA (button/yes_no/dismiss_only).
@@ -766,6 +778,7 @@ setInterval(function () {
       var yesBtn = document.createElement("button");
       yesBtn.type = "button";
       yesBtn.className = "chapter-yes";
+      chapterApplyThemeButtonColor(yesBtn, prompt);
       yesBtn.textContent = actions.yes_label || "Yes";
       var noBtn = document.createElement("button");
       noBtn.type = "button";
@@ -784,6 +797,7 @@ setInterval(function () {
     } else if (ctaType === "button") {
       var btn = document.createElement("a");
       btn.className = "chapter-prompt-link-btn";
+      chapterApplyThemeButtonColor(btn, prompt);
       btn.style.display = "block";
       btn.style.textAlign = "center";
       btn.href = String(actions.cta_url || "#");
@@ -1288,6 +1302,7 @@ setInterval(function () {
       var primaryBtn = document.createElement("button");
       primaryBtn.type = "submit";
       primaryBtn.className = "chapter-prompt-button";
+      chapterApplyThemeButtonColor(primaryBtn, prompt);
       primaryBtn.style.cssText = "flex:1;";
       primaryBtn.textContent = isLast ? "Submit" : "Next";
       navWrap.appendChild(primaryBtn);
@@ -1635,6 +1650,7 @@ setInterval(function () {
     var submitBtn = document.createElement("button");
     submitBtn.type = "submit";
     submitBtn.className = "chapter-prompt-submit";
+    chapterApplyThemeButtonColor(submitBtn, prompt);
     submitBtn.textContent = prompt.button_label || "Send offer";
     form.appendChild(submitBtn);
 
@@ -1848,6 +1864,7 @@ setInterval(function () {
     var submitBtn = document.createElement("button");
     submitBtn.type = "submit";
     submitBtn.className = "chapter-prompt-submit";
+    chapterApplyThemeButtonColor(submitBtn, prompt);
     submitBtn.textContent = prompt.button_label || "Notify me";
     form.appendChild(submitBtn);
 
@@ -2038,6 +2055,7 @@ setInterval(function () {
     var button = document.createElement("button");
     button.type = "submit";
     button.className = "chapter-prompt-button";
+    chapterApplyThemeButtonColor(button, prompt);
     button.textContent = prompt.button_label || "Submit";
 
     var form = document.createElement("form");
@@ -2175,6 +2193,7 @@ setInterval(function () {
         var linkBtn = document.createElement("a");
         linkBtn.href = prompt.post_submit_url;
         linkBtn.className = "chapter-prompt-link-btn";
+        chapterApplyThemeButtonColor(linkBtn, prompt);
         linkBtn.textContent = prompt.post_submit_button_label || "Claim it";
         // Honor target=_self by default so it replaces the current page.
         card.appendChild(linkBtn);
