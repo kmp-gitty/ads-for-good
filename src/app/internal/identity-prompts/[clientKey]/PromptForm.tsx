@@ -1260,8 +1260,18 @@ export default function PromptForm({
         <div style={{ flex: "1 1 320px", minWidth: 280, maxWidth: 420 }}>
           {/* Sticky wrapper — keeps the preview + Before/After toggle in view
               while the operator scrolls through a long form. Matches the
-              RuleForm URL-tester pattern. */}
-          <div style={{ position: "sticky", top: 20 }}>
+              RuleForm URL-tester pattern.
+              max-height + overflow-y ensures a tall preview panel becomes
+              internally scrollable (rather than spilling off-screen and
+              hiding the top toggle) when the viewport is short. */}
+          <div
+            style={{
+              position: "sticky",
+              top: 20,
+              maxHeight: "calc(100vh - 40px)",
+              overflowY: "auto",
+            }}
+          >
           {(() => {
             // Self-serve PromptPreview handles single-page custom_form only —
             // multi-page has its own state shape (pages_jsonb) with per-page
@@ -1318,6 +1328,7 @@ export default function PromptForm({
               consentMode,
               consentText,
               consentDefaultChecked,
+              themeButtonColor: themeButtonColor || undefined,
             };
             return <PromptPreview data={previewData} />;
           })()}

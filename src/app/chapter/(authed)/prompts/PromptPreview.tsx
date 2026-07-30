@@ -39,7 +39,18 @@ export type PreviewData = {
   consentMode?: "off" | "checkbox" | "choice";
   consentText?: string;
   consentDefaultChecked?: boolean;
+  // Operator-picked hex for the primary CTA button. Overrides ORANGE default.
+  themeButtonColor?: string;
 };
+
+// Resolve the effective button background. Only accepts a valid 6-digit hex;
+// anything else falls back to the default Chapter orange so a mid-typing
+// hex doesn't break the preview.
+function buttonBg(d: PreviewData): string {
+  const c = (d.themeButtonColor ?? "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(c)) return c;
+  return ORANGE;
+}
 
 function ConsentPreview({ d }: { d: PreviewData }) {
   if (!d.consentMode || d.consentMode === "off") return null;
@@ -182,7 +193,7 @@ function successContent(d: PreviewData) {
       )}
       {d.postSubmitAction === "button" && (
         <>
-          <div style={{ background: ORANGE, color: "white", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, fontWeight: 600, textAlign: "center" }}>{d.postSubmitButtonLabel || "Claim it"}</div>
+          <div style={{ background: buttonBg(d), color: "white", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, fontWeight: 600, textAlign: "center" }}>{d.postSubmitButtonLabel || "Claim it"}</div>
           <div style={{ fontSize: 10, color: FAINT, textAlign: "center", marginTop: 5, wordBreak: "break-all" }}>→ {d.postSubmitUrl || "your URL"}</div>
         </>
       )}
@@ -234,8 +245,8 @@ function Body({ text }: { text: string }) {
 function MockInput({ placeholder }: { placeholder: string }) {
   return <div style={{ border: `1px solid ${LINE}`, borderRadius: 7, padding: "8px 10px", fontSize: 12, color: FAINT, marginBottom: 8 }}>{placeholder || "…"}</div>;
 }
-function SubmitBtn({ label }: { label: string }) {
-  return <div style={{ background: ORANGE, color: "white", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, fontWeight: 600, textAlign: "center" }}>{label || "Submit"}</div>;
+function SubmitBtn({ label, bg }: { label: string; bg?: string }) {
+  return <div style={{ background: bg || ORANGE, color: "white", borderRadius: 8, padding: "8px 10px", fontSize: 12.5, fontWeight: 600, textAlign: "center" }}>{label || "Submit"}</div>;
 }
 
 function emailContent(d: PreviewData) {
@@ -246,7 +257,7 @@ function emailContent(d: PreviewData) {
       {d.inputMode !== "phone" && <MockInput placeholder={d.emailPlaceholder} />}
       {d.inputMode !== "email" && <MockInput placeholder={d.phonePlaceholder} />}
       <ConsentPreview d={d} />
-      <SubmitBtn label={d.buttonLabel} />
+      <SubmitBtn label={d.buttonLabel} bg={buttonBg(d)} />
       {d.offerCode.trim() && (
         <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8, textAlign: "center" }}>🎁 Code “{d.offerCode.trim()}” shown after submit</div>
       )}
@@ -282,7 +293,7 @@ function formContent(d: PreviewData) {
         d.cfFields.map((f, i) => <div key={i}>{fieldMock(f)}</div>)
       )}
       <ConsentPreview d={d} />
-      <SubmitBtn label="Submit" />
+      <SubmitBtn label="Submit" bg={buttonBg(d)} />
     </>
   );
 }
@@ -321,11 +332,11 @@ function notificationContent(d: PreviewData) {
           : <div key={i} style={{ fontSize: 11.5, color: MUTED, marginBottom: 8, lineHeight: 1.4 }}>{b.text}</div>,
       )}
       {a.cta_type === "button" && (
-        <div style={{ background: ORANGE, color: "white", borderRadius: 7, padding: "7px 10px", fontSize: 12, fontWeight: 600, textAlign: "center" }}>{a.cta_label || "Learn more"}</div>
+        <div style={{ background: buttonBg(d), color: "white", borderRadius: 7, padding: "7px 10px", fontSize: 12, fontWeight: 600, textAlign: "center" }}>{a.cta_label || "Learn more"}</div>
       )}
       {a.cta_type === "yes_no" && (
         <div style={{ display: "flex", gap: 6 }}>
-          <div style={{ flex: 1, background: ORANGE, color: "white", borderRadius: 7, padding: "7px 8px", fontSize: 11.5, fontWeight: 600, textAlign: "center" }}>{a.yes_label || "Yes"}</div>
+          <div style={{ flex: 1, background: buttonBg(d), color: "white", borderRadius: 7, padding: "7px 8px", fontSize: 11.5, fontWeight: 600, textAlign: "center" }}>{a.yes_label || "Yes"}</div>
           <div style={{ flex: 1, border: `1px solid ${LINE}`, color: MUTED, borderRadius: 7, padding: "7px 8px", fontSize: 11.5, fontWeight: 600, textAlign: "center" }}>{a.no_label || "No"}</div>
         </div>
       )}
