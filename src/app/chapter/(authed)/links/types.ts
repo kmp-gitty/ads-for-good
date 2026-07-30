@@ -55,5 +55,20 @@ export type LinkStats = {
   fulfillment: { visitors: number; converted: number };
 };
 
+export type LinkOverviewRow = {
+  slug: string;
+  clicks: number;
+  unique: number;
+  scanner: number;
+  all_time: number;
+  top_destination: string | null;
+};
+
+export type LinksOverview = {
+  window_days: number;
+  totals: { clicks: number; scanner: number; links: number };
+  links: LinkOverviewRow[];
+};
+
 // Reserved slugs that would collide with static routes under /links.
-export const RESERVED_SLUGS = new Set(["new", "domain"]);
+export const RESERVED_SLUGS = new Set(["new", "domain", "analytics"]);

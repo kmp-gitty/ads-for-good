@@ -14,7 +14,7 @@ import { getCurrentChapterUser, getClientEntitlement } from "@/app/lib/auth/chap
 import { createSupabaseServiceRoleClient } from "@/app/lib/auth/supabase-server";
 import { withSelfServeClient } from "@/app/lib/db/per-client";
 import { getBrandedDomain } from "./domain/_actions";
-import { RESERVED_SLUGS, type LinkInput, type LinkSummary, type LinkDetail, type LinkStats } from "./types";
+import { RESERVED_SLUGS, type LinkInput, type LinkSummary, type LinkDetail, type LinkStats, type LinksOverview } from "./types";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -227,4 +227,20 @@ export async function getLinkStats(slug: string): Promise<LinkStats | null> {
     return null;
   }
   return data as LinkStats;
+}
+
+// Overview across all of a tenant's links (analytics tab). Same service_role +
+// session-gated pattern as getLinkStats.
+export async function getLinksOverview(): Promise<LinksOverview | null> {
+  const t = await requireTenant();
+  if ("error" in t) return null;
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .schema("chapter_reporting")
+    .rpc("smart_links_overview", { p_client_key: t.clientKey, p_days: 30 });
+  if (error) {
+    console.error("[links] getLinksOverview failed:", error.message);
+    return null;
+  }
+  return data as LinksOverview;
 }
