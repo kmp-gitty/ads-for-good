@@ -17,6 +17,7 @@
 //   client_employee  → client_key IS NOT NULL (agency_key NULL)
 
 import { createSupabaseServerClient, createSupabaseServiceRoleClient } from "./supabase-server";
+import { notifySelfServeSignup } from "@/app/lib/monitoring/signup-notify";
 
 // Web Crypto (globalThis.crypto) instead of node:crypto — this module is
 // imported by middleware.ts, which runs on the Edge runtime where Node
@@ -430,6 +431,18 @@ export async function provisionSelfServeTenant(
 
   // Best-effort cleanup of the staged row (non-fatal if it fails).
   await supabase.schema("chapter_config").from("pending_signups").delete().eq("email", em);
+
+  // Fire-and-forget operator notification (never blocks provisioning/redirect).
+  void notifySelfServeSignup({
+    clientKey,
+    email: em,
+    company,
+    fullName,
+    phone,
+    trialDays: 21,
+  }).catch((e) =>
+    console.error("[chapter-user] signup notification failed:", e instanceof Error ? e.message : e),
+  );
 
   return { client_key: clientKey };
 }
