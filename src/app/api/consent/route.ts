@@ -53,6 +53,18 @@ export async function POST(req: NextRequest) {
   const isLocal =
     req.nextUrl.hostname === "localhost" || req.nextUrl.hostname === "127.0.0.1";
 
+  // Scope cookies to the registrable apex so a 1P collect host (s.eosfabrics.com)
+  // sets Domain=.eosfabrics.com, readable by the storefront pixel — otherwise
+  // the cookie is host-only and fragments from the collect/identify cookies.
+  // Mirrors /api/pixel + /api/identify.
+  const cookieApex = (() => {
+    if (isLocal) return undefined;
+    const parts = req.nextUrl.hostname.split(".");
+    if (parts.length <= 2) return req.nextUrl.hostname;
+    return parts.slice(1).join(".");
+  })();
+  const cookieDomain = cookieApex ? `.${cookieApex}` : undefined;
+
   // Cookie-based or freshly generated identifiers.
   const journeyCookieName = `up_journey_${client_key}`;
   const existingJourney = req.cookies.get(journeyCookieName)?.value || null;
@@ -150,17 +162,19 @@ export async function POST(req: NextRequest) {
   );
 
   res.cookies.set(journeyCookieName, journey_id, {
+    domain: cookieDomain,
     httpOnly: false,
     secure: !isLocal,
-    sameSite: "lax",
+    sameSite: isLocal ? "lax" : "none",
     path: "/",
     maxAge: 60 * 60 * 24 * 180,
   });
 
   res.cookies.set(anonCookieName, anon_id, {
+    domain: cookieDomain,
     httpOnly: false,
     secure: !isLocal,
-    sameSite: "lax",
+    sameSite: isLocal ? "lax" : "none",
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
   });
@@ -174,6 +188,7 @@ export async function POST(req: NextRequest) {
   // set client-side by the pixel (see chapterWriteConsentCookie in pixel.js).
   if (consent_status === "opt_in" || consent_status === "opt_out") {
     res.cookies.set("chapter_consent", consent_status, {
+      domain: cookieDomain,
       httpOnly: false,
       secure: !isLocal,
       sameSite: "lax",
