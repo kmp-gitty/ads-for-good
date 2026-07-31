@@ -3,29 +3,105 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import SmartPromptsGraphic from "@/components/SmartPromptsGraphic";
 
 export const metadata = {
-  title: "Smart Prompts | Ads for Good",
+  title: "Exit Intent Popup Software | Smart Prompts by afG",
   description:
-    "Show the right prompt at the right moment — exit-intent, cart-abandon, time-spent — with your copy and an optional offer. Capture more sales, signups, and leads.",
+    "Exit intent popup software that fires on cart-abandon, scroll, click, or time-spent. Your copy, your offer, and a show-to-submit rate for every prompt.",
 };
 
 const PROMPT_TYPES: { name: string; desc: string; soon?: boolean }[] = [
-  { name: "Email Exchange", desc: "Email + button, with an optional offer revealed on submit." },
-  { name: "Custom Form", desc: "Multi-field capture for richer signups and qualification." },
-  { name: "Custom Notification", desc: "Lightweight corner bubble — yes/no or single CTA." },
-  { name: "Make an Offer", desc: "Cart-recovery offers with your thresholds and counter-offers." },
-  { name: "Phone Call", desc: "Click-to-call CTAs for calls-driven businesses." },
-  { name: "Remind Me", desc: "Price-drop and restock alerts that notify on trigger." },
+  { name: "Email capture popup", desc: "Email + button, with an optional offer revealed on submit." },
+  { name: "Multi-field form popup", desc: "Multi-field capture for richer signups and qualification." },
+  { name: "Notification bubble", desc: "Lightweight corner bubble — yes/no or single CTA." },
+  { name: "Cart abandonment offer", desc: "Cart-recovery offers with your thresholds and counter-offers." },
+  { name: "Click-to-call prompt", desc: "Click-to-call CTAs for calls-driven businesses." },
+  { name: "Price-drop and restock alerts", desc: "Price-drop and restock alerts that notify on trigger." },
 ];
+
+const FAQ_LD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "What is an exit intent popup?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "A prompt that fires when a visitor's cursor moves toward closing the tab or hitting back. It's the last moment to make an offer before they leave.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Does this replace my email platform?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "No. Smart Prompts is the capture and nudge layer — keep sending through your ESP (Klaviyo, Mailchimp, and others).",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What can trigger a prompt?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Exit-intent, time-spent, scroll-depth, click, cart-abandon, winback, and more.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What can a prompt capture?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Email signups, form fills, or a direct sale — paired with your copy and an optional discount code.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can I measure how prompts perform?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes. Chapter logs shown / submitted / dismissed for every prompt, so you see show → submit rates and can optimize.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Is it privacy-safe?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes — consent-respecting by default, and emails are hashed in the visitor's browser.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Do I have to use all of Chapter?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "No. Smart Prompts works on its own; it's also part of the full Chapter platform.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Does this only work on Shopify?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "No. Smart Prompts installs with a code drop into your theme or template, so it runs on Shopify, WooCommerce, Webflow, or a custom build.",
+      },
+    },
+  ],
+};
 
 export default function SmartPromptsPage() {
   return (
     <main className="bg-[#f7f4ee] text-neutral-900 flex flex-col items-center px-4 pt-8 pb-24">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_LD) }}
+      />
       {/* HERO SECTION */}
       <section className="w-full max-w-6xl flex flex-col gap-10 md:flex-row md:items-start">
         {/* Left: Hero copy */}
         <div className="flex-1 min-w-0 flex flex-col">
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-            Smart Prompts: Capture the extra sale, signup, or lead.
+            Exit intent popup software that captures the extra sale, signup, or
+            lead.
           </h1>
 
           <div className="mt-3 flex gap-2 text-xs font-medium">
@@ -33,6 +109,17 @@ export default function SmartPromptsPage() {
               Chapter Feature · Available Standalone · Available Self-Serve
             </span>
           </div>
+
+          <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
+            Smart Prompts is exit intent popup software for capturing the sale,
+            signup, or lead you were about to lose. Fire a prompt when someone
+            moves to leave, abandons a cart, scrolls past a point, or has been
+            on the page long enough to be interested. Pair it with your own copy
+            and an optional discount code. Every prompt logs its own
+            show-to-submit rate, so you can see what works instead of guessing.
+            It runs on any site, not just Shopify, and it works alongside the
+            email platform you already send from.
+          </p>
 
           <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
             Show the right prompt at the right moment — exit-intent,
@@ -55,7 +142,7 @@ export default function SmartPromptsPage() {
         <div className="flex-1">
           <div className="rounded-3xl border border-orange-200 bg-white shadow-sm px-6 py-5">
             <h2 className="text-sm font-semibold text-neutral-900">
-              Capture more at the right moment:
+              Popup triggers
             </h2>
 
             <ul className="mt-3 space-y-1.5 text-xs sm:text-sm text-neutral-800 list-disc list-inside">
@@ -109,7 +196,7 @@ export default function SmartPromptsPage() {
           <div className="grid gap-8 md:grid-cols-2 md:items-center">
             <div>
               <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-                What you can do with Smart Prompts.
+                What exit intent popup software does
               </h2>
               <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed">
                 Upgrade lost moments to conversions — capture the extra sale,
@@ -208,6 +295,10 @@ export default function SmartPromptsPage() {
           <div className="mt-6 space-y-3 max-w-4xl">
             {[
               {
+                q: "What is an exit intent popup?",
+                a: "A prompt that fires when a visitor's cursor moves toward closing the tab or hitting back. It's the last moment to make an offer before they leave.",
+              },
+              {
                 q: "Does this replace my email platform?",
                 a: "No. Smart Prompts is the capture and nudge layer — keep sending through your ESP (Klaviyo, Mailchimp, and others).",
               },
@@ -230,6 +321,10 @@ export default function SmartPromptsPage() {
               {
                 q: "Do I have to use all of Chapter?",
                 a: "No. Smart Prompts works on its own; it's also part of the full Chapter platform.",
+              },
+              {
+                q: "Does this only work on Shopify?",
+                a: "No. Smart Prompts installs with a code drop into your theme or template, so it runs on Shopify, WooCommerce, Webflow, or a custom build.",
               },
             ].map((item) => (
               <details
@@ -268,14 +363,14 @@ export default function SmartPromptsPage() {
                     href="/for-businesses/lifecycle-attribution"
                     className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                   >
-                    Explore Chapter
+                    Chapter, lifecycle attribution
                   </Link>
 
                   <Link
                     href="/for-businesses/smart-links"
                     className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                   >
-                    Chapter Links
+                    first-party link tracking
                   </Link>
 
                   <Link
