@@ -353,7 +353,7 @@ export default function LaggedImpactClient({
         <div className="card" style={{ padding: "14px 18px", display: "flex", alignItems: "flex-start", gap: 14, background: "rgba(227,100,16,0.06)", border: "1px solid rgba(227,100,16,0.18)" }}>
           <div style={{ color: "var(--accent)", marginTop: 2 }}><Icon name="info" size={16} /></div>
           <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55 }}>
-            <strong>EOS data depth caveat.</strong> Canonical data starts April 2026, so at current depth (~8 weeks) most lag cells will land below the n ≥ 30 floor or within noise. Results below should be read as directional, not definitive. Seasonality controls activate once 6+ months of data are available — until then, calendar effects we cannot yet model may influence results.
+            <strong>Data depth caveat.</strong> This workspace&rsquo;s canonical attribution history is still shallow, so most lag cells will land below the n ≥ 30 floor or within noise. Results below should be read as directional, not definitive. Seasonality controls activate once 6+ months of data are available — until then, calendar effects we cannot yet model may influence results.
           </div>
         </div>
 
