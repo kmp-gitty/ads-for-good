@@ -251,11 +251,13 @@ export default function PathsClient({
                       <td className="num">{c.avg_touches.toFixed(1)}</td>
                       {showDelta && (
                         <td className="num">
-                          {c.smallBase && c.moveAbs != null
-                            ? <span title="Prior base too small for a meaningful %" style={{ fontWeight: 600, color: "var(--ink-2)" }}>{c.moveAbs >= 0 ? "+" : ""}{c.moveAbs}</span>
-                            : c.move != null
-                              ? <Move value={c.move} semantic="up-good" />
-                              : <span className="dim">—</span>}
+                          {c.chapters < 5
+                            ? <span className="dim">—</span>              /* low-sample: make no movement claim */
+                            : c.smallBase && c.moveAbs != null && c.moveAbs !== 0
+                              ? <span title="Small prior base — showing absolute chapter change" style={{ fontWeight: 600, color: "var(--ink-2)" }}>{c.moveAbs > 0 ? "+" : ""}{c.moveAbs}</span>
+                              : c.move != null
+                                ? <Move value={c.move} semantic="up-good" />
+                                : <span className="dim">—</span>}
                         </td>
                       )}
                     </tr>
