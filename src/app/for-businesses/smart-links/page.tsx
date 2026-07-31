@@ -3,26 +3,129 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import SmartLinkRoutingGraphic from "@/components/SmartLinkRoutingGraphic";
 
 export const metadata = {
-  title: "Smart Links | Ads for Good",
+  title: "Link Management Software | Smart Links by afG",
   description:
-    "Smart Links wraps the links you already share — in emails, texts, ads, posts, and profiles — so you own the click, protect consent, and send the right person to the right place.",
+    "First-party link management software: wrap links on your own domain, route by device or location, filter out bots, and keep every click yours.",
+};
+
+const FAQ_LD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "What is link management software?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "A tool that sits between the links you share and where they go — so you can shorten them on your own domain, change the destination later, route different people to different pages, and see who actually clicked.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How is this different from a URL shortener?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "A shortener makes a link shorter and counts clicks on someone else's domain. Link management runs on yours, so the click data is yours to keep, and it adds routing, consent handling, and bot filtering on top.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Do I have to use all of Chapter?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "No. Smart Links works on its own; it's also part of the full Chapter platform.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Does it work with my email or ad platform?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes — it wraps links behind Mailchimp, Klaviyo, Meta, Google Ads, Shopify Email, and more.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can one link send people to different places?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes — by device, location, cart status, audience, A/B split, or time. And you can change a link's destination retroactively: after you've sent an email, document, or post.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Is it privacy-safe?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Consent-aware, respects opt-outs, and no invasive personally identifiable information.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What makes a link “first-party”?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "It runs on your own domain, so the click and cookie belong to you, not a third party — and they last longer in modern browsers.",
+      },
+    },
+  ],
 };
 
 export default function ChapterLinksPage() {
   return (
     <main className="bg-[#f7f4ee] text-neutral-900 flex flex-col items-center px-4 pt-12 pb-24">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_LD) }}
+      />
       {/* HERO SECTION */}
       <section className="w-full max-w-6xl flex flex-col gap-10 md:flex-row md:items-start">
         {/* Left: Hero copy */}
         <div className="flex-1 min-w-0 flex flex-col">
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-            Smart Links: Control every click.
+            Link management software that keeps every click yours.
           </h1>
 
           <div className="mt-3 flex gap-2 text-xs font-medium">
             <span className="bg-orange-100 text-orange-600 px-3 py-1 rounded-full">
               Chapter Feature · Available Standalone · Available Self-Serve
             </span>
+          </div>
+
+          <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
+            Smart Links is link management software built on your own domain.
+            Wrap the links you already share in emails, texts, ads, and posts,
+            then route each click to the right destination based on device,
+            location, cart status, or audience. Because the link runs
+            first-party, the click and the cookie belong to you rather than a
+            third-party platform, and they survive longer in modern browsers.
+            Bots and email security scanners get filtered out, so what&apos;s
+            left is real people. It&apos;s not a vanity shortener with a
+            dashboard bolted on.
+          </p>
+
+        </div>
+
+        {/* Right: Explainer card + sub-line + CTA (fills the column, no right-side gap) */}
+        <div className="flex-1">
+          <div className="rounded-3xl border border-orange-200 bg-white shadow-sm px-6 py-6">
+            <h2 className="text-sm font-semibold text-neutral-900">
+              What link management software should do
+            </h2>
+
+            <ul className="mt-3 space-y-1.5 text-xs sm:text-sm text-neutral-800 list-disc list-inside">
+              <li>Wrap any link behind your own first-party domain</li>
+              <li>
+                Send to different destinations — by device, location, cart, or
+                audience
+              </li>
+              <li>Respect consent and opt-outs on every click</li>
+              <li>
+                Filter out bots and email security scanners so your numbers stay
+                clean
+              </li>
+              <li>Feed every click into your Chapter attribution</li>
+            </ul>
           </div>
 
           <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
@@ -41,29 +144,6 @@ export default function ChapterLinksPage() {
             </Link>
           </section>
         </div>
-
-        {/* Right: Explainer card */}
-        <div className="flex-1">
-          <div className="rounded-3xl border border-orange-200 bg-white shadow-sm px-6 py-6">
-            <h2 className="text-sm font-semibold text-neutral-900">
-              Make your links smarter:
-            </h2>
-
-            <ul className="mt-3 space-y-1.5 text-xs sm:text-sm text-neutral-800 list-disc list-inside">
-              <li>Wrap any link behind your own first-party domain</li>
-              <li>
-                Send to different destinations — by device, location, cart, or
-                audience
-              </li>
-              <li>Respect consent and opt-outs on every click</li>
-              <li>
-                Filter out bots and email security scanners so your numbers stay
-                clean
-              </li>
-              <li>Feed every click into your Chapter attribution</li>
-            </ul>
-          </div>
-        </div>
       </section>
 
       {/* WHAT YOU CAN DO SECTION */}
@@ -72,7 +152,7 @@ export default function ChapterLinksPage() {
           <div className="grid gap-8 md:grid-cols-2 md:items-center">
             <div>
               <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-                What you can do with Smart Links.
+                How businesses use Smart Links
               </h2>
               <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed">
                 The links you already share become smart, first-party, and fully
@@ -164,6 +244,14 @@ export default function ChapterLinksPage() {
           <div className="mt-6 space-y-3 max-w-4xl">
             {[
               {
+                q: "What is link management software?",
+                a: "A tool that sits between the links you share and where they go — so you can shorten them on your own domain, change the destination later, route different people to different pages, and see who actually clicked.",
+              },
+              {
+                q: "How is this different from a URL shortener?",
+                a: "A shortener makes a link shorter and counts clicks on someone else's domain. Link management runs on yours, so the click data is yours to keep, and it adds routing, consent handling, and bot filtering on top.",
+              },
+              {
                 q: "Do I have to use all of Chapter?",
                 a: "No. Smart Links works on its own; it's also part of the full Chapter platform.",
               },
@@ -200,6 +288,39 @@ export default function ChapterLinksPage() {
           </div>
         </section>
 
+        {/* Related reading — link-management cluster spokes */}
+        <section className="mt-12">
+          <h2 className="text-xl font-semibold tracking-tight text-neutral-900">
+            Related reading
+          </h2>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <Link
+              href="/for-people/education/link-management-tools"
+              className="rounded-3xl border border-orange-100 bg-white px-5 py-4 shadow-sm hover:bg-orange-50"
+            >
+              <p className="text-sm font-semibold text-neutral-900">
+                Link management tools, honestly compared
+              </p>
+              <p className="mt-1 text-xs text-neutral-600">
+                What each link tool is actually best at, who it suits, and where
+                it falls short.
+              </p>
+            </Link>
+            <Link
+              href="/for-people/education/first-party-click-tracking"
+              className="rounded-3xl border border-orange-100 bg-white px-5 py-4 shadow-sm hover:bg-orange-50"
+            >
+              <p className="text-sm font-semibold text-neutral-900">
+                Why your click data disappears
+              </p>
+              <p className="mt-1 text-xs text-neutral-600">
+                What changed with cookies and ITP, and what first-party tracking
+                actually fixes.
+              </p>
+            </Link>
+          </div>
+        </section>
+
         {/* Part of Chapter / cross-links */}
         <section className="mt-14 sm:mt-16">
           <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
@@ -220,14 +341,14 @@ export default function ChapterLinksPage() {
                     href="/for-businesses/lifecycle-attribution"
                     className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                   >
-                    Explore Chapter
+                    Chapter, lifecycle attribution
                   </Link>
 
                   <Link
                     href="/for-businesses/smart-prompts"
                     className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                   >
-                    Smart Prompts
+                    exit intent popup software
                   </Link>
 
                   <Link

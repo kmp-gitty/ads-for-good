@@ -96,7 +96,7 @@ export default function SmartPromptsPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_LD) }}
       />
       {/* HERO SECTION */}
-      <section className="w-full max-w-6xl flex flex-col gap-10 md:flex-row md:items-stretch">
+      <section className="w-full max-w-6xl flex flex-col gap-10 md:flex-row md:items-start">
         {/* Left: Hero copy */}
         <div className="flex-1 min-w-0 flex flex-col">
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
@@ -139,7 +139,7 @@ export default function SmartPromptsPage() {
         </div>
 
         {/* Right: Explainer card */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1">
           <div className="rounded-3xl border border-orange-200 bg-white shadow-sm px-6 py-5">
             <h2 className="text-sm font-semibold text-neutral-900">
               Popup triggers
@@ -160,15 +160,15 @@ export default function SmartPromptsPage() {
             </ul>
           </div>
 
-          <div className="mt-3 md:flex md:flex-1 md:flex-col">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
+          <div className="mt-16">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
               Prompt types
             </p>
-            <div className="grid grid-cols-2 gap-x-1.5 gap-y-3 md:flex-1 md:content-between">
+            <div className="grid grid-cols-2 gap-x-1.5 gap-y-2">
               {PROMPT_TYPES.map((p) => (
                 <div
                   key={p.name}
-                  className="rounded-2xl border border-orange-100 bg-white px-3 py-2 shadow-sm"
+                  className="rounded-2xl border border-orange-100 bg-white px-3 py-3.5 shadow-sm"
                 >
                   <div className="flex items-center gap-1.5">
                     <p className="text-xs font-semibold text-neutral-900">
@@ -343,6 +343,51 @@ export default function SmartPromptsPage() {
           </div>
         </section>
 
+        {/* Related reading — popup cluster spokes */}
+        <section className="mt-12">
+          <h2 className="text-xl font-semibold tracking-tight text-neutral-900">
+            Related reading
+          </h2>
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <Link
+              href="/for-people/education/privy-alternatives"
+              className="rounded-3xl border border-orange-100 bg-white px-5 py-4 shadow-sm hover:bg-orange-50"
+            >
+              <p className="text-sm font-semibold text-neutral-900">
+                The best Privy alternatives, honestly compared
+              </p>
+              <p className="mt-1 text-xs text-neutral-600">
+                What each popup tool is actually good at — and how to pick by how
+                you capture leads.
+              </p>
+            </Link>
+            <Link
+              href="/for-people/education/email-popup-examples"
+              className="rounded-3xl border border-orange-100 bg-white px-5 py-4 shadow-sm hover:bg-orange-50"
+            >
+              <p className="text-sm font-semibold text-neutral-900">
+                Email popup examples that earn the signup
+              </p>
+              <p className="mt-1 text-xs text-neutral-600">
+                The patterns that work, grouped by trigger, plus the mistakes that
+                make people close the tab.
+              </p>
+            </Link>
+            <Link
+              href="/for-people/education/klaviyo-popups"
+              className="rounded-3xl border border-orange-100 bg-white px-5 py-4 shadow-sm hover:bg-orange-50"
+            >
+              <p className="text-sm font-semibold text-neutral-900">
+                How to set up popups in Klaviyo
+              </p>
+              <p className="mt-1 text-xs text-neutral-600">
+                A plain-English walkthrough — the form, the trigger, the timing,
+                and how to tell if it&apos;s working.
+              </p>
+            </Link>
+          </div>
+        </section>
+
         {/* Part of Chapter / cross-links */}
         <section className="mt-14 sm:mt-16">
           <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-8 sm:py-10">
@@ -370,7 +415,7 @@ export default function SmartPromptsPage() {
                     href="/for-businesses/smart-links"
                     className="w-fit rounded-full border border-orange-200 bg-white px-4 py-2 text-sm font-medium text-orange-500 hover:bg-orange-100 hover:underline"
                   >
-                    first-party link tracking
+                    link management software
                   </Link>
 
                   <Link
