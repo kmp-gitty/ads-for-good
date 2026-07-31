@@ -96,7 +96,7 @@ export default function SmartPromptsPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_LD) }}
       />
       {/* HERO SECTION */}
-      <section className="w-full max-w-6xl flex flex-col gap-10 md:flex-row md:items-start">
+      <section className="w-full max-w-6xl flex flex-col gap-10 md:flex-row md:items-stretch">
         {/* Left: Hero copy */}
         <div className="flex-1 min-w-0 flex flex-col">
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
@@ -139,7 +139,7 @@ export default function SmartPromptsPage() {
         </div>
 
         {/* Right: Explainer card */}
-        <div className="flex-1">
+        <div className="flex-1 flex flex-col">
           <div className="rounded-3xl border border-orange-200 bg-white shadow-sm px-6 py-5">
             <h2 className="text-sm font-semibold text-neutral-900">
               Popup triggers
@@ -160,11 +160,11 @@ export default function SmartPromptsPage() {
             </ul>
           </div>
 
-          <div className="mt-3">
+          <div className="mt-3 md:flex md:flex-1 md:flex-col">
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
               Prompt types
             </p>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 gap-x-1.5 gap-y-3 md:flex-1 md:content-between">
               {PROMPT_TYPES.map((p) => (
                 <div
                   key={p.name}
