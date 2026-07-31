@@ -234,10 +234,26 @@ export async function POST(req: NextRequest) {
   const isLocal =
     req.nextUrl.hostname === "localhost" || req.nextUrl.hostname === "127.0.0.1";
 
+  // Scope identity cookies to the registrable apex so the storefront can read
+  // them — e.g. an identify call to s.eosfabrics.com sets Domain=.eosfabrics.com,
+  // visible to the pixel on eosfabrics.com. Without this the cookies are
+  // host-only (s.eosfabrics.com) and fragment from the collect-side cookie.
+  // Mirrors /api/pixel's derivation. (Also broadens NSC identify cookies from
+  // host-only chapter.notsocavalier.com to .notsocavalier.com — a fix, matching
+  // collect.)
+  const cookieApex = (() => {
+    if (isLocal) return undefined;
+    const parts = req.nextUrl.hostname.split(".");
+    if (parts.length <= 2) return req.nextUrl.hostname;
+    return parts.slice(1).join(".");
+  })();
+  const cookieDomain = cookieApex ? `.${cookieApex}` : undefined;
+
   const res = NextResponse.json({ ok: true, journey_id }, { status: 200 });
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
 
   res.cookies.set(cookieName, journey_id, {
+    domain: cookieDomain,
     httpOnly: false,
     secure: !isLocal,
     sameSite: isLocal ? "lax" : "none",
@@ -251,6 +267,7 @@ export async function POST(req: NextRequest) {
       : randomUUID();
 
   res.cookies.set(anonCookieName, anonCookieValue, {
+    domain: cookieDomain,
     httpOnly: false,
     secure: !isLocal,
     sameSite: isLocal ? "lax" : "none",
