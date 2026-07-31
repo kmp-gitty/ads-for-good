@@ -71,6 +71,12 @@ export function NavBar() {
                   >
                     Who We Are
                   </Link>
+                  <Link
+                    href="/for-people/education"
+                    className="rounded-lg px-2 py-2 hover:bg-orange-50 hover:text-orange-500"
+                  >
+                    Education
+                  </Link>
                 </div>
               </div>
             </div>
@@ -488,6 +494,17 @@ export function NavBar() {
                       className="hover:text-orange-500"
                     >
                       Who We Are
+                    </Link>
+
+                    <Link
+                      href="/for-people/education"
+                      onClick={() => {
+                        setMobileOpen(false);
+                        setAboutOpen(false);
+                      }}
+                      className="hover:text-orange-500"
+                    >
+                      Education
                     </Link>
                   </div>
                 )}

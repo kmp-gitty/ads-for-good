@@ -42,6 +42,21 @@ export default function PostBody({ markdown }: { markdown: string }) {
           blockquote: ({ children }) => (
             <blockquote className="my-5 border-l-4 border-orange-200 pl-4 text-neutral-700 italic">{children}</blockquote>
           ),
+          // Blog-body images (e.g. popup screenshots). alt doubles as a caption.
+          img: ({ src, alt }) => (
+            <figure className="my-6 mx-auto max-w-md">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={typeof src === "string" ? src : ""}
+                alt={alt ?? ""}
+                loading="lazy"
+                className="w-full rounded-2xl border border-orange-100 shadow-sm"
+              />
+              {alt ? (
+                <figcaption className="mt-2 text-center text-xs text-neutral-500">{alt}</figcaption>
+              ) : null}
+            </figure>
+          ),
         }}
       >
         {markdown}

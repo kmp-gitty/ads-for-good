@@ -16,9 +16,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const post = getPost(slug);
-  if (!post) return { title: "Post not found | ads for Good blog" };
+  if (!post) return { title: "Post not found | ads for Good" };
   return {
-    title: `${post.metaTitle || post.title} | ads for Good blog`,
+    title: `${post.metaTitle || post.title} | ads for Good`,
     description: post.excerpt,
   };
 }
@@ -53,6 +53,43 @@ export default async function BlogPostPage({
           <div className="mt-8">
             <PostBody markdown={post.body} />
           </div>
+
+          {post.faqs && post.faqs.length > 0 && (
+            <section className="mt-12 border-t border-orange-100 pt-8">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900">
+                Frequently asked questions
+              </h2>
+              <div className="mt-5 space-y-3">
+                {post.faqs.map((f) => (
+                  <details
+                    key={f.q}
+                    className="rounded-2xl border border-orange-100 bg-white p-4 sm:p-5 shadow-sm"
+                  >
+                    <summary className="cursor-pointer select-none font-medium text-neutral-900 text-sm sm:text-base">
+                      {f.q}
+                    </summary>
+                    <div className="mt-2 text-sm sm:text-base text-neutral-800 leading-relaxed">
+                      {f.a}
+                    </div>
+                  </details>
+                ))}
+              </div>
+              <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                  __html: JSON.stringify({
+                    "@context": "https://schema.org",
+                    "@type": "FAQPage",
+                    mainEntity: post.faqs.map((f) => ({
+                      "@type": "Question",
+                      name: f.q,
+                      acceptedAnswer: { "@type": "Answer", text: f.a },
+                    })),
+                  }),
+                }}
+              />
+            </section>
+          )}
 
           <div className="mt-12 border-t border-orange-100 pt-6">
             <Link href="/for-people/education" className="text-sm font-medium text-orange-500 hover:underline">

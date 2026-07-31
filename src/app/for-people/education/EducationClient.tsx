@@ -7,14 +7,18 @@ import { POSTS, postImage } from "./posts";
 const POSTS_PER_LOAD = 8;
 
 // Blog topic taxonomy (the filter chips). Keep in sync with BlogCategory.
-const CATEGORIES = ["Attribution Fundamentals", "Data & Tracking", "Measurement Strategy"];
+const CATEGORIES = ["Attribution Fundamentals", "Data & Tracking", "Measurement Strategy", "Marketing Playbook"];
 
 export default function EducationClient() {
   const [visibleCount, setVisibleCount] = useState(POSTS_PER_LOAD);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
 
-  const filteredPosts =
-    selectedTopics.length === 0 ? POSTS : POSTS.filter((p) => selectedTopics.includes(p.category));
+  // Newest first — sort by post date so the latest entries always lead the hub.
+  const filteredPosts = (
+    selectedTopics.length === 0 ? POSTS : POSTS.filter((p) => selectedTopics.includes(p.category))
+  )
+    .slice()
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const visiblePosts = filteredPosts.slice(0, visibleCount);
   const canLoadMore = visibleCount < filteredPosts.length;
 
