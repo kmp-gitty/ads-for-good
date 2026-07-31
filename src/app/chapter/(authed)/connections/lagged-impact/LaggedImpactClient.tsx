@@ -11,7 +11,7 @@
 // No "best lag" headline — spec §6 mandates showing all defaults so users
 // can't lag-shop a finding.
 
-import React, { useState } from "react";
+import React, { useState, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { TopBar } from "../../../_components/TopBar";
 import { Icon } from "../../../_components/Icon";
@@ -301,12 +301,27 @@ export default function LaggedImpactClient({
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+
+  // 7.2: navigate + force a server re-fetch. router.replace alone can serve the
+  // stale RSC segment from the App Router client cache on a query-only change
+  // (symptom: URL updates, content doesn't, manual refresh fixes it). Wrapping
+  // in a transition + router.refresh() busts the cached segment; isPending
+  // drives a loading state so the re-fetch is legible. (Cache-key completeness
+  // is not the issue — unstable_cache includes the RPC args in its key, and no
+  // sibling tab shares this in-page-selector-drives-searchParams pattern.)
+  const navigate = (next: URLSearchParams) => {
+    startTransition(() => {
+      router.replace(`${pathname}?${next.toString()}`);
+      router.refresh();
+    });
+  };
 
   const setParam = (key: string, val: string | null) => {
     const next = new URLSearchParams(sp.toString());
     if (val == null) next.delete(key);
     else next.set(key, val);
-    router.replace(`${pathname}?${next.toString()}`);
+    navigate(next);
   };
 
   const [showWorkOpen, setShowWorkOpen] = useState(false);
@@ -315,7 +330,7 @@ export default function LaggedImpactClient({
     const next = new URLSearchParams(sp.toString());
     next.set("channel_a", channelB);
     next.set("channel_b", channelA);
-    router.replace(`${pathname}?${next.toString()}`);
+    navigate(next);
   };
 
   // Surface the result map across all default lags, marking skipped ones.
@@ -331,7 +346,7 @@ export default function LaggedImpactClient({
         subtitle={<span>Does touching one channel make people more likely to come back via another later — beyond what comparable untouched people did? Measured cousin to <em>Cross-Source Influence</em>.</span>}
         showCompare={false}
       />
-      <div className="content">
+      <div className="content" style={{ opacity: isPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
         {/* How-this-page-works hero */}
         <div className="card" style={{ background: "var(--navy)", color: "white", border: "none", padding: "20px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 18, flexWrap: "wrap" }}>
