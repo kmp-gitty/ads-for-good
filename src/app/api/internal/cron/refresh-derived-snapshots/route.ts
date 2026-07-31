@@ -168,6 +168,39 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // chapter_purchase_summary_snapshot (per-client). MUST run before the
+    // DASHBOARD_RPC_SNAPSHOTS below: incrementality/contribution overviews call
+    // chapter_purchase_summary, which is now snapshot-backed by this table, so
+    // it has to be fresh first. This also feeds Channels/Paths/Attribution +
+    // channel_affinity/performance/correlation. The slow all-time aggregate
+    // (chapter_purchase_summary_live, ~16s on EOS) runs here off-peak on the
+    // direct connection (10min statement_timeout) instead of timing out the
+    // dashboard's 8s PostgREST limit on page load. Full rebuild for now; the
+    // _snapshot_runs timing tells us when to incrementalize.
+    for (const c of clients) {
+      const start = Date.now();
+      try {
+        const rows = await sql.unsafe(
+          `SELECT chapter_reporting.refresh_chapter_purchase_summary_snapshot($1::text) AS rows_written`,
+          [c.client_key],
+        );
+        snapshotResults.push({
+          snapshot: "chapter_purchase_summary_snapshot",
+          client_key: c.client_key,
+          ok: true,
+          refresh_ms: Date.now() - start,
+          rows: Number((rows[0] as { rows_written?: number })?.rows_written ?? 0),
+        });
+      } catch (err) {
+        snapshotResults.push({
+          snapshot: "chapter_purchase_summary_snapshot",
+          client_key: c.client_key,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     // Sprint 9 Phase 2 — dashboard RPC snapshots (per-client)
     for (const snap of DASHBOARD_RPC_SNAPSHOTS) {
       for (const c of clients) {

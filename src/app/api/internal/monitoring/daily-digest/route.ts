@@ -34,6 +34,9 @@ const ATTRIBUTION_CHAIN_STAGES = [
   "chapter_attribution.chapter_channel_paths_canonical_v2_snapshot",
   // Sprint 3 — denormalized journey resolution; refreshed by 04:00 cron.
   "journey_resolved_v1",
+  // Jul 30 — materialization of chapter_purchase_summary; feeds Channels/Paths/
+  // Attribution + 5 other RPCs. Refreshed by refresh-derived-snapshots (04:25).
+  "chapter_purchase_summary_snapshot",
 ] as const;
 
 // Global (non-per-client) snapshot tables. We check max(snapshot_ts) on the
@@ -197,6 +200,7 @@ function shortStage(stage: string): string {
   if (stage.endsWith("canonical_v1_snapshot")) return "canonical_v1";
   if (stage.endsWith("canonical_v2_snapshot")) return "canonical_v2";
   if (stage === "journey_resolved_v1") return "journey_resolved";
+  if (stage === "chapter_purchase_summary_snapshot") return "purchase_summary";
   return stage.split(".").pop() ?? stage;
 }
 
