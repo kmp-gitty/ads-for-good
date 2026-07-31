@@ -13,6 +13,10 @@
       "schedule": "0 3 * * *"
     },
     {
+      "path": "/api/internal/cron/cart-token-stitch",
+      "schedule": "15 3 * * *"
+    },
+    {
       "path": "/api/internal/cron/refresh-attribution-chain",
       "schedule": "30 3 * * *"
     },
