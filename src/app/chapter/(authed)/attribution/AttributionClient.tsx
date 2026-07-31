@@ -15,6 +15,34 @@ import type { AttributionOverviewRow } from "../../_lib/dashboard-rpc";
 
 const CHANNEL_FALLBACK = { name: "Unknown", color: "#9CA0A8", short: "—" };
 
+// 6.2 — each model states its allocation rule on-page (visible without hovering).
+// Linear's wording explicitly covers the repeat-touch case, matching the SQL
+// (attribution_overview splits per touch, not per distinct channel).
+const MODEL_DEFINITIONS: Record<AttributionModel, string> = {
+  first:  "All credit to the first channel in the chapter.",
+  last:   "All credit to the last channel in the chapter.",
+  linear: "Credit split evenly across every touch in the chapter — a channel appearing more than once is credited for each appearance.",
+  custom: "J-shape: 40% first touch, 20% spread across the middle, 40% last touch.",
+};
+
+// 6.3 — revenue vs conversion count. Both are already in the RPC payload
+// (first_orders/first_revenue etc.); the toggle just picks which to allocate.
+type Metric = "revenue" | "count";
+
+// Label the count metric from the client's boundary event — "Orders" for a
+// purchase, "Bookings" for an appointment. Never a generic word.
+function countLabelFor(boundaryEvent: string): string {
+  const map: Record<string, string> = { purchase: "Orders", appointment_booked: "Bookings" };
+  return (
+    map[boundaryEvent] ??
+    boundaryEvent
+      .split(/[_\s]+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ")
+  );
+}
+
 type Props = {
   attribution: AttributionOverviewRow[];
   summary: {
@@ -41,19 +69,20 @@ type Props = {
   priorEngagement: { engagement_rate: number | null } | null;
   clientKey: string;
   range: string;
+  boundaryEvent: string;
 };
 
-// Per-channel percentage under each attribution model. "custom" is held back
-// as a placeholder (J-shape isn't computed server-side yet).
+// Per-channel share (%) + absolute value under each model, for the selected
+// metric. "custom" is scaffolding (J-shape not computed server-side yet).
 type ChannelPct = {
   channel: string;
   first: number;
   last: number;
   linear: number;
   custom: number;
-  first_revenue: number;
-  last_revenue: number;
-  linear_revenue: number;
+  firstVal: number;
+  lastVal: number;
+  linearVal: number;
 };
 
 function pctDelta(c: number | null | undefined, p: number | null | undefined): number | null {
@@ -63,31 +92,39 @@ function pctDelta(c: number | null | undefined, p: number | null | undefined): n
   return ((cN - pN) / pN) * 100;
 }
 
-// Convert RPC rows to the per-channel-percentage shape the UI needs.
-// Sum-of-revenues = denominator per model; each channel's share is its
-// percentage. Returns [] if the window has no attributable revenue.
-function rowsToPct(rows: AttributionOverviewRow[]): ChannelPct[] {
-  const firstTotal  = rows.reduce((s, r) => s + Number(r.first_revenue  ?? 0), 0);
-  const lastTotal   = rows.reduce((s, r) => s + Number(r.last_revenue   ?? 0), 0);
-  const linearTotal = rows.reduce((s, r) => s + Number(r.linear_revenue ?? 0), 0);
+// Convert RPC rows to per-channel shares for the selected metric. Sum over the
+// metric = denominator per model; each channel's share is its percentage.
+// Revenue and count shares differ (a channel with many low-value orders has a
+// higher order-share than revenue-share). Returns [] if the window is empty.
+function rowsToPct(rows: AttributionOverviewRow[], metric: Metric): ChannelPct[] {
+  const pick = (r: AttributionOverviewRow, model: "first" | "last" | "linear"): number => {
+    const v =
+      metric === "count"
+        ? (model === "first" ? r.first_orders : model === "last" ? r.last_orders : r.linear_orders)
+        : (model === "first" ? r.first_revenue : model === "last" ? r.last_revenue : r.linear_revenue);
+    return Number(v ?? 0);
+  };
+  const firstTotal  = rows.reduce((s, r) => s + pick(r, "first"), 0);
+  const lastTotal   = rows.reduce((s, r) => s + pick(r, "last"), 0);
+  const linearTotal = rows.reduce((s, r) => s + pick(r, "linear"), 0);
   return rows.map(r => {
-    const fr  = Number(r.first_revenue  ?? 0);
-    const lr  = Number(r.last_revenue   ?? 0);
-    const lir = Number(r.linear_revenue ?? 0);
+    const fv  = pick(r, "first");
+    const lv  = pick(r, "last");
+    const liv = pick(r, "linear");
     return {
       channel: r.channel,
-      first:  firstTotal  > 0 ? (fr  / firstTotal)  * 100 : 0,
-      last:   lastTotal   > 0 ? (lr  / lastTotal)   * 100 : 0,
-      linear: linearTotal > 0 ? (lir / linearTotal) * 100 : 0,
+      first:  firstTotal  > 0 ? (fv  / firstTotal)  * 100 : 0,
+      last:   lastTotal   > 0 ? (lv  / lastTotal)   * 100 : 0,
+      linear: linearTotal > 0 ? (liv / linearTotal) * 100 : 0,
       // J-shape custom (40/20/40): 40% first + 20% linear + 40% last
       custom: firstTotal > 0 && lastTotal > 0 && linearTotal > 0
-        ? 0.4 * (fr  / firstTotal)  * 100
-        + 0.2 * (lir / linearTotal) * 100
-        + 0.4 * (lr  / lastTotal)   * 100
+        ? 0.4 * (fv  / firstTotal)  * 100
+        + 0.2 * (liv / linearTotal) * 100
+        + 0.4 * (lv  / lastTotal)   * 100
         : 0,
-      first_revenue: fr,
-      last_revenue: lr,
-      linear_revenue: lir,
+      firstVal: fv,
+      lastVal: lv,
+      linearVal: liv,
     };
   });
 }
@@ -200,26 +237,47 @@ function AllocTable({ models, data }: { models: AttributionModel[]; data: Channe
   );
 }
 
-function SingleModelView({ data }: { data: ChannelPct[] }) {
+function SingleModelView({ data, metric, countLabel, netRevenue, netOrders }: {
+  data: ChannelPct[]; metric: Metric; countLabel: string;
+  netRevenue: number | null; netOrders: number | null;
+}) {
   const { model } = useChapter();
-  const totalRevenue = data.reduce(
-    (s, r) =>
-      s
-      + (model === "first"  ? r.first_revenue
-       : model === "last"   ? r.last_revenue
-       : model === "linear" ? r.linear_revenue
-       : (0.4 * r.first_revenue + 0.2 * r.linear_revenue + 0.4 * r.last_revenue)),
-    0
-  );
+  const modelVal = (c: ChannelPct): number =>
+    model === "first"  ? c.firstVal
+    : model === "last"   ? c.lastVal
+    : model === "linear" ? c.linearVal
+    : (0.4 * c.firstVal + 0.2 * c.linearVal + 0.4 * c.lastVal);
+  const total = data.reduce((s, c) => s + modelVal(c), 0);
   const sorted = [...data].sort((a, b) => (b[model] as number) - (a[model] as number));
+
+  const isCount = metric === "count";
+  // Only Linear produces fractional counts (each touch takes a share of one
+  // conversion). First/Last counts are whole numbers.
+  const fractional = isCount && model === "linear";
+  const fmtVal = (n: number): string =>
+    isCount ? (fractional ? n.toFixed(1) : Math.round(n).toLocaleString()) : fmtMoney(n);
+  const unitLabel = isCount ? countLabel.toLowerCase() : "revenue";
+
+  // Unattributed = headline total with no channel path — the "(unknown)" bucket
+  // (chapters with no captured session entry). attribution_overview filters
+  // channel_path IS NOT NULL, so without this the allocation silently fails to
+  // reconcile to the headline (operator-spotted Jul 30).
+  const netRaw = isCount ? netOrders : netRevenue;
+  const net = netRaw != null ? Number(netRaw) : null;
+  const unattributed = net != null ? Math.max(0, net - total) : 0;
+  const unattributedPct = net && net > 0 ? (unattributed / net) * 100 : 0;
   return (
     <div className="card">
       <div className="card-head">
         <div>
           <h3 className="card-title">Channel allocation under {ATTRIBUTION_MODEL_LABELS[model]}</h3>
-          <div className="card-sub">Share of attributed revenue · {fmtMoney(totalRevenue)} attributed across {data.length} channels</div>
+          <div className="card-sub">Share of attributed {unitLabel} · {fmtVal(total)} across {data.length} channels</div>
+          {/* 6.2 — allocation rule stated on-page, no hover needed */}
+          <div className="card-sub" style={{ marginTop: 4 }}>
+            {MODEL_DEFINITIONS[model]}
+            {fractional && " Counts are fractional under Linear because each touch takes a share of one conversion."}
+          </div>
         </div>
-        {model === "custom" && <span className="role-pill closer">Custom model · J-shape (40/20/40)</span>}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {sorted.map(c => {
@@ -236,11 +294,16 @@ function SingleModelView({ data }: { data: ChannelPct[] }) {
                 <div style={{ width: (pct / maxPct) * 100 + "%", height: "100%", background: ch.color, opacity: 0.85 }}></div>
               </div>
               <div className="lrow-num" style={{ textAlign: "right", fontWeight: 600 }}>{pct.toFixed(1)}%</div>
-              <div className="lrow-num muted" style={{ textAlign: "right" }}>{fmtMoney(totalRevenue * pct / 100)}</div>
+              <div className="lrow-num muted" style={{ textAlign: "right" }}>{fmtVal(modelVal(c))}</div>
             </div>
           );
         })}
       </div>
+      {unattributed > 0 && (
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--line-2)", fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5 }}>
+          <strong style={{ color: "var(--ink-2)" }}>{fmtVal(unattributed)}</strong> ({unattributedPct.toFixed(1)}%) of the {fmtVal(net ?? 0)} headline {unitLabel} is not attributed to any channel path — chapters with no captured session entry (shown as “(unknown)” elsewhere). The bars above allocate the {fmtVal(total)} that does.
+        </div>
+      )}
     </div>
   );
 }
@@ -248,23 +311,29 @@ function SingleModelView({ data }: { data: ChannelPct[] }) {
 export default function AttributionClient({
   attribution, summary, journey, engagement,
   priorSummary, priorJourney, priorEngagement,
-  clientKey: _clientKey, range: _range,
+  clientKey: _clientKey, range: _range, boundaryEvent,
 }: Props) {
   const { client, model, setModel } = useChapter();
   const sp = useSearchParams();
   const [selectedModels, setSelectedModels] = useState<AttributionModel[]>(["first", "linear", "last"]);
+  // 6.3 — allocate by revenue or by conversion count. Both are in the payload.
+  const [metric, setMetric] = useState<Metric>("revenue");
+  const countLabel = countLabelFor(boundaryEvent);
 
-  // Convert live RPC rows → per-channel percentages. Empty window → use the
-  // mock attribution channels so the page still renders something.
-  const liveData = rowsToPct(attribution);
-  const data: ChannelPct[] = liveData.length > 0 ? liveData : [];
+  // Convert live RPC rows → per-channel shares for the selected metric.
+  const data: ChannelPct[] = rowsToPct(attribution, metric);
   const empty = data.length === 0;
 
   const toggleModel = (m: AttributionModel) => {
     setSelectedModels(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m]);
   };
 
-  const allModels: AttributionModel[] = ["first", "last", "linear", "custom"];
+  // 6.1 — three models only (first / last / linear). Custom J-shape is not
+  // computed server-side; the client-side scaffolding (rowsToPct `custom`,
+  // MODEL_DEFINITIONS.custom, the `AttributionModel` union) is preserved for a
+  // future reimplementation, but the pill + "new custom model" entry point are
+  // removed so the tab doesn't advertise a capability that doesn't exist.
+  const allModels: AttributionModel[] = ["first", "last", "linear"];
   const bumpModels = (selectedModels.length >= 2
     ? selectedModels.filter(m => m !== "custom")
     : ["first", "linear", "last"]) as AttributionModel[];
@@ -329,10 +398,22 @@ export default function AttributionClient({
                     )}
                   </Dropdown>
                 </div>
+                {/* 6.3 — allocate by revenue or by conversion count */}
+                <div className="filter-bar">
+                  <span style={{ fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".1em" }}>Metric</span>
+                  <button className={`btn-ghost ${metric === "revenue" ? "active" : ""}`} onClick={() => setMetric("revenue")}>Revenue</button>
+                  <button className={`btn-ghost ${metric === "count" ? "active" : ""}`} onClick={() => setMetric("count")}>{countLabel}</button>
+                </div>
               </div>
             </div>
 
-            <SingleModelView data={data} />
+            <SingleModelView
+              data={data}
+              metric={metric}
+              countLabel={countLabel}
+              netRevenue={summary?.total_revenue ?? null}
+              netOrders={summary?.total_orders ?? null}
+            />
 
             {/* ───── Compare models ───────────────────────────────────────── */}
             <div className="card" style={{ padding: "18px 22px" }}>
@@ -343,13 +424,10 @@ export default function AttributionClient({
                   {allModels.map(m => (
                     <button key={m} className={`btn-ghost ${selectedModels.includes(m) ? "active" : ""}`} onClick={() => toggleModel(m)}>
                       {ATTRIBUTION_MODEL_LABELS[m]}
-                      {m === "custom" && <span className="dim" style={{ marginLeft: 6, fontSize: 9, textTransform: "uppercase", letterSpacing: ".1em" }}>custom</span>}
                     </button>
                   ))}
                 </div>
-                <div className="filter-bar">
-                  <button className="toolbar-btn"><Icon name="plus" size={12}/> New custom model</button>
-                </div>
+                {/* 6.1 — "New custom model" entry point removed (custom models not built). */}
               </div>
             </div>
 

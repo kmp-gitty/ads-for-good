@@ -14,6 +14,23 @@ import type { ChannelRoleRow, ChannelAffinityRow } from "../../_lib/dashboard-rp
 
 const CHANNEL_FALLBACK = { name: "Unknown", color: "#9CA0A8", short: "—" };
 
+// Sample-size floor (the review's most-repeated deferred item). Non-destructive:
+// channels below this chapter count still render, but get a "low sample" chip so
+// noise-level rows (e.g. Paid Social at n=1) aren't read as signal.
+const LOW_SAMPLE_N = 20;
+
+function LowSamplePill({ n }: { n: number }) {
+  if (n >= LOW_SAMPLE_N) return null;
+  return (
+    <span
+      title={`Only ${n} chapter${n === 1 ? "" : "s"} — read with caution`}
+      style={{ marginLeft: 6, fontSize: 10, color: "var(--ink-3)", border: "1px solid var(--line-2)", borderRadius: 4, padding: "0 5px", whiteSpace: "nowrap" }}
+    >
+      low sample
+    </span>
+  );
+}
+
 type Props = {
   roles: ChannelRoleRow[];
   rolesPrior: ChannelRoleRow[];
@@ -362,7 +379,7 @@ export default function ChannelsClient({
                     <div className="ch">
                       <span className="sw" style={{ background: r.channel.color }}>{r.channel.short}</span>
                       <div>
-                        <h4>{r.channel.name}</h4>
+                        <h4>{r.channel.name}<LowSamplePill n={r.chapters} /></h4>
                         <div className="sub">{r.presence_pct.toFixed(1)}% of converting chapters</div>
                       </div>
                     </div>

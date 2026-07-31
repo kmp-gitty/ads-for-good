@@ -70,6 +70,7 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
       priorEngagement={engagementPrior[0] ?? null}
       clientKey={clientKey}
       range={range}
+      boundaryEvent={clientConfig.boundary_event_name}
     />
   );
 }

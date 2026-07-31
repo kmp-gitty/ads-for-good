@@ -51,7 +51,9 @@ type ComboRow = {
   revenue: number;
   aov: number;
   avg_touches: number;
-  move: number;
+  move: number | null;    // % vs prior; null when NEW or no usable comparison
+  moveAbs: number | null; // absolute chapter delta vs prior (for tiny-base combos)
+  smallBase: boolean;     // prior existed but too small for a % to be meaningful
   isNew: boolean;
 };
 
@@ -85,7 +87,12 @@ export default function PathsClient({
 
   // Pick the bundle that matches selected mode (already pre-fetched server-side).
   const bundle = combos[mode];
-  const priorHasData = bundle.prior.length > 0;
+  // 5.4 — a prior window that's empty OR near-empty (few combos / few chapters,
+  // e.g. NSC's 485-of-487 (direct)) can't support a "NEW vs prior" claim: every
+  // other combination looks new by accident. Only trust the prior for NEW/move
+  // when it has real breadth.
+  const priorTotalChapters = bundle.prior.reduce((s, r) => s + Number(r.chapters ?? 0), 0);
+  const priorUsable = bundle.prior.length >= 3 && priorTotalChapters >= 30;
 
   // Build prior-lookup once per mode change
   const priorByKey = useMemo(() => {
@@ -99,6 +106,13 @@ export default function PathsClient({
     const prior = priorByKey.get(id);
     const currentChapters = Number(c.chapters ?? 0);
     const priorChapters   = prior ? Number(prior.chapters ?? 0) : 0;
+    const inPrior = !!prior && priorChapters > 0;
+    // NEW only when the prior is usable AND this combo genuinely wasn't in it —
+    // never NEW + a numeric move at the same time.
+    const isNew = priorUsable && !inPrior;
+    // Tiny prior base → a percentage is misleading ("2 → 50" is +2400%); show
+    // the absolute chapter delta instead.
+    const smallBase = inPrior && priorChapters < 10;
     return {
       id,
       channels:    c.channels as ChannelKey[],
@@ -107,17 +121,19 @@ export default function PathsClient({
       revenue:     Number(c.revenue     ?? 0),
       aov:         Number(c.aov         ?? 0),
       avg_touches: Number(c.avg_touches ?? 0),
-      move:  prior ? pctDelta(currentChapters, priorChapters) : 0,
-      isNew: priorHasData && (!prior || priorChapters === 0),
+      move:     isNew || !inPrior || smallBase ? null : pctDelta(currentChapters, priorChapters),
+      moveAbs:  inPrior ? currentChapters - priorChapters : null,
+      smallBase,
+      isNew,
     };
-  }), [bundle.current, priorByKey, priorHasData]);
+  }), [bundle.current, priorByKey, priorUsable]);
 
   const sorted = useMemo(() => {
     const arr = [...rows];
     if (sortBy === "chapters") arr.sort((a, b) => b.chapters - a.chapters);
     if (sortBy === "revenue")  arr.sort((a, b) => b.revenue  - a.revenue);
     if (sortBy === "aov")      arr.sort((a, b) => b.aov      - a.aov);
-    if (sortBy === "movement") arr.sort((a, b) => b.move     - a.move);
+    if (sortBy === "movement") arr.sort((a, b) => (b.move ?? -Infinity) - (a.move ?? -Infinity));
     return arr;
   }, [rows, sortBy]);
 
@@ -221,13 +237,27 @@ export default function PathsClient({
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           {renderPath(c)}
                           {c.isNew && <span className="obs-tag new" style={{ fontSize: 9 }}>New</span>}
+                          {c.chapters < 5 && (
+                            <span title={`Only ${c.chapters} chapter${c.chapters === 1 ? "" : "s"} — read with caution`}
+                                  style={{ fontSize: 9, color: "var(--ink-3)", border: "1px solid var(--line-2)", borderRadius: 4, padding: "0 5px", whiteSpace: "nowrap" }}>
+                              low sample
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="num">{fmtNum(c.chapters)}</td>
                       <td className="num">{fmtMoney(c.revenue)}</td>
                       <td className="num">${c.aov.toFixed(2)}</td>
                       <td className="num">{c.avg_touches.toFixed(1)}</td>
-                      {showDelta && <td className="num"><Move value={c.move} semantic="up-good" /></td>}
+                      {showDelta && (
+                        <td className="num">
+                          {c.smallBase && c.moveAbs != null
+                            ? <span title="Prior base too small for a meaningful %" style={{ fontWeight: 600, color: "var(--ink-2)" }}>{c.moveAbs >= 0 ? "+" : ""}{c.moveAbs}</span>
+                            : c.move != null
+                              ? <Move value={c.move} semantic="up-good" />
+                              : <span className="dim">—</span>}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
