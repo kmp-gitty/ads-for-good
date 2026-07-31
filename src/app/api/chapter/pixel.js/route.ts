@@ -400,6 +400,25 @@ if (!anonId) {
 
     window.ChapterPixel = api;
 
+  // Shopify visitor anchor (forward, belt-and-suspenders): Shopify sets a
+  // durable first-party _shopify_y cookie (~1yr) that survives even when our
+  // anonymous_id is cleared or ITP-capped. Linking it as a stable identity key
+  // re-connects a returning visitor's sessions independent of our own cookie
+  // durability — the primary cross-visit linker for non-1P Shopify installs and
+  // a fallback for 1P ones. Fires once per session (each session's anon links
+  // to the same _shopify_y → they merge). No-ops on non-Shopify storefronts
+  // (no _shopify_y cookie), so it's self-gating.
+  (function chapterCaptureShopifyVisitor() {
+    try {
+      var y = readCookieValue("_shopify_y");
+      if (!y || y.length < 8 || y.length > 64 || !/^[A-Za-z0-9_-]+$/.test(y)) return;
+      var flagKey = "__chapter_sy_" + clientKey;
+      if (sessionStorage.getItem(flagKey) === "1") return;
+      sessionStorage.setItem(flagKey, "1");
+      api.identify({ identity_key: "shopify_visitor:" + y, traits: { source: "shopify_visitor" } });
+    } catch (e) { /* sessionStorage blocked or no cookie — skip */ }
+  })();
+
   // Tier 1 redirect handoff (solution 1): if this landing has a ?chid=...
   // param, the visitor arrived via a Chapter /r/... redirect that minted an
   // anonymous identity on a different apex. Alias that redirect identity to
