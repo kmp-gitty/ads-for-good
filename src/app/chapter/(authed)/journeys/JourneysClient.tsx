@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { TopBar } from "../../_components/TopBar";
+import { resolveIdentitySearch, type IdentitySearchResult } from "./_actions";
 import { Icon } from "../../_components/Icon";
 import { Dropdown } from "../../_components/Dropdown";
 import { PathRender } from "../../_components/ChannelChip";
@@ -136,9 +137,47 @@ const EVENT_COLOR: Record<string, string> = {
   purchase:    "#E36410",
 };
 
+// 8.2 — search outcome banner. Distinguishes the three outcomes (no identity /
+// found-no-sessions / found-with-sessions) and states coverage honestly.
+function SearchResultBanner({ result }: { result: IdentitySearchResult }) {
+  let tone: "good" | "warn" | "neutral" | "bad" = "neutral";
+  let msg: React.ReactNode;
+  switch (result.status) {
+    case "found":
+      tone = "good";
+      msg = <>Found — showing this customer below. <strong>{result.nJourneys}</strong> linked session{result.nJourneys === 1 ? "" : "s"} · {result.nChapters} chapter{result.nChapters === 1 ? "" : "s"} · {result.nMergedKeys} merged identifier{result.nMergedKeys === 1 ? "" : "s"}. {result.hasAnonActivity ? "Includes some pre-identification browsing." : "Activity before this customer was identified may not be connected."}</>;
+      break;
+    case "no_journeys":
+      tone = "warn";
+      msg = <>Identity found, but no linked sessions yet — <strong>{result.nMergedKeys}</strong> merged identifier{result.nMergedKeys === 1 ? "" : "s"}. Activity before this customer was identified may not be connected.</>;
+      break;
+    case "no_identity":
+      tone = "neutral";
+      msg = <>No exact match. Search is exact-match only (identifiers are hashed), so a miss doesn&apos;t necessarily mean the person isn&apos;t a customer — double-check the exact email / order ID.</>;
+      break;
+    case "rate_limited":
+      tone = "warn";
+      msg = <>Too many searches in a short window — try again in a few minutes.</>;
+      break;
+    case "forbidden":
+      tone = "bad";
+      msg = <>You don&apos;t have access to this client&apos;s customer data.</>;
+      break;
+    default:
+      msg = <>Enter an email, order ID, phone, or customer ID.</>;
+  }
+  const bg = tone === "good" ? "rgba(26,127,90,0.08)" : tone === "warn" ? "rgba(227,100,16,0.08)" : tone === "bad" ? "rgba(200,40,40,0.08)" : "var(--bg-2)";
+  const bd = tone === "good" ? "rgba(26,127,90,0.30)" : tone === "warn" ? "rgba(227,100,16,0.30)" : tone === "bad" ? "rgba(200,40,40,0.30)" : "var(--line-2)";
+  return (
+    <div style={{ marginTop: 10, padding: "9px 12px", borderRadius: 8, background: bg, border: `1px solid ${bd}`, fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5 }}>
+      {msg}
+    </div>
+  );
+}
+
 export default function JourneysClient({
   stats, list, selectedIdentity, chapters, events, aliases,
-  clientKey: _clientKey, range: _range, action, outcome, boundaryEvent,
+  clientKey, range: _range, action, outcome, boundaryEvent,
 }: Props) {
   const { client } = useChapter();
   const router = useRouter();
@@ -157,6 +196,23 @@ export default function JourneysClient({
   }
   function selectIdentity(id: string) {
     updateParam("identity", id);
+  }
+
+  // 8.2 — identity search. Resolves via a server action (shared hash.ts,
+  // client-scoped, audited, rate-limited); on a hit we navigate to ?identity so
+  // the existing detail panel + PII-view audit render the customer.
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResult, setSearchResult] = useState<IdentitySearchResult | null>(null);
+  const [isSearching, startSearch] = useTransition();
+  function runSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const term = searchTerm.trim();
+    if (!term) return;
+    startSearch(async () => {
+      const res = await resolveIdentitySearch(clientKey, term);
+      setSearchResult(res);
+      if (res.status === "found" || res.status === "no_journeys") selectIdentity(res.canonical);
+    });
   }
 
   const selectedRow = list.find(r => r.canonical_identity_key === selectedIdentity);
@@ -205,6 +261,26 @@ export default function JourneysClient({
             <SummaryStat label="Total LTV" value={stats?.total_ltv != null ? fmtMoney(Number(stats.total_ltv)) : "—"} foot="lifetime revenue · cohort" />
             <SummaryStat label="Avg LTV" value={stats?.avg_ltv != null ? fmtMoney(Number(stats.avg_ltv)) : "—"} foot="per identity, including $0" />
             <SummaryStat label="Median LTV" value={stats?.median_ltv != null ? fmtMoney(Number(stats.median_ltv)) : "—"} foot="50% above / 50% below" />
+          </div>
+        </div>
+
+        {/* ── 8.2 identity search ────────────────────────────────────────── */}
+        <div className="card" style={{ padding: 16 }}>
+          <form onSubmit={runSearch} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Find a specific customer — email, order ID, phone, or customer ID"
+              aria-label="Search for a customer by email, order ID, phone, or customer ID"
+              style={{ flex: "1 1 320px", minWidth: 0, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line-2)", fontSize: 13, background: "var(--bg)", color: "var(--ink)" }}
+            />
+            <button type="submit" className="toolbar-btn" disabled={isSearching || !searchTerm.trim()} style={{ fontWeight: 600 }}>
+              {isSearching ? "Searching…" : "Search"}
+            </button>
+          </form>
+          {searchResult && <SearchResultBanner result={searchResult} />}
+          <div style={{ marginTop: 8, fontSize: 11, color: "var(--ink-4)" }}>
+            Exact match only — identifiers are hashed, so partial or fuzzy search isn&apos;t possible, and the term is never stored.
           </div>
         </div>
 
