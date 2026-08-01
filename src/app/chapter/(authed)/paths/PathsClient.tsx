@@ -48,6 +48,7 @@ type ComboRow = {
   channels: ChannelKey[];
   gaps: number[] | null;
   chapters: number;
+  chaptersWithRevenue: number; // 5.3 — 0 means revenue not captured (render "—", not $0.00)
   revenue: number;
   aov: number;
   avg_touches: number;
@@ -118,6 +119,7 @@ export default function PathsClient({
       channels:    c.channels as ChannelKey[],
       gaps:        c.gaps ?? null,
       chapters:    currentChapters,
+      chaptersWithRevenue: Number(c.chapters_with_revenue ?? 0),
       revenue:     Number(c.revenue     ?? 0),
       aov:         Number(c.aov         ?? 0),
       avg_touches: Number(c.avg_touches ?? 0),
@@ -246,8 +248,24 @@ export default function PathsClient({
                         </div>
                       </td>
                       <td className="num">{fmtNum(c.chapters)}</td>
-                      <td className="num">{fmtMoney(c.revenue)}</td>
-                      <td className="num">${c.aov.toFixed(2)}</td>
+                      {/* 5.3 — revenue not captured (e.g. bookings not yet paid) renders "—",
+                          never $0.00; partial coverage flags valued-chapter share. */}
+                      <td className="num">
+                        {c.chaptersWithRevenue === 0
+                          ? <span className="dim" title="Revenue not captured for these chapters (e.g. bookings not yet paid)">—</span>
+                          : (
+                            <>
+                              {fmtMoney(c.revenue)}
+                              {c.chaptersWithRevenue < c.chapters && (
+                                <span title={`${c.chaptersWithRevenue} of ${c.chapters} chapters have captured revenue`}
+                                      style={{ marginLeft: 5, fontSize: 9, color: "var(--ink-3)" }}>
+                                  {c.chaptersWithRevenue}/{c.chapters}
+                                </span>
+                              )}
+                            </>
+                          )}
+                      </td>
+                      <td className="num">{c.chaptersWithRevenue === 0 ? <span className="dim">—</span> : `$${c.aov.toFixed(2)}`}</td>
                       <td className="num">{c.avg_touches.toFixed(1)}</td>
                       {showDelta && (
                         <td className="num">

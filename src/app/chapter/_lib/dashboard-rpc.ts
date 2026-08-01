@@ -202,12 +202,13 @@ export const cachedAttributionOverview = makeCachedRpc<AttributionOverviewRow>("
 export type PathMode = "set" | "collapsed" | "raw";
 
 export type PathCombinationRow = {
-  channels:    string[];
-  gaps:        number[] | null;
-  chapters:    number | null;
-  revenue:     number | null;
-  aov:         number | null;
-  avg_touches: number | null;
+  channels:               string[];
+  gaps:                   number[] | null;
+  chapters:               number | null;
+  chapters_with_revenue:  number | null; // 5.3 — valued chapters; lets the client render "—" (not $0.00) for uncaptured revenue
+  revenue:                number | null;
+  aov:                    number | null;
+  avg_touches:            number | null;
 };
 
 type PathArgs = RpcArgs & { p_mode: PathMode };
