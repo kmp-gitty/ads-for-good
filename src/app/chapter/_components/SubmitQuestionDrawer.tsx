@@ -106,16 +106,16 @@ export function SubmitQuestionDrawer({
 
         {confirmed ? (
           <div style={{ padding: "12px 4px" }}>
-            <h3 id="submit-q-title" className="chapter-submit-title">Thanks — we'll review it.</h3>
+            <h3 id="submit-q-title" className="chapter-submit-title">Thanks — we&rsquo;ll review it.</h3>
             <p className="chapter-submit-body">
-              We&rsquo;ll let you know if it&rsquo;s added to the library.
+              We&rsquo;ll review it and add it to what Chapter watches for.
             </p>
           </div>
         ) : (
           <form onSubmit={onSubmit}>
-            <h3 id="submit-q-title" className="chapter-submit-title">Suggest an observation question</h3>
+            <h3 id="submit-q-title" className="chapter-submit-title">Suggest what Chapter should watch for</h3>
             <p className="chapter-submit-body">
-              What pattern would you like Chapter to watch for? The Chapter team reviews submissions and adds promising ones to the question library.
+              What pattern would you like Chapter to flag for you? The Chapter team reviews submissions and adds promising ones to what Chapter watches for.
             </p>
 
             <label className="chapter-submit-label">

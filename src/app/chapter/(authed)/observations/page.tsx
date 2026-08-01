@@ -1,7 +1,9 @@
 // Server component for /chapter/observations.
 // Pulls real findings from chapter_observations via cached RPCs.
 
+import { redirect } from "next/navigation";
 import ObservationsClient from "./ObservationsClient";
+import { getCurrentChapterUserOrLegacy } from "@/app/lib/auth/chapter-user";
 import {
   cachedObservationsList,
   cachedObservationsHistory,
@@ -11,6 +13,13 @@ import {
 type SearchParams = Promise<{ client?: string }>;
 
 export default async function ObservationsPage({ searchParams }: { searchParams: SearchParams }) {
+  // 1.1 — Observations is retired from the operator-facing surface; it stays
+  // accessible to chapter_staff (and the legacy CHAPTER_DASH_TOKEN operator,
+  // who resolves to a chapter_staff row) for firing inspection + threshold
+  // tuning. Non-staff hitting the URL directly go to Recommendations.
+  const gateUser = await getCurrentChapterUserOrLegacy();
+  if (gateUser && gateUser.role !== "chapter_staff") redirect("/chapter/recommendations");
+
   const params = await searchParams;
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
 

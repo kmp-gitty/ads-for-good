@@ -11,6 +11,7 @@ import { TopBar } from "../../_components/TopBar";
 import { Icon } from "../../_components/Icon";
 import { Dropdown } from "../../_components/Dropdown";
 import { useChapter } from "../../_components/ChapterContext";
+import { SubmitQuestionDrawer } from "../../_components/SubmitQuestionDrawer";
 import type { RecommendationFinding } from "../../_lib/dashboard-rpc";
 import OverrideMenu from "./OverrideMenu";
 
@@ -198,15 +199,13 @@ export default function RecommendationsClient({
   current:   RecommendationFinding[];
   history:   RecommendationFinding[];
 }) {
-  // clientKey kept on props for parity with sibling pages even though
-  // we read display via ChapterContext.
-  void clientKey;
-
   const { client } = useChapter();
   const [view,         setView]         = useState<"current" | "history">("current");
   const [confFilter,   setConfFilter]   = useState<"all" | Conf>("all");
   const [stateFilter,  setStateFilter]  = useState<"all" | "new" | "standing" | "changed">("all");
   const [actionFilter, setActionFilter] = useState<"all" | ActT>("all");
+  // 1.3 — "Suggest what Chapter should watch for" moved here from Observations.
+  const [showSuggestDrawer, setShowSuggestDrawer] = useState(false);
 
   // Part 2: engine writes one row per active (rule, subject). No client-side
   // collapse needed — `current` is already the collapsed set. `history` is a
@@ -261,8 +260,17 @@ export default function RecommendationsClient({
         <div className="card" style={{ background: "var(--navy)", color: "white", border: "none", padding: "22px 26px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
             <div style={{ maxWidth: 720, flex: "1 1 320px", minWidth: 0 }}>
-              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600, marginBottom: 8 }}>
-                How this page works
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600 }}>
+                  How this page works
+                </div>
+                <button
+                  type="button"
+                  className="chapter-suggest-btn"
+                  onClick={() => setShowSuggestDrawer(true)}
+                >
+                  + Suggest what Chapter should watch for
+                </button>
               </div>
               <div style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
                 Each Monday Chapter evaluates a library of rules against your data and synthesizes findings into recommendations across six themes. Each card pairs the finding with evidence and a suggested next step — never a directive. Confidence reflects signal strength: strong findings have held across multiple periods.
@@ -411,6 +419,11 @@ export default function RecommendationsClient({
           </>
         )}
       </div>
+      <SubmitQuestionDrawer
+        open={showSuggestDrawer}
+        onClose={() => setShowSuggestDrawer(false)}
+        clientKey={clientKey}
+      />
     </>
   );
 }
