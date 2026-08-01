@@ -100,11 +100,28 @@ function fmtLag(n: number | null | undefined): string {
   return "0d";
 }
 
+// 9.1 — lift = pct_of_anchor / base_rate. Color-codes the row so parity (~1×)
+// is visually distinct from a 5× at a glance (the whole point of the column).
+function fmtLift(n: number | null | undefined): string {
+  if (n == null) return "—";
+  const v = Number(n);
+  return (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + "×";
+}
+function liftColor(n: number | null | undefined): string {
+  if (n == null) return "var(--ink-4)";
+  const v = Number(n);
+  if (v >= 2)   return "#1a7f5a"; // co-occurs 2x+ more than expected — the argument
+  if (v >= 1.2) return "var(--ink)";
+  if (v < 0.8)  return "var(--ink-4)"; // below its own base rate — de-emphasize
+  return "var(--ink-2)";               // ~parity: unremarkable
+}
+
 // Single source of truth for the panel grid layout. Tight on the right-hand
 // numeric columns so the outcome % is always visible without horizontal
 // scroll. Channel column is flexible + ellipsis-truncating. Column gap is
 // zero — visual separation comes from vertical dividers + cell padding.
-const PANEL_GRID    = "minmax(80px,1fr) 52px 62px 68px 92px";
+// 9.1 adds the Lift column (base rate shown as its sub-line).
+const PANEL_GRID    = "minmax(76px,1fr) 44px 52px 64px 54px 82px";
 const DIVIDER       = "1px solid var(--line)";
 const CELL_PAD      = 10;
 
@@ -146,6 +163,19 @@ function ConnectionRow({ row, index, onClick }: { row: ConnectionsPanelRow; inde
       </div>
       <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", color: "var(--ink-2)", fontSize: 12 }}>
         {fmtPct(row.pct_of_anchor)}
+      </div>
+      <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums" }}
+           title={row.lift == null
+             ? "Base rate not available for page connections yet"
+             : `Appears for ${fmtPct(row.base_rate)} of identities generally; here at ${fmtPct(row.pct_of_anchor)} — ${fmtLift(row.lift)} expected`}>
+        {row.lift == null
+          ? <span style={{ color: "var(--ink-4)" }}>—</span>
+          : (
+            <>
+              <div style={{ fontWeight: 600, fontSize: 12.5, color: liftColor(row.lift) }}>{fmtLift(row.lift)}</div>
+              <div style={{ fontSize: 9, color: "var(--ink-4)", lineHeight: 1 }}>base {fmtPct(row.base_rate, 0)}</div>
+            </>
+          )}
       </div>
       <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", color: "var(--ink-2)", fontSize: 12 }}>
         {fmtLag(row.median_lag_days)}
@@ -201,6 +231,7 @@ function PanelHeader({ outcomeWindowDays }: { outcomeWindowDays: number }) {
       <HeaderCell                              bottom="Channel" firstCell />
       <HeaderCell                              bottom="People"  />
       <HeaderCell top="of"      bottom="Anchor" />
+      <HeaderCell top="vs base" bottom="Lift"   />
       <HeaderCell top="Median"  bottom="Lag"    />
       <HeaderCell top={`${outcomeWindowDays}d`} bottom="Outcome" />
     </div>
@@ -228,11 +259,22 @@ function Panel({
         </div>
       ) : (
         <div style={{ overflowX: "auto" }}>
-          <div style={{ minWidth: 380 }}>
+          <div style={{ minWidth: 440 }}>
             <PanelHeader outcomeWindowDays={outcomeWindowDays} />
             <div>
-              {rows.map((r, i) => <ConnectionRow key={i} row={r} index={i} onClick={onRowClick} />)}
+              {/* 9.1 — default sort by lift (co-occurs more than expected leads),
+                  n_identities as tiebreak; page rows (null lift) fall to the bottom. */}
+              {[...rows]
+                .sort((a, b) =>
+                  (Number(b.lift ?? -1) - Number(a.lift ?? -1)) ||
+                  (Number(b.n_identities ?? 0) - Number(a.n_identities ?? 0)))
+                .map((r, i) => <ConnectionRow key={i} row={r} index={i} onClick={onRowClick} />)}
             </div>
+            {rows.some((r) => r.lift != null) && (
+              <div style={{ padding: "8px 16px", fontSize: 10.5, color: "var(--ink-4)", lineHeight: 1.4, borderTop: DIVIDER }}>
+                <strong style={{ color: "var(--ink-3)" }}>Lift</strong> = how often this appears here vs its <em>base rate</em> — the share of identities active in this window who touched it at all. 1× = no more than expected; 3× = three times its baseline.
+              </div>
+            )}
           </div>
         </div>
       )}
