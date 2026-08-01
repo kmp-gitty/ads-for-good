@@ -46,10 +46,14 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
   const clientKey   = (params.client && params.client.trim()) || "eos_fabrics";
   const range       = (params.range && params.range.trim()) || DEFAULT_RANGE;
   const rawType     = (params.anchor_type && params.anchor_type.trim()) || "channel";
+  // 9.4 — Cohort removed as an anchor (a cohort is a property of people, not a
+  // timed touchpoint, so "what did it feed?" isn't well-posed). Will return as
+  // a filter across the other anchor types. Backend (connections_cohorts,
+  // uploads, RPC cohort path) is preserved; a bookmarked ?anchor_type=cohort
+  // now falls back to channel.
   const anchorType: ConnectionsAnchorType =
     rawType === "page"     ? "page" :
     rawType === "campaign" ? "campaign" :
-    rawType === "cohort"   ? "cohort" :
     "channel";
   const channel     = (params.anchor_channel && params.anchor_channel.trim()) || DEFAULT_CHANNEL;
   const windowDays  = Math.max(1, Math.min(180, parseInt(params.window_days || "", 10) || DEFAULT_WINDOW_DAYS));
@@ -108,9 +112,7 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
       ? { page_path:   pagePath,   start_ts: start.toISOString(), end_ts: end.toISOString() }
     : anchorType === "campaign"
       ? { campaign_id: campaignId, start_ts: start.toISOString(), end_ts: end.toISOString() }
-    : anchorType === "cohort"
-      ? { cohort_id:   cohortId,   start_ts: start.toISOString(), end_ts: end.toISOString() }
-      : { channel:     channel,    start_ts: start.toISOString(), end_ts: end.toISOString() };
+      : { channel:     channel,    start_ts: start.toISOString(), end_ts: end.toISOString() }; // cohort anchor removed (9.4)
 
   // Self-repetition strip per spec §4.3a: only meaningful when the connection
   // type matches the anchor type. Channel anchor + channel connections → strip

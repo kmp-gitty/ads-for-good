@@ -41,11 +41,13 @@ const CHANNEL_OPTIONS: { value: string; label: string }[] = [
 const WINDOW_OPTIONS         = [7, 14, 30, 60, 90];
 const OUTCOME_WINDOW_OPTIONS = [7, 14, 30, 60, 90];
 
+// 9.4 — Cohort removed from the anchor selector (demote to a filter later; a
+// cohort is a property of people, not a timed touchpoint). Cohort backend +
+// the RPC's cohort path stay intact for the future filter build.
 const ANCHOR_TYPES: { value: string; label: string; enabled: boolean }[] = [
   { value: "channel",  label: "Channel",  enabled: true },
   { value: "page",     label: "Page",     enabled: true },
   { value: "campaign", label: "Campaign", enabled: true },
-  { value: "cohort",   label: "Cohort",   enabled: true },
 ];
 
 function channelLabel(v: string): string {
