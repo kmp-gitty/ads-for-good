@@ -20,6 +20,7 @@ export type Post = {
   image?: string;     // optional tile image (e.g. "/images/DigitalAuditWallpaper.png"); falls back to a placeholder
   body: string;       // markdown
   faqs?: { q: string; a: string }[]; // optional — rendered on-page + emitted as FAQPage JSON-LD
+  publishAt?: string; // ISO date (e.g. "2026-08-03"). Hidden in production until this date; absent = live now. Always visible in dev so drafts can be reviewed locally.
 };
 
 // One default tile image per category (the "category images"). A post can
@@ -644,7 +645,796 @@ That's the whole reason we built our [link management software](/for-businesses/
       },
     ],
   },
+  {
+    slug: "outsourced-marketing-small-business",
+    title: "When outsourcing your marketing actually makes sense",
+    metaTitle: "Outsourced Marketing for Small Business: When It's Worth It",
+    category: "Marketing Playbook",
+    date: "Aug 1, 2026",
+    publishAt: "2026-08-01",
+    excerpt:
+      "Should you outsource your marketing? An honest look at what it costs, what you give up, and the point where doing it yourself stops making sense.",
+    image: "/images/ConsultingWallpaper.png",
+    body: `Most owners don't start by asking what outsourced marketing is. They start on a Sunday night, looking at a list of things that didn't get done again, wondering whether paying someone would fix it.
+
+Sometimes it would. Sometimes it's the most expensive way to avoid a decision you haven't made yet. This is an honest look at which situation you're in — including the cases where the answer is no, keep doing it yourself.
+
+## The three reasons owners start looking
+
+Almost everyone arrives here for one of three reasons, and they lead to different answers.
+
+**Out of time.** The marketing is working well enough, you just can't keep feeding it. This is the best reason to outsource. You already know what works; you need hands.
+
+**Out of depth.** You can run an email list but paid ads lose money every time you try. Also a good reason — you're buying a skill you don't have and don't want to spend a year acquiring.
+
+**Out of patience.** You've tried things, nothing stuck, and you're hoping someone else knows the secret. This is the risky one. If you can't say what success looks like, outsourcing usually means paying someone to be uncertain on your behalf.
+
+![A small business owner reviewing marketing tasks that keep getting postponed](/images/OwnaBusiness.png#half "The list that doesn't shrink is usually what starts the conversation")
+
+## What outsourcing actually costs
+
+Most articles on this dodge the number. Here's the shape of it.
+
+**Project work** — a website refresh, a campaign build, a one-time setup — generally runs in the hundreds to low thousands depending on scope. You pay once and you own the result.
+
+**Ongoing retainers** with a small agency or freelancer commonly land in the four-figures-per-month range. Larger agencies start higher, sometimes considerably.
+
+**A full-time hire** costs more than most small businesses spend on marketing in total, once you include salary, taxes, benefits, and the tools they'll ask for. And one person rarely covers ads, email, SEO, and the website well.
+
+**The more useful question than "what does it cost" is "what does it need to return."** If you're spending $1,500 a month, the marketing has to produce meaningfully more than $1,500 in profit — not revenue — to be worth it. Work that backwards before you shop. It tells you what you can afford and what you should expect, and it makes every sales conversation shorter.
+
+## What you give up
+
+Real costs that don't appear on the invoice.
+
+**Immediacy.** You can no longer change the homepage at 9pm because you thought of something. There's a queue now, and you're in it.
+
+**Ramp-up.** Nobody is useful in week one. Expect a month or two before an outside team knows your customers well enough to be better than you at talking to them.
+
+**Voice.** This is the one owners underestimate. Your marketing sounds like you because you wrote it. Someone else writing it will sound close, then a little off, then fine again once they've learned — but there's a stretch in the middle that costs you something.
+
+**Dependency.** If they leave, some of what they knew leaves too. Ask up front what you keep.
+
+## When to keep it in-house
+
+**Keep it when you enjoy it.** Owners who like marketing are usually good at it, because they do it consistently and they know the customer better than anyone you could hire.
+
+**Keep it when the business is still moving.** If the offer, price, or audience is still changing month to month, an outside team spends your money learning a target that keeps moving. Settle the fundamentals first.
+
+**Keep it when the budget is below the floor.** Under a few hundred a month you won't buy enough of anyone's attention to matter. You'll buy a report. Spend it on one tool and your own time instead until there's more.
+
+## The middle option most people miss
+
+The choice isn't all-or-nothing, and framing it that way is why a lot of owners stall.
+
+You can outsource one channel and keep the rest. You can hand off the work you hate and keep the work you're good at. You can bring someone in for a defined project, see how it goes, and decide from evidence rather than from a pitch.
+
+That's the shape of our [outsourced marketing plans](/for-businesses) — active projects you choose, rather than a retainer that quietly covers everything and explains nothing. It's also just a sensible way to start with anyone, including people who aren't us.
+
+## Questions to ask before you sign anything
+
+**"What exactly am I getting each month?"** Vague scope is where retainers go to die. Get it in writing as deliverables, not hours.
+
+**"What do I keep if we stop?"** Accounts, ad account access, email lists, website admin, the tracking setup. All of it should be in your name from day one.
+
+**"How will we know it's working?"** If the only evidence of progress is a report they write, that's not measurement. You should be able to see the numbers yourself.
+
+**"Who's actually doing the work?"** The person selling is often not the person delivering. Ask to meet them.
+
+**"What happens in month one?"** A good answer is specific and unglamorous — audit, access, setup, a first small thing shipped. A bad answer is a strategy phase with no output.`,
+    faqs: [
+      {
+        q: "How much does outsourced marketing cost for a small business?",
+        a: "It ranges widely. Project work often lands in the hundreds; ongoing retainers with a small agency commonly run four figures a month. The more useful question is what the work needs to return to be worth it — if you're spending $1,500 a month, the marketing needs to produce meaningfully more than that in profit.",
+      },
+      {
+        q: "Is outsourcing marketing better than hiring someone?",
+        a: "It depends on how much work there is. One full-time marketer costs more than most small businesses spend on marketing in total, and a single hire rarely covers ads, email, SEO, and the website. Outsourcing buys a range of skills for less than one salary. A hire wins when the volume of work is steady enough to fill a whole role.",
+      },
+      {
+        q: "What should I outsource first?",
+        a: "Whatever is both time-consuming and skill-dependent. For most small businesses that's paid ads or email — work that needs doing consistently and punishes guesswork. Keep the parts that depend on knowing your customers personally.",
+      },
+      {
+        q: "How do I know if it's working?",
+        a: "Agree on what you're measuring before the work starts, and make sure you can see it yourself. If the only evidence of progress is a monthly report written by the person you're paying, that's not measurement.",
+      },
+      {
+        q: "Can I outsource just part of my marketing?",
+        a: "Yes, and for most small businesses that's the better starting point. Pick one channel, run it for a quarter, and judge from the result rather than committing to everything at once.",
+      },
+    ],
+  },
+  {
+    slug: "fractional-marketing-team",
+    title: "A fractional marketing team is not a fractional CMO",
+    metaTitle: "Fractional Marketing Team: What It Is and Who It Suits",
+    category: "Marketing Playbook",
+    date: "Aug 1, 2026",
+    publishAt: "2026-08-01",
+    excerpt:
+      "A fractional marketing team is not a fractional CMO, and the difference decides whether it works for you. What each one does, what they cost, and who needs which.",
+    image: "/images/MarketingGuidebookWallpaper.png",
+    body: `Both terms get used as if they mean the same thing. They don't, and the difference is the whole decision.
+
+One is a senior person who tells you what to do. The other is a group of people who do it. If you buy the wrong one, you end up with an expensive plan and nobody to execute it, or a lot of activity pointed in no particular direction. Here's how to tell which you need.
+
+## Fractional CMO vs fractional team vs agency
+
+| | Fractional CMO | Fractional marketing team | Agency |
+|---|---|---|---|
+| **What you get** | One senior strategist, part time | A group covering ads, email, SEO, web | A vendor running defined campaigns |
+| **What they do** | Decide direction, set priorities | Execute across channels | Execute their specialty |
+| **Typical cost** | Highest per hour, lowest output volume | Mid — a share of several people | Varies widely by scope |
+| **Suits** | Businesses with staff to direct | Businesses with work and no team | Businesses with one clear need |
+| **Fails when** | There's nobody to execute the plan | You need one accountable owner | Your need spans channels |
+
+**The short version:** a fractional CMO is leadership. A fractional team is capacity. Most small businesses already know roughly what needs doing. They need hands, not another strategy deck.
+
+![Comparison of a fractional CMO, a fractional marketing team, and an agency](/images/Consulting.png#half "Leadership, capacity, and campaigns are three different purchases")
+
+## What a fractional team actually covers
+
+The word "fractional" describes how you buy it, not what it is. You're getting a share of several specialists rather than all of one generalist.
+
+In practice that usually means:
+
+**The channels that need consistent work** — email sends, ad management, posting and profile upkeep. Things that decay if nobody touches them for a month.
+
+**The projects that need a skill you don't have** — a website rebuild, tracking setup, a migration between tools.
+
+**The measurement layer** — someone making sure you can actually tell what worked, which is the part most small businesses skip and later regret.
+
+**What it usually doesn't cover:** being available within the hour, sitting in your meetings all week, or knowing your customers as well as you do. That last one stays yours no matter who you hire.
+
+## What it costs, honestly
+
+A fractional team generally costs less than one full-time marketing hire — often substantially — because you're buying a portion of several people instead of all of one.
+
+A fractional CMO usually costs **more per hour and buys less execution.** That's not a criticism; senior strategic time is expensive everywhere. It's just worth knowing that the higher rate buys thinking, not doing. If you're paying CMO rates and still doing the work yourself, something has gone wrong.
+
+Cost typically scales with how much work you want running at once rather than with hours logged. That's a better fit for small businesses, because it means a quiet month costs less than a busy one.
+
+## Who this works for
+
+**Works when there's more work than you can do, but not enough for a salary.** That gap is exactly what the model exists to fill.
+
+**Works when the work spans channels.** One hire is rarely good at ads and email and SEO and the website. A team is, because it's several people.
+
+**Works when you want to start small.** You can run one project, see the result, and expand or stop. Hiring doesn't give you that.
+
+## Who it doesn't work for
+
+Being straight about this saves everyone time.
+
+**Not for businesses needing someone available all day.** If your marketing requires immediate response — live events, breaking news, constant reactive posting — you need someone in the building.
+
+**Not for businesses that want one accountable person.** A team spreads responsibility by design. Some owners find that freeing and some find it maddening. Know which you are.
+
+**Not for pre-product-market-fit businesses.** If the offer and audience are still changing monthly, you'll pay a team to learn a moving target. Settle that first.
+
+**Not a replacement for knowing your own customers.** Nobody you hire will know them like you do. The good ones will keep asking you.
+
+## How it works in practice
+
+The version we run is built around active projects rather than a blanket retainer — you pick what's running, it changes when your priorities change, and you can see what each project is doing. That's our [on-demand marketing team plans](/for-businesses).
+
+If you'd rather talk it through before committing to anything, that's what a [small business marketing consultant](/for-businesses/consulting) conversation is for. Either way, ask any provider the same question first: what exactly is running this month, and how will I know if it worked?`,
+    faqs: [
+      {
+        q: "What is a fractional marketing team?",
+        a: "A group of marketers who work across several businesses rather than one, giving you a range of skills — ads, email, SEO, web — for part of the cost of hiring any one of them full time. You get a team's coverage at a fraction of a team's payroll.",
+      },
+      {
+        q: "How is a fractional marketing team different from a fractional CMO?",
+        a: "A fractional CMO is one senior person who sets direction. A fractional team does the work. The CMO tells you what to do; the team does it. Most small businesses already know roughly what needs doing and need hands, not another strategy deck.",
+      },
+      {
+        q: "How much does a fractional marketing team cost?",
+        a: "Less than one full-time marketing hire, generally by a wide margin, because you're buying a share of several people rather than all of one. Cost usually scales with how much active work you want running at once rather than with hours logged.",
+      },
+      {
+        q: "Is a fractional team the same as hiring an agency?",
+        a: "There's overlap, and the labels get used loosely. The practical difference is posture: agencies typically sell campaigns, fractional teams typically embed and handle whatever the marketing function needs that month. Ask which one you're buying before you sign.",
+      },
+      {
+        q: "When should a small business consider one?",
+        a: "When there's consistently more marketing work than you can do yourself, but not enough to justify a full-time salary. That gap is exactly what the model exists to fill.",
+      },
+    ],
+  },
+  {
+    slug: "marketing-automation-small-business",
+    title: "What's actually worth automating when you're small",
+    metaTitle: "Marketing Automation for Small Business: What's Worth Automating",
+    category: "Marketing Playbook",
+    date: "Aug 3, 2026",
+    publishAt: "2026-08-03",
+    excerpt:
+      "Most small businesses automate the wrong things first. Which tasks are worth automating, which tools fit a small budget, and where AI genuinely helps.",
+    image: "/images/DigitalAuditWallpaper.png",
+    body: `Most marketing automation advice is written for companies with a marketing department. It assumes someone owns the tool, someone else writes the content, and a third person checks whether any of it worked.
+
+You have none of that. You have a business to run and maybe an hour on a Tuesday. So the question isn't which platform has the best workflow builder. It's which handful of things, automated once, will keep earning while you're doing something else.
+
+## Start with the task, not the tool
+
+The mistake almost everyone makes is buying a platform and then looking for things to put in it. That's backwards, and it's why so many small businesses pay for automation software they use for one welcome email.
+
+Start from the other end. Look for tasks that are **repetitive, rule-based, and currently not happening.** All three matter. Repetitive means it's worth setting up. Rule-based means a computer can do it without judgment. Not happening means automating it adds something rather than just moving it.
+
+Anything failing one of those three is a bad first candidate.
+
+![Sorting marketing tasks by whether they are repetitive and rule-based](/images/DigitalAudit.png "Repetitive, rule-based, and not currently happening — all three, or skip it")
+
+## The five things worth automating first
+
+In rough order of return.
+
+**Welcome emails.** Someone joins your list at their most interested moment. Without automation they hear from you whenever you next get around to sending something. One email, sent immediately, is the highest-return automation most small businesses will ever build.
+
+**Abandoned cart or abandoned enquiry.** If you sell online, this recovers revenue you're currently losing by default. If you don't sell online, the equivalent is the follow-up to someone who asked a question and never heard back.
+
+**Review requests.** Timed to fire after a purchase or a completed job. Reviews compound — they feed local search, they feed conversion, and asking manually means asking inconsistently.
+
+**Lead routing and follow-up.** A form submission that lands in an inbox and waits until evening is a lead cooling off. Automating the acknowledgment buys you hours.
+
+**Reporting.** Not glamorous, but automating the assembly of your numbers means you actually look at them. Most owners stop measuring because collecting the data is tedious.
+
+## What not to automate
+
+The advantage a small business has over a large one is being a person. Automating that away is a bad trade.
+
+**Responses to unhappy customers.** An automated reply to a complaint reads as "we didn't read this." Handle those yourself, every time.
+
+**Messages to your best regulars.** The people who spend the most with you usually know you. A templated message to someone who considers you a person is worse than no message.
+
+**Anything requiring judgment about a specific situation.** If the right response depends on knowing the context, a rule can't make it.
+
+**Content that's supposed to sound like you.** You can draft faster with help. You shouldn't hand over the voice entirely, because the voice is often the reason people chose you.
+
+## The tools, honestly
+
+Three tiers, and most small businesses need only the first.
+
+**Your existing email platform.** Mailchimp, Klaviyo, Constant Contact, Shopify's built-in messaging, and most others include automation for welcome sequences, cart recovery, and basic triggers. You're likely paying for this already. **For most small businesses, everything in the list above can be built here, and this is where you should start.**
+
+**A connector tool.** Zapier, Make, and similar exist to make tools talk to each other — form to CRM, purchase to review request, enquiry to Slack. Worth it once you've hit a wall your email platform can't cross. Not worth it before.
+
+**A CRM with automation built in.** HubSpot, Zoho, and others bundle contact management with workflows. Real capability, real cost, and real setup time. This tier makes sense when you're managing enough contacts that keeping track has become its own job.
+
+**The honest advice:** most small businesses should exhaust tier one before buying anything from tier two or three. The tools aren't the constraint. Setting them up and leaving them running is.
+
+## Where AI actually helps — and where it doesn't
+
+AI shows up in every automation pitch right now, so it's worth being specific about where it earns its place.
+
+**It helps you plan and draft faster.** Getting from blank page to a workable first version of a welcome sequence, a set of subject lines, or a follow-up message is genuinely faster with help. That's real time saved on the part most owners stall on.
+
+**It helps you connect things you couldn't before.** Describing what you want in plain language and getting a working setup out the other end has lowered the technical floor considerably. Things that used to need a developer often don't.
+
+**It does not replace knowing your customers.** This is where most AI marketing claims oversell. A model can write a competent email to a generic audience. It can't know that your regulars hate discount language, or that your busiest month is different from everyone else's in your industry. That knowledge is yours, and it's what makes the automation land.
+
+**Treat AI as an accelerant on the work, not a substitute for the system.** The automation still needs somewhere to run and something to trigger it. Faster drafting doesn't change which five things are worth automating.
+
+## How to tell if it's working
+
+Two numbers, and neither is the one most tools show first.
+
+**Time saved.** Roughly how many hours a month are you not spending on this anymore? If the answer is "none, but I built a lot of workflows," you've automated the wrong things.
+
+**Revenue influenced.** Did the welcome email produce orders? Did cart recovery recover carts? These are answerable, and they're the only reason any of this matters.
+
+Emails sent, workflows built, and tools connected are activity. If your setup is getting complicated enough that you can't answer those two questions, that's usually the point to bring in [marketing operations support](/for-businesses/marketing-ops) — or to simplify until you can answer them again.`,
+    faqs: [
+      {
+        q: "What should a small business automate first?",
+        a: "Welcome emails and abandoned-cart follow-ups, in that order. Both are rule-based, both run without supervision once set up, and both recover revenue you're currently losing by default.",
+      },
+      {
+        q: "Do I need expensive software to automate marketing?",
+        a: "No. Most small businesses can cover their first several automations inside the email platform they already pay for. The cost usually shows up later, when you want different tools talking to each other.",
+      },
+      {
+        q: "Does AI replace marketing automation tools?",
+        a: "No. AI helps you plan faster, draft faster, and connect things more easily. The automation still needs somewhere to run and something to trigger it. Treat AI as an accelerant on the work, not a substitute for the system.",
+      },
+      {
+        q: "What shouldn't be automated?",
+        a: "Anything where being a person is the point. Responses to unhappy customers, messages to your best regulars, and anything requiring judgment about a specific situation. Automating those is how small businesses lose the advantage they have over big ones.",
+      },
+      {
+        q: "How do I know if my automation is actually working?",
+        a: "Measure time saved and revenue influenced. Emails sent, workflows built, and tools connected are activity, not results.",
+      },
+    ],
+  },
+  {
+    slug: "how-to-audit-your-online-presence",
+    title: "How to audit your online presence in an afternoon",
+    metaTitle: "How to Audit Your Online Presence (Step by Step)",
+    category: "Marketing Playbook",
+    date: "Aug 5, 2026",
+    publishAt: "2026-08-05",
+    excerpt:
+      "An online presence audit is just looking at your business the way a customer does. Here's how to find everything, what to check, and what to fix first.",
+    image: "/images/DigitalAuditWallpaper.png",
+    body: `Your business exists in more places than you put it. Directory listings you never made. A Yelp page someone else created. An old Facebook page with the wrong hours. A Google Business Profile with a photo from four years ago.
+
+An online presence audit is just going and looking at all of it, in order, the way a customer would. It takes an afternoon and it usually turns up something embarrassing. Here's how to do it properly.
+
+## What an online presence audit actually covers
+
+Three things, and most people only check the first.
+
+**Your website** — not whether it loads, but whether someone who's never heard of you can tell what you do and how to contact you within a few seconds.
+
+**Your profiles and listings** — Google Business Profile, Yelp, Facebook, Instagram, and whichever industry directories matter in your category. These are what people check *before* they visit your site, which makes them higher-stakes than most owners assume.
+
+**The gaps** — places you should be and aren't. This is the part nobody thinks to audit, because you can't see what isn't there.
+
+![The three areas of an online presence audit: website, profiles, and gaps](/images/DigitalAudit.png "Most audits stop at the website. The profiles usually matter more.")
+
+## Step one: find everything
+
+Before you can review it, you need the list — and it will be longer than you expect.
+
+**Search your business name.** Not on your own computer, where Google knows you. Open a private window and search your name, then your name plus your city, then your name plus your main service. Write down everything on the first two pages.
+
+**Search your phone number and your address.** This surfaces listings that don't use your exact business name — the ones created by aggregators, or by an employee in 2019, or by a customer.
+
+**Check the obvious platforms directly.** Google Business Profile, Yelp, Facebook, Instagram, Apple Maps, Bing Places, and whatever is standard in your industry.
+
+**Write it all in one place.** A spreadsheet is fine. One row per property, with the URL and who controls it. Half the value of an audit is just having the list.
+
+## Step two: the consumer pass
+
+Now go through the list once as a customer would — quickly, impatiently, without any inside knowledge.
+
+For each property, three questions:
+
+**Can I tell what this business does?** In about three seconds, without scrolling.
+
+**Can I tell whether it's still open and real?** Recent photos, recent reviews, current hours. A listing that looks abandoned reads as *closed*, even when it isn't.
+
+**Can I contact them the way I want to?** Some people call. Some fill in forms. Some message on Instagram and expect an answer. Every one of those paths should work.
+
+Be honest here. It's harder than it sounds to look at your own business as a stranger, and the whole exercise fails if you grade generously.
+
+## Step three: the marketer pass
+
+Second time through, looking for what's broken rather than what's confusing.
+
+**Consistency.** Name, address, and phone number identical everywhere. Not "Street" in one place and "St." in another. Search engines treat inconsistency as uncertainty.
+
+**Completeness.** Most profiles are half-filled. Categories, service lists, attributes, hours including holidays, photos. The fields exist because they get used.
+
+**Broken things.** Dead links, 404 pages, forms that don't submit, a phone number that goes nowhere. Test the contact form. Actually submit it.
+
+**Reviews.** Not just the rating — whether anyone replied. Unanswered reviews, good or bad, read as nobody's home.
+
+**Ownership.** Can you actually log in and edit each of these? Unclaimed listings are the most common finding in any audit, and they're usually the easiest fix.
+
+## What to fix first
+
+You'll finish with a long list and limited time. Order it like this:
+
+**Anything factually wrong.** Wrong hours, wrong phone number, wrong address. These actively cost you customers today.
+
+**Anything unclaimed.** Claim it before you improve it. You can't fix what you don't control.
+
+**Broken contact paths.** A form that doesn't send is worse than no form.
+
+**Incomplete profiles on platforms that matter.** Usually Google first, then whichever platform your customers actually use — which may not be the one you assume.
+
+**Everything else.** Photos, descriptions, secondary directories. Real value, but none of it matters while your phone number is wrong somewhere.
+
+## What most audits miss
+
+**The gaps.** You'll naturally review what exists. Ask separately: where should we be that we aren't? A missing profile on the platform your customers use is invisible in any review of what you already have.
+
+**Mobile.** Check every property on an actual phone. Not a narrow browser window — a phone. Things break there that look fine on a desktop.
+
+**The path between properties.** Someone finds your Yelp listing, clicks through to your site, and lands on a homepage that doesn't mention the thing they were looking at. Each property being fine doesn't mean the journey is.
+
+**Old accounts.** A Twitter account last posted to in 2021 isn't neutral. It suggests a business that started things and stopped.
+
+## When it's worth having someone else do it
+
+Doing this yourself is entirely reasonable, and if you've got an afternoon, do it. Two situations make it worth handing over.
+
+**You can't see it fresh.** You built it, so you know where everything is and what it means. That's exactly the knowledge that makes it hard to spot what a stranger would find confusing.
+
+**You want the fixes done, not just found.** A list of twenty problems is only progress if someone works through it.
+
+That's what our [digital presence audit](/for-businesses/digital-health-check) is — a person, not an automated scanner, going through everything the way a customer would, then handing you a prioritized document. We can make the changes too, or you can. Either way you keep the document.`,
+    faqs: [
+      {
+        q: "What is an online presence audit?",
+        a: "A structured review of every place your business appears online — your website, your Google Business Profile, review sites, social profiles, and directory listings — checking each one for accuracy, completeness, and whether it actually helps a customer decide to contact you.",
+      },
+      {
+        q: "How do I do a digital presence audit?",
+        a: "Find everything first by searching your business name, phone number, and address in a private browser window. Then go through the list twice: once as a customer checking whether it's clear and trustworthy, once as a marketer checking for broken, missing, or inconsistent details. Fix anything factually wrong first.",
+      },
+      {
+        q: "How often should I audit my online presence?",
+        a: "Once or twice a year for most small businesses, and any time something material changes — new address, new hours, new service, a rebrand. Listings drift on their own, because aggregators update them without asking you.",
+      },
+      {
+        q: "What's the most common problem an audit finds?",
+        a: "Unclaimed listings and inconsistent contact details. Most businesses have at least one profile they didn't create and can't currently edit, and small variations in how the address is written across platforms.",
+      },
+      {
+        q: "Do I need a tool to audit my online presence?",
+        a: "No. Tools speed up finding listings, but the parts that matter — whether a stranger understands what you do, whether the contact paths work, whether the photos look current — need a person to judge. Most of this is done in a browser.",
+      },
+    ],
+  },
+  {
+    slug: "what-is-eddm",
+    title: "What is EDDM? Every Door Direct Mail, explained",
+    metaTitle: "What Is EDDM? Every Door Direct Mail, Explained",
+    category: "Marketing Playbook",
+    date: "Aug 5, 2026",
+    publishAt: "2026-08-05",
+    excerpt:
+      "EDDM lets you mail every home on a postal route without buying an address list. What it is, what it costs, the rules that trip people up, and when it's worth it.",
+    image: "/images/LocalMailWallpaper.png",
+    body: `EDDM stands for Every Door Direct Mail. It's a USPS program that lets you send mail to every address on a postal carrier route without buying a mailing list or knowing a single name.
+
+That's the whole idea, and it's why it's cheaper than regular direct mail. You're not paying to target individuals. You're paying to blanket a neighborhood, and the carrier who already walks that route every day delivers your piece along with everything else.
+
+## How it actually works
+
+You pick routes, not people.
+
+USPS breaks every ZIP code into carrier routes — the loop one mail carrier walks or drives in a day, usually a few hundred addresses. Through the EDDM tool you choose which routes to hit, see roughly how many households and businesses are on each, and filter by things like average household income, average age, and household size.
+
+Then you print your piece, bundle it the way USPS asks, drop it at the post office serving those routes, and pay. Every address on the routes you selected gets one.
+
+**No mailing list.** That's the part that surprises people. You never buy or build a list, which removes both a cost and a data-privacy headache.
+
+![Selecting USPS carrier routes on a map for an EDDM campaign](/images/LocalMail.png#half "You choose routes, not addresses — that's what makes it cheap")
+
+## The two versions, and which one you want
+
+This trips up almost everyone the first time.
+
+**EDDM Retail** is the small-business version. No mailing permit required, you pay at the post office, and there's a daily cap on how many pieces you can send per ZIP code. For most local businesses this is the right one and the cap is never a problem.
+
+**EDDM BMEU** is the higher-volume version, handled through a Business Mail Entry Unit. It requires a permit and more paperwork, but it lifts the daily limit and opens up more options. If you're mailing at a scale where the retail cap matters, you've probably already got someone handling this for you.
+
+**Which to pick:** if you're a local business mailing a neighborhood or two, Retail. If you're mailing tens of thousands of pieces, BMEU — and at that point work with a mail house.
+
+## What EDDM costs
+
+Three costs, and people usually only budget for one.
+
+**Postage.** EDDM postage is priced per piece and is meaningfully cheaper than first-class mail, which is the entire appeal. Rates change, so check the current figure on the USPS EDDM page rather than trusting a number in a blog post — this one included.
+
+**Printing.** Usually the bigger line item. Depends on size, paper weight, and quantity, and the per-piece cost drops sharply as volume rises.
+
+**Design.** Either your time or someone else's. This is the cost most people skip and most regret, because the design does more to determine the result than the route selection does.
+
+**A rough way to think about it:** postage plus printing together typically lands in the range of a few tens of cents per household. Mailing a thousand homes is a few hundred dollars, not a few thousand. That's the number to hold in your head before you go looking at exact rates.
+
+## The requirements that trip people up
+
+EDDM has physical rules, and pieces get rejected at the counter for breaking them.
+
+**Size.** Your piece has to be bigger than a standard postcard — EDDM requires flat-size mail, so the small postcards you might picture don't qualify. Print shops sell EDDM-specific sizes precisely because of this. If you're ordering from one, say it's for EDDM and the size problem solves itself.
+
+**Weight.** There's a maximum weight per piece. Heavy card stock on a large format can push you over it, so check before you print several thousand.
+
+**The indicia.** Your piece needs the correct postal marking and a simplified address block — something like "Local Postal Customer" rather than a name. Print shops handle this routinely; if you're doing it yourself, get the current template from USPS.
+
+**Bundling.** Pieces have to arrive at the post office in bundles of a set size, with facing slips and completed paperwork. This is manual, tedious, and the most common reason a first-time EDDM drop takes longer than expected.
+
+**The safest move:** use a printer who does EDDM regularly. They know the current specs, and the cost difference is small compared to a rejected run.
+
+## Who EDDM works for
+
+**Businesses with a geographic customer base.** Restaurants, dentists, gyms, home services, salons, local retail. If your customers come from within a few miles, blanketing those miles makes sense.
+
+**New locations.** Nothing announces an opening to a neighborhood faster.
+
+**Offers with broad appeal.** Everyone eats. Everyone has a roof. The wider the appeal, the better untargeted mail performs.
+
+## Who it doesn't work for
+
+**Narrow or niche audiences.** If one household in fifty is a plausible customer, you're paying to reach forty-nine who aren't. Targeted mail with a real list beats EDDM here, even at a higher cost per piece.
+
+**Businesses without a service area.** If you sell nationally online, geography isn't your filter.
+
+**Anyone expecting immediate, trackable response.** Mail works, but it works slower and less legibly than a click. Which brings us to the mistakes.
+
+## Common EDDM mistakes
+
+**No way to tell if it worked.** The big one. Use a distinct phone number, a coupon code, a dedicated landing page — anything that separates mail response from everything else. Without it you'll have an opinion, not a result.
+
+**Mailing once.** A single drop into a neighborhood is a coin flip. The businesses that get results from mail send to the same routes repeatedly, so the piece becomes familiar rather than novel.
+
+**Choosing routes by convenience.** Nearest isn't the same as best. Use the demographic filters — a route half a mile further away with a better income match often outperforms.
+
+**Burying the offer.** People decide in about a second, standing over a recycling bin. One offer, large, obvious. Not three.
+
+**Skipping the design.** A cheap-looking piece signals a cheap business. The design is the message.
+
+## The version most people don't know about
+
+There's a cheaper way to reach a neighborhood than mailing it yourself: share the piece.
+
+In a co-op or shared mailer, several non-competing local businesses appear on one card sent to the same routes. You split the postage and printing, so the per-household cost drops well below what a solo EDDM drop costs. The tradeoff is that you're sharing attention with the other advertisers on the card.
+
+For a small business testing whether mail works at all, that tradeoff is usually worth it — it's a much cheaper first experiment than committing to a full solo run.
+
+That's one of the two ways our [direct mail service](/for-businesses/direct-mail) works. We run a local co-op newsletter in the neighborhoods we serve, with one advertiser per category, and we run custom solo campaigns anywhere in the US through our USPS partnership. Whichever fits, we handle the specs, the bundling, and the paperwork.`,
+    faqs: [
+      {
+        q: "What is EDDM?",
+        a: "Every Door Direct Mail, a USPS program that lets you send mail to every address on selected postal carrier routes without buying a mailing list. You choose routes rather than individual recipients, which is what makes it cheaper than addressed direct mail.",
+      },
+      {
+        q: "How much does EDDM cost?",
+        a: "Postage per piece is well below first-class rates, and printing is usually the larger cost. Together they typically land in the range of a few tens of cents per household, so mailing a thousand homes runs to a few hundred dollars rather than a few thousand. Check the USPS EDDM page for current postage rates before budgeting.",
+      },
+      {
+        q: "What are the requirements for EDDM?",
+        a: "Your piece must meet USPS flat-size dimensions — larger than a standard postcard — stay under the maximum weight, carry the correct indicia and a simplified address block, and arrive at the post office bundled with facing slips and paperwork. Using a printer who does EDDM regularly removes most of this risk.",
+      },
+      {
+        q: "Do I need a mailing list for EDDM?",
+        a: "No. That's the defining feature. You select carrier routes and every address on them receives your piece, so there's no list to buy, build, or maintain.",
+      },
+      {
+        q: "Is EDDM worth it for a small business?",
+        a: "It's worth testing if your customers come from a defined geographic area and your offer has broad appeal. It's a poor fit for narrow audiences, because you're paying to reach every household whether or not they could ever buy from you. A shared or co-op mailer is usually the cheapest way to find out.",
+      },
+    ],
+  },
+  {
+    slug: "ppc-management-pricing",
+    title: "What paid ads management actually costs",
+    metaTitle: "PPC Management Pricing: What Paid Ads Help Actually Costs",
+    category: "Marketing Playbook",
+    date: "Aug 8, 2026",
+    publishAt: "2026-08-08",
+    excerpt:
+      "Most agency pricing pages won't name a number. Here's how PPC management is actually priced, what each model rewards, and the budget below which it isn't worth paying anyone.",
+    image: "/images/adNetworkWallpaper.png",
+    body: `Search for PPC management pricing and the top results are Reddit threads. That's not an accident. Almost every agency page on the subject spends a thousand words explaining that it depends, then asks you to book a call.
+
+It does depend. But the *structure* of the pricing is knowable, and so is the thing nobody explains: what each model quietly rewards the agency for doing.
+
+## The three ways this gets priced
+
+Most quotes you receive will be one of these, or a blend.
+
+**Percentage of ad spend.** You pay a share of whatever you spend on ads. Commonly somewhere in the region of ten to twenty percent, often with a monthly minimum underneath it. Spend more, pay more.
+
+**Flat monthly fee.** A fixed amount regardless of spend. Small-business retainers commonly start in the mid-hundreds and rise into the thousands depending on channels and complexity.
+
+**Per channel or per project.** Priced by how many platforms are being run, or by a defined piece of work. Less common with larger agencies, more common with smaller shops and freelancers.
+
+There's also **performance-based pricing** — a fee tied to leads or revenue. Rarer than it sounds, because it requires tracking both parties trust, and it usually comes with a base fee anyway.
+
+![Comparison of percentage-of-spend, flat fee, and per-channel PPC pricing models](/images/adNetwork.png#half "The model matters more than the number")
+
+## What each model rewards
+
+This is the part worth understanding before you compare quotes.
+
+**Percentage of spend rewards spending.** If your agency earns fifteen percent of your budget, their revenue rises when your budget rises. That isn't necessarily bad — often the right answer genuinely is to spend more on what's working. But the incentive is real, and it points one direction. Ask how they'd advise you to *cut* spend, and see whether the answer is convincing.
+
+**Flat fees reward efficiency.** The agency earns the same whether you spend $2,000 or $20,000, so their incentive is to spend as little of their own time as possible. That can mean sharp, focused work. It can also mean your account gets looked at once a month.
+
+**Per-channel pricing rewards adding channels.** Straightforward to understand, and the risk is equally straightforward: you can end up running four platforms when two were working.
+
+**No model is dishonest.** Every one of them has a pull. Knowing which pull you're buying tells you what to watch.
+
+## What the fee does and doesn't include
+
+The single most common misunderstanding in this category.
+
+**The management fee is not your ad spend.** Ad spend goes to Google, Meta, Amazon, or wherever you're advertising. It should be billed to your own payment method, in your own ad account. The management fee is what you pay a person to plan, build, run, and watch it.
+
+**Usually included:** account setup, campaign structure, keyword or audience research, bid and budget management, reporting.
+
+**Often not included:** creative — the actual images, video, and ad copy — landing pages, tracking implementation, and anything on your website. These get quoted separately more often than people expect. Ask.
+
+**The question that saves arguments later:** "What's included, and what would be billed on top?" Get it written down.
+
+## The budget where this stops making sense
+
+Nobody selling ads management will volunteer this, so here it is.
+
+Add the management fee to your monthly ad spend and work out what share of the total the fee represents.
+
+If you're spending $1,000 a month on ads and paying $500 to have it managed, a third of your money is going to management. The campaigns now have to perform extraordinarily well just to cover the overhead, and at $1,000 of monthly spend there usually isn't enough data for anyone to optimise against.
+
+**Rough guide:** below about a thousand a month in ad spend, paid management rarely pays for itself. You're better off running simple campaigns yourself, or spending that money on something else entirely, until the budget grows.
+
+Between roughly one and three thousand a month, it's genuinely arguable and depends on how much your own time is worth.
+
+Above that, management usually earns its fee — a competent operator will generally save more in wasted spend than they cost.
+
+**Any agency willing to take your money at $500 a month of spend without saying this to you is telling you something about how they work.**
+
+## Questions worth asking before you sign
+
+**"Which model is this, and why that one for my business?"** A good answer connects the model to your situation. A bad answer is that it's just how they do it.
+
+**"Who owns the ad accounts?"** They should be yours, in your name, from the start. If the agency owns the account, you lose your entire campaign history when you leave. This is the single most expensive mistake in this category.
+
+**"What's the minimum commitment?"** Some ramp-up period is reasonable — ads take time to gather enough data to judge. Twelve months is not reasonable for a small business.
+
+**"What happens if I want to reduce spend?"** Especially worth asking on a percentage model.
+
+**"Who actually works on my account?"** The person selling is frequently not the person doing it.
+
+**"What do I keep if we stop?"** Accounts, historical data, creative, tracking setup, landing pages. All of it should be yours.
+
+## Cheap isn't the goal, and neither is expensive
+
+A low fee attached to somebody logging in once a month will cost you far more in wasted ad spend than the fee saved. A high fee doesn't guarantee attention either.
+
+What you're actually buying is someone's regular attention plus their judgment about where your money goes. Price it against that, not against a benchmark number.
+
+If you'd rather not price ads management as a separate line at all, that's how [our paid ads management](/for-businesses/digital-ads) is set up — it runs as a project inside an on-demand plan, so it's covered by the plan rather than billed per channel. Ad spend still goes straight to the platforms and stays in your accounts, as it should anywhere.`,
+    faqs: [
+      {
+        q: "How much does PPC management cost?",
+        a: "It depends on the pricing model. Percentage-of-spend arrangements commonly run somewhere around ten to twenty percent of your ad budget, often with a monthly minimum. Flat monthly fees for small businesses commonly start in the mid-hundreds and rise with channels and complexity. Neither figure includes your actual ad spend.",
+      },
+      {
+        q: "Is the management fee separate from ad spend?",
+        a: "Yes, and it should always be. Ad spend goes directly to the advertising platform from your own account. The management fee is what you pay someone to run it. Be cautious with any arrangement that bundles the two, because it makes it hard to see what you're paying for.",
+      },
+      {
+        q: "What's the minimum ad budget worth managing?",
+        a: "As a rough guide, below about a thousand a month in ad spend, management fees tend to eat too large a share of the total, and there usually isn't enough data to optimise against. Between one and three thousand it's arguable. Above that, good management generally saves more than it costs.",
+      },
+      {
+        q: "Is percentage of ad spend or a flat fee better?",
+        a: "Neither is better in the abstract — they reward different behaviour. Percentage pricing gives the agency a reason to grow your budget. Flat fees give them a reason to spend less time on your account. Pick the pull you'd rather manage, and ask how they'd handle the obvious conflict.",
+      },
+      {
+        q: "What should be included in PPC management?",
+        a: "Typically account setup, campaign structure, research, bid and budget management, and reporting. Creative, landing pages, and tracking implementation are often quoted separately. Ask for the boundary in writing before you start.",
+      },
+    ],
+  },
+  {
+    slug: "website-maintenance-cost",
+    title: "What website maintenance actually costs",
+    metaTitle: "What Website Maintenance Actually Costs",
+    category: "Marketing Playbook",
+    date: "Aug 8, 2026",
+    publishAt: "2026-08-08",
+    excerpt:
+      "Website maintenance pricing ranges from nothing to thousands a month, and the gap is mostly about what's included. What you're really paying for, and what you can skip.",
+    image: "/images/DigitalAuditWallpaper.png",
+    body: `Ask three people what website maintenance costs and you'll get answers from zero to several thousand a month. All three can be right, because "maintenance" covers everything from renewing a domain once a year to having someone on call when the checkout breaks.
+
+So the useful question isn't what it costs. It's what you're buying, and which parts you actually need.
+
+## The costs you have whether or not you hire anyone
+
+These exist even if you never pay a person. Budget them first.
+
+**Domain registration.** Annual, and usually the cheapest line on the list.
+
+**Hosting.** Monthly or annual. Shared hosting for a small brochure site is inexpensive; anything with a database, a store, or real traffic costs more.
+
+**SSL certificate.** Often included with hosting now. Check rather than assume.
+
+**Platform and plugin fees.** If you're on a website builder, that subscription is your platform cost. If you're on WordPress, it's whatever premium plugins and themes you're running.
+
+**A small brochure site can run on very little.** A store with a booking system and a handful of paid integrations will cost meaningfully more before anyone touches it.
+
+![The layers of website maintenance cost, from hosting up to ongoing support](/images/DigitalAudit.png "Hosting is the floor. Everything above it is a choice.")
+
+## What you're paying a person for
+
+This is where the range gets wide, and it comes down to which of these you're buying.
+
+**Monitoring.** Someone notices when the site is down, slow, or broken — ideally before you do. Largely automated, cheap to provide, and genuinely valuable.
+
+**Updates and patches.** Platform, plugin, and security updates. Boring, necessary, and the thing most neglected sites are missing. Skipping this is how small sites get hacked.
+
+**Backups.** Automated, stored somewhere other than the site itself, and tested. Untested backups aren't backups.
+
+**Content edits.** Changing hours, adding a service, swapping photos, publishing a post. The part most owners actually want and the part most quotes are vaguest about.
+
+**Technical performance.** Page speed, mobile behaviour, broken links, the technical basics that affect search.
+
+**Being on call.** Someone who answers when something breaks. This is what you're really paying for at the higher end, and it's worth more than it looks until the day you need it.
+
+## Rough shape of the pricing
+
+Hedged deliberately — rates move and vary a lot by market.
+
+**Low end.** Little more than the platform costs, with automated updates and backups running unattended and nobody looking at it. Fine for a simple site that rarely changes.
+
+**Middle.** A small monthly fee covering monitoring, updates, backups, and a limited amount of edit time. This is where most small businesses land and where the value is usually best.
+
+**Higher end.** Larger monthly retainers including generous or unlimited edits, performance work, and fast response. Justified when the site is genuinely part of how you make money — bookings, orders, lead forms.
+
+**What moves you up the range:** an online store, a booking system, custom code, frequent content changes, or a site where downtime costs you real money in an afternoon.
+
+## What "unlimited edits" usually means
+
+You'll see this a lot, and it's rarely dishonest — but it's rarely unlimited either.
+
+It generally means **unlimited small requests, handled in a queue.** Change some text, swap an image, update your hours: yes. Build a new section, add a booking system, redesign a page: that's a project, quoted separately.
+
+**Ask two questions.** What counts as an edit rather than a project? And how fast do edits get done — same day, same week, or whenever?
+
+## What you can skip
+
+Not everything on a maintenance quote is worth paying for.
+
+**Monthly reports nobody reads.** If the report is the deliverable, that's a warning sign. Reporting should be a byproduct of work, not the work.
+
+**SEO bundled into maintenance.** Real SEO is a separate discipline with separate effort. When it's folded into a maintenance fee it usually means very little of it is happening.
+
+**Security add-ons on top of updates.** Keeping the platform patched and backed up is most of small-site security. Be sceptical of premium security tiers layered on top.
+
+**A retainer for a site that never changes.** If you genuinely update your site once a year, you need hosting, automated backups, and someone's phone number. Not a monthly fee.
+
+## Questions to ask before you sign
+
+**"What exactly is included each month?"** In deliverables, not hours.
+
+**"What counts as an edit versus a project?"** The most common source of surprise invoices.
+
+**"How quickly do things get done?"** A cheap plan with a two-week turnaround is expensive when your hours are wrong going into a holiday weekend.
+
+**"Where are the backups, and have they been tested?"** Ask when the last restore was attempted.
+
+**"Who owns the hosting and the domain?"** Both should be in your name. If your maintenance provider owns your domain, leaving becomes a negotiation.
+
+**"What happens if I stop?"** You should keep the site, the domain, the hosting access, and the content.
+
+## The honest summary
+
+For most small businesses, the right answer to [website maintenance](/for-businesses/website-builds-updates) is a modest monthly fee covering monitoring, updates, backups, and a reasonable amount of edit time — plus a clear understanding of what counts as a project.
+
+Paying nothing and hoping is how sites go down quietly and stay down for a week. Paying a large retainer for a site that changes twice a year is money that would do more elsewhere.`,
+    faqs: [
+      {
+        q: "How much does website maintenance cost?",
+        a: "It depends almost entirely on what's included. Hosting and domain renewal are the unavoidable baseline and are usually modest. Paying someone for monitoring, updates, backups, and content edits adds a monthly fee that scales with how complex the site is and how quickly you need things done.",
+      },
+      {
+        q: "Do I need to pay for website maintenance?",
+        a: "You need hosting, a domain, and current security patches regardless. Whether you pay a person depends on whether you'll do the updates yourself and how costly downtime is for you. A site that takes orders or bookings is worth maintaining properly.",
+      },
+      {
+        q: "What's included in website maintenance?",
+        a: "Typically monitoring, platform and plugin updates, backups, basic technical performance checks, and some amount of content editing. Redesigns, new features, and new pages are usually quoted as separate projects.",
+      },
+      {
+        q: "What does \"unlimited edits\" actually mean?",
+        a: "Usually unlimited small requests handled in a queue — text changes, image swaps, hours updates. New sections, new functionality, and redesigns are projects, not edits. Ask where the line sits and how fast the queue moves.",
+      },
+      {
+        q: "Can I maintain my own website?",
+        a: "Yes, if you'll actually do it. That means applying updates promptly, keeping tested backups somewhere other than the site, and noticing when something breaks. Most owners intend to and then don't, which is the real argument for paying someone.",
+      },
+    ],
+  },
 ];
+
+// A post is live when it has no publishAt, or its publishAt date has passed. In
+// development everything is visible so drafts can be reviewed locally before
+// their public go-live date.
+export function isLive(post: Post, now: number = Date.now()): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
+  if (!post.publishAt) return true;
+  return new Date(post.publishAt).getTime() <= now;
+}
 
 export function getPost(slug: string): Post | undefined {
   return POSTS.find((p) => p.slug === slug);

@@ -4,9 +4,9 @@ import GuidebookCheckoutCTA from "@/components/GuidebookCheckoutCTA";
 import TrackedLink from "@/components/TrackedLink";
 
 export const metadata = {
-  title: "Business Services | Ads for Good",
+  title: "Outsourced Marketing for Small Business | On-Demand Plans",
   description:
-    "Explore our business services — start with guidance, move into execution, or plug us in as your marketing team.",
+    "Outsourced marketing for small businesses, from $750 a month. Pick the projects you want running, swap them any time, and skip hiring a full marketing team.",
 };
 
 export default function ForBusinessesPage() {
@@ -21,11 +21,11 @@ export default function ForBusinessesPage() {
             </p>
 
             <h1 className="mt-6 text-4xl font-semibold tracking-tight leading-[1.04] sm:text-5xl lg:text-6xl">
-              Flexible, on-demand marketing support—without hiring a full team.
+              Outsourced marketing support, without hiring a full team.
             </h1>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/85">
-              Our plans includes a set number of active marketing projects. You can swap, pause, or change them anytime.
+              Our on-demand marketing plans include a set number of active marketing projects — the equivalent of a fractional marketing team, without the hiring. Swap, pause, or change them anytime.
             </p>
           </div>
         </div>
@@ -39,7 +39,7 @@ export default function ForBusinessesPage() {
               Plans
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight">
-              Our On-Demand Marketing Plans:
+              Flexibility and Delivery with Every Plan
             </h2>
           </div>
         </div>
@@ -219,7 +219,7 @@ export default function ForBusinessesPage() {
 
     <div className="flex flex-wrap items-center gap-3">
       <Link
-        href="/for-businesses/local-direct-mail"
+        href="/for-businesses/direct-mail"
         className="rounded-xl border border-orange-200 bg-[#fff7ed] px-4 py-3 transition hover:bg-orange-100 w-[240px] text-center"
       >
         Direct Mail — varies
@@ -314,7 +314,7 @@ export default function ForBusinessesPage() {
 
     <div className="grid grid-cols-[240px_1fr] items-center gap-4">
       <Link
-        href="/for-businesses/local-direct-mail"
+        href="/for-businesses/direct-mail"
         className="w-[240px] text-center rounded-xl border border-orange-200 bg-[#fff7ed] px-4 py-3 transition hover:bg-orange-100"
       >
         Direct Mail — varies
@@ -363,6 +363,74 @@ export default function ForBusinessesPage() {
         </div>
       </section>
 
+      {/* FAQ */}
+      <section className="mx-auto max-w-6xl px-4 pb-20">
+        <div className="max-w-3xl">
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-orange-500">
+            FAQ
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight">
+            Frequently asked questions
+          </h2>
+        </div>
+
+        <div className="mt-8 max-w-3xl space-y-6">
+          <div className="rounded-3xl border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-neutral-900">
+              How much does outsourced marketing cost?
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-neutral-700">
+              Our plans start at $750 a month for two active projects, $1,400 for four, and $2,400 for eight. For comparison, one full-time marketing hire costs more than most small businesses spend on marketing in total — and one person rarely covers ads, email, SEO, and the website.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-neutral-900">
+              What counts as a marketing project?
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-neutral-700">
+              Any of the areas listed above — profile management, SEO, paid ads, website updates, email marketing, or marketing operations. Your plan sets how many run at once, not which ones. Swap them whenever your priorities change.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-neutral-900">
+              Is this the same as hiring an agency?
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-neutral-700">
+              Similar idea, different shape. Agencies usually sell campaigns on a retainer that quietly covers everything. Here you pick what&apos;s active, see what each project is doing, and change it without renegotiating.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-neutral-900">
+              Is ad spend included?
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-neutral-700">
+              No. Ad spend goes directly to Google, Meta, or wherever you&apos;re advertising, billed to your own account and staying in your name. Plan pricing covers the work, not the media.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-neutral-900">
+              Is there a contract or minimum?
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-neutral-700">
+              Plans are month to month. Some individual projects need a run-up period to be worth judging — SEO and paid ads both take time to produce a readable result — and we&apos;ll say so before starting rather than after.
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-base font-semibold text-neutral-900">
+              What if I only need one thing done?
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-neutral-700">
+              Then a plan is probably the wrong purchase. Our standalone services above cover one-time work, and if you&apos;re not sure what you need, a conversation costs nothing.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* CHAPTER / LIFECYCLE INTELLIGENCE */}
       <section className="px-4 pb-28">
   <div className="mx-auto max-w-6xl rounded-[2rem] bg-[#24364D] p-8 sm:p-10 text-white shadow-[0_12px_36px_rgba(0,0,0,0.10)]">
@@ -392,7 +460,7 @@ export default function ForBusinessesPage() {
     <div className="relative mt-8 min-h-[220px]">
     <div className="mt-8 max-w-3xl">
       <p className="text-base leading-8 text-white/80">
-        Chapter is our own technology, developed to help businesses understand how people interact with every piece of your business to do to what you care about. Instead of only looking at isolated clicks, channels, or last-touch conversions, Chapter's Lifecycle Intelligence is about seeing the full customer journey and using that context to make smarter business decisions.
+        Chapter is our own technology, developed to help businesses understand how people interact with every part of your business before doing what you care about. Instead of only looking at isolated clicks, channels, or last-touch conversions, Chapter's Lifecycle Intelligence is about seeing the full customer journey and using that context to make smarter business decisions.
       </p>
 
       <p className="mt-5 text-base leading-8 text-white/80">

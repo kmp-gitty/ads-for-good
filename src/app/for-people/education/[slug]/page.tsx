@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { POSTS, getPost } from "../posts";
+import { POSTS, getPost, isLive } from "../posts";
 import PostBody from "../PostBody";
 import BackToTop from "../BackToTop";
+
+// ISR: re-evaluate hourly so scheduled posts (publishAt) flip live on their date
+// without needing a redeploy.
+export const revalidate = 3600;
 
 export function generateStaticParams() {
   return POSTS.map((p) => ({ slug: p.slug }));
@@ -30,7 +34,8 @@ export default async function BlogPostPage({
 }) {
   const { slug } = await params;
   const post = getPost(slug);
-  if (!post) notFound();
+  // Not found, or scheduled for a future publishAt (hidden in prod until then).
+  if (!post || !isLive(post)) notFound();
 
   return (
     <main className="bg-[#f7f4ee] text-neutral-900 px-4 pt-12 pb-24 flex justify-center">

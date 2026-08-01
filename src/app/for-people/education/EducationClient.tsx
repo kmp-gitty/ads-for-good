@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { POSTS, postImage } from "./posts";
+import { POSTS, postImage, isLive } from "./posts";
 
 const POSTS_PER_LOAD = 8;
 
@@ -13,9 +13,11 @@ export default function EducationClient() {
   const [visibleCount, setVisibleCount] = useState(POSTS_PER_LOAD);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
 
-  // Newest first — sort by post date so the latest entries always lead the hub.
+  // Live posts only (scheduled/future posts are hidden in production until their
+  // publishAt date), newest first by post date so the latest entries lead the hub.
+  const livePosts = POSTS.filter((p) => isLive(p));
   const filteredPosts = (
-    selectedTopics.length === 0 ? POSTS : POSTS.filter((p) => selectedTopics.includes(p.category))
+    selectedTopics.length === 0 ? livePosts : livePosts.filter((p) => selectedTopics.includes(p.category))
   )
     .slice()
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
