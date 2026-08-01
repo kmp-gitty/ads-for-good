@@ -37,9 +37,14 @@ const TOP_N_CAMPAIGNS = 15;
 // Hardcoded channel vocabulary — matches the channel taxonomy used in
 // dashboard mockdata + the channel classifier in canonical_v1's session-entry
 // resolver. Adding a new channel requires bumping this list.
+// MUST match the stored channel vocab (canonical_v1/v2 channel_path segments)
+// AND the UI's CHANNEL_OPTIONS in InfluenceClient.tsx — the snapshot key is the
+// anchor_key the app looks up, so any drift silently bypasses the snapshot and
+// forces the anchor onto the slow live-RPC path. Stored vocab uses "(direct)"
+// (parenthesized) and spaces, not underscores.
 const CHANNELS = [
-  "direct", "email", "organic_search", "paid_search", "meta",
-  "paid_social", "tiktok", "referral", "affiliate", "sms",
+  "(direct)", "email", "organic search", "paid search",
+  "organic social", "paid social", "referral",
 ];
 
 type Combo = {
