@@ -4,9 +4,9 @@ import SmoothScrollButton from "@/components/SmoothScrollButton";
 import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
-  title: "Lifecycle Attribution | Ads for Good",
+  title: "Chapter: Identity-First marketing attribution software | ads for Good",
   description:
-    "Chapter helps businesses connect visits, channels, behavior, and conversions into one holistic view — so marketing decisions are based on full journeys, not isolated channels.",
+    "Chapter stitches every visit, channel, and behavior to one person — so you can see the whole journey instead of five platforms all claiming the same conversion. From $149/mo.",
 };
 
 export default function LifecycleAttributionPage() {
@@ -56,6 +56,43 @@ export default function LifecycleAttributionPage() {
   </SmoothScrollButton>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* THE PROBLEM */}
+      <section className="mx-auto max-w-6xl px-4 pt-16">
+        <div className="max-w-3xl">
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-orange-500">
+            The problem
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+            Purchase journeys are convoluted — across every industry
+          </h2>
+          <p className="mt-4 text-base leading-8 text-neutral-700">
+            After discovering a product, consumers typically research it at least
+            three separate times before deciding to buy — and 22.8% research five
+            or more times.* Every one of those moments is a chance for
+            single-platform reporting to miscount, double-count, or lose the
+            person entirely.
+          </p>
+          <p className="mt-4 text-base leading-8 text-neutral-700">
+            More than three in ten shoppers research online and then buy in
+            store. EMARKETER&apos;s own analysts note that attribution for these
+            purchases is especially difficult, because it&apos;s unclear where the
+            customer actually discovered the product.*
+          </p>
+          <p className="mt-3 text-xs leading-6 text-neutral-500">
+            *EMARKETER and impact.com,{" "}
+            <a
+              href="https://www.emarketer.com/content/5-key-stats-on-shopping-journey"
+              className="underline hover:text-neutral-800"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              5 key stats on the shopping journey
+            </a>
+            , January 2025
+          </p>
         </div>
       </section>
 
@@ -143,7 +180,7 @@ export default function LifecycleAttributionPage() {
             <p className="mt-4 text-sm leading-7 text-neutral-700">
               Uses identity graph logic to connect anonymous users, identified
               users, and events across visits, with capabilities to stitch
-              online to offline and vice versa.<br/><em>*No invasive personally identifiable information used*</em>
+              online to offline and vice versa.<br/><em>*No invasive personally identifiable information used.*</em> Chapter operates as a designated Service Provider and is built for GDPR and CCPA compliance, with each client&apos;s data isolated on a per-client basis.
             </p>
           </div>
 
@@ -159,6 +196,214 @@ export default function LifecycleAttributionPage() {
               observational data, channel correlations, lift-style signals, and
               practical answers to questions like: what to change to increase
               adoption, revenue, orders, or engagement.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* CHAPTER LINKS */}
+      <section className="mx-auto max-w-6xl px-4 pb-16">
+        <div className="max-w-3xl">
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-orange-500">
+            Added capability
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+            Chapter Links: own the click, keep the identity
+          </h2>
+          <p className="mt-4 text-base leading-8 text-neutral-700">
+            Every marketing link routes through Chapter first — in under 50
+            milliseconds — before the visitor ever lands.
+          </p>
+        </div>
+
+        <div className="mt-10 grid gap-6 md:grid-cols-2">
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">Captures the click, first-party</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Chapter owns the click, not Meta or Mailchimp. It enters the
+              attribution chain as a real event rather than something
+              reconstructed later from a platform&apos;s own report.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">Stitches identity across the hop</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Connects the click to one person across devices — and even to
+              destinations with no Chapter pixel at all, which is what makes
+              booking tools and appointment systems measurable. Identifiers are
+              hashed, never stored.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">Routes the visitor intelligently</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              One link, every destination. The landing page is chosen per visitor
+              in real time by person, cohort, geo, device, cart, or time.
+              Returners with an open cart land on their cart. iOS gets a deep
+              link, everyone else gets web.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">Repoint once, updates everywhere</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Change the destination in one place and it updates everywhere the
+              link is live. No re-trafficking, no resubmitting ads, no new email
+              send to change an A/B test.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm md:col-span-2">
+            <h3 className="text-2xl font-semibold">Consent-gated at the click</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Chapter Links checks opt-out status at the moment of the click and
+              stops tracking before it starts. Opted-out visitors still get
+              routed — they just never get tracked.
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-6 max-w-3xl text-sm leading-7 text-neutral-700">
+          Works behind any ESP or ad platform, including Mailchimp, Klaviyo,
+          Shopify Email, Meta, and Google Ads.
+        </p>
+        <p className="mt-3 max-w-3xl text-sm leading-7 text-neutral-700">
+          Available on its own as{" "}
+          <a href="/for-businesses/smart-links" className="text-orange-500 underline hover:text-orange-600">
+            Smart Links
+          </a>
+          .
+        </p>
+      </section>
+
+      {/* MOMENT IDENTITY */}
+      <section className="mx-auto max-w-6xl px-4 pb-16">
+        <div className="max-w-3xl">
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-orange-500">
+            Added capability
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+            Moment Identity: when a stranger becomes someone you know
+          </h2>
+          <p className="mt-4 text-base leading-8 text-neutral-700">
+            Every popup captures an email. This one captures a person.
+          </p>
+          <p className="mt-4 text-base leading-8 text-neutral-700">
+            A prompt fires on exit intent, time on page, scroll depth, a click,
+            cart abandonment, or a winback visit — your copy, your offer,
+            optionally your discount code. When someone submits, Chapter resolves
+            the identity in real time and stitches everything they did before
+            that moment into their journey.
+          </p>
+          <p className="mt-4 text-base leading-8 text-neutral-700">
+            The ad click three weeks ago. The three page views last Tuesday. All
+            of it attaches to a person who, until that submit, was anonymous.
+          </p>
+        </div>
+
+        <div className="mt-10 grid gap-6 md:grid-cols-2">
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">The email is hashed in the browser</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Hashing happens in your visitor&apos;s browser before anything is
+              sent. Chapter captures the person, not the plaintext address.
+              Consent is respected throughout.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">It replaces the popup, not your ESP</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Mailchimp, Klaviyo, or whatever you already send with keeps doing
+              that job. Moment Identity replaces the capture layer sitting in
+              front of it.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm md:col-span-2">
+            <h3 className="text-2xl font-semibold">The prompts grade themselves</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Chapter fires shown, submitted, and dismissed events for every
+              prompt, so each one&apos;s show-to-submit rate appears in the
+              dashboard alongside everything else. It doesn&apos;t just act — it
+              measures its own action.
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-6 max-w-3xl text-sm leading-7 text-neutral-700">
+          Available on its own as{" "}
+          <a href="/for-businesses/smart-prompts" className="text-orange-500 underline hover:text-orange-600">
+            Smart Prompts
+          </a>
+          .
+        </p>
+      </section>
+
+      {/* JUSTIFICATION */}
+      <section className="mx-auto max-w-6xl px-4 pb-16">
+        <div className="max-w-3xl">
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-orange-500">
+            Justification
+          </p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+            Answering &ldquo;did it actually work?&rdquo;
+          </h2>
+          <p className="mt-4 text-base leading-8 text-neutral-700">
+            Observations tell you what happened. These tell you what it was worth.
+          </p>
+        </div>
+
+        <div className="mt-10 grid gap-6 md:grid-cols-2">
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">Lift</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Compares performance when a channel is present against performance
+              when it isn&apos;t. The straightforward version of the question:
+              with this channel running, do the numbers move?
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">Incrementality</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Compares like cohorts — similar people, one group exposed to a
+              channel and one not. Stricter than lift, because it controls for the
+              customers who would have converted anyway. This is the difference
+              between a channel getting credit and a channel earning it.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">Value</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Chapter&apos;s own measure, and the one that answers the question you
+              actually ask at budget time: what would happen to the metrics you
+              care about if you removed this channel from the mix entirely? Not
+              what it&apos;s credited with, but what disappears without it.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">Lagged Impact</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              The effect of a channel over time on other channels and other
+              metrics. This is where brand-style media finally becomes measurable
+              — the spend that closes little on its own but makes everything else
+              close faster. Lagged Impact is how you catch it before you cut it.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm md:col-span-2">
+            <h3 className="text-2xl font-semibold">Cross-Source Influence</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              Anchor on a channel, a page, or a campaign, and see what people did
+              before and after being exposed to it, within a window you define.
+              The leading actions that preceded it and the trailing actions that
+              followed. This is how you find sequence — not just which touchpoints
+              matter, but what order they work in.
             </p>
           </div>
         </div>
@@ -214,6 +459,39 @@ export default function LifecycleAttributionPage() {
                 measurement and decision-making.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FROM THE FIELD */}
+      <section className="mx-auto max-w-6xl px-4 pb-16">
+        <div className="rounded-[2rem] bg-[#24364D] p-8 text-white shadow-[0_12px_36px_rgba(0,0,0,0.10)] sm:p-10">
+          <div className="max-w-3xl">
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-orange-300">
+              From the field
+            </p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+              1,200 scans. Six weeks. Still no answer.
+            </h2>
+            <p className="mt-5 text-base leading-8 text-white/80">
+              A company works a conference booth and comes away with 1,200 badge
+              scans. Six weeks later someone asks the obvious question: how many
+              turned into pipeline?
+            </p>
+            <p className="mt-4 text-base leading-8 text-white/80">
+              Nobody can say. The scans sit in one system. The CRM has some of
+              those people under different records. The ad platform claims a
+              portion of them. The website has no idea any of it happened.
+              There&apos;s a sales team working the list and still no clear answer.
+            </p>
+            <p className="mt-4 text-base leading-8 text-white/80">
+              The data exists. It&apos;s just scattered across systems that
+              don&apos;t reconcile — so nobody can say what&apos;s real.
+            </p>
+            <p className="mt-4 text-base leading-8 text-white">
+              One identity. One source of truth. That&apos;s the whole problem
+              Chapter is built to solve.
+            </p>
           </div>
         </div>
       </section>
@@ -342,6 +620,16 @@ export default function LifecycleAttributionPage() {
               higher-quality journeys, lift, and future performance.
             </p>
           </div>
+
+          <div className="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+            <h3 className="text-2xl font-semibold">Identity Across Touches</h3>
+            <p className="mt-4 text-sm leading-7 text-neutral-700">
+              When the same person visits anonymously, signs up by email, and
+              converts three weeks later, most tools see three different users.
+              Chapter sees one. Channels are how people reach you — identity is
+              who they are and what they did.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -436,6 +724,14 @@ export default function LifecycleAttributionPage() {
   />
   </div>
 
+        <p className="mt-6 text-sm leading-7 text-neutral-700">
+          Already on an on-demand marketing plan? Chapter is 20% off.{" "}
+          <a href="/for-businesses" className="text-orange-500 underline hover:text-orange-600">
+            See plans
+          </a>
+          .
+        </p>
+
         <div className="mt-6 rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -470,6 +766,15 @@ export default function LifecycleAttributionPage() {
     platforms, analytics, ecommerce, and conversion flows — then turn
     that fragmented activity into a more useful lifecycle view.
   </p>
+
+  <div className="mt-8 rounded-[2rem] border border-white/15 bg-white/5 p-6">
+    <h3 className="text-2xl font-semibold">First-party by default</h3>
+    <p className="mt-3 max-w-3xl text-base leading-8 text-white/80">
+      Chapter plugs into your own site as first-party intelligence, which is
+      more durable and more accurate than third-party pixels. We can run
+      third-party if you prefer — first-party is simply our recommendation.
+    </p>
+  </div>
 
   <div className="mt-8">
     <InquiryLauncher
