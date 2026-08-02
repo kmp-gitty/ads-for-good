@@ -233,11 +233,20 @@ export function NavBar() {
                     </li>
                     <li>
                       <Link
+                        href="/for-businesses/newsletter-advertising"
+                        className="flex items-center gap-2 hover:text-orange-500"
+                      >
+                        <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
+                        Newsletter Ads: Advertisers
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
                         href="/for-businesses/ad-monetization"
                         className="flex items-center gap-2 hover:text-orange-500"
                       >
                         <span className="h-1.5 w-1.5 rounded-[2px] bg-neutral-800" />
-                        Ad Monetization
+                        Newsletter Ads: Publishers
                       </Link>
                     </li>
                   </ul>
@@ -595,11 +604,18 @@ export function NavBar() {
                 <span className="ml-2 text-[10px] font-semibold text-orange-500">Available Self-Serve</span>
               </Link>
               <Link
+                href="/for-businesses/newsletter-advertising"
+                onClick={() => setMobileOpen(false)}
+                className="pl-6 hover:text-orange-500"
+              >
+                Newsletter Ads: Advertisers
+              </Link>
+              <Link
                 href="/for-businesses/ad-monetization"
                 onClick={() => setMobileOpen(false)}
                 className="pl-6 hover:text-orange-500"
               >
-                Ad Monetization
+                Newsletter Ads: Publishers
               </Link>
               <p className="pl-3 pt-2 text-xs font-semibold text-neutral-800">
                 Spending Less

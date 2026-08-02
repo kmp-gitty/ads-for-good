@@ -28,7 +28,7 @@ export default function InquiryModal({
 
   const options = useMemo(
     () =>
-      serviceOptions ?? [
+      (serviceOptions ?? [
         "DIY Marketing Guidebook",
         "Marketing Advice On Demand",
         "Digital Health Check",
@@ -37,14 +37,16 @@ export default function InquiryModal({
         "Digital Profile Management",
         "SEO Services",
         "Digital Ads",
+        "Email Marketing Services",
         "Local Direct Mail",
         "On-Demand Marketing Plans",
         "Chapter: Lifecycle Attribution",
         "Smart Links",
         "Smart Prompts",
         "Ad Monetization",
+        "Newsletter Advertising",
         "Subscription Freedom",
-      ],
+      ]).slice().sort((a, b) => a.localeCompare(b)),
     [serviceOptions]
   );
 
@@ -325,15 +327,17 @@ export default function InquiryModal({
                       Interested Service(s)
                     </legend>
 
-                    {/* IMPORTANT: force 2 columns only (no lg:grid-cols-3) */}
-                    <div className="mt-2 grid gap-2 grid-cols-1 sm:grid-cols-2">
+                    {/* Column-major fill so options read A→Z DOWN the left
+                        column, then continue down the right (CSS multi-column,
+                        not grid, which would fill left→right per row). */}
+                    <div className="mt-2 columns-1 sm:columns-2 gap-2">
                       {options.map((opt) => {
                         const checked = services.includes(opt);
                         return (
                           <label
                             key={opt}
                             className={[
-                              "flex items-start gap-2 rounded-xl border px-3 py-1 text-sm cursor-pointer",
+                              "flex items-start gap-2 rounded-xl border px-3 py-1 text-sm cursor-pointer break-inside-avoid mb-2",
                               checked
                                 ? "border-orange-300 bg-white"
                                 : "border-orange-100 bg-white/70 hover:bg-white",

@@ -3,9 +3,9 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import AdMonetizationGraphic from "@/components/AdMonetizationGraphic";
 
 export const metadata = {
-  title: "Ad Monetization | Ads for Good",
+  title: "Newsletter Monetization: Earn From the Emails You Already Send | ads for Good",
   description:
-    "Earn extra revenue from the audience you already have — starting with email. Extra, afG's ad network, adds seamless ad delivery to the sends you're already doing.",
+    "Monetize your email list without raising prices or adding products. Extra inserts text-only ads you approve into the sends you already make, and you keep a share.",
 };
 
 export default function AdMonetizationPage() {
@@ -16,7 +16,7 @@ export default function AdMonetizationPage() {
         {/* Left: Hero copy */}
         <div className="flex-1 min-w-0 flex flex-col">
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-            Ad Monetization: Extra revenue from what you already send.
+            Newsletter monetization: extra revenue from what you already send.
           </h1>
 
           <div className="mt-3 flex gap-2 text-xs font-medium">
@@ -73,7 +73,7 @@ export default function AdMonetizationPage() {
           <div className="grid gap-8 md:grid-cols-2 md:items-center">
             <div>
               <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-                What you can do with Ad Monetization.
+                How newsletter monetization works with Extra
               </h2>
               <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed">
                 Monetize the audience and properties you already own — starting
@@ -149,6 +149,32 @@ export default function AdMonetizationPage() {
                 Chapter by afG · Attribution
               </span>
             </div>
+            <h3 className="mt-8 text-lg font-semibold">Where the ads come from</h3>
+            <p className="mt-3 max-w-3xl text-sm sm:text-base leading-7 text-white/80">
+              Extra sources demand from advertisers who want to reach engaged,
+              opted-in audiences rather than rented attention on a social feed.
+              Every advertiser is reviewed before they enter the network, and
+              every sender approves who appears in their own sends — so nothing
+              runs in your email that you haven&apos;t seen.
+            </p>
+            <p className="mt-4 max-w-3xl text-sm sm:text-base leading-7 text-white/80">
+              We&apos;re building the advertiser side deliberately rather than
+              filling inventory with whatever clears. That means fill starts
+              modest and grows as the network does. If you&apos;d rather wait
+              until it&apos;s dense, say so and we&apos;ll come back to you — but
+              early senders help shape which advertisers we take.
+            </p>
+            <p className="mt-6 max-w-3xl text-sm sm:text-base leading-7 text-white/80">
+              Looking to advertise <em>in</em> newsletters rather than sell space
+              in your own? See{" "}
+              <a
+                href="/for-businesses/newsletter-advertising"
+                className="text-orange-300 underline hover:text-orange-200"
+              >
+                newsletter advertising with Extra
+              </a>
+              .
+            </p>
           </div>
         </section>
 
