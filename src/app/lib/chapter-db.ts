@@ -6,6 +6,8 @@ export const chapterSchemas = {
     attribution: (db: any) => db.schema("chapter_attribution"),
     reporting: (db: any) => db.schema("chapter_reporting"),
     config: (db: any) => db.schema("chapter_config"),
+    recommendations: (db: any) => db.schema("chapter_recommendations"),
+    observations: (db: any) => db.schema("chapter_observations"),
   };
   
   export const coreSchemas = {
