@@ -3,9 +3,9 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import SubscriptionFreedomGraphic from "@/components/SubscriptionFreedomGraphic";
 
 export const metadata = {
-  title: "Subscription Freedom — Own Your Tools & Cut Software Costs | Ads for Good",
+  title: "Custom Tools to Replace Your Subscriptions | ads for Good",
   description:
-    "Stop renting software you could own. We build custom replacements for the subscriptions and widgets you pay for monthly — built for your business, so you cancel the fee and own the tool.",
+    "We build custom web and Shopify tools to replace the widgets and apps you rent monthly. Built for your workflow, hosted on your site, owned outright. Cancel the subscription.",
 };
 
 export default function SubscriptionFreedomPage() {
@@ -16,7 +16,7 @@ export default function SubscriptionFreedomPage() {
         {/* Left: Hero copy */}
         <div className="flex-1 min-w-0 flex flex-col">
           <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-            Subscription Freedom: Own your tools, don&apos;t rent them.
+            Custom-built tools to replace the ones you rent.
           </h1>
 
           <div className="mt-3 flex gap-2 text-xs font-medium">
@@ -26,10 +26,10 @@ export default function SubscriptionFreedomPage() {
           </div>
 
           <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-            You&apos;re paying every month for tools you could own. We build you a
-            custom replacement — one that fits your business and lives on your
-            site — so you cancel the subscription and stop paying rent on
-            software you&apos;ll never own.
+            You&apos;re paying every month for tools you could own. We do custom
+            web and Shopify app development for businesses that don&apos;t need a
+            whole software project — just the one tool that fits, built properly,
+            living on your own site. Then you cancel the subscription.
           </p>
 
           {/* CTA */}
@@ -71,7 +71,7 @@ export default function SubscriptionFreedomPage() {
           <div className="grid gap-8 md:grid-cols-2 md:items-center">
             <div>
               <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-                What you can do with Subscription Freedom.
+                What we build
               </h2>
               <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed">
                 Almost any rented tool can become one you own — and it usually
@@ -97,7 +97,7 @@ export default function SubscriptionFreedomPage() {
             {/* Pill 2 */}
             <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
               <h3 className="text-sm font-semibold text-neutral-900">
-                A tool built for you.
+                A custom Shopify app, built to fit.
               </h3>
               <p className="mt-2 text-xs text-neutral-700">
                 A client&apos;s rigid Shopify fulfillment app didn&apos;t fit her
@@ -187,6 +187,10 @@ export default function SubscriptionFreedomPage() {
               {
                 q: "Isn't a subscription easier?",
                 a: "Sometimes. If a tool is cheap and does exactly what you need, keep it. We only replace the ones worth owning.",
+              },
+              {
+                q: "Is a custom build cheaper than the subscription?",
+                a: "Eventually, and it depends on the tool. A build is money up front against a fee that never stops, so the maths turns on how long you'll keep paying and how much the subscription costs. Cheap tools you'd keep for a year rarely justify it. A $40-a-month widget you've already paid for three years is a different conversation. Tell us what you're paying and we'll be straight about whether it's worth replacing.",
               },
               {
                 q: "Do I own it outright?",
