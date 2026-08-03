@@ -14,6 +14,7 @@ import {
   cachedConnectionsCampaignOptions,
   cachedConnectionsCohortOptions,
   cachedConnectionsSelfRecurrence,
+  cachedConnectionsReturnLoop,
   type ConnectionsAnchorPayload,
   type ConnectionsAnchorType,
   type ConnectionsConnectionType,
@@ -121,7 +122,7 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
   const excludeChannels = (anchorType === "channel" && connectionType === "channel") ? [channel]  : [];
   const excludePages    = (anchorType === "page"    && connectionType === "page")    ? [pagePath] : [];
 
-  const [resolveRows, upstreamRows, downstreamRows, selfRecurrenceRows] = await Promise.all([
+  const [resolveRows, upstreamRows, downstreamRows, selfRecurrenceRows, returnLoopRows] = await Promise.all([
     cachedConnectionsAnchorResolve({
       p_client_key:     clientKey,
       p_anchor_type:    anchorType,
@@ -156,6 +157,15 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
       p_anchor_type:    anchorType,
       p_anchor_payload: anchorPayload,
     }),
+    // 9.5 — return-loop, channel anchor only (session-level table).
+    anchorType === "channel"
+      ? cachedConnectionsReturnLoop({
+          p_client_key: clientKey,
+          p_channel:    channel,
+          p_start_ts:   start.toISOString(),
+          p_end_ts:     end.toISOString(),
+        })
+      : Promise.resolve([]),
   ]);
 
   const resolve         = resolveRows[0] ?? null;
@@ -178,6 +188,7 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
       connectionType={connectionType}
       resolve={resolve}
       selfRecurrence={selfRecurrence}
+      returnLoop={returnLoopRows}
       upstream={upstreamRows}
       downstream={downstreamRows}
     />

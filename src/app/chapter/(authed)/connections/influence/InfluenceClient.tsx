@@ -26,6 +26,7 @@ import type {
   ConnectionsCohortOption,
   ConnectionsConnectionType,
   ConnectionsSelfRecurrenceRow,
+  ConnectionsReturnLoopRow,
 } from "../../../_lib/dashboard-rpc";
 
 const CHANNEL_OPTIONS: { value: string; label: string }[] = [
@@ -417,7 +418,7 @@ function AnchorExplanation({
 }
 
 export default function InfluenceClient({
-  clientKey, range, anchorType, anchorChannel, anchorPagePath, anchorCampaignId, anchorCohortId, pageOptions, campaignOptions, cohortOptions, windowDays, outcomeWindowDays, connectionType, resolve, selfRecurrence, upstream, downstream,
+  clientKey, range, anchorType, anchorChannel, anchorPagePath, anchorCampaignId, anchorCohortId, pageOptions, campaignOptions, cohortOptions, windowDays, outcomeWindowDays, connectionType, resolve, returnLoop, upstream, downstream,
 }: {
   clientKey:         string;
   range:             string;
@@ -434,6 +435,7 @@ export default function InfluenceClient({
   connectionType:    ConnectionsConnectionType;
   resolve:           ConnectionsAnchorResolveRow | null;
   selfRecurrence:    ConnectionsSelfRecurrenceRow | null;
+  returnLoop:        ConnectionsReturnLoopRow[];
   upstream:          ConnectionsPanelRow[];
   downstream:        ConnectionsPanelRow[];
 }) {
@@ -1021,28 +1023,39 @@ export default function InfluenceClient({
                   Matched <strong style={{ color: "var(--ink-2)" }}>{Number(selectedCohort.total_matched).toLocaleString()}</strong> of {Number(selectedCohort.total_uploaded).toLocaleString()} uploads
                 </div>
               )}
-              {/* Self-recurrence tile — Channel anchor only for v1. Shows the
-                  "this channel keeps producing for this person" pattern, per
-                  spec §4.3b. Hidden when there are zero recurrent identities. */}
-              {anchorType === "channel" && selfRecurrence && Number(selfRecurrence.n_recurrent) > 0 && (
-                <div style={{ marginTop: 4, padding: "8px 10px", borderRadius: 6, background: "rgba(227,100,16,0.10)", border: "1px solid rgba(227,100,16,0.18)", textAlign: "center" }}>
-                  <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".12em", color: "var(--accent)", fontWeight: 600 }}>
-                    Self-recurrence
+              {/* 9.5 — Return-to-anchor tile (Channel anchor only). Replaces the
+                  self-recurrence tile: it counts the same returning customers but
+                  ALSO shows the intervening channel they touched between anchor
+                  entries — the loop last-click can never see. Hidden when no loop. */}
+              {anchorType === "channel" && (() => {
+                const total = Number(returnLoop[0]?.total_anchored ?? 0);
+                const nRet  = Number(returnLoop[0]?.n_returned ?? 0);
+                if (total === 0 || nRet === 0) return null;
+                const pct = Math.round((nRet / total) * 100);
+                const floor = nFloor(total);
+                const interv = returnLoop
+                  .filter(r => r.intervening_channel != null && Number(r.n_identities ?? 0) >= floor)
+                  .map(r => ({ ch: r.intervening_channel as string, n: Number(r.n_identities ?? 0) }));
+                return (
+                  <div style={{ marginTop: 4, padding: "8px 10px", borderRadius: 6, background: "rgba(227,100,16,0.10)", border: "1px solid rgba(227,100,16,0.18)", textAlign: "center" }}>
+                    <div style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: ".12em", color: "var(--accent)", fontWeight: 600 }}>
+                      Return-to-anchor
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
+                      {pct}%
+                      <span style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 500, marginLeft: 4 }}>
+                        ({nRet.toLocaleString()} of {total.toLocaleString()})
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 2, lineHeight: 1.35 }}>
+                      left, then re-entered via {channelLabel(anchorChannel)}
+                      {interv.length > 0 && (
+                        <> — touching {interv.map(x => `${channelLabel(x.ch)} (${x.n.toLocaleString()})`).join(", ")} in between</>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
-                    {Math.round(Number(selfRecurrence.pct_recurrent) * 100)}%
-                    <span style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 500, marginLeft: 4 }}>
-                      ({Number(selfRecurrence.n_recurrent).toLocaleString()} of {Number(selfRecurrence.total_anchored).toLocaleString()})
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 2, lineHeight: 1.3 }}>
-                    have {channelLabel(anchorChannel)} in <strong style={{ color: "var(--ink-2)" }}>{Number(selfRecurrence.avg_chapters_recurrent || 0).toFixed(1)}</strong> chapters
-                    {Number(selfRecurrence.revenue_recurrent) > 0 && (
-                      <> · ${Math.round(Number(selfRecurrence.revenue_recurrent)).toLocaleString()} attributable</>
-                    )}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
               <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 4 }}>
                 Bot-filtered · resolved across all sources
               </div>

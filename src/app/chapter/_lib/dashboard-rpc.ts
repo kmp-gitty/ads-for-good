@@ -917,6 +917,34 @@ export const cachedConnectionsSelfRecurrence = unstable_cache(
   { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_self_recurrence:v2"] },
 );
 
+// 9.5 — return-loop primitive. Of identities anchored on a channel, the share
+// that left, touched another channel, and re-entered via the anchor (a loop
+// last-click can't see), plus the intervening channels. Channel anchor only.
+export type ConnectionsReturnLoopArgs = {
+  p_client_key: string;
+  p_channel:    string;
+  p_start_ts:   string;   // ISO
+  p_end_ts:     string;   // ISO
+};
+export type ConnectionsReturnLoopRow = {
+  intervening_channel: string | null;  // null = summary row (carries totals)
+  n_identities:        number | null;
+  total_anchored:      number | null;
+  n_returned:          number | null;
+};
+export const cachedConnectionsReturnLoop = unstable_cache(
+  async (args: ConnectionsReturnLoopArgs): Promise<ConnectionsReturnLoopRow[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc("connections_return_loop", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] connections_return_loop failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as ConnectionsReturnLoopRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:connections_return_loop:v1"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_return_loop:v1"] },
+);
+
 export type ConnectionsCampaignOption = {
   campaign_id:     string;
   campaign_name:   string | null;
