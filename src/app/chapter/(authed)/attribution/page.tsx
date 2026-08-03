@@ -13,6 +13,7 @@ import {
   bucketedNow,
   cachedClientConfig,
   cachedAttributionOverview,
+  cachedAttributionModelIndicators,
   cachedPurchaseOverview,
   cachedJourneyOverview,
   cachedEngagementQuality,
@@ -47,10 +48,11 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
   // The other 3 RPCs feed the standard TopBar KPI strip (Orders/Revenue/AOV/
   // Journeys/% Identified) so attribution shares the same header as other pages.
   const [
-    attribution, purchase, journey, engagement,
+    attribution, indicators, purchase, journey, engagement,
     purchasePrior, journeyPrior, engagementPrior,
   ] = await Promise.all([
     cachedAttributionOverview(args),
+    cachedAttributionModelIndicators(args),
     cachedPurchaseOverview(args),
     cachedJourneyOverview(args),
     cachedEngagementQuality(args),
@@ -62,6 +64,7 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
   return (
     <AttributionClient
       attribution={attribution}
+      indicators={indicators}
       summary={purchase[0] ?? null}
       journey={journey[0] ?? null}
       engagement={engagement[0] ?? null}

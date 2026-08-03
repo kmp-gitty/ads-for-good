@@ -11,9 +11,14 @@ import {
   CHANNELS, ATTRIBUTION_MODEL_LABELS, type AttributionModel,
   type ChannelKey, type Kpi,
 } from "../../_components/mockdata";
-import type { AttributionOverviewRow } from "../../_lib/dashboard-rpc";
+import type { AttributionOverviewRow, AttributionModelIndicatorRow } from "../../_lib/dashboard-rpc";
 
 const CHANNEL_FALLBACK = { name: "Unknown", color: "#9CA0A8", short: "—" };
+
+// 6.5 blind-spot indicators — suppress channels below this many qualifying
+// chapters (matches the Channel Roles / Path Patterns sample floor). A channel
+// under the floor is listed as low-sample rather than given a headline number.
+const INDICATOR_SAMPLE_FLOOR = 20;
 
 // 6.2 — each model states its allocation rule on-page (visible without hovering).
 // Linear's wording explicitly covers the repeat-touch case, matching the SQL
@@ -45,6 +50,7 @@ function countLabelFor(boundaryEvent: string): string {
 
 type Props = {
   attribution: AttributionOverviewRow[];
+  indicators: AttributionModelIndicatorRow[];
   summary: {
     total_orders: number | null;
     total_revenue: number | null;
@@ -237,9 +243,71 @@ function AllocTable({ models, data }: { models: AttributionModel[]; data: Channe
   );
 }
 
-function SingleModelView({ data, metric, countLabel, netRevenue, netOrders }: {
+// 6.5 — per-model blind-spot slot. One consistent line stating what the model
+// hides, with the supporting per-channel numbers. Copy states facts, no advice.
+//   last   → 6.5(b) % assisted (closing chapters that had an earlier, different channel)
+//   linear → 6.5(c) share of path a channel actually occupies when present
+//   first  → 6.5(a) coverage readout needs the attribution-lookback control (not shipped);
+//            we state the blind spot without fabricating the number
+function ModelBlindSpot({ model, indicators }: {
+  model: AttributionModel; indicators: AttributionModelIndicatorRow[];
+}) {
+  if (model === "first") {
+    return (
+      <div className="card-sub" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line-2)", lineHeight: 1.5 }}>
+        <strong style={{ color: "var(--ink-2)" }}>What first-touch hides:</strong> everything after the first click.
+        A coverage readout — the share of each channel’s activity that began before your window — arrives with the attribution-lookback control.
+      </div>
+    );
+  }
+
+  const isLast = model === "last";
+  const label = isLast ? "What last-touch hides" : "What an even split hides";
+  const lead = isLast
+    ? "share of each channel’s closing chapters that were assisted — had an earlier, different channel:"
+    : "share of the path each channel actually occupies when it appears (a channel repeated across touches is not an even split):";
+
+  // Pick the model-appropriate metric + sample column, gate on the floor, rank desc.
+  const rows = indicators
+    .map((r) => {
+      const n = isLast ? Number(r.last_touch_chapters ?? 0) : Number(r.present_chapters ?? 0);
+      const val = isLast ? r.pct_assisted : r.avg_share_of_path;
+      return { channel: r.channel, n, val: val == null ? null : Number(val) };
+    })
+    .filter((r) => r.val != null);
+  const shown = rows.filter((r) => r.n >= INDICATOR_SAMPLE_FLOOR).sort((a, b) => (b.val! - a.val!));
+  const lowSample = rows.filter((r) => r.n < INDICATOR_SAMPLE_FLOOR).map((r) => r.channel);
+
+  if (shown.length === 0 && lowSample.length === 0) return null;
+
+  return (
+    <div className="card-sub" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line-2)", lineHeight: 1.6 }}>
+      <strong style={{ color: "var(--ink-2)" }}>{label}:</strong> {lead}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 6 }}>
+        {shown.map((r) => {
+          const ch = CHANNELS[r.channel as ChannelKey] ?? CHANNEL_FALLBACK;
+          return (
+            <span key={r.channel} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 10, height: 10, background: ch.color, borderRadius: 3 }}></span>
+              <span style={{ color: "var(--ink-2)" }}>{ch.name}</span>
+              <span style={{ fontWeight: 600 }}>{r.val!.toFixed(0)}%</span>
+            </span>
+          );
+        })}
+      </div>
+      {lowSample.length > 0 && (
+        <div style={{ marginTop: 6, color: "var(--ink-3)" }}>
+          Low sample (under {INDICATOR_SAMPLE_FLOOR} chapters), not shown: {lowSample.map((c) => (CHANNELS[c as ChannelKey] ?? CHANNEL_FALLBACK).name).join(", ")}.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indicators }: {
   data: ChannelPct[]; metric: Metric; countLabel: string;
   netRevenue: number | null; netOrders: number | null;
+  indicators: AttributionModelIndicatorRow[];
 }) {
   const { model } = useChapter();
   const modelVal = (c: ChannelPct): number =>
@@ -304,12 +372,13 @@ function SingleModelView({ data, metric, countLabel, netRevenue, netOrders }: {
           <strong style={{ color: "var(--ink-2)" }}>{fmtVal(unattributed)}</strong> ({unattributedPct.toFixed(1)}%) of the {fmtVal(net ?? 0)} headline {unitLabel} is not attributed to any channel path — chapters with no captured session entry (shown as “(unknown)” elsewhere). The bars above allocate the {fmtVal(total)} that does.
         </div>
       )}
+      <ModelBlindSpot model={model} indicators={indicators} />
     </div>
   );
 }
 
 export default function AttributionClient({
-  attribution, summary, journey, engagement,
+  attribution, indicators, summary, journey, engagement,
   priorSummary, priorJourney, priorEngagement,
   clientKey: _clientKey, range: _range, boundaryEvent,
 }: Props) {
@@ -413,6 +482,7 @@ export default function AttributionClient({
               countLabel={countLabel}
               netRevenue={summary?.total_revenue ?? null}
               netOrders={summary?.total_orders ?? null}
+              indicators={indicators}
             />
 
             {/* ───── Compare models ───────────────────────────────────────── */}

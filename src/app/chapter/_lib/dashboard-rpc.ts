@@ -191,6 +191,21 @@ export type AttributionOverviewRow = {
 
 export const cachedAttributionOverview = makeCachedRpc<AttributionOverviewRow>("attribution_overview");
 
+// 6.5(b)/(c) — per-model blind-spot indicators. Computed from v2 channel_path:
+//   pct_assisted    = last-touch chapters that had >=1 different channel earlier
+//   avg_share_of_path = when a channel is present, avg share of the path it occupies
+export type AttributionModelIndicatorRow = {
+  channel: string;
+  last_touch_chapters: number | null;
+  assisted_chapters:   number | null;
+  pct_assisted:        number | null;
+  present_chapters:    number | null;
+  avg_share_of_path:   number | null;
+};
+
+export const cachedAttributionModelIndicators =
+  makeCachedRpc<AttributionModelIndicatorRow>("attribution_model_indicators");
+
 // ─────── Path combinations (set / collapsed / raw modes) ────────────────────
 // One row per (mode-specific grouping key). Returns `channels` + `gaps` arrays
 // that drive PathRender directly:
