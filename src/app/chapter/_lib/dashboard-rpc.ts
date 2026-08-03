@@ -757,7 +757,7 @@ export const cachedConnectionsAnchorResolve = unstable_cache(
   { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_anchor_resolve:v4"] },
 );
 
-export type ConnectionsConnectionType = "channel" | "page";
+export type ConnectionsConnectionType = "channel" | "page" | "campaign";
 
 export type ConnectionsPanelArgs = {
   p_client_key:           string;

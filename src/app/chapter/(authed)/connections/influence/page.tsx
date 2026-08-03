@@ -60,15 +60,16 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
   const windowDays  = Math.max(1, Math.min(180, parseInt(params.window_days || "", 10) || DEFAULT_WINDOW_DAYS));
   const outcomeWindowDays = Math.max(1, Math.min(180, parseInt(params.outcome_window_days || "", 10) || DEFAULT_OUTCOME_WINDOW_DAYS));
 
-  // Connections-view default depends on anchor type: when the anchor is a
-  // page / campaign / cohort, page-to-page is the more interesting question;
-  // when the anchor is a channel, channel-to-channel stays the default.
+  // 9.3 — connection VIEW. Default is "all": a single mixed panel that unions
+  // channel + page + campaign connections and ranks them by lift, so the most
+  // influential connection surfaces regardless of type. The explicit type
+  // toggles (Channels / Pages / Campaigns) still narrow to one dimension.
   const rawConnType   = (params.connection_type && params.connection_type.trim()) || "";
-  const connectionType: ConnectionsConnectionType = rawConnType === "page"
-    ? "page"
-    : rawConnType === "channel"
-    ? "channel"
-    : (anchorType === "channel" ? "channel" : "page");
+  const connectionView: "all" | ConnectionsConnectionType =
+    rawConnType === "page"     ? "page" :
+    rawConnType === "channel"  ? "channel" :
+    rawConnType === "campaign" ? "campaign" :
+    "all";
 
   const clientConfig = await cachedClientConfig(clientKey);
   const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
@@ -115,12 +116,37 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
       ? { campaign_id: campaignId, start_ts: start.toISOString(), end_ts: end.toISOString() }
       : { channel:     channel,    start_ts: start.toISOString(), end_ts: end.toISOString() }; // cohort anchor removed (9.4)
 
-  // Self-repetition strip per spec §4.3a: only meaningful when the connection
-  // type matches the anchor type. Channel anchor + channel connections → strip
-  // the anchor channel. Page anchor + page connections → strip the anchor page.
-  // Cross-type combos (e.g. Page anchor + channel connections) need no strip.
-  const excludeChannels = (anchorType === "channel" && connectionType === "channel") ? [channel]  : [];
-  const excludePages    = (anchorType === "page"    && connectionType === "page")    ? [pagePath] : [];
+  // Self-repetition strip per spec §4.3a: strip the anchor's own identity from
+  // the connection list. A channel anchor strips its channel from channel
+  // connections; a page anchor strips its page from page connections. Campaign
+  // self-exclusion is handled inside the RPC (campaign branch). Each dimension's
+  // RPC only applies the exclude array it understands, so passing both is safe.
+  const excludeChannels = anchorType === "channel" ? [channel]  : [];
+  const excludePages    = anchorType === "page"    ? [pagePath] : [];
+
+  // 9.3 — dimensions to fetch. "all" unions channel + page + campaign; a
+  // specific view fetches just that one. Each dimension is its own snapshot-
+  // backed RPC call, so the merge stays fast; the client ranks the union by
+  // lift and tags each row with its dimension (connected_thing_type).
+  const dims: ConnectionsConnectionType[] =
+    connectionView === "all" ? ["channel", "page", "campaign"] : [connectionView];
+
+  const fetchPanel = (direction: "upstream" | "downstream") =>
+    Promise.all(
+      dims.map((dim) =>
+        cachedConnectionsPanel({
+          p_client_key:          clientKey,
+          p_anchor_type:         anchorType,
+          p_anchor_payload:      anchorPayload,
+          p_direction:           direction,
+          p_window_days:         windowDays,
+          p_outcome_window_days: outcomeWindowDays,
+          p_exclude_channels:    excludeChannels,
+          p_connection_type:     dim,
+          p_exclude_pages:       excludePages,
+        }),
+      ),
+    ).then((lists) => lists.flat());
 
   const [resolveRows, upstreamRows, downstreamRows, selfRecurrenceRows, returnLoopRows] = await Promise.all([
     cachedConnectionsAnchorResolve({
@@ -128,28 +154,8 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
       p_anchor_type:    anchorType,
       p_anchor_payload: anchorPayload,
     }),
-    cachedConnectionsPanel({
-      p_client_key:           clientKey,
-      p_anchor_type:          anchorType,
-      p_anchor_payload:       anchorPayload,
-      p_direction:            "upstream",
-      p_window_days:          windowDays,
-      p_outcome_window_days:  outcomeWindowDays,
-      p_exclude_channels:     excludeChannels,
-      p_connection_type:      connectionType,
-      p_exclude_pages:        excludePages,
-    }),
-    cachedConnectionsPanel({
-      p_client_key:           clientKey,
-      p_anchor_type:          anchorType,
-      p_anchor_payload:       anchorPayload,
-      p_direction:            "downstream",
-      p_window_days:          windowDays,
-      p_outcome_window_days:  outcomeWindowDays,
-      p_exclude_channels:     excludeChannels,
-      p_connection_type:      connectionType,
-      p_exclude_pages:        excludePages,
-    }),
+    fetchPanel("upstream"),
+    fetchPanel("downstream"),
     // Self-recurrence tile — only meaningful for channel anchor in v1 but the
     // RPC is safe to call for any anchor type (returns zeros for others).
     cachedConnectionsSelfRecurrence({
@@ -185,7 +191,7 @@ export default async function CrossSourceInfluencePage({ searchParams }: { searc
       cohortOptions={cohortOptions}
       windowDays={windowDays}
       outcomeWindowDays={outcomeWindowDays}
-      connectionType={connectionType}
+      connectionView={connectionView}
       resolve={resolve}
       selfRecurrence={selfRecurrence}
       returnLoop={returnLoopRows}

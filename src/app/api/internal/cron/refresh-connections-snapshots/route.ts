@@ -51,7 +51,7 @@ type Combo = {
   anchor_type: "channel" | "page" | "campaign" | "cohort";
   anchor_key: string;
   direction: "upstream" | "downstream";
-  connection_type: "channel" | "page";
+  connection_type: "channel" | "page" | "campaign";
 };
 
 type WorkerResult =
@@ -197,7 +197,10 @@ async function refreshClient(
 
   let combos: Combo[] = [];
   const directions: Combo["direction"][] = ["upstream", "downstream"];
-  const connTypes: Combo["connection_type"][] = ["channel", "page"];
+  // 9.3 — 'campaign' added: every anchor type also gets a campaign-connection
+  // panel (email campaigns clicked up/downstream of the anchor). Live base
+  // over the ~40 real campaigns/client, so lift is comparable to page/channel.
+  const connTypes: Combo["connection_type"][] = ["channel", "page", "campaign"];
 
   for (const channel of CHANNELS) {
     for (const d of directions) for (const ct of connTypes) {

@@ -176,8 +176,26 @@ const cellDivided = (firstCell: boolean): React.CSSProperties => ({
   borderLeft:   firstCell ? undefined : DIVIDER,
 });
 
+// 9.3 — dimension badge for the mixed "All" panel so page + campaign rows read
+// as distinct from channel rows (channels already carry their colored chip).
+const DIM_BADGE: Record<string, { bg: string; fg: string; label: string }> = {
+  page:     { bg: "rgba(45,122,201,0.12)", fg: "#2D7AC9", label: "page" },
+  campaign: { bg: "rgba(142,93,168,0.14)", fg: "#8E5DA8", label: "email" },
+};
+function DimBadge({ kind }: { kind: string }) {
+  const b = DIM_BADGE[kind];
+  if (!b) return null;
+  return (
+    <span style={{
+      flex: "0 0 auto", fontSize: 8.5, textTransform: "uppercase", letterSpacing: ".06em",
+      fontWeight: 700, color: b.fg, background: b.bg, padding: "1px 4px", borderRadius: 3,
+    }}>
+      {b.label}
+    </span>
+  );
+}
+
 function ConnectionRow({ row, index, onClick, gate }: { row: ConnectionsPanelRow; index: number; onClick?: (r: ConnectionsPanelRow) => void; gate: GateStatus }) {
-  const isPageRow = row.connected_thing_type === "page";
   const stripe = index % 2 === 1 ? "rgba(15,23,34,0.025)" : "transparent";
   // 9.2 — only rows clearing both the n-floor and the noise gate render at full
   // weight. Gated rows stay visible (for a channel an operator is arguing about)
@@ -199,12 +217,23 @@ function ConnectionRow({ row, index, onClick, gate }: { row: ConnectionsPanelRow
         opacity: gated ? 0.5 : 1,
       }}
     >
-      <div style={{ ...cellDivided(true), minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {isPageRow
-          ? <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{row.connected_thing_label}</span>
-          : <ChannelChip ch={row.connected_thing_id as ChannelKey} />}
+      <div style={{ ...cellDivided(true), display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        {row.connected_thing_type === "channel" ? (
+          <ChannelChip ch={row.connected_thing_id as ChannelKey} />
+        ) : (
+          <>
+            <DimBadge kind={row.connected_thing_type} />
+            <span style={{
+              flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              fontSize: 12,
+              fontFamily: row.connected_thing_type === "page" ? "ui-monospace, monospace" : undefined,
+            }}>
+              {row.connected_thing_label}
+            </span>
+          </>
+        )}
         {gated && (
-          <span style={{ marginLeft: 6, fontSize: 9.5, color: "var(--ink-4)", fontStyle: "italic", whiteSpace: "nowrap" }}>
+          <span style={{ flex: "0 0 auto", fontSize: 9.5, color: "var(--ink-4)", fontStyle: "italic", whiteSpace: "nowrap" }}>
             · {gateLabel(gate)}
           </span>
         )}
@@ -287,7 +316,7 @@ function PanelHeader({ outcomeWindowDays }: { outcomeWindowDays: number }) {
         fontWeight: 600,
       }}
     >
-      <HeaderCell                              bottom="Channel" firstCell />
+      <HeaderCell                              bottom="Connection" firstCell />
       <HeaderCell                              bottom="People"  />
       <HeaderCell top="of"      bottom="Anchor" />
       <HeaderCell top="vs base" bottom="Lift"   />
@@ -426,7 +455,7 @@ function AnchorExplanation({
 }
 
 export default function InfluenceClient({
-  clientKey, range, anchorType, anchorChannel, anchorPagePath, anchorCampaignId, anchorCohortId, pageOptions, campaignOptions, cohortOptions, windowDays, outcomeWindowDays, connectionType, resolve, returnLoop, upstream, downstream,
+  clientKey, range, anchorType, anchorChannel, anchorPagePath, anchorCampaignId, anchorCohortId, pageOptions, campaignOptions, cohortOptions, windowDays, outcomeWindowDays, connectionView, resolve, returnLoop, upstream, downstream,
 }: {
   clientKey:         string;
   range:             string;
@@ -440,7 +469,7 @@ export default function InfluenceClient({
   cohortOptions:     ConnectionsCohortOption[];
   windowDays:        number;
   outcomeWindowDays: number;
-  connectionType:    ConnectionsConnectionType;
+  connectionView:    "all" | ConnectionsConnectionType;
   resolve:           ConnectionsAnchorResolveRow | null;
   selfRecurrence:    ConnectionsSelfRecurrenceRow | null;
   returnLoop:        ConnectionsReturnLoopRow[];
@@ -487,6 +516,13 @@ export default function InfluenceClient({
       next.set("anchor_page_path", row.connected_thing_id);
       next.delete("anchor_channel");
       next.delete("anchor_campaign_id");
+      next.delete("anchor_cohort_id");
+      next.delete("connection_type");
+    } else if (row.connected_thing_type === "campaign") {
+      next.set("anchor_type",         "campaign");
+      next.set("anchor_campaign_id",  row.connected_thing_id);
+      next.delete("anchor_channel");
+      next.delete("anchor_page_path");
       next.delete("anchor_cohort_id");
       next.delete("connection_type");
     }
@@ -538,7 +574,13 @@ export default function InfluenceClient({
     : isCohortAnchor
     ? (selectedCohort?.name || "cohort")
     : channelLabel(anchorChannel);
-  const connectionsNoun  = connectionType === "page" ? "pages" : "channels";
+  const connectionsNoun  =
+    connectionView === "page"     ? "pages" :
+    connectionView === "campaign" ? "campaigns" :
+    connectionView === "channel"  ? "channels" :
+    "connections";
+  // Capitalized noun for panel subtitles.
+  const ConnectionsNoun  = connectionsNoun.charAt(0).toUpperCase() + connectionsNoun.slice(1);
 
   // Upload-cohort modal state
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -873,26 +915,39 @@ export default function InfluenceClient({
             </Dropdown>
           )}
 
-          {/* Connection type toggle — shown for Page / Campaign / Cohort
-              anchors. Channel anchor stays single-view for now. */}
-          {(anchorType === "page" || anchorType === "campaign" || anchorType === "cohort") && (
-            <div className="toggle-group">
-              <button
-                className={connectionType === "page" ? "active" : ""}
-                onClick={() => setParam("connection_type", "page")}
-                title="Show what other pages they visited"
-              >
-                Pages
-              </button>
-              <button
-                className={connectionType === "channel" ? "active" : ""}
-                onClick={() => setParam("connection_type", "channel")}
-                title="Show what channels brought them or returned them"
-              >
-                Channels
-              </button>
-            </div>
-          )}
+          {/* 9.3 — connection dimension toggle. "All" unions channel + page +
+              campaign connections into one lift-ranked panel; the others narrow
+              to a single dimension. Shown for every anchor type. */}
+          <div className="toggle-group">
+            <button
+              className={connectionView === "all" ? "active" : ""}
+              onClick={() => setParam("connection_type", "all")}
+              title="Show the most influential connections of any type, ranked by lift"
+            >
+              All
+            </button>
+            <button
+              className={connectionView === "channel" ? "active" : ""}
+              onClick={() => setParam("connection_type", "channel")}
+              title="Show only the channels that brought or returned them"
+            >
+              Channels
+            </button>
+            <button
+              className={connectionView === "page" ? "active" : ""}
+              onClick={() => setParam("connection_type", "page")}
+              title="Show only the pages they visited"
+            >
+              Pages
+            </button>
+            <button
+              className={connectionView === "campaign" ? "active" : ""}
+              onClick={() => setParam("connection_type", "campaign")}
+              title="Show only the email campaigns they clicked"
+            >
+              Campaigns
+            </button>
+          </div>
 
           {/* Lag window dropdown — controls connection proximity to anchor */}
           <Dropdown align="left" width={180} trigger={
@@ -964,7 +1019,7 @@ export default function InfluenceClient({
             {/* UPSTREAM (left) */}
             <Panel
               title="Upstream"
-              subtitle={`${connectionsNoun === "pages" ? "Pages" : "Channels"} visited ${windowDays} days BEFORE the ${anchorDisplay} ${anchorTouchNoun}`}
+              subtitle={`${ConnectionsNoun} seen ${windowDays} days BEFORE the ${anchorDisplay} ${anchorTouchNoun}`}
               rows={upstream}
               outcomeWindowDays={outcomeWindowDays}
               emptyText={`No upstream ${connectionsNoun} meeting the 5-identity minimum within ${windowDays}d.`}
@@ -1072,7 +1127,7 @@ export default function InfluenceClient({
             {/* DOWNSTREAM (right) */}
             <Panel
               title="Downstream"
-              subtitle={`${connectionsNoun === "pages" ? "Pages" : "Channels"} visited ${windowDays} days AFTER the ${anchorDisplay} ${anchorTouchNoun}`}
+              subtitle={`${ConnectionsNoun} seen ${windowDays} days AFTER the ${anchorDisplay} ${anchorTouchNoun}`}
               rows={downstream}
               outcomeWindowDays={outcomeWindowDays}
               emptyText={`No downstream ${connectionsNoun} meeting the 5-identity minimum within ${windowDays}d.`}
