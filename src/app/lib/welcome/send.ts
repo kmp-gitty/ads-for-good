@@ -36,6 +36,12 @@ export function evaluateWelcome(s: WelcomeState, nowMs: number): { skips: number
     else skips.push(step);
   };
 
+  // Step 0 (instant welcome) is normally sent synchronously by the auth
+  // callback on fresh provision. Backfill it here for any path that skips that
+  // send — reactivation / reused-email signups — so it always eventually goes
+  // out, ahead of the later steps. No-ops on the happy path, where the callback
+  // already sent and recorded it (done.has(0)).
+  consider(0, true, true);
   consider(1, ageDays >= 1, needsInstall);
   consider(2, ageDays >= 3, needsInstall);
   consider(3, ageDays >= 5, needsBuild);
