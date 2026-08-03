@@ -118,6 +118,44 @@ function liftColor(n: number | null | undefined): string {
   return "var(--ink-2)";               // ~parity: unremarkable
 }
 
+// 9.2 — cell gate, mirroring lagged_impact_pair's reference implementation
+// (n floor + 95% CI on the share difference). Order matters: the n-floor is
+// checked FIRST because a tiny sample can produce a degenerate zero-variance
+// CI (e.g. 6/6 = 100%) that would otherwise read as "confident".
+type GateStatus = "ok" | "within_noise" | "below_n_floor";
+
+// Floor derived from the anchor population, not a constant — a connection must
+// appear for at least this many anchored identities to be shown at full weight.
+// GREATEST(30, 5% of anchor pop): 30 matches the lagged_impact reference; the
+// 5% term scales the demand up for large anchors.
+function nFloor(anchorPop: number): number {
+  return Math.max(30, Math.ceil(anchorPop * 0.05));
+}
+
+function gateStatus(row: ConnectionsPanelRow, anchorPop: number): GateStatus {
+  const n = Number(row.n_identities ?? 0);
+  if (anchorPop < 30 || n < nFloor(anchorPop)) return "below_n_floor";
+  // Page rows carry no base_rate/lift yet (9.1 deferred) — no noise test
+  // possible, so they pass on the n-floor alone.
+  if (row.base_rate == null || row.lift == null) return "ok";
+  const pObs = Number(row.pct_of_anchor);
+  const pBase = Number(row.base_rate);
+  if (!(anchorPop > 0) || !isFinite(pObs) || !isFinite(pBase)) return "below_n_floor";
+  // SE of the observed share; base rate treated as a stable population rate
+  // (large denominator), same simplification the reference makes on the
+  // baseline arm. within_noise ⇔ the 95% CI on (observed − base) includes 0,
+  // i.e. lift is indistinguishable from 1×.
+  const se = Math.sqrt(Math.max(pObs * (1 - pObs), 0) / anchorPop);
+  if (se === 0) return "within_noise"; // degenerate (0% or 100%): not established
+  return Math.abs(pObs - pBase) <= 1.96 * se ? "within_noise" : "ok";
+}
+
+function gateLabel(g: GateStatus): string {
+  return g === "below_n_floor" ? "below sample floor" : g === "within_noise" ? "within noise" : "";
+}
+
+const gateRank: Record<GateStatus, number> = { ok: 0, within_noise: 1, below_n_floor: 2 };
+
 // Single source of truth for the panel grid layout. Tight on the right-hand
 // numeric columns so the outcome % is always visible without horizontal
 // scroll. Channel column is flexible + ellipsis-truncating. Column gap is
@@ -137,9 +175,13 @@ const cellDivided = (firstCell: boolean): React.CSSProperties => ({
   borderLeft:   firstCell ? undefined : DIVIDER,
 });
 
-function ConnectionRow({ row, index, onClick }: { row: ConnectionsPanelRow; index: number; onClick?: (r: ConnectionsPanelRow) => void }) {
+function ConnectionRow({ row, index, onClick, gate }: { row: ConnectionsPanelRow; index: number; onClick?: (r: ConnectionsPanelRow) => void; gate: GateStatus }) {
   const isPageRow = row.connected_thing_type === "page";
   const stripe = index % 2 === 1 ? "rgba(15,23,34,0.025)" : "transparent";
+  // 9.2 — only rows clearing both the n-floor and the noise gate render at full
+  // weight. Gated rows stay visible (for a channel an operator is arguing about)
+  // but de-emphasised so they can never be mistaken for an established finding.
+  const gated = gate !== "ok";
   return (
     <div
       className="lrow"
@@ -153,12 +195,18 @@ function ConnectionRow({ row, index, onClick }: { row: ConnectionsPanelRow; inde
         borderBottom: DIVIDER,
         background: stripe,
         cursor: onClick ? "pointer" : "default",
+        opacity: gated ? 0.5 : 1,
       }}
     >
       <div style={{ ...cellDivided(true), minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {isPageRow
           ? <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12 }}>{row.connected_thing_label}</span>
           : <ChannelChip ch={row.connected_thing_id as ChannelKey} />}
+        {gated && (
+          <span style={{ marginLeft: 6, fontSize: 9.5, color: "var(--ink-4)", fontStyle: "italic", whiteSpace: "nowrap" }}>
+            · {gateLabel(gate)}
+          </span>
+        )}
       </div>
       <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>
         {row.n_identities}
@@ -241,14 +289,20 @@ function PanelHeader({ outcomeWindowDays }: { outcomeWindowDays: number }) {
 }
 
 function Panel({
-  title, subtitle, rows, outcomeWindowDays, emptyText, onRowClick,
+  title, subtitle, rows, outcomeWindowDays, emptyText, onRowClick, anchorPop,
 }: {
   title: string; subtitle: string;
   rows: ConnectionsPanelRow[];
   outcomeWindowDays: number;
   emptyText: string;
   onRowClick?: (r: ConnectionsPanelRow) => void;
+  anchorPop: number;
 }) {
+  // 9.2 — gate each row, then rank ok → within_noise → below_floor, lift desc
+  // within each band. Established findings sit on top at full weight.
+  const pop = Number(anchorPop) || 0;
+  const graded = rows.map((r) => ({ r, gate: gateStatus(r, pop) }));
+  const anyOk = graded.some((g) => g.gate === "ok");
   return (
     <div className="card" style={{ flex: 1, minWidth: 0, padding: 0, display: "flex", flexDirection: "column" }}>
       <div className="card-head" style={{ padding: "14px 18px", borderBottom: "1px solid var(--line)" }}>
@@ -264,17 +318,25 @@ function Panel({
           <div style={{ minWidth: 440 }}>
             <PanelHeader outcomeWindowDays={outcomeWindowDays} />
             <div>
-              {/* 9.1 — default sort by lift (co-occurs more than expected leads),
-                  n_identities as tiebreak; page rows (null lift) fall to the bottom. */}
-              {[...rows]
+              {/* 9.2 — established rows first (gate rank), then by lift; page rows
+                  (null lift) fall within their band. 9.1's lift sort survives as
+                  the intra-band tiebreak. */}
+              {[...graded]
                 .sort((a, b) =>
-                  (Number(b.lift ?? -1) - Number(a.lift ?? -1)) ||
-                  (Number(b.n_identities ?? 0) - Number(a.n_identities ?? 0)))
-                .map((r, i) => <ConnectionRow key={i} row={r} index={i} onClick={onRowClick} />)}
+                  (gateRank[a.gate] - gateRank[b.gate]) ||
+                  (Number(b.r.lift ?? -1) - Number(a.r.lift ?? -1)) ||
+                  (Number(b.r.n_identities ?? 0) - Number(a.r.n_identities ?? 0)))
+                .map((g, i) => <ConnectionRow key={i} row={g.r} index={i} onClick={onRowClick} gate={g.gate} />)}
             </div>
+            {!anyOk && (
+              <div style={{ padding: "8px 16px", fontSize: 10.5, color: "var(--ink-4)", lineHeight: 1.4, borderTop: DIVIDER }}>
+                No connection here clears the sample floor (≥ {nFloor(pop)} of {pop.toLocaleString()} anchored identities) and the noise gate, so none is shown as established. This is expected while cross-channel identity coverage is still low.
+              </div>
+            )}
             {rows.some((r) => r.lift != null) && (
               <div style={{ padding: "8px 16px", fontSize: 10.5, color: "var(--ink-4)", lineHeight: 1.4, borderTop: DIVIDER }}>
                 <strong style={{ color: "var(--ink-3)" }}>Lift</strong> = how often this appears here vs its <em>base rate</em> — the share of identities active in this window who touched it at all. 1× = no more than expected; 3× = three times its baseline.
+                {" "}<strong style={{ color: "var(--ink-3)" }}>Gating:</strong> a row shows at full weight only if it clears the sample floor (≥ {nFloor(pop)} identities, derived from the anchor population) and its lift is distinguishable from its base rate at 95%. Faded rows are below floor or within noise. This tab tests many pairs and does <em>not</em> correct for multiple comparisons — treat faded rows as not established.
               </div>
             )}
           </div>
@@ -897,6 +959,7 @@ export default function InfluenceClient({
               outcomeWindowDays={outcomeWindowDays}
               emptyText={`No upstream ${connectionsNoun} meeting the 5-identity minimum within ${windowDays}d.`}
               onRowClick={rehomeOn}
+              anchorPop={nAnchor}
             />
 
             {/* ANCHOR (middle) — kept compact so side panels have room for all columns */}
@@ -993,6 +1056,7 @@ export default function InfluenceClient({
               outcomeWindowDays={outcomeWindowDays}
               emptyText={`No downstream ${connectionsNoun} meeting the 5-identity minimum within ${windowDays}d.`}
               onRowClick={rehomeOn}
+              anchorPop={nAnchor}
             />
           </div>
         )}
