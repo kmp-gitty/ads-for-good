@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { withClient, isKnownClient } from "@/app/lib/db/per-client";
 import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
 import { isEmailIgnored } from "@/app/lib/auth/tracking-ignore";
+import { isBotUserAgent } from "@/app/lib/auth/bot-ua";
 
 function safeString(v: any): string | null {
   if (v === null || v === undefined) return null;
@@ -34,6 +35,12 @@ export async function POST(req: NextRequest) {
   }
   if (!isKnownClient(client_key)) {
     return withCors(req, NextResponse.json({ error: "unknown_client" }, { status: 400 }));
+  }
+
+  // Crawlers render JS and can fire identify on init; skip so they never mint a
+  // journey / identity edge (same phantom-journey fix as /api/consent).
+  if (isBotUserAgent(req.headers.get("user-agent"))) {
+    return withCors(req, NextResponse.json({ ok: true, skipped: "bot_ua" }));
   }
 
   // Suppression check: when the identity being attached is an email_sha256 on

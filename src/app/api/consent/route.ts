@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { withClient, isKnownClient } from "@/app/lib/db/per-client";
 import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
+import { isBotUserAgent } from "@/app/lib/auth/bot-ua";
 
 function safeString(v: any): string | null {
   if (v === null || v === undefined) return null;
@@ -39,6 +40,12 @@ export async function POST(req: NextRequest) {
   }
   if (!isKnownClient(client_key)) {
     return withCors(req, NextResponse.json({ error: "unknown_client" }, { status: 400 }));
+  }
+
+  // Crawlers (Googlebot, meta-externalads, …) render JS and fire this consent
+  // init on page load. Skip all writes so they never mint a phantom journey.
+  if (isBotUserAgent(req.headers.get("user-agent"))) {
+    return withCors(req, NextResponse.json({ ok: true, skipped: "bot_ua" }, { status: 200 }));
   }
 
   const consent_status = safeConsentStatus(payload?.consent_status);
@@ -113,34 +120,52 @@ export async function POST(req: NextRequest) {
         if (insErr?.code !== "23505") throw insErr;
       }
 
-      // 2. Journey upsert (consent fields). Single statement avoids the
-      //    SELECT-then-INSERT-or-UPDATE pattern from the original supabase-js code.
+      // 2. Journey consent fields. A journey is born from a real EVENT (collect),
+      //    never from a consent signal alone. Only opt_IN mints a journey here
+      //    (the visitor is being tracked and will generate events); opt_out /
+      //    unknown are UPDATE-only, so a consent-only init with no events
+      //    (crawlers, do-nothing opt-outs) never creates a phantom zero-event
+      //    journey — the over-count root cause.
       const firstTouch = tx.json({ referrer });
-      await tx`
-        INSERT INTO chapter_journey.journeys (
-          id, client_key, first_seen, last_seen,
-          first_touch, last_touch,
-          user_agent, country, region, city,
-          consent_status, consent_mode, consent_ts,
-          ever_opted_in, last_identity_key
-        ) VALUES (
-          ${journey_id}, ${client_key}, ${nowIso}, ${nowIso},
-          ${firstTouch}::jsonb, ${firstTouch}::jsonb,
-          ${req.headers.get("user-agent") ?? null},
-          ${req.headers.get("x-vercel-ip-country") ?? null},
-          ${req.headers.get("x-vercel-ip-country-region") ?? null},
-          ${req.headers.get("x-vercel-ip-city") ?? null},
-          ${consent_status}, ${consent_mode}, ${consent_ts},
-          ${consent_status === "opt_in"}, ${identity_key}
-        )
-        ON CONFLICT (id) DO UPDATE SET
-          last_seen = EXCLUDED.last_seen,
-          consent_status = EXCLUDED.consent_status,
-          consent_mode = EXCLUDED.consent_mode,
-          consent_ts = EXCLUDED.consent_ts,
-          ever_opted_in = chapter_journey.journeys.ever_opted_in OR EXCLUDED.ever_opted_in,
-          last_identity_key = EXCLUDED.last_identity_key
-      `;
+      if (consent_status === "opt_in") {
+        await tx`
+          INSERT INTO chapter_journey.journeys (
+            id, client_key, first_seen, last_seen,
+            first_touch, last_touch,
+            user_agent, country, region, city,
+            consent_status, consent_mode, consent_ts,
+            ever_opted_in, last_identity_key
+          ) VALUES (
+            ${journey_id}, ${client_key}, ${nowIso}, ${nowIso},
+            ${firstTouch}::jsonb, ${firstTouch}::jsonb,
+            ${req.headers.get("user-agent") ?? null},
+            ${req.headers.get("x-vercel-ip-country") ?? null},
+            ${req.headers.get("x-vercel-ip-country-region") ?? null},
+            ${req.headers.get("x-vercel-ip-city") ?? null},
+            ${consent_status}, ${consent_mode}, ${consent_ts},
+            TRUE, ${identity_key}
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            last_seen = EXCLUDED.last_seen,
+            consent_status = EXCLUDED.consent_status,
+            consent_mode = EXCLUDED.consent_mode,
+            consent_ts = EXCLUDED.consent_ts,
+            ever_opted_in = chapter_journey.journeys.ever_opted_in OR EXCLUDED.ever_opted_in,
+            last_identity_key = EXCLUDED.last_identity_key
+        `;
+      } else {
+        // opt_out / unknown — update an existing journey's consent only; never
+        // insert. If no journey exists yet (no real event), nothing happens.
+        await tx`
+          UPDATE chapter_journey.journeys SET
+            last_seen = ${nowIso},
+            consent_status = ${consent_status},
+            consent_mode = ${consent_mode},
+            consent_ts = ${consent_ts},
+            last_identity_key = ${identity_key}
+          WHERE id = ${journey_id} AND client_key = ${client_key}
+        `;
+      }
     });
   } catch (err: any) {
     console.error("consent_events insert / journey upsert failed:", err);
