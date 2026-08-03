@@ -38,6 +38,8 @@ const MVS = [
   "chapter_reporting.connections_top_pages_v1",
   "chapter_reporting.connections_top_pages_90d_v1",
   "chapter_reporting.connections_top_campaigns_90d_v1",
+  // 9.3 — per-page distinct-identity base rates (page lift in connections_panel).
+  "chapter_reporting.connections_page_base_v1",
 ];
 
 type MvResult =
