@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { TopBar } from "../../_components/TopBar";
 import { Icon } from "../../_components/Icon";
 import { Dropdown } from "../../_components/Dropdown";
@@ -29,6 +29,24 @@ const MODEL_DEFINITIONS: Record<AttributionModel, string> = {
   linear: "Credit split evenly across every touch in the chapter — a channel appearing more than once is credited for each appearance.",
   custom: "J-shape: 40% first touch, 20% spread across the middle, 40% last touch.",
 };
+
+// 6.4 — attribution lookback: how far back before EACH boundary to count touches.
+// "unlimited" is the default (reproduces today's numbers exactly). Options are
+// per-boundary day windows; totals are invariant to the choice, only allocation
+// moves. Persisted in ?lookback= so a view is shareable.
+const LOOKBACK_OPTIONS: { v: string; label: string }[] = [
+  { v: "unlimited", label: "Unlimited" },
+  { v: "7",   label: "7 days" },
+  { v: "14",  label: "14 days" },
+  { v: "28",  label: "28 days" },
+  { v: "30",  label: "30 days" },
+  { v: "60",  label: "60 days" },
+  { v: "90",  label: "90 days" },
+  { v: "365", label: "365 days" },
+];
+function lookbackLabel(v: string): string {
+  return LOOKBACK_OPTIONS.find((o) => o.v === v)?.label ?? "Unlimited";
+}
 
 // 6.3 — revenue vs conversion count. Both are already in the RPC payload
 // (first_orders/first_revenue etc.); the toggle just picks which to allocate.
@@ -75,6 +93,7 @@ type Props = {
   priorEngagement: { engagement_rate: number | null } | null;
   clientKey: string;
   range: string;
+  lookback: string;
   boundaryEvent: string;
 };
 
@@ -380,10 +399,18 @@ function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indi
 export default function AttributionClient({
   attribution, indicators, summary, journey, engagement,
   priorSummary, priorJourney, priorEngagement,
-  clientKey: _clientKey, range: _range, boundaryEvent,
+  clientKey: _clientKey, range: _range, lookback, boundaryEvent,
 }: Props) {
   const { client, model, setModel } = useChapter();
   const sp = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  // 6.4 — update ?lookback= in place, preserving every other param.
+  const setLookback = (v: string) => {
+    const next = new URLSearchParams(sp.toString());
+    if (v === "unlimited") next.delete("lookback"); else next.set("lookback", v);
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
   const [selectedModels, setSelectedModels] = useState<AttributionModel[]>(["first", "linear", "last"]);
   // 6.3 — allocate by revenue or by conversion count. Both are in the payload.
   const [metric, setMetric] = useState<Metric>("revenue");
@@ -466,6 +493,25 @@ export default function AttributionClient({
                       </>
                     )}
                   </Dropdown>
+                  {/* 6.4 — attribution lookback, independent of the date picker */}
+                  <Dropdown align="left" width={200} trigger={
+                    <button className="toolbar-btn">
+                      <span style={{ color: "var(--ink-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em" }}>Lookback</span>
+                      <span style={{ fontWeight: 600 }}>{lookbackLabel(lookback)}</span>
+                      <span className="chev"><Icon name="chev" size={12}/></span>
+                    </button>
+                  }>
+                    {(close) => (
+                      <>
+                        {LOOKBACK_OPTIONS.map(o => (
+                          <button key={o.v} className={`dd-item ${lookback === o.v ? "active" : ""}`} onClick={() => { setLookback(o.v); close(); }}>
+                            <span>{o.label}</span>
+                            {lookback === o.v && <span className="check"><Icon name="check" size={14}/></span>}
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </Dropdown>
                 </div>
                 {/* 6.3 — allocate by revenue or by conversion count */}
                 <div className="filter-bar">
@@ -473,6 +519,12 @@ export default function AttributionClient({
                   <button className={`btn-ghost ${metric === "revenue" ? "active" : ""}`} onClick={() => setMetric("revenue")}>Revenue</button>
                   <button className={`btn-ghost ${metric === "count" ? "active" : ""}`} onClick={() => setMetric("count")}>{countLabel}</button>
                 </div>
+              </div>
+              {/* 6.4 — honest framing: what the lookback does + does not do */}
+              <div className="card-sub" style={{ marginTop: 10, lineHeight: 1.5 }}>
+                {lookback === "unlimited"
+                  ? <>The <strong>date picker</strong> chooses which conversions to include; the <strong>lookback</strong> counts touches back from each conversion. Unlimited counts a conversion’s full history back to its previous purchase. Totals never change with the lookback — only how credit is split across channels.</>
+                  : <>Each conversion counts only touches in the <strong>{lookbackLabel(lookback)}</strong> before it (measured per conversion, not as a calendar cutoff). A conversion with no touch in that window is credited to <strong>(direct)</strong>, so the total is unchanged — tightening the window shifts credit toward direct, it never drops revenue. “First touch within {lookbackLabel(lookback)}” is not necessarily the true first touch (see the coverage note under First Touch).</>}
               </div>
             </div>
 

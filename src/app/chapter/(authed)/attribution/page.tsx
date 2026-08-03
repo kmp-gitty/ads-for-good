@@ -23,12 +23,18 @@ import {
 type SearchParams = Promise<{
   client?: string;
   range?: string;
+  lookback?: string;
 }>;
 
 export default async function AttributionPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
   const range = (params.range && params.range.trim()) || "30d";
+
+  // 6.4 — attribution lookback: how many days before EACH boundary to count
+  // touches. Default unlimited (null → RPC reproduces today's numbers exactly).
+  const lookback = (params.lookback && params.lookback.trim()) || "unlimited";
+  const lookbackDays = /^\d+$/.test(lookback) ? Number(lookback) : null;
 
   const clientConfig = await cachedClientConfig(clientKey);
   const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
@@ -37,6 +43,8 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
     p_start_ts: start.toISOString(),
     p_end_ts:   end.toISOString(),
   };
+  // attribution_overview alone takes the lookback; the other RPCs are 3-arg.
+  const attributionArgs = { ...args, p_lookback_days: lookbackDays };
   const prior = priorWindow(start, end);
   const priorArgs = {
     p_client_key: clientKey,
@@ -51,7 +59,7 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
     attribution, indicators, purchase, journey, engagement,
     purchasePrior, journeyPrior, engagementPrior,
   ] = await Promise.all([
-    cachedAttributionOverview(args),
+    cachedAttributionOverview(attributionArgs),
     cachedAttributionModelIndicators(args),
     cachedPurchaseOverview(args),
     cachedJourneyOverview(args),
@@ -73,6 +81,7 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
       priorEngagement={engagementPrior[0] ?? null}
       clientKey={clientKey}
       range={range}
+      lookback={lookback}
       boundaryEvent={clientConfig.boundary_event_name}
     />
   );
