@@ -782,6 +782,7 @@ export type ConnectionsPanelRow = {
   outcome_rate:          number | null;
   base_rate:             number | null; // 9.1 — how often this thing appears for identities generally (channel connections only; null for page)
   lift:                  number | null; // 9.1 — pct_of_anchor / base_rate; >1 = co-occurs more than expected
+  median_touch_count:    number | null; // 9.3 — median times an anchored identity touched this connection (count, not just presence)
 };
 
 // Sprint 9 Phase 1A — Snapshot-first lookup.

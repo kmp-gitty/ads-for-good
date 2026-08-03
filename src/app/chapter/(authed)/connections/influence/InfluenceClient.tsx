@@ -209,8 +209,16 @@ function ConnectionRow({ row, index, onClick, gate }: { row: ConnectionsPanelRow
           </span>
         )}
       </div>
-      <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}>
+      <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", fontWeight: 500 }}
+           title={row.median_touch_count != null ? `Median ${Number(row.median_touch_count).toFixed(1)} touches per person` : undefined}>
         {row.n_identities}
+        {/* 9.3 — median touch count, shown only when repeated (>1); a person who
+            touched this 4× is different from one who touched it once. */}
+        {row.median_touch_count != null && Number(row.median_touch_count) > 1 && (
+          <div style={{ fontSize: 9, color: "var(--ink-4)", lineHeight: 1, fontWeight: 500 }}>
+            ×{Number(row.median_touch_count).toFixed(1)}
+          </div>
+        )}
       </div>
       <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", color: "var(--ink-2)", fontSize: 12 }}>
         {fmtPct(row.pct_of_anchor)}
