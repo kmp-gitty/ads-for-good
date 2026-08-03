@@ -14,6 +14,7 @@ import {
   cachedClientConfig,
   cachedAttributionOverview,
   cachedAttributionModelIndicators,
+  cachedAttributionFirstTouchCoverage,
   cachedPurchaseOverview,
   cachedJourneyOverview,
   cachedEngagementQuality,
@@ -56,11 +57,15 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
   // The other 3 RPCs feed the standard TopBar KPI strip (Orders/Revenue/AOV/
   // Journeys/% Identified) so attribution shares the same header as other pages.
   const [
-    attribution, indicators, purchase, journey, engagement,
+    attribution, indicators, coverage, purchase, journey, engagement,
     purchasePrior, journeyPrior, engagementPrior,
   ] = await Promise.all([
     cachedAttributionOverview(attributionArgs),
     cachedAttributionModelIndicators(args),
+    // 6.5(a) — only when a lookback is set (unlimited has nothing "beyond").
+    lookbackDays != null
+      ? cachedAttributionFirstTouchCoverage({ ...args, p_lookback_days: lookbackDays })
+      : Promise.resolve([]),
     cachedPurchaseOverview(args),
     cachedJourneyOverview(args),
     cachedEngagementQuality(args),
@@ -73,6 +78,7 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
     <AttributionClient
       attribution={attribution}
       indicators={indicators}
+      coverage={coverage}
       summary={purchase[0] ?? null}
       journey={journey[0] ?? null}
       engagement={engagement[0] ?? null}

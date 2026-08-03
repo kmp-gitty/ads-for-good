@@ -46,6 +46,7 @@ export type RpcArgs = {
   p_client_key: string;
   p_start_ts: string;   // ISO
   p_end_ts:   string;   // ISO
+  p_lookback_days?: number | null;  // 6.4/6.5(a) — attribution RPCs only; ignored by others
 };
 
 /** Build a cached RPC wrapper. One per RPC name so cache entries are isolated. */
@@ -205,6 +206,18 @@ export type AttributionModelIndicatorRow = {
 
 export const cachedAttributionModelIndicators =
   makeCachedRpc<AttributionModelIndicatorRow>("attribution_model_indicators");
+
+// 6.5(a) — First Touch coverage under a lookback (6.4). Per within-lookback
+// first-touch channel: share whose TRUE first touch was earlier than the window.
+export type AttributionFirstTouchCoverageRow = {
+  channel: string;
+  chapters:        number | null;
+  beyond_chapters: number | null;
+  pct_beyond:      number | null;
+};
+
+export const cachedAttributionFirstTouchCoverage =
+  makeCachedRpc<AttributionFirstTouchCoverageRow>("attribution_first_touch_coverage");
 
 // ─────── Path combinations (set / collapsed / raw modes) ────────────────────
 // One row per (mode-specific grouping key). Returns `channels` + `gaps` arrays

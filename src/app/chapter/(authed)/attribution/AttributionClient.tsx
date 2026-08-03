@@ -11,7 +11,7 @@ import {
   CHANNELS, ATTRIBUTION_MODEL_LABELS, type AttributionModel,
   type ChannelKey, type Kpi,
 } from "../../_components/mockdata";
-import type { AttributionOverviewRow, AttributionModelIndicatorRow } from "../../_lib/dashboard-rpc";
+import type { AttributionOverviewRow, AttributionModelIndicatorRow, AttributionFirstTouchCoverageRow } from "../../_lib/dashboard-rpc";
 
 const CHANNEL_FALLBACK = { name: "Unknown", color: "#9CA0A8", short: "—" };
 
@@ -69,6 +69,7 @@ function countLabelFor(boundaryEvent: string): string {
 type Props = {
   attribution: AttributionOverviewRow[];
   indicators: AttributionModelIndicatorRow[];
+  coverage: AttributionFirstTouchCoverageRow[];
   summary: {
     total_orders: number | null;
     total_revenue: number | null;
@@ -268,14 +269,49 @@ function AllocTable({ models, data }: { models: AttributionModel[]; data: Channe
 //   linear → 6.5(c) share of path a channel actually occupies when present
 //   first  → 6.5(a) coverage readout needs the attribution-lookback control (not shipped);
 //            we state the blind spot without fabricating the number
-function ModelBlindSpot({ model, indicators }: {
+function ModelBlindSpot({ model, indicators, coverage, lookback }: {
   model: AttributionModel; indicators: AttributionModelIndicatorRow[];
+  coverage: AttributionFirstTouchCoverageRow[]; lookback: string;
 }) {
   if (model === "first") {
+    // 6.5(a) — under a lookback, show the coverage gap: of the chapters where a
+    // channel is first-touch (within the window), what share actually had an
+    // earlier touch that got cut off. Only meaningful when a lookback is set.
+    if (lookback === "unlimited") {
+      return (
+        <div className="card-sub" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line-2)", lineHeight: 1.5 }}>
+          <strong style={{ color: "var(--ink-2)" }}>What first-touch hides:</strong> everything after the first click. Set an <strong>attribution lookback</strong> above to see, per channel, what share of these “first touches” actually had an earlier touch outside the window.
+        </div>
+      );
+    }
+    const rows = coverage
+      .map((r) => ({ channel: r.channel, chapters: Number(r.chapters ?? 0), pct: r.pct_beyond == null ? null : Number(r.pct_beyond) }))
+      .filter((r) => r.pct != null && r.chapters >= INDICATOR_SAMPLE_FLOOR)
+      .sort((a, b) => (b.pct! - a.pct!));
+    const lowSample = coverage
+      .map((r) => ({ channel: r.channel, chapters: Number(r.chapters ?? 0) }))
+      .filter((r) => r.chapters > 0 && r.chapters < INDICATOR_SAMPLE_FLOOR)
+      .map((r) => r.channel);
     return (
-      <div className="card-sub" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line-2)", lineHeight: 1.5 }}>
-        <strong style={{ color: "var(--ink-2)" }}>What first-touch hides:</strong> everything after the first click.
-        A coverage readout — the share of each channel’s activity that began before your window — arrives with the attribution-lookback control.
+      <div className="card-sub" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line-2)", lineHeight: 1.6 }}>
+        <strong style={{ color: "var(--ink-2)" }}>What first-touch hides:</strong> share of each channel’s first-touch chapters whose <em>true</em> first touch was earlier than your {lookbackLabel(lookback)} window (so the shown first touch is not the real one):
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 6 }}>
+          {rows.map((r) => {
+            const ch = CHANNELS[r.channel as ChannelKey] ?? CHANNEL_FALLBACK;
+            return (
+              <span key={r.channel} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 10, height: 10, background: ch.color, borderRadius: 3 }}></span>
+                <span style={{ color: "var(--ink-2)" }}>{ch.name}</span>
+                <span style={{ fontWeight: 600 }}>{r.pct!.toFixed(0)}%</span>
+              </span>
+            );
+          })}
+        </div>
+        {lowSample.length > 0 && (
+          <div style={{ marginTop: 6, color: "var(--ink-3)" }}>
+            Low sample (under {INDICATOR_SAMPLE_FLOOR} chapters), not shown: {lowSample.map((c) => (CHANNELS[c as ChannelKey] ?? CHANNEL_FALLBACK).name).join(", ")}.
+          </div>
+        )}
       </div>
     );
   }
@@ -323,10 +359,11 @@ function ModelBlindSpot({ model, indicators }: {
   );
 }
 
-function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indicators }: {
+function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indicators, coverage, lookback }: {
   data: ChannelPct[]; metric: Metric; countLabel: string;
   netRevenue: number | null; netOrders: number | null;
   indicators: AttributionModelIndicatorRow[];
+  coverage: AttributionFirstTouchCoverageRow[]; lookback: string;
 }) {
   const { model } = useChapter();
   const modelVal = (c: ChannelPct): number =>
@@ -391,13 +428,13 @@ function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indi
           <strong style={{ color: "var(--ink-2)" }}>{fmtVal(unattributed)}</strong> ({unattributedPct.toFixed(1)}%) of the {fmtVal(net ?? 0)} headline {unitLabel} is not attributed to any channel path — chapters with no captured session entry (shown as “(unknown)” elsewhere). The bars above allocate the {fmtVal(total)} that does.
         </div>
       )}
-      <ModelBlindSpot model={model} indicators={indicators} />
+      <ModelBlindSpot model={model} indicators={indicators} coverage={coverage} lookback={lookback} />
     </div>
   );
 }
 
 export default function AttributionClient({
-  attribution, indicators, summary, journey, engagement,
+  attribution, indicators, coverage, summary, journey, engagement,
   priorSummary, priorJourney, priorEngagement,
   clientKey: _clientKey, range: _range, lookback, boundaryEvent,
 }: Props) {
@@ -535,6 +572,8 @@ export default function AttributionClient({
               netRevenue={summary?.total_revenue ?? null}
               netOrders={summary?.total_orders ?? null}
               indicators={indicators}
+              coverage={coverage}
+              lookback={lookback}
             />
 
             {/* ───── Compare models ───────────────────────────────────────── */}
