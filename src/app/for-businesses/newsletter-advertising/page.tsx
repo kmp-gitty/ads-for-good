@@ -2,6 +2,7 @@ import Link from "next/link";
 import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/newsletter-advertising" },
   title: "Newsletter Advertising: Reach Engaged Inboxes | ads for Good",
   description:
     "Text-only ads inside newsletters people actually open. Extra is our growing ad network — tell us who you want to reach and we'll match you as senders come online.",

@@ -1,4 +1,5 @@
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/for-good" },
   title: "philanthropic impact | how ads for Good services are different",
   description:
     "Putting our money where our heart is. Using advertising revenue and profits for the betterment of our people and our communities.",

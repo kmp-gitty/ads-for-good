@@ -3,6 +3,7 @@ import Link from "next/link";
 import ExpertiseSection from "@/components/ExpertiseSection";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com" },
   title: "ads for Good | Ethical advertising consulting and tips for small businesses and people",
   description:
     "ads for Good is a mission-driven ad company focused on educating people about the ad industry and privacy protection, and consulting businesses on ethical and proper marketing tactics.",

@@ -24,6 +24,7 @@ export async function generateMetadata({
   return {
     title: `${post.metaTitle || post.title} | ads for Good`,
     description: post.excerpt,
+    alternates: { canonical: `https://www.ads4good.com/for-people/education/${post.slug}` },
   };
 }
 

@@ -3,6 +3,7 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import AdMonetizationGraphic from "@/components/AdMonetizationGraphic";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/ad-monetization" },
   title: "Newsletter Monetization: Earn From the Emails You Already Send | ads for Good",
   description:
     "Monetize your email list without raising prices or adding products. Extra inserts text-only ads you approve into the sends you already make, and you keep a share.",

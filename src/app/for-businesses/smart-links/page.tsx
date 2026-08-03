@@ -3,6 +3,7 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import SmartLinkRoutingGraphic from "@/components/SmartLinkRoutingGraphic";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/smart-links" },
   title: "Link Management Software | Smart Links by afG",
   description:
     "First-party link management software: wrap links on your own domain, route by device or location, filter out bots, and keep every click yours.",

@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/for-people/privacy-protection" },
   title: "privacy and data | take back control",
   description:
     "You'd be surprised how many companies have and how many ways there are to use your data. Learn free tips to take back some control and enact our paid services for even more protection.",

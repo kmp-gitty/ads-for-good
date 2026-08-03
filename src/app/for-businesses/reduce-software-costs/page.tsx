@@ -3,6 +3,7 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import SubscriptionFreedomGraphic from "@/components/SubscriptionFreedomGraphic";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/reduce-software-costs" },
   title: "Custom Tools to Replace Your Subscriptions | ads for Good",
   description:
     "We build custom web and Shopify tools to replace the widgets and apps you rent monthly. Built for your workflow, hosted on your site, owned outright. Cancel the subscription.",

@@ -4,6 +4,7 @@ import SmoothScrollButton from "@/components/SmoothScrollButton";
 import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/lifecycle-attribution" },
   title: "Chapter: Identity-First marketing attribution software | ads for Good",
   description:
     "Chapter stitches every visit, channel, and behavior to one person — so you can see the whole journey instead of five platforms all claiming the same conversion. From $149/mo.",

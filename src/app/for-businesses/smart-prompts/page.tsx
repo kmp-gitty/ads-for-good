@@ -3,6 +3,7 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import SmartPromptsGraphic from "@/components/SmartPromptsGraphic";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/smart-prompts" },
   title: "Exit Intent Popup Software | Smart Prompts by afG",
   description:
     "Exit intent popup software that fires on cart-abandon, scroll, click, or time-spent. Your copy, your offer, and a show-to-submit rate for every prompt.",

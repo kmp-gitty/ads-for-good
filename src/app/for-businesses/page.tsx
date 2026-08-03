@@ -4,6 +4,7 @@ import GuidebookCheckoutCTA from "@/components/GuidebookCheckoutCTA";
 import TrackedLink from "@/components/TrackedLink";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/for-businesses" },
   title: "Outsourced Marketing for Small Business | On-Demand Plans",
   description:
     "Outsourced marketing for small businesses, from $750 a month. Pick the projects you want running, swap them any time, and skip hiring a full marketing team.",

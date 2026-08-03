@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/about" },
   title: "about ads for Good | Ad tactics and information with people in mind",
   description:
     "Former corporate ad pros using their knowledge to make ads less creepy, and use advertising for community impact instead of just profit.",

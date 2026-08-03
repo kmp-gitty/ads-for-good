@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 
 export const metadata = {
+  alternates: { canonical: "https://www.ads4good.com/for-people" },
   title: "consumer services | education, privacy information, and a for good ad network",
   description:
     "The ad industry impacts every day consumers, so why shouldn't you know more about it? Use our education blog, privacy protection services, or ad network to be a more conscious ad consumer.",
