@@ -1,17 +1,24 @@
-// R1.3 — Identity stitching coverage gap.
+// R1.3 — Identity stitching coverage dropped vs the client's own baseline.
 //
-// Stance: "A material share of journeys is failing to stitch to canonical
-// identity; downstream attribution is incomplete." (Theme: Data Integrity)
+// Stance: "Your journey-stitching coverage has fallen meaningfully below where
+// it normally runs — recent attribution is more fragmented than usual."
+// (Theme: Data Integrity)
 //
-// Trigger conditions (per spec):
-//   - Stitching rate <40% in current period, OR
-//   - Stitching rate dropped ≥3pt vs trailing 4-week average
+// REC2 — the trigger is now RELATIVE to the client's own trailing 3-month
+// baseline, not an arbitrary absolute 40% floor. Different businesses have
+// different structural stitch ceilings (a Shopify store that collects email at
+// checkout vs a booking site), so a one-size floor mislabels a client whose
+// healthy norm is 25%. A chronically-low-but-stable rate is that client's
+// structural norm, not a recommendation; we only fire when coverage DROPS from
+// where it has been. (An outlier-vs-peers check is the future surprise-scanner.)
 //
-// Stitching = share of identified journeys whose anonymous_id resolves to a
-// canonical identity (i.e. journey was cross-stitched, not just minted a new
-// anonymous_id). We approximate via journey_resolved_v1 — non-bot journeys
-// with event_count > 1 and a canonical_identity_key are "stitched"; others
-// are loose. This is the same dashboard-canonical filter used elsewhere.
+// Trigger: current 4-week stitch rate is below the trailing 3-month baseline by
+//   - >= 3 percentage points, OR
+//   - >= 15% relative.
+//
+// Stitching = share of non-bot journeys with multi-event activity that resolve
+// to a canonical identity, approximated via journey_resolved_v1 (same
+// dashboard-canonical filter used elsewhere).
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
@@ -23,47 +30,38 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
-const FLOOR_THRESHOLD = 0.40; // 40%
-const DROP_THRESHOLD_PT = 3;
+const DROP_THRESHOLD_PT = 3;    // absolute percentage-point drop
+const DROP_THRESHOLD_REL = 15;  // OR relative % drop vs baseline
 
 export const R1_3: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | null> => {
   const oneWeekMs = 7 * 24 * 3600 * 1000;
   const end = ctx.data_window_end;
 
-  const current = await stitchingRateFor(ctx.client_key, new Date(end.getTime() - 4 * oneWeekMs), end);
-  if (current === null) return null;
+  // Current = last 4 weeks. Baseline = the trailing 3 months (12 weeks)
+  // immediately BEFORE the current window — the client's own recent norm.
+  const currentStart  = new Date(end.getTime() - 4  * oneWeekMs);
+  const baselineStart = new Date(end.getTime() - 16 * oneWeekMs);
+  const baselineEnd   = currentStart;
 
-  const trailingRates: number[] = [];
-  for (let i = 1; i <= 4; i++) {
-    const wEnd = new Date(end.getTime() - i * 4 * oneWeekMs);
-    const wStart = new Date(wEnd.getTime() - 4 * oneWeekMs);
-    const r = await stitchingRateFor(ctx.client_key, wStart, wEnd);
-    if (r !== null) trailingRates.push(r);
-  }
+  const current  = await stitchingRateFor(ctx.client_key, currentStart, end);
+  const baseline = await stitchingRateFor(ctx.client_key, baselineStart, baselineEnd);
+  // No baseline (client younger than ~3 months, or no traffic) → don't fire.
+  if (current === null || baseline === null) return null;
 
-  if (trailingRates.length === 0) return null;
-  const trailingAvg = trailingRates.reduce((s, n) => s + n, 0) / trailingRates.length;
-
-  const belowFloor = current < FLOOR_THRESHOLD;
-  const droppedPt = (trailingAvg - current) * 100;
-  const droppedMeaningfully = droppedPt >= DROP_THRESHOLD_PT;
-
-  if (!belowFloor && !droppedMeaningfully) return null;
+  const droppedPt     = (baseline - current) * 100;
+  const droppedRelPct = baseline > 0 ? ((baseline - current) / baseline) * 100 : 0;
+  const fired = droppedPt >= DROP_THRESHOLD_PT || droppedRelPct >= DROP_THRESHOLD_REL;
+  if (!fired) return null;
 
   const currentPct = Math.round(current * 100);
-  const priorPct = Math.round(trailingAvg * 100);
-  const ptChange = Math.round(droppedPt);
+  const priorPct   = Math.round(baseline * 100);
+  const ptChange   = Math.max(1, Math.round(droppedPt));
 
-  // Confidence: both conditions met = strong; one = moderate; just crossing = early
   const confidence: "strong" | "moderate" | "early_signal" =
-    belowFloor && droppedMeaningfully ? "strong" :
-    (belowFloor && current < FLOOR_THRESHOLD - 0.05) || droppedPt >= DROP_THRESHOLD_PT + 2 ? "moderate" :
-    "early_signal";
+    droppedPt >= 6 || droppedRelPct >= 30 ? "strong" : "moderate";
 
-  // Direction-aware floor_or_drop_clause matches spec template.
-  const floorOrDropClause = belowFloor
-    ? `below the healthy floor of ${Math.round(FLOOR_THRESHOLD * 100)}%`
-    : `a ${ptChange}pt drop from the trailing average`;
+  const floorOrDropClause =
+    `down from its trailing 3-month average of ${priorPct}% (a ${ptChange}pt drop)`;
 
   return {
     rule_id: "R1.3",
@@ -78,12 +76,12 @@ export const R1_3: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     evidence: [
       {
         source: "Raw Performance",
-        fact: `Stitching coverage: ${currentPct}% of journeys resolved to canonical identity`,
+        fact: `Stitching coverage now: ${currentPct}% of journeys resolved to a canonical identity`,
         deeplink: chapterUrl(ctx.client_key, "raw"),
       },
       {
         source: "Customer Journeys",
-        fact: `Trailing 16-week average: ${priorPct}%${belowFloor ? " — current below 40% floor" : ""}`,
+        fact: `Trailing 3-month baseline: ${priorPct}% — current is a ${ptChange}pt drop`,
         deeplink: chapterUrl(ctx.client_key, "journeys"),
       },
     ],
