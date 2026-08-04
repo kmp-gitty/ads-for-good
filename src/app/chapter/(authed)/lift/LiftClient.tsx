@@ -137,13 +137,49 @@ function buildGates(row: CorrelationChannelRow): Record<MetricKey, MetricGate> {
   return { conv_rate: conv, aov, days, touches };
 }
 
-/** Pick the headline metric per spec §3: largest |delta_rel| that clears the
- *  noise gate. Default to conv_rate if nothing clears. */
+// Metric groups (shared by the C1 headline picker and the C2 card layout):
+// Value = what a purchase is worth / how likely it is; Character = path shape.
+const VALUE_METRICS: MetricKey[] = ["conv_rate", "aov"];
+const CHARACTER_METRICS: MetricKey[] = ["days", "touches"];
+
+/** Pick the headline metric — deviation-based + redundancy-aware (C1).
+ *  The naive "largest |delta_rel| that clears the gate" let the two
+ *  path-length metrics (time-to-close, touches — the SAME fact twice) grab the
+ *  headline and bury the real story (conversion, AOV). Instead:
+ *   1. Redundancy collapse — if time-to-close AND touches both clear the gate in
+ *      the same direction, keep only the stronger so the pair votes once.
+ *   2. Prefer a Value metric (conv rate, AOV) for the headline — that's usually
+ *      the story — UNLESS a path-character metric's deviation is substantially
+ *      larger (>=1.5x). That last clause deliberately KEEPS the good case: a new
+ *      channel that closes 50% faster is a real deviation worth headlining. */
 function pickHeadline(gates: Record<MetricKey, MetricGate>): MetricKey {
-  const confident = (Object.values(gates) as MetricGate[])
-    .filter(g => g.state === "confident" && g.delta_rel != null)
-    .sort((a, b) => Math.abs(b.delta_rel!) - Math.abs(a.delta_rel!));
-  if (confident.length > 0) return confident[0].key;
+  const mag = (k: MetricKey) => {
+    const g = gates[k];
+    return g.state === "confident" && g.delta_rel != null ? Math.abs(g.delta_rel) : -1;
+  };
+  const confident = (k: MetricKey) => mag(k) >= 0;
+
+  // 1. Collapse the redundant path-length pair (same direction → drop weaker).
+  const dropped = new Set<MetricKey>();
+  if (confident("days") && confident("touches")
+      && Math.sign(gates.days.delta_rel!) === Math.sign(gates.touches.delta_rel!)) {
+    dropped.add(mag("days") >= mag("touches") ? "touches" : "days");
+  }
+
+  const bestOf = (keys: MetricKey[]) =>
+    keys.filter(k => confident(k) && !dropped.has(k))
+        .sort((a, b) => mag(b) - mag(a))[0] as MetricKey | undefined;
+
+  const bestValue = bestOf(VALUE_METRICS);
+  const bestChar  = bestOf(CHARACTER_METRICS);
+
+  if (bestValue) {
+    // 2. Let a path-character metric headline only if its deviation dwarfs the
+    //    best Value metric's — the genuine-signal case.
+    if (bestChar && mag(bestChar) >= 1.5 * mag(bestValue)) return bestChar;
+    return bestValue;
+  }
+  if (bestChar) return bestChar;
   return "conv_rate";
 }
 
@@ -264,8 +300,7 @@ function CorrelationCard({ row }: { row: CorrelationChannelRow }) {
   // (conversion rate, AOV) vs Path character (time to close, touches). The two
   // character metrics are largely the same fact — longer paths take more touches
   // AND more days — so they're grouped and flagged as one signal, not two.
-  const VALUE_METRICS: MetricKey[] = ["conv_rate", "aov"];
-  const CHARACTER_METRICS: MetricKey[] = ["days", "touches"];
+  // (VALUE_METRICS / CHARACTER_METRICS are module-level, shared with pickHeadline.)
   const renderMetric = (k: MetricKey) => {
     const g = gates[k];
     const isHeadline = k === headlineKey;
@@ -737,6 +772,12 @@ function NewIncrementalityCard({ channel, buckets, axis }: {
                   // data), show a tailored "n/a for this axis" instead of the
                   // generic "need n≥30" message.
                   const isConvHiddenByAxis = k === "conv_rate" && g.n_with === 0 && g.n_without === 0;
+                  // I2 — saturation guard: when the WITHOUT-arm baseline is
+                  // already near the ceiling (e.g. subscribers converting ~97%),
+                  // there is no headroom for a measurable lift, so any lift number
+                  // is meaningless. Flag it so "96% with" isn't misread as lift.
+                  const isSaturated = k === "conv_rate" && g.state !== "hidden"
+                    && g.mean_without != null && g.mean_without >= 90;
                   const cls =
                     g.state === "hidden"     ? "neutral"
                     : g.state === "noise"    ? "neutral"
@@ -787,13 +828,18 @@ function NewIncrementalityCard({ channel, buckets, axis }: {
                       {/* Threshold line — surfaces the confidence gate magnitude
                           on its own line for visual scanability. Hidden state
                           doesn't have a meaningful threshold (no stats yet). */}
-                      {threshold != null && g.state !== "hidden" && (
+                      {isSaturated ? (
+                        <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 4, lineHeight: 1.3, fontStyle: "italic" }}
+                             title={`Baseline conversion is already ${g.mean_without?.toFixed(1)}% — near the ceiling, so there's almost no headroom for a measurable lift. Read the with/without values, not the lift number.`}>
+                          near-ceiling baseline — little room for lift
+                        </div>
+                      ) : threshold != null && g.state !== "hidden" ? (
                         <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 4, lineHeight: 1.3 }}>
                           {g.state === "noise"
                             ? <>need ±{Math.abs(threshold).toFixed(1)}% for confident</>
                             : <>gate ±{Math.abs(threshold).toFixed(1)}%</>}
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })}
@@ -960,6 +1006,10 @@ const QUADRANT_LABELS: Record<ContribComputed["quadrant"], { title: string; verd
   unscored:          { title: "Insufficient data", verdict: "Not enough samples to score this channel." },
 };
 
+// Channels whose value is chiefly retention/repeat-habit. Matched incrementality
+// over-controls for these (V5), so their incremental-loss band reads low.
+const RETENTION_CHANNELS = new Set<string>(["email", "sms"]);
+
 function ContributionCard({ c }: { c: ContribComputed }) {
   const fmtPctRange = (lo: number | null, hi: number | null) =>
     lo != null && hi != null
@@ -985,6 +1035,11 @@ function ContributionCard({ c }: { c: ContribComputed }) {
   const headline = isDirect
     ? "Direct is a return-visitor floor, not a channel you can turn off — read its footprint as your loyalty baseline, not a lever."
     : measureAHeadline;
+  // V5 — retention channels are structurally under-measured by matched
+  // incrementality: splitting by subscriber status conditions on the channel's
+  // OWN outcome (email's job is to create subscribers + repeat habit), so the
+  // "within noise" band is a known underestimate. Flag it against the footprint.
+  const isRetentionChannel = RETENTION_CHANNELS.has(c.channel);
 
   return (
     <div className="lift-card">
@@ -1020,6 +1075,11 @@ function ContributionCard({ c }: { c: ContribComputed }) {
                   ? "Within statistical noise — CI straddles 0."
                   : "Outside the noise gate — confident."}
               </div>
+              {isRetentionChannel && c.incremental_gate === "noise" && (
+                <div style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 6, lineHeight: 1.4, fontStyle: "italic" }}>
+                  Likely an underestimate for a retention channel — matched incrementality splits by subscriber status, which conditions on {c.channelName}&apos;s own job (creating subscribers + repeat habit). Weigh it against the footprint score&nbsp;→.
+                </div>
+              )}
             </>
           )}
         </div>
