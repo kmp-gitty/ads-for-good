@@ -702,13 +702,23 @@ function NewIncrementalityCard({ channel, buckets, axis }: {
       {bucketGates.map(bg => {
         const headlineKey = pickIncHeadline(bg.gates);
         const allBucketHidden = (Object.values(bg.gates) as IncMetricGate[]).every(g => g.state === "hidden");
+        // I1 — the three metrics have three different denominators: conversion
+        // rate is per-identity (ids_with), AOV per converting chapter (n_with),
+        // time-to-close a stricter chapter subset. A single "n" (the AOV chapter
+        // count) let an owner read the conversion % against the wrong, ~3.5×
+        // larger base. Show both denominators; fold the days subset into the tip.
+        const convN = bg.gates.conv_rate;
+        const aovN  = bg.gates.aov;
+        const hasConvN = convN.n_with > 0 || convN.n_without > 0;
         return (
           <div key={bg.bucket} style={{ borderTop: "1px solid var(--line-2)", paddingTop: 14, marginTop: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
                 {bg.bucket_label}
-                <span style={{ marginLeft: 8, fontSize: 11, color: "var(--ink-3)", fontWeight: 500 }}>
-                  n={bg.gates.aov.n_with} with / {bg.gates.aov.n_without} without
+                <span style={{ marginLeft: 8, fontSize: 11, color: "var(--ink-3)", fontWeight: 500, cursor: "help" }}
+                      title={`Each metric has its own denominator (shown as with / without). Conversion rate is measured over identities; AOV over converting chapters; time-to-close over a stricter chapter subset (${bg.gates.days.n_with} with / ${bg.gates.days.n_without} without).`}>
+                  {hasConvN && <>{convN.n_with.toLocaleString()}/{convN.n_without.toLocaleString()} identities · </>}
+                  {aovN.n_with.toLocaleString()}/{aovN.n_without.toLocaleString()} chapters
                 </span>
               </div>
               {allBucketHidden && (
