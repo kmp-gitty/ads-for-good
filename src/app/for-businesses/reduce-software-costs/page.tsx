@@ -1,6 +1,7 @@
 import Link from "next/link";
 import InquiryLauncher from "@/components/InquiryLauncher";
 import SubscriptionFreedomGraphic from "@/components/SubscriptionFreedomGraphic";
+import DigitalRentCalculator from "./DigitalRentCalculator";
 
 export const metadata = {
   alternates: { canonical: "https://www.ads4good.com/for-businesses/reduce-software-costs" },
@@ -62,6 +63,18 @@ export default function SubscriptionFreedomPage() {
               <li>Built for your needs, not a one-size-fits-all widget</li>
               <li>Ongoing support from us if you want it — at a discounted rate</li>
             </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* DIGITAL RENT CALCULATOR — answers the "Over your business lifetime" question posed in the hero card above. Intro copy per spec §2.1; no new heading. */}
+      <section className="w-full max-w-6xl mt-12">
+        <div className="mx-auto max-w-3xl">
+          <p className="text-base sm:text-lg leading-relaxed text-neutral-800">
+            Here&apos;s the actual number. Add what you&apos;re paying now.
+          </p>
+          <div className="mt-5">
+            <DigitalRentCalculator />
           </div>
         </div>
       </section>
@@ -191,7 +204,7 @@ export default function SubscriptionFreedomPage() {
               },
               {
                 q: "Is a custom build cheaper than the subscription?",
-                a: "Eventually, and it depends on the tool. A build is money up front against a fee that never stops, so the maths turns on how long you'll keep paying and how much the subscription costs. Cheap tools you'd keep for a year rarely justify it. A $40-a-month widget you've already paid for three years is a different conversation. Tell us what you're paying and we'll be straight about whether it's worth replacing.",
+                a: "Eventually, and it depends on the tool. A build is money up front against a fee that never stops, so the maths turns on how long you'll keep paying and how much the subscription costs. Cheap tools you'd keep for a year rarely justify it. A $40-a-month widget you've already paid for three years is a different conversation. The calculator above will show you what you're paying over three, five and ten years. Bring that number and we'll be straight about whether it's worth replacing.",
               },
               {
                 q: "Do I own it outright?",

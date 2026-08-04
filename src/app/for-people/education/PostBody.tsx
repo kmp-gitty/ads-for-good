@@ -3,6 +3,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import EddmCalculator from "./EddmCalculator";
+import AdBudgetFloorChecker from "./AdBudgetFloorChecker";
 
 // Renders a blog post's markdown body with the agency site's styling.
 export default function PostBody({ markdown }: { markdown: string }) {
@@ -24,6 +25,9 @@ export default function PostBody({ markdown }: { markdown: string }) {
             const flat = Array.isArray(children) ? children.join("") : children;
             if (typeof flat === "string" && flat.trim() === "[[EDDM_CALCULATOR]]") {
               return <EddmCalculator />;
+            }
+            if (typeof flat === "string" && flat.trim() === "[[AD_BUDGET_CHECKER]]") {
+              return <AdBudgetFloorChecker />;
             }
             return (
               <p className="mb-4 text-[15px] sm:text-base leading-relaxed text-neutral-800">{children}</p>

@@ -1208,8 +1208,8 @@ That's one of the two ways our [direct mail service](/for-businesses/direct-mail
     title: "What paid ads management actually costs",
     metaTitle: "PPC Management Pricing: What Paid Ads Help Actually Costs",
     category: "Marketing Playbook",
-    date: "Aug 8, 2026",
-    publishAt: "2026-08-08",
+    date: "Aug 5, 2026",
+    publishAt: "2026-08-05",
     excerpt:
       "Most agency pricing pages won't name a number. Here's how PPC management is actually priced, what each model rewards, and the budget below which it isn't worth paying anyone.",
     image: "/images/adNetworkWallpaper.png",
@@ -1265,11 +1265,17 @@ If you're spending $1,000 a month on ads and paying $500 to have it managed, a t
 
 **Rough guide:** below about a thousand a month in ad spend, paid management rarely pays for itself. You're better off running simple campaigns yourself, or spending that money on something else entirely, until the budget grows.
 
+Run your own numbers.
+
+[[AD_BUDGET_CHECKER]]
+
 Between roughly one and three thousand a month, it's genuinely arguable and depends on how much your own time is worth.
 
 Above that, management usually earns its fee — a competent operator will generally save more in wasted spend than they cost.
 
 **Any agency willing to take your money at $500 a month of spend without saying this to you is telling you something about how they work.**
+
+**One exception worth naming.** All of that assumes the fee is a share of your ad spend and buys ad management alone. A flat fee charged *on top* of spend that also covers other work — several marketing projects for one management fee, not just ads — changes the maths, because you're no longer handing a third of a small budget to a single service. That's how our [on-demand plans](/for-businesses) work: it's why we'll manage a $1,000 ad budget that a percentage-of-spend agency shouldn't touch.
 
 ## Questions worth asking before you sign
 
