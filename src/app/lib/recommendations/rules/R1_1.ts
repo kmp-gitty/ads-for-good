@@ -1,19 +1,23 @@
-// R1.1 — High bot rate with no mitigation in place.
+// R1.1 — Elevated bot traffic reaching the pixel (already excluded).
 //
-// Stance: "Bot traffic is materially polluting downstream metrics; mitigation
-// should be considered." (Theme: Data Integrity & Trust)
+// Stance (REC3-corrected): bots are ALREADY excluded from every analytical
+// metric + billed verified-journeys, so this is an honest FYI — "here's how much
+// bot-like traffic reaches the pixel; it's already filtered; check your bot
+// protection if it's unexpectedly high" — NOT "your metrics are polluted, add
+// mitigation." Chapter cannot observe a client's mitigation (it's blind to bots
+// blocked upstream by a firewall), so the reported share is what got THROUGH
+// whatever protection they already run. (Theme: Data Integrity & Trust)
 //
-// Trigger conditions (per chapter_recommendations_spec_v1.md):
+// Trigger conditions:
 //   - Bot share ≥ 30% in current period
-//   - No mitigation flagged in client config (assumed null today —
-//     bot_mitigation_status column not yet on chapter_config.clients)
 //   - Pattern persists across last 2+ comparison periods (stability check)
+//   (There is no "no mitigation" check — Chapter can't observe mitigation.)
 //
-// Part 2 severity bands (write-time dedup):
+// Part 2 severity bands (write-time dedup; ordinals drive escalation state):
 //   | Band                | Range   | Ordinal | Operator meaning                    |
-//   | elevated-30-50      | 30-49%  | 1       | Concerning; mitigation recommended  |
-//   | elevated-50-70      | 50-69%  | 2       | Critical; mitigation urgent         |
-//   | elevated-70-plus    | 70%+    | 3       | Measurement infrastructure broken   |
+//   | elevated-30-50      | 30-49%  | 1       | Typical for ecom; informational     |
+//   | elevated-50-70      | 50-69%  | 2       | High; worth a bot-protection check  |
+//   | elevated-70-plus    | 70%+    | 3       | Very high; likely scraping/attack   |
 //
 // Same-band drift → state='standing'. Escalation to higher band → state='changed'.
 // De-escalation while still triggering → state='standing' (attenuation captured
@@ -53,7 +57,7 @@ export const R1_1: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
   const priorAboveThreshold = [p2, p3].filter((v): v is number => v !== null && v >= BOT_THRESHOLD).length;
 
   if (currentShare < BOT_THRESHOLD) {
-    return { rule_id: "R1.1", fired: false, subject_key: null, data: {}, evidence: [], confidence: "early_signal", severity_weight: "high", action_type: "mechanical" };
+    return { rule_id: "R1.1", fired: false, subject_key: null, data: {}, evidence: [], confidence: "early_signal", severity_weight: "low", action_type: "mechanical" };
   }
 
   const confidence =
@@ -79,17 +83,20 @@ export const R1_1: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     evidence: [
       {
         source: "Raw Performance",
-        fact: `Bot share: ${Math.round(currentShare * 100)}% over the trailing 4 weeks`,
+        fact: `${Math.round(currentShare * 100)}% of sessions classified bot-like (trailing 4 weeks) — excluded from every analytical metric`,
         deeplink: chapterUrl(ctx.client_key, "raw"),
       },
       {
-        source: "Observations",
-        fact: `Bot mitigation status: not flagged in client config`,
-        deeplink: chapterUrl(ctx.client_key, "observations"),
+        source: "Raw Performance",
+        fact: `Excluded from your billed verified-journey count`,
+        deeplink: chapterUrl(ctx.client_key, "raw"),
       },
     ],
     confidence,
-    severity_weight: "high",
+    // REC3 — 'low', not 'high': bots are ALREADY excluded from every analytical
+    // metric + billed verified-journeys, so this is an FYI (check your bot
+    // protection if unexpectedly high), not an urgent metric-accuracy fix.
+    severity_weight: "low",
     action_type: "mechanical",
   };
 };
