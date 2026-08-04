@@ -15,7 +15,7 @@ import {
 import { fmtRangeSubtitle, rangeToWindow, compareWindow, fmtDateRange } from "./format";
 
 export function TopBar({
-  title, subtitle, showModel = false, showCompare = true, kpis,
+  title, subtitle, showModel = false, showCompare = true, kpis, extraAction,
 }: {
   title: string;
   subtitle: React.ReactNode;
@@ -24,6 +24,9 @@ export function TopBar({
   /** Live KPI strip data. When omitted, KpiStrip falls back to mock so
    *  unwired pages still render something. */
   kpis?: Kpi[];
+  /** Optional page-specific action rendered immediately before the global
+   *  Send-inquiry button (e.g. Recommendations' "Suggest what to watch for"). */
+  extraAction?: React.ReactNode;
 }) {
   const { dateRange, setDateRange, compare, setCompare, model, setModel, setSidebarOpen, client, freshness } = useChapter();
   const pathname = usePathname();
@@ -80,6 +83,8 @@ export function TopBar({
           {asOfLine && <div className="topbar-asof">{asOfLine}</div>}
         </div>
         <div className="spacer"></div>
+
+        {extraAction}
 
         {/* Inquiry trigger — global "ask Chapter staff a question" entry point. */}
         <button

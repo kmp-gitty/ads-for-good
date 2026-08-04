@@ -254,23 +254,24 @@ export default function RecommendationsClient({
         title="Recommendations"
         subtitle={<span>Synthesizing this week&apos;s findings across the data Chapter is collecting for: <span style={{ color: "var(--ink-2)", fontWeight: 500 }}>{client.name}</span></span>}
         showCompare={false}
+        extraAction={
+          <button
+            type="button"
+            className="toolbar-btn"
+            onClick={() => setShowSuggestDrawer(true)}
+            title="Suggest a question for Chapter to watch for"
+          >
+            + Suggest what to watch for
+          </button>
+        }
       />
       <div className="content">
         {/* Hero */}
         <div className="card" style={{ background: "var(--navy)", color: "white", border: "none", padding: "22px 26px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
             <div style={{ maxWidth: 720, flex: "1 1 320px", minWidth: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8 }}>
-                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600 }}>
-                  How this page works
-                </div>
-                <button
-                  type="button"
-                  className="chapter-suggest-btn"
-                  onClick={() => setShowSuggestDrawer(true)}
-                >
-                  + Suggest what Chapter should watch for
-                </button>
+              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600, marginBottom: 8 }}>
+                How this page works
               </div>
               <div style={{ fontSize: 14, lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
                 Each Monday Chapter evaluates a library of rules against your data and synthesizes findings into recommendations across six themes. Each card pairs the finding with evidence and a suggested next step — never a directive. Confidence reflects signal strength: strong findings have held across multiple periods.
