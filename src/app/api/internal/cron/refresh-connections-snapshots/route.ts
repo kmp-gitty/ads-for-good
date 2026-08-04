@@ -58,11 +58,6 @@ type WorkerResult =
   | { ok: true; client_key: string; combo: Combo; ms: number; row_count: number }
   | { ok: false; client_key: string; combo: Combo; error: string };
 
-type Anchor = {
-  anchor_type: "channel" | "page" | "campaign" | "cohort";
-  anchor_key: string;
-};
-
 export async function GET(req: NextRequest) {
   const unauthorized = unauthorizedIfNotCron(req);
   if (unauthorized) return unauthorized;
@@ -281,38 +276,10 @@ async function refreshClient(
     }),
   );
 
-  // Phase 1B — also refresh anchor_meta (anchor_resolve + self_recurrence)
-  // for every unique anchor in this client's combo set. Anchor metadata is
-  // direction- and connection_type-independent so we dedupe by (type, key).
-  const anchorSet = new Set<string>();
-  const uniqueAnchors: Anchor[] = [];
-  for (const c of combos) {
-    const k = `${c.anchor_type}|${c.anchor_key}`;
-    if (anchorSet.has(k)) continue;
-    anchorSet.add(k);
-    uniqueAnchors.push({ anchor_type: c.anchor_type, anchor_key: c.anchor_key });
-  }
-
-  const metaQueue = [...uniqueAnchors];
-  await Promise.all(
-    Array.from({ length: CONCURRENCY }).map(async () => {
-      while (true) {
-        const anchor = metaQueue.shift();
-        if (!anchor) break;
-        try {
-          await refreshOneAnchorMeta(sql, client_key, anchor, startTs, endTs);
-        } catch (err) {
-          // Non-fatal: anchor_meta is a perf optimization; the page falls back
-          // to the live RPC if the snapshot row is missing. Log + continue.
-          console.error(
-            `[refresh-connections-snapshots] anchor_meta failed: ${client_key} ${anchor.anchor_type}:${anchor.anchor_key} →`,
-            err instanceof Error ? err.message : err,
-          );
-        }
-      }
-    }),
-  );
-
+  // CSI4 — the anchor_meta snapshot refresh was removed: it silently failed for
+  // 7 weeks (frozen June 19), and the anchor card now reads anchor_resolve +
+  // self_recurrence LIVE (fast, 5-min cached in dashboard-rpc). Nothing reads
+  // connections_anchor_meta_snapshot_v1 anymore, so there's no refresh to fail.
   return results;
 }
 
@@ -378,71 +345,5 @@ async function refreshOne(
   return Number(result[0]?.row_count ?? 0);
 }
 
-// ─── single anchor meta refresh (Phase 1B) ──────────────────────────────────
-//
-// Pre-computes connections_anchor_resolve + connections_self_recurrence for
-// one anchor and upserts a single row into connections_anchor_meta_snapshot_v1.
-// Each value is stored as jsonb so the wrapper can return the row payload
-// verbatim from a single DB read.
-async function refreshOneAnchorMeta(
-  sql: postgres.Sql,
-  client_key: string,
-  anchor: Anchor,
-  startTs: Date,
-  endTs: Date,
-): Promise<void> {
-  const anchorPayload =
-    anchor.anchor_type === "channel"
-      ? { channel: anchor.anchor_key, start_ts: startTs.toISOString(), end_ts: endTs.toISOString() }
-    : anchor.anchor_type === "page"
-      ? { page_path: anchor.anchor_key, start_ts: startTs.toISOString(), end_ts: endTs.toISOString() }
-    : anchor.anchor_type === "campaign"
-      ? { campaign_id: anchor.anchor_key, start_ts: startTs.toISOString(), end_ts: endTs.toISOString() }
-      : { cohort_id: anchor.anchor_key, start_ts: startTs.toISOString(), end_ts: endTs.toISOString() };
-
-  // Two parallel RPC calls then upsert in one statement. Use jsonb_build_object
-  // construction at SQL time to dodge postgres-js's JSONValue type narrowing —
-  // we pass the payload as a raw jsonb literal via sql.json on the input only.
-  const payloadJson = sql.json(anchorPayload);
-
-  const resolveSql = sql<{ row_text: string | null }[]>`
-    SELECT (to_jsonb(t))::text AS row_text
-    FROM chapter_reporting.connections_anchor_resolve(
-      ${client_key},
-      ${anchor.anchor_type},
-      ${payloadJson}::jsonb
-    ) t
-    LIMIT 1
-  `;
-  const recurrenceSql = sql<{ row_text: string | null }[]>`
-    SELECT (to_jsonb(t))::text AS row_text
-    FROM chapter_reporting.connections_self_recurrence(
-      ${client_key},
-      ${anchor.anchor_type},
-      ${payloadJson}::jsonb
-    ) t
-    LIMIT 1
-  `;
-  const [resolveRows, recurrenceRows] = await Promise.all([resolveSql, recurrenceSql]);
-
-  const resolveText = resolveRows[0]?.row_text ?? null;
-  const recurrenceText = recurrenceRows[0]?.row_text ?? null;
-
-  await sql`
-    INSERT INTO chapter_reporting.connections_anchor_meta_snapshot_v1 (
-      client_key, anchor_type, anchor_key, anchor_resolve, self_recurrence
-    )
-    VALUES (
-      ${client_key},
-      ${anchor.anchor_type},
-      ${anchor.anchor_key},
-      ${resolveText}::jsonb,
-      ${recurrenceText}::jsonb
-    )
-    ON CONFLICT (client_key, anchor_type, anchor_key)
-    DO UPDATE SET
-      anchor_resolve = EXCLUDED.anchor_resolve,
-      self_recurrence = EXCLUDED.self_recurrence,
-      built_at = now()
-  `;
-}
+// (refreshOneAnchorMeta removed — CSI4: connections_anchor_meta_snapshot_v1 is
+// no longer read; the anchor card reads anchor_resolve + self_recurrence live.)

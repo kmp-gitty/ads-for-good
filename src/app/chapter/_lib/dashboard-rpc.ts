@@ -716,32 +716,17 @@ export type ConnectionsAnchorResolveRow = {
 };
 
 // Sprint 9 Phase 1B — snapshot-first lookup for anchor_resolve. Mirrors the
-// Phase 1A pattern: read from connections_anchor_meta_snapshot_v1 first
-// (~30ms), fall back to live RPC for anchors not in the snapshot.
-async function anchorResolveSnapshotLookup(
-  args: ConnectionsAnchorResolveArgs,
-): Promise<ConnectionsAnchorResolveRow[] | null> {
-  const anchorKey = extractAnchorKey(args.p_anchor_type, args.p_anchor_payload as Record<string, unknown>);
-  if (!anchorKey) return null;
-
-  const r = await supabase
-    .schema("chapter_reporting")
-    .from("connections_anchor_meta_snapshot_v1")
-    .select("anchor_resolve")
-    .eq("client_key", args.p_client_key)
-    .eq("anchor_type", args.p_anchor_type)
-    .eq("anchor_key", anchorKey)
-    .maybeSingle();
-
-  if (r.error || !r.data || !r.data.anchor_resolve) return null;
-  return [r.data.anchor_resolve as ConnectionsAnchorResolveRow];
-}
-
+// CSI4 — the connections_anchor_meta_snapshot_v1 snapshot-first lookups
+// (anchor_resolve + self_recurrence) were removed: the snapshot's nightly
+// refresh silently failed for 7 weeks, and both RPCs are fast enough to read
+// live under the 5-min unstable_cache. See the wrappers below.
 export const cachedConnectionsAnchorResolve = unstable_cache(
   async (args: ConnectionsAnchorResolveArgs): Promise<ConnectionsAnchorResolveRow[]> => {
-    const snap = await anchorResolveSnapshotLookup(args);
-    if (snap !== null) return snap;
-
+    // CSI4 — read live (still 5-min cached by unstable_cache). The anchor_meta
+    // snapshot was dropped as a source: connections_anchor_resolve is a fast
+    // call, and its nightly refresh silently failed for 7 weeks (frozen at
+    // June 19), serving a badly stale anchor card. Live removes the staleness
+    // AND the silent-failure surface.
     const r = await supabase
       .schema("chapter_reporting")
       .rpc("connections_anchor_resolve", args);
@@ -751,10 +736,9 @@ export const cachedConnectionsAnchorResolve = unstable_cache(
     }
     return (Array.isArray(r.data) ? r.data : []) as ConnectionsAnchorResolveRow[];
   },
-  // v4 — Phase 1B snapshot-first lookup added; bust cache so stale empties
-  // get re-resolved through the snapshot path.
-  ["dashboard-rpc:chapter_reporting:connections_anchor_resolve:v4"],
-  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_anchor_resolve:v4"] },
+  // v5 — dropped stale anchor_meta snapshot; read live (CSI4). Key bumped to bust.
+  ["dashboard-rpc:chapter_reporting:connections_anchor_resolve:v5"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_anchor_resolve:v5"] },
 );
 
 export type ConnectionsConnectionType = "channel" | "page" | "campaign";
@@ -881,31 +865,9 @@ export type ConnectionsSelfRecurrenceRow = {
   revenue_recurrent:      number | null;
 };
 
-// Sprint 9 Phase 1B — snapshot-first lookup for self_recurrence.
-async function selfRecurrenceSnapshotLookup(
-  args: ConnectionsAnchorResolveArgs,
-): Promise<ConnectionsSelfRecurrenceRow[] | null> {
-  const anchorKey = extractAnchorKey(args.p_anchor_type, args.p_anchor_payload as Record<string, unknown>);
-  if (!anchorKey) return null;
-
-  const r = await supabase
-    .schema("chapter_reporting")
-    .from("connections_anchor_meta_snapshot_v1")
-    .select("self_recurrence")
-    .eq("client_key", args.p_client_key)
-    .eq("anchor_type", args.p_anchor_type)
-    .eq("anchor_key", anchorKey)
-    .maybeSingle();
-
-  if (r.error || !r.data || !r.data.self_recurrence) return null;
-  return [r.data.self_recurrence as ConnectionsSelfRecurrenceRow];
-}
-
 export const cachedConnectionsSelfRecurrence = unstable_cache(
   async (args: ConnectionsAnchorResolveArgs): Promise<ConnectionsSelfRecurrenceRow[]> => {
-    const snap = await selfRecurrenceSnapshotLookup(args);
-    if (snap !== null) return snap;
-
+    // CSI4 — read live (5-min cached); dropped the stale anchor_meta snapshot.
     const r = await supabase.schema("chapter_reporting").rpc("connections_self_recurrence", args);
     if (r.error) {
       console.error("[dashboard-rpc] connections_self_recurrence failed:", { ...r.error });
@@ -913,9 +875,9 @@ export const cachedConnectionsSelfRecurrence = unstable_cache(
     }
     return (Array.isArray(r.data) ? r.data : []) as ConnectionsSelfRecurrenceRow[];
   },
-  // v2 — Phase 1B snapshot-first lookup added.
-  ["dashboard-rpc:chapter_reporting:connections_self_recurrence:v2"],
-  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_self_recurrence:v2"] },
+  // v3 — dropped stale anchor_meta snapshot; read live (CSI4).
+  ["dashboard-rpc:chapter_reporting:connections_self_recurrence:v3"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:connections_self_recurrence:v3"] },
 );
 
 // 9.5 — return-loop primitive. Of identities anchored on a channel, the share
