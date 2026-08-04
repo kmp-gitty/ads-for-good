@@ -260,8 +260,46 @@ function CorrelationCard({ row }: { row: CorrelationChannelRow }) {
     return "This is a description of what's in your data — not a causal estimate. Self-selection and audience overlap are not controlled for.";
   })();
 
-  // 4 metric stat blocks — render with per-metric gate state
-  const metricsToRender: MetricKey[] = ["conv_rate", "aov", "days", "touches"];
+  // C2 — group the four metrics so they aren't read as co-equal: Value
+  // (conversion rate, AOV) vs Path character (time to close, touches). The two
+  // character metrics are largely the same fact — longer paths take more touches
+  // AND more days — so they're grouped and flagged as one signal, not two.
+  const VALUE_METRICS: MetricKey[] = ["conv_rate", "aov"];
+  const CHARACTER_METRICS: MetricKey[] = ["days", "touches"];
+  const renderMetric = (k: MetricKey) => {
+    const g = gates[k];
+    const isHeadline = k === headlineKey;
+    const deltaText = formatDelta(g);
+    const cls =
+      g.state === "hidden"     ? "neutral"
+      : g.state === "noise"    ? "neutral"
+      : g.delta_rel != null && g.delta_rel >= 0 ? "up" : "down";
+    return (
+      <div key={k} className="lift-stat" style={{ opacity: g.state === "hidden" ? 0.4 : 1 }}>
+        <div className="lift-stat-label">
+          {g.label}
+          {isHeadline && g.state === "confident" && (
+            <span style={{ marginLeft: 6, fontSize: 9, color: "var(--accent)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".1em" }}>headline</span>
+          )}
+        </div>
+        <div className="lift-stat-pair">
+          <div className="with">{formatMetricValue(g, g.mean_with)}<span className="tag">with</span></div>
+          <div className="without">{formatMetricValue(g, g.mean_without)}<span className="tag">without</span></div>
+        </div>
+        {g.state === "hidden" ? (
+          <div className="lift-stat-delta neutral">need n ≥ 30</div>
+        ) : g.state === "noise" ? (
+          <div className="lift-stat-delta neutral" style={{ color: "var(--ink-4)" }} title={`Δ = ${deltaText}, but within statistical noise (|Δ|/SE = ${g.z?.toFixed(2)}, threshold 2.0)`}>
+            {deltaText} <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.8 }}>within noise</span>
+          </div>
+        ) : (
+          <div className={`lift-stat-delta ${cls}`} title={`|Δ|/SE = ${g.z?.toFixed(2)} ≥ 2.0`}>
+            {deltaText}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="lift-card">
@@ -276,41 +314,18 @@ function CorrelationCard({ row }: { row: CorrelationChannelRow }) {
         <span className="lift-method-tag obs">Observational</span>
       </div>
 
-      <div className="lift-stat-row">
-        {metricsToRender.map(k => {
-          const g = gates[k];
-          const isHeadline = k === headlineKey;
-          const deltaText = formatDelta(g);
-          const cls =
-            g.state === "hidden"     ? "neutral"
-            : g.state === "noise"    ? "neutral"
-            : g.delta_rel != null && g.delta_rel >= 0 ? "up" : "down";
-          return (
-            <div key={k} className="lift-stat" style={{ opacity: g.state === "hidden" ? 0.4 : 1 }}>
-              <div className="lift-stat-label">
-                {g.label}
-                {isHeadline && g.state === "confident" && (
-                  <span style={{ marginLeft: 6, fontSize: 9, color: "var(--accent)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".1em" }}>headline</span>
-                )}
-              </div>
-              <div className="lift-stat-pair">
-                <div className="with">{formatMetricValue(g, g.mean_with)}<span className="tag">with</span></div>
-                <div className="without">{formatMetricValue(g, g.mean_without)}<span className="tag">without</span></div>
-              </div>
-              {g.state === "hidden" ? (
-                <div className="lift-stat-delta neutral">need n ≥ 30</div>
-              ) : g.state === "noise" ? (
-                <div className="lift-stat-delta neutral" style={{ color: "var(--ink-4)" }} title={`Δ = ${deltaText}, but within statistical noise (|Δ|/SE = ${g.z?.toFixed(2)}, threshold 2.0)`}>
-                  {deltaText} <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.8 }}>within noise</span>
-                </div>
-              ) : (
-                <div className={`lift-stat-delta ${cls}`} title={`|Δ|/SE = ${g.z?.toFixed(2)} ≥ 2.0`}>
-                  {deltaText}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--ink-3)", fontWeight: 600, marginBottom: 6 }}>Value</div>
+          <div className="lift-stat-row">{VALUE_METRICS.map(renderMetric)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--ink-3)", fontWeight: 600, marginBottom: 6 }}>Path character</div>
+          <div className="lift-stat-row">{CHARACTER_METRICS.map(renderMetric)}</div>
+          <div style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 4, lineHeight: 1.4 }}>
+            Time to close and touches describe path shape and usually move together — read them as one signal, not two.
+          </div>
+        </div>
       </div>
 
       <div className="lift-stat-row" style={{ marginTop: 8 }}>
