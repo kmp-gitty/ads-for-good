@@ -52,6 +52,12 @@ function lookbackLabel(v: string): string {
 // (first_orders/first_revenue etc.); the toggle just picks which to allocate.
 type Metric = "revenue" | "count";
 
+// AM1 — channel scope. "Paid" narrows the VIEW to paid channels; the underlying
+// attribution math is unchanged (each channel's % is still its share of the
+// all-channel total), so a paid channel's number is honest, not re-normalized.
+type Scope = "all" | "paid";
+const isPaidChannel = (ch: string) => /paid/i.test(ch);
+
 // Label the count metric from the client's boundary event — "Orders" for a
 // purchase, "Bookings" for an appointment. Never a generic word.
 function countLabelFor(boundaryEvent: string): string {
@@ -359,11 +365,12 @@ function ModelBlindSpot({ model, indicators, coverage, lookback }: {
   );
 }
 
-function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indicators, coverage, lookback }: {
+function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indicators, coverage, lookback, scope }: {
   data: ChannelPct[]; metric: Metric; countLabel: string;
   netRevenue: number | null; netOrders: number | null;
   indicators: AttributionModelIndicatorRow[];
   coverage: AttributionFirstTouchCoverageRow[]; lookback: string;
+  scope: Scope;
 }) {
   const { model } = useChapter();
   const modelVal = (c: ChannelPct): number =>
@@ -371,8 +378,11 @@ function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indi
     : model === "last"   ? c.lastVal
     : model === "linear" ? c.linearVal
     : (0.4 * c.firstVal + 0.2 * c.linearVal + 0.4 * c.lastVal);
+  // Totals / unattributed stay over the FULL channel set (all-channel math);
+  // only which bars we render is scoped (AM1).
+  const shown = scope === "paid" ? data.filter(c => isPaidChannel(c.channel)) : data;
   const total = data.reduce((s, c) => s + modelVal(c), 0);
-  const sorted = [...data].sort((a, b) => (b[model] as number) - (a[model] as number));
+  const sorted = [...shown].sort((a, b) => (b[model] as number) - (a[model] as number));
 
   const isCount = metric === "count";
   // Only Linear produces fractional counts (each touch takes a share of one
@@ -395,7 +405,10 @@ function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indi
       <div className="card-head">
         <div>
           <h3 className="card-title">Channel allocation under {ATTRIBUTION_MODEL_LABELS[model]}</h3>
-          <div className="card-sub">Share of attributed {unitLabel} · {fmtVal(total)} across {data.length} channels</div>
+          <div className="card-sub">
+            Share of attributed {unitLabel} · {fmtVal(total)} across {data.length} channels
+            {scope === "paid" && <> · <strong>paid channels only</strong> ({shown.length} shown; % is still share of the all-channel total)</>}
+          </div>
           {/* 6.2 — allocation rule stated on-page, no hover needed */}
           <div className="card-sub" style={{ marginTop: 4 }}>
             {MODEL_DEFINITIONS[model]}
@@ -403,11 +416,16 @@ function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indi
           </div>
         </div>
       </div>
+      {scope === "paid" && shown.length === 0 ? (
+        <div style={{ padding: "16px 2px", fontSize: 13, color: "var(--ink-3)" }}>
+          No paid channels in this window — you don&apos;t appear to be running paid search or paid social here.
+        </div>
+      ) : (
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {sorted.map(c => {
           const ch = CHANNELS[c.channel as ChannelKey] ?? CHANNEL_FALLBACK;
           const pct = c[model] as number;
-          const maxPct = Math.max(1, ...data.map(d => d[model] as number));
+          const maxPct = Math.max(1, ...shown.map(d => d[model] as number));
           return (
             <div key={c.channel} style={{ display: "grid", gridTemplateColumns: "140px 1fr 80px 80px", gap: 14, alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -423,6 +441,7 @@ function SingleModelView({ data, metric, countLabel, netRevenue, netOrders, indi
           );
         })}
       </div>
+      )}
       {unattributed > 0 && (
         <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--line-2)", fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5 }}>
           <strong style={{ color: "var(--ink-2)" }}>{fmtVal(unattributed)}</strong> ({unattributedPct.toFixed(1)}%) of the {fmtVal(net ?? 0)} headline {unitLabel} is not attributed to any channel path — chapters with no captured session entry (shown as “(unknown)” elsewhere). The bars above allocate the {fmtVal(total)} that does.
@@ -451,10 +470,14 @@ export default function AttributionClient({
   const [selectedModels, setSelectedModels] = useState<AttributionModel[]>(["first", "linear", "last"]);
   // 6.3 — allocate by revenue or by conversion count. Both are in the payload.
   const [metric, setMetric] = useState<Metric>("revenue");
+  const [scope, setScope] = useState<Scope>("all");   // AM1 — channel view scope
   const countLabel = countLabelFor(boundaryEvent);
 
   // Convert live RPC rows → per-channel shares for the selected metric.
   const data: ChannelPct[] = rowsToPct(attribution, metric);
+  // AM1 — scoped subset for the compare views; the single-model view gets full
+  // data + the scope flag so its totals/unattributed stay all-channel.
+  const scopedData: ChannelPct[] = scope === "paid" ? data.filter(c => isPaidChannel(c.channel)) : data;
   const empty = data.length === 0;
 
   const toggleModel = (m: AttributionModel) => {
@@ -552,7 +575,12 @@ export default function AttributionClient({
                 </div>
                 {/* 6.3 — allocate by revenue or by conversion count */}
                 <div className="filter-bar">
-                  <span style={{ fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".1em" }}>Metric</span>
+                  {/* AM1 — scope the view to all channels or paid only. Credit math
+                      is unchanged; this just narrows which channels are shown. */}
+                  <span style={{ fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".1em" }}>Channels</span>
+                  <button className={`btn-ghost ${scope === "all" ? "active" : ""}`} onClick={() => setScope("all")}>All</button>
+                  <button className={`btn-ghost ${scope === "paid" ? "active" : ""}`} onClick={() => setScope("paid")} title="Paid search + paid social. Each channel's % stays its share of the all-channel total.">Paid</button>
+                  <span style={{ fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".1em", marginLeft: 10 }}>Metric</span>
                   <button className={`btn-ghost ${metric === "revenue" ? "active" : ""}`} onClick={() => setMetric("revenue")}>Revenue</button>
                   <button className={`btn-ghost ${metric === "count" ? "active" : ""}`} onClick={() => setMetric("count")}>{countLabel}</button>
                 </div>
@@ -574,6 +602,7 @@ export default function AttributionClient({
               indicators={indicators}
               coverage={coverage}
               lookback={lookback}
+              scope={scope}
             />
 
             {/* ───── Compare models ───────────────────────────────────────── */}
@@ -596,14 +625,14 @@ export default function AttributionClient({
               <div className="card-head">
                 <div>
                   <h3 className="card-title">Channel rank shifts across attribution models</h3>
-                  <div className="card-sub">Biggest swings highlighted — channels with rank change ≥ 3 across selected models.</div>
+                  <div className="card-sub">Biggest swings highlighted — channels with rank change ≥ 3 across selected models.{scope === "paid" && " Paid channels only."}</div>
                 </div>
               </div>
-              <BumpChart models={bumpModels} data={data} />
+              <BumpChart models={bumpModels} data={scopedData} />
             </div>
 
             <div className="card flush">
-              <AllocTable models={tableModels} data={data} />
+              <AllocTable models={tableModels} data={scopedData} />
             </div>
           </>
         )}
