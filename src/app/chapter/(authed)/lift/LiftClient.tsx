@@ -953,6 +953,14 @@ function ContributionCard({ c }: { c: ContribComputed }) {
 
   const qd = QUADRANT_LABELS[c.quadrant];
 
+  // V4 — Direct isn't a channel you can turn off, so the "if it disappeared"
+  // projection + "cut / do-not-cut" verdict are nonsensical for it. Reframe as a
+  // return-visitor floor: a baseline to read, not a lever to pull.
+  const isDirect = c.channel === "(direct)";
+  const headline = isDirect
+    ? "Direct is a return-visitor floor, not a channel you can turn off — read its footprint as your loyalty baseline, not a lever."
+    : measureAHeadline;
+
   return (
     <div className="lift-card">
       <div className="lift-card-head">
@@ -960,7 +968,7 @@ function ContributionCard({ c }: { c: ContribComputed }) {
           <span className="lift-chip" style={{ background: c.color }}>{c.short}</span>
           <div>
             <div className="lift-card-eyebrow">{c.channelName} · contribution view</div>
-            <h3 className="lift-card-headline" style={{ fontSize: 15, lineHeight: 1.4 }}>{measureAHeadline}</h3>
+            <h3 className="lift-card-headline" style={{ fontSize: 15, lineHeight: 1.4 }}>{headline}</h3>
           </div>
         </div>
         <span className={`lift-method-tag ${c.quadrant === "connective_tissue" ? "causal" : "obs"}`}>{qd.title}</span>
@@ -994,11 +1002,14 @@ function ContributionCard({ c }: { c: ContribComputed }) {
         {/* Measure B — Contribution Index */}
         <div style={{ padding: "12px 14px", background: "var(--bg-2)", border: "1px solid var(--line-2)", borderRadius: 8 }}>
           <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".12em", color: "var(--ink-3)", fontWeight: 600, marginBottom: 6 }}>
-            Contribution Index · footprint (not causal)
+            Footprint score · not a % · relative to your channels
           </div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 6 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 2 }}>
             {(c.contribution_index * 100).toFixed(0)}
             <span style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-3)" }}> / 100</span>
+          </div>
+          <div style={{ fontSize: 10, color: "var(--ink-4)", marginBottom: 6 }}>
+            100 = your most-embedded channel — a relative rank, not a percentage of anything
           </div>
           <div style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.4 }}>
             <div>Participation: <strong style={{ color: "var(--ink-2)" }}>{(c.participation_rate * 100).toFixed(1)}%</strong> <span style={{ opacity: 0.7 }}>of converting chapters</span></div>
@@ -1010,7 +1021,11 @@ function ContributionCard({ c }: { c: ContribComputed }) {
 
       <div className="lift-caveat" style={{ marginTop: 14 }}>
         <Icon name="info" size={13} />
-        <span><strong>{qd.title}:</strong> {qd.verdict}</span>
+        {isDirect ? (
+          <span><strong>Return-visitor floor:</strong> Direct isn&apos;t a spendable lever. A high footprint here reflects returning customers who&apos;d arrive regardless of channel — treat it as your loyalty baseline, not something to cut or scale.</span>
+        ) : (
+          <span><strong>{qd.title}:</strong> {qd.verdict}</span>
+        )}
       </div>
 
       <details style={{ marginTop: 12, fontSize: 12 }}>
@@ -1061,15 +1076,24 @@ function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
         </div>
       </div>
       <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: "auto", display: "block" }}>
-        {/* Quadrant backgrounds (median split lines) */}
+        {/* Quadrant backgrounds (median split lines). <title> gives a native
+            hover explainer for each quadrant (V3). */}
         <rect x={pad.l} y={pad.t} width={xs(medianInc) - pad.l} height={ys(medianCon) - pad.t}
-              fill="#E36410" opacity="0.04" />
+              fill="#E36410" opacity="0.04">
+          <title>Connective tissue — high footprint, low incremental. DO NOT CUT: heavily embedded in the customer base even though matched-cohort lift is small.</title>
+        </rect>
         <rect x={xs(medianInc)} y={pad.t} width={(w - pad.r) - xs(medianInc)} height={ys(medianCon) - pad.t}
-              fill="#2E7D5B" opacity="0.05" />
+              fill="#2E7D5B" opacity="0.05">
+          <title>Core driver — high footprint, high incremental. Protect: both deeply embedded AND causally lifting conversions.</title>
+        </rect>
         <rect x={pad.l} y={ys(medianCon)} width={xs(medianInc) - pad.l} height={(h - pad.b) - ys(medianCon)}
-              fill="#9CA0A8" opacity="0.04" />
+              fill="#9CA0A8" opacity="0.04">
+          <title>Coasting — low footprint, low incremental. Least load-bearing: little embedded footprint and little measured lift.</title>
+        </rect>
         <rect x={xs(medianInc)} y={ys(medianCon)} width={(w - pad.r) - xs(medianInc)} height={(h - pad.b) - ys(medianCon)}
-              fill="#6F86A8" opacity="0.05" />
+              fill="#6F86A8" opacity="0.05">
+          <title>Closing spark — low footprint, high incremental. Rarely appears, but converts when it does.</title>
+        </rect>
 
         {/* Median split lines */}
         <line x1={xs(medianInc)} x2={xs(medianInc)} y1={pad.t} y2={h - pad.b} stroke="var(--line-2)" strokeWidth="1" strokeDasharray="3 3" />
@@ -1107,17 +1131,20 @@ function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
         ))}
         <text x={16} y={(pad.t + h - pad.b) / 2} fontSize="11" fill="var(--ink-2)" fontWeight="500"
               textAnchor="middle" transform={`rotate(-90 16 ${(pad.t + h - pad.b) / 2})`}>
-          Contribution Index
+          Footprint score (0–100)
         </text>
 
-        {/* Channel chips */}
+        {/* Channel chips — flip the label to the left of the dot near the right
+            edge so channel names never clip off the plot (V1). */}
         {scored.map(c => {
           const x = xs(Math.max(xMin, Math.min(xMax, c.incremental_rate!)));
           const y = ys(Math.max(yMin, Math.min(yMax, c.contribution_index)));
+          const flipLeft = x > w - pad.r - 90;
           return (
             <g key={c.channel}>
               <circle cx={x} cy={y} r="9" fill={c.color} stroke="white" strokeWidth="2" />
-              <text x={x + 14} y={y + 4} fontSize="11" fill="var(--ink)" fontWeight="500">{c.channelName}</text>
+              <text x={flipLeft ? x - 14 : x + 14} y={y + 4} fontSize="11" fill="var(--ink)" fontWeight="500"
+                    textAnchor={flipLeft ? "end" : "start"}>{c.channelName}</text>
             </g>
           );
         })}
