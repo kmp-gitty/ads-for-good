@@ -45,10 +45,10 @@ const OUTCOME_WINDOW_OPTIONS = [7, 14, 30, 60, 90];
 // 9.4 — Cohort removed from the anchor selector (demote to a filter later; a
 // cohort is a property of people, not a timed touchpoint). Cohort backend +
 // the RPC's cohort path stay intact for the future filter build.
-const ANCHOR_TYPES: { value: string; label: string; enabled: boolean }[] = [
-  { value: "channel",  label: "Channel",  enabled: true },
-  { value: "page",     label: "Page",     enabled: true },
-  { value: "campaign", label: "Campaign", enabled: true },
+const ANCHOR_TYPES: { value: string; label: string; enabled: boolean; desc?: string }[] = [
+  { value: "channel",  label: "Channel",  enabled: true, desc: "Anchor = the entry channel identities came in on (their journey's first session)." },
+  { value: "page",     label: "Page",     enabled: true, desc: "Anchor = identities who viewed this page." },
+  { value: "campaign", label: "Campaign", enabled: true, desc: "Anchor = identities who clicked this email campaign." },
 ];
 
 function channelLabel(v: string): string {
@@ -278,10 +278,11 @@ function ConnectionRow({ row, index, onClick, gate }: { row: ConnectionsPanelRow
 // Two-line header cell — short qualifier line over the primary noun. Makes
 // each column visually distinct instead of reading as one continuous sentence.
 function HeaderCell({
-  top, bottom, firstCell = false,
-}: { top?: string; bottom: string; firstCell?: boolean }) {
+  top, bottom, firstCell = false, title,
+}: { top?: string; bottom: string; firstCell?: boolean; title?: string }) {
   return (
     <div
+      title={title}
       style={{
         ...cellDivided(firstCell),
         textAlign: firstCell ? "left" : "center",
@@ -291,6 +292,7 @@ function HeaderCell({
         alignItems: firstCell ? "flex-start" : "center",
         gap: 2,
         lineHeight: 1.1,
+        cursor: title ? "help" : undefined,
       }}
     >
       <span style={{ color: "var(--ink-4)", fontWeight: 500 }}>{top ?? " "}</span>
@@ -317,11 +319,16 @@ function PanelHeader({ outcomeWindowDays }: { outcomeWindowDays: number }) {
       }}
     >
       <HeaderCell                              bottom="Connection" firstCell />
-      <HeaderCell                              bottom="People"  />
-      <HeaderCell top="of"      bottom="Anchor" />
-      <HeaderCell top="vs base" bottom="Lift"   />
-      <HeaderCell top="Median"  bottom="Lag"    />
-      <HeaderCell top={`${outcomeWindowDays}d`} bottom="Outcome" />
+      <HeaderCell                              bottom="People"
+        title="How many of the anchored identities also touched this connection." />
+      <HeaderCell top="of"      bottom="Anchor"
+        title="Share of the anchored identities that also touched this connection." />
+      <HeaderCell top="vs base" bottom="Lift"
+        title="How much more often this connection shows up among these identities than across all identities generally. 1× = no different from baseline; 2× = twice as common here." />
+      <HeaderCell top="Median"  bottom="Lag"
+        title="Median time between this connection touch and the anchor moment (before the anchor for upstream, after it for downstream)." />
+      <HeaderCell top={`${outcomeWindowDays}d`} bottom="Outcome"
+        title={`Of the identities in this row, the share that reached a purchase within ${outcomeWindowDays} days of the CONNECTION touch — not the anchor.`} />
     </div>
   );
 }
@@ -625,7 +632,7 @@ export default function InfluenceClient({
                 How this page works
               </div>
               <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
-                Anchor on a <strong>{anchorType === "channel" ? "channel" : anchorType === "page" ? "page" : anchorType === "campaign" ? "campaign" : "cohort"}</strong> above. The middle column shows the identity set selected. The two side panels show OTHER {connectionsNoun} those same identities touched within {windowDays} days before (left) or after (right) their anchor moment. <strong>This describes connections in your data — it does not estimate cause.</strong> The measured cousin lives at <em>Lagged Impact</em>.
+                Anchor on a <strong>{anchorType === "channel" ? "channel" : anchorType === "page" ? "page" : anchorType === "campaign" ? "campaign" : "cohort"}</strong>{anchorType === "channel" ? <> (the channel identities <em>entered</em> on)</> : null} above. The middle column shows the identity set selected. The two side panels show OTHER {connectionsNoun} those same identities touched within {windowDays} days before (left) or after (right) their anchor moment. <strong>This describes connections in your data — it does not estimate cause.</strong> The measured cousin lives at <em>Lagged Impact</em>.
               </div>
             </div>
 
@@ -703,7 +710,7 @@ export default function InfluenceClient({
                 className={anchorType === t.value ? "active" : ""}
                 disabled={!t.enabled}
                 onClick={() => t.enabled && setParam("anchor_type", t.value)}
-                title={t.enabled ? undefined : "Coming soon"}
+                title={t.enabled ? t.desc : "Coming soon"}
                 style={t.enabled ? undefined : { opacity: 0.4, cursor: "not-allowed" }}
               >
                 {t.label}
@@ -999,7 +1006,8 @@ export default function InfluenceClient({
             )}
           </Dropdown>
 
-          <div style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)" }}>
+          <div style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)", cursor: "help" }}
+               title={"Three different windows on this page:\n• Anchor window (this) — the date range Chapter scans for anchor moments, set by the Range control at the top.\n• Lag window — how close to the anchor moment a connection touch must occur to count.\n• Outcome window — how long after a connection touch we keep watching for a purchase."}>
             Anchor window: <strong style={{ color: "var(--ink-2)" }}>{range}</strong>
           </div>
         </div>
