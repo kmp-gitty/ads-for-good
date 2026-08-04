@@ -355,7 +355,7 @@ export default function LaggedImpactClient({
                 How this page works
               </div>
               <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
-                Pick a channel pair (A → B). The page splits the analysis range into a <strong>treatment window</strong> (when A could occur — first third) and a <strong>lookforward window</strong> (when we count B returns — remaining two-thirds). For each default lag (7 / 14 / 30 / 60 / 90 days), we compare the B-return rate of identities touched by A against comparable identities who weren't touched by A — neither cohort had touched B during the treatment window. <strong>Default lags are shown together so a "best lag" can't be cherry-picked.</strong>
+                Pick a channel pair (A → B). The page splits the analysis range into a <strong>treatment window</strong> (when A could occur — first third) and a <strong>lookforward window</strong> (when we count B returns — remaining two-thirds). For each default lag (7 / 14 / 30 / 60 / 90 days), we compare the B-return rate of identities touched by A against comparable identities who weren't touched by A — neither cohort had touched B during the treatment window. <strong>Default lags are shown together so a "best lag" can't be cherry-picked.</strong> Touches too recent for their full lag window to have elapsed are excluded from each cell, so return rates aren&apos;t undercounted by activity we can&apos;t observe yet — larger lags therefore analyze a slightly earlier slice of the window.
               </div>
             </div>
             <div style={{ color: "rgba(255,255,255,0.55)" }}>
