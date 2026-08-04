@@ -41,6 +41,10 @@
       "schedule": "0 6 * * 1"
     },
     {
+      "path": "/api/internal/cron/refresh-session-channel-entries",
+      "schedule": "45 4 * * *"
+    },
+    {
       "path": "/api/internal/cron/refresh-connections-snapshots",
       "schedule": "30 5 * * *"
     },
