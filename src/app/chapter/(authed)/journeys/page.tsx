@@ -70,11 +70,15 @@ export default async function JourneysPage({ searchParams }: { searchParams: Sea
 
   const stats = statsRows[0] ?? null;
 
-  // Default detail = ?identity if provided AND in list, else first list row.
-  const selectedIdentity =
-    identity && listRows.some(r => r.canonical_identity_key === identity)
-      ? identity
-      : listRows[0]?.canonical_identity_key ?? null;
+  // CJ2 — an explicit ?identity (from search or a list click) is ALWAYS honored:
+  // the detail RPCs fetch by canonical directly, so it renders even for a
+  // customer outside the top-50-by-LTV list. Only fall back to the first list
+  // row for the default first-paint (no ?identity). Falling back here was
+  // silently showing the wrong (top-of-list) person for any searched customer
+  // beyond the top 50.
+  const selectedIdentity = identity ?? (listRows[0]?.canonical_identity_key ?? null);
+  const selectedInList = selectedIdentity != null
+    && listRows.some(r => r.canonical_identity_key === selectedIdentity);
 
   let chapters: Awaited<ReturnType<typeof cachedJourneyDetailChapters>> = [];
   let events:   Awaited<ReturnType<typeof cachedJourneyDetailEvents>>   = [];
@@ -119,6 +123,7 @@ export default async function JourneysPage({ searchParams }: { searchParams: Sea
       stats={stats}
       list={listRows}
       selectedIdentity={selectedIdentity}
+      selectedInList={selectedInList}
       chapters={chapters}
       events={events}
       aliases={aliases}

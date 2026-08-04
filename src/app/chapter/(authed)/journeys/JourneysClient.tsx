@@ -19,6 +19,7 @@ type Props = {
   stats:             JourneysStatsRow | null;
   list:              JourneysListRow[];
   selectedIdentity:  string | null;
+  selectedInList:    boolean;   // CJ2 — is the selected identity in the top-50 list?
   chapters:          JourneyDetailChapterRow[];
   events:            JourneyDetailEventRow[];
   aliases:           JourneyDetailAliasRow[];
@@ -176,7 +177,7 @@ function SearchResultBanner({ result }: { result: IdentitySearchResult }) {
 }
 
 export default function JourneysClient({
-  stats, list, selectedIdentity, chapters, events, aliases,
+  stats, list, selectedIdentity, selectedInList, chapters, events, aliases,
   clientKey, range: _range, action, outcome, boundaryEvent,
 }: Props) {
   const { client } = useChapter();
@@ -216,6 +217,17 @@ export default function JourneysClient({
   }
 
   const selectedRow = list.find(r => r.canonical_identity_key === selectedIdentity);
+  // CJ2 — when the selected identity is a searched customer OUTSIDE the top-50
+  // list, selectedRow is undefined even though the server fetched their full
+  // detail. Derive the header facts from the detail data so the panel still
+  // renders (instead of the "select an identity" empty state).
+  const detailLtv = selectedRow
+    ? Number(selectedRow.lifetime_value ?? 0)
+    : chapters.reduce((s, c) => s + Number(c.revenue ?? 0), 0);
+  const detailConverted = selectedRow
+    ? selectedRow.outcome === "converted"
+    : chapters.some(c => Number(c.revenue ?? 0) > 0);
+  const detailLastPurchase = selectedRow?.last_purchase_ts ?? null;
 
   // Per-chapter expand state. Default = all collapsed (just header summary).
   // Resets when the selected identity changes so we don't carry stale ids over.
@@ -259,8 +271,8 @@ export default function JourneysClient({
             <SummaryStat label="Identities matching" value={stats?.total_identities != null ? fmtNum(Number(stats.total_identities)) : "—"} foot={actionLabel === "All actions" ? "in selected window" : `did "${actionLabel.toLowerCase()}"`} />
             <SummaryStat label="Converted" value={stats?.converted_count != null ? fmtNum(Number(stats.converted_count)) : "—"} foot={stats?.pct_converted != null ? `${Number(stats.pct_converted).toFixed(1)}% of cohort` : "—"} />
             <SummaryStat label="Total LTV" value={stats?.total_ltv != null ? fmtMoney(Number(stats.total_ltv)) : "—"} foot="lifetime revenue · cohort" />
-            <SummaryStat label="Avg LTV" value={stats?.avg_ltv != null ? fmtMoney(Number(stats.avg_ltv)) : "—"} foot="per identity, including $0" />
-            <SummaryStat label="Median LTV" value={stats?.median_ltv != null ? fmtMoney(Number(stats.median_ltv)) : "—"} foot="50% above / 50% below" />
+            <SummaryStat label="Avg per buyer" value={stats?.avg_ltv_converted != null ? fmtMoney(Number(stats.avg_ltv_converted)) : "—"} foot="converting customers only" />
+            <SummaryStat label="Median per buyer" value={stats?.median_ltv_converted != null ? fmtMoney(Number(stats.median_ltv_converted)) : "—"} foot="typical buyer · 50% above / below" />
           </div>
         </div>
 
@@ -326,8 +338,13 @@ export default function JourneysClient({
               )}
             </Dropdown>
           </div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
-            {list.length} identities · top 50 by LTV
+          <div style={{ fontSize: 12, color: "var(--ink-3)", cursor: "help" }}
+               title={action === "all"
+                 ? "The list shows the 50 highest-lifetime-value customers in this window, ranked by value."
+                 : `The list shows the 50 highest-lifetime-value customers who did “${actionLabel.toLowerCase()}” in this window. Because high-value customers tend to have done every action, the ranking can look similar across filters — the ×N badge on each row shows how many times they did the selected action.`}>
+            {action === "all"
+              ? <>{list.length} shown · top 50 by lifetime value</>
+              : <>{list.length} shown · did &ldquo;{actionLabel.toLowerCase()}&rdquo; · top 50 by value</>}
           </div>
         </div>
 
@@ -384,12 +401,17 @@ export default function JourneysClient({
 
           {/* Right: detail panel */}
           <div className="card" style={{ padding: "22px 26px" }}>
-            {!selectedIdentity || !selectedRow ? (
+            {!selectedIdentity ? (
               <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)" }}>
                 Select an identity from the list to see their full journey.
               </div>
             ) : (
               <>
+                {selectedIdentity && !selectedInList && (
+                  <div style={{ marginBottom: 14, padding: "8px 12px", borderRadius: 8, background: "var(--bg-2)", border: "1px solid var(--line-2)", fontSize: 12, color: "var(--ink-2)" }}>
+                    Showing a searched customer — not in the top-50-by-value list on the left, so no row is highlighted there.
+                  </div>
+                )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
                   <div>
                     <div className="eyebrow">Canonical identity</div>
@@ -397,13 +419,13 @@ export default function JourneysClient({
                       <span className="hash" title={selectedIdentity} style={{ fontSize: 12 }}>
                         {truncateIdentity(selectedIdentity)}
                       </span>
-                      <span className={`role-pill ${selectedRow.outcome === "converted" ? "closer" : "opener"}`} style={{ fontSize: 10 }}>
-                        {selectedRow.outcome}
+                      <span className={`role-pill ${detailConverted ? "closer" : "opener"}`} style={{ fontSize: 10 }}>
+                        {detailConverted ? "converted" : "open"}
                       </span>
                     </h3>
                     <div className="muted" style={{ fontSize: 12 }}>
                       {chapters[0] && <>First seen {fmtDateShort(chapters[0].first_ts)}</>}
-                      {selectedRow.last_purchase_ts && <> · Last purchase {fmtDateShort(selectedRow.last_purchase_ts)}</>}
+                      {detailLastPurchase && <> · Last purchase {fmtDateShort(detailLastPurchase)}</>}
                     </div>
                   </div>
                 </div>
@@ -411,7 +433,7 @@ export default function JourneysClient({
                 <div className="role-stats" style={{ paddingTop: 0, borderTop: "none", gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 22 }}>
                   <div><div className="role-stat-label">Chapters</div><div className="role-stat-val">{fmtNum(chapters.length)}</div></div>
                   <div><div className="role-stat-label">Events</div><div className="role-stat-val">{fmtNum(events.length)}</div></div>
-                  <div><div className="role-stat-label">LTV</div><div className="role-stat-val">{fmtMoney(Number(selectedRow.lifetime_value ?? 0))}</div></div>
+                  <div><div className="role-stat-label">LTV</div><div className="role-stat-val">{fmtMoney(detailLtv)}</div></div>
                   <div><div className="role-stat-label">Stitched IDs</div><div className="role-stat-val">{aliases.length}</div></div>
                 </div>
 

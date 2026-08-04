@@ -359,6 +359,10 @@ export type JourneysStatsRow = {
   total_ltv:         number | null;
   avg_ltv:           number | null;
   median_ltv:        number | null;
+  // CJ3 — value scoped to converting customers only (the cohort-wide avg/median
+  // are ~$0 because non-buyers dominate the identity count).
+  avg_ltv_converted:    number | null;
+  median_ltv_converted: number | null;
 };
 
 export type JourneysListRow = {
