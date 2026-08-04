@@ -2,9 +2,10 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
-    title: "Direct Mail Marketing | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/direct-mail" },
+    title: "Direct Mail Marketing & EDDM for Local Business | ads for Good",
     description:
-      "Professional and affordable direct mail marketing for your business. Reach local households with relevant messaging to get more business.",
+      "Direct mail and EDDM campaigns through our USPS partnership. Reach every household in the areas you choose, or share the cost on a local co-op mailer.",
   };
   
   export default function LocalMarketingDetailPage() {
@@ -16,7 +17,7 @@ export const metadata = {
             {/* Left */}
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-                Local mail marketing: more than nearby, inside your neighborhoods.
+                Direct mail that lands inside your neighborhoods, not just near them.
               </h1>
 
               <div className="mt-3 flex gap-2 text-xs font-medium">
@@ -27,7 +28,7 @@ export const metadata = {
   
               <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
                 We have a direct mail partnership with USPS. Working with them, we can mail every
-                resident and business owner in any area.
+                resident and business owner in any area — the program USPS calls Every Door Direct Mail, or EDDM.
                 <br />
                 <br />
                 Direct mail has consistently been proven as one of the marketing channels that ranks
@@ -82,7 +83,7 @@ export const metadata = {
           <div className="mx-auto w-full max-w-6xl px-4 py-16">
             <div className="max-w-6xl">
               <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-                How do we activate direct local mail?
+                How EDDM and direct mail campaigns actually work
               </h2>
   
               <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed">
@@ -499,7 +500,19 @@ export const metadata = {
                 },
                 {
                   q: "What targeting is available?",
-                  a: "Yes. We can target by zip, household income, average age, household size, and by resident or business address.",
+                  a: (
+                    <>
+                      Yes. We can target by zip, household income, average age, household size, and by resident or business address.{" "}
+                      New to this? Here&apos;s{" "}
+                      <a
+                        href="/for-people/education/what-is-eddm"
+                        className="text-orange-500 underline hover:text-orange-600"
+                      >
+                        what EDDM is and how it works
+                      </a>
+                      .
+                    </>
+                  ),
                 },
               ].map((item) => (
                 <details

@@ -1074,12 +1074,12 @@ That's what our [digital presence audit](/for-businesses/digital-health-check) i
   {
     slug: "what-is-eddm",
     title: "What is EDDM? Every Door Direct Mail, explained",
-    metaTitle: "What Is EDDM? Every Door Direct Mail, Explained",
+    metaTitle: "What Is EDDM? Every Door Direct Mail Costs and Rules",
     category: "Marketing Playbook",
-    date: "Aug 5, 2026",
-    publishAt: "2026-08-05",
+    date: "Aug 4, 2026",
+    publishAt: "2026-08-04",
     excerpt:
-      "EDDM lets you mail every home on a postal route without buying an address list. What it is, what it costs, the rules that trip people up, and when it's worth it.",
+      "EDDM lets you mail every home on a postal route without buying an address list. What it is, the rules that trip people up, and a calculator for what your drop will cost.",
     image: "/images/LocalMailWallpaper.png",
     body: `EDDM stands for Every Door Direct Mail. It's a USPS program that lets you send mail to every address on a postal carrier route without buying a mailing list or knowing a single name.
 
@@ -1118,6 +1118,12 @@ Three costs, and people usually only budget for one.
 **Design.** Either your time or someone else's. This is the cost most people skip and most regret, because the design does more to determine the result than the route selection does.
 
 **A rough way to think about it:** postage plus printing together typically lands in the range of a few tens of cents per household. Mailing a thousand homes is a few hundred dollars, not a few thousand. That's the number to hold in your head before you go looking at exact rates.
+
+## EDDM cost calculator
+
+Three numbers decide what a drop costs: how many households, what your printer charges per piece, and USPS postage. Two of those are yours. We'll handle the third.
+
+[[EDDM_CALCULATOR]]
 
 ## The requirements that trip people up
 
@@ -1177,7 +1183,7 @@ That's one of the two ways our [direct mail service](/for-businesses/direct-mail
       },
       {
         q: "How much does EDDM cost?",
-        a: "Postage per piece is well below first-class rates, and printing is usually the larger cost. Together they typically land in the range of a few tens of cents per household, so mailing a thousand homes runs to a few hundred dollars rather than a few thousand. Check the USPS EDDM page for current postage rates before budgeting.",
+        a: "Postage per piece is well below first-class rates, and printing is usually the larger cost. Together they typically land in the range of a few tens of cents per household, so mailing a thousand homes runs to a few hundred dollars rather than a few thousand. The calculator above will give you a real figure once you have a print quote.",
       },
       {
         q: "What are the requirements for EDDM?",
@@ -1190,6 +1196,10 @@ That's one of the two ways our [direct mail service](/for-businesses/direct-mail
       {
         q: "Is EDDM worth it for a small business?",
         a: "It's worth testing if your customers come from a defined geographic area and your offer has broad appeal. It's a poor fit for narrow audiences, because you're paying to reach every household whether or not they could ever buy from you. A shared or co-op mailer is usually the cheapest way to find out.",
+      },
+      {
+        q: "Is EDDM cost effective?",
+        a: "It depends almost entirely on how broad your offer is. Because you pay for every household on the route whether or not they could ever buy from you, EDDM gets cheaper per useful impression the wider your appeal. A pizza place mailing a neighborhood is reaching mostly plausible customers. A commercial roofing contractor mailing the same routes is paying for a lot of tenants who can't buy. Run your own numbers above, then divide by how many households on those routes are realistically customers. That second number is the one that decides it.",
       },
     ],
   },

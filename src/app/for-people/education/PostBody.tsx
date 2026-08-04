@@ -2,6 +2,7 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import EddmCalculator from "./EddmCalculator";
 
 // Renders a blog post's markdown body with the agency site's styling.
 export default function PostBody({ markdown }: { markdown: string }) {
@@ -16,9 +17,18 @@ export default function PostBody({ markdown }: { markdown: string }) {
           h3: ({ children }) => (
             <h3 className="mt-8 mb-2 text-lg font-semibold text-neutral-900">{children}</h3>
           ),
-          p: ({ children }) => (
-            <p className="mb-4 text-[15px] sm:text-base leading-relaxed text-neutral-800">{children}</p>
-          ),
+          p: ({ children }) => {
+            // Component sentinel: a paragraph containing only [[EDDM_CALCULATOR]]
+            // is swapped for the interactive widget. The surrounding H2 + intro
+            // stay in the (server-rendered) markdown for SEO.
+            const flat = Array.isArray(children) ? children.join("") : children;
+            if (typeof flat === "string" && flat.trim() === "[[EDDM_CALCULATOR]]") {
+              return <EddmCalculator />;
+            }
+            return (
+              <p className="mb-4 text-[15px] sm:text-base leading-relaxed text-neutral-800">{children}</p>
+            );
+          },
           ul: ({ children }) => (
             <ul className="mb-5 space-y-2 pl-5 list-disc marker:text-orange-400">{children}</ul>
           ),
