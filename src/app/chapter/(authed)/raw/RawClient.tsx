@@ -196,11 +196,16 @@ export default function RawClient({
         kpis={kpis}
       />
       <div className="content">
-        <div className="callout" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+        <div className="callout" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
           <div>
             <span className="em">Raw marketing and performance metrics.</span> Use this page to gauge what Chapter is ingesting and assessing — volume, funnel shape, and channel scoreboard from the resolved data.
+            <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5 }}>
+              <li><strong>Reconciling against your store admin?</strong> Totals reflect Chapter&apos;s ingest timing, so counts near the start or end of the window can differ by a small amount — an event and its store order sometimes land on opposite sides of the window boundary.</li>
+              <li><strong>&ldquo;Revenue&rdquo; here is net</strong> — after refunds and discounts. It reads lower than a store&apos;s &ldquo;Gross sales,&rdquo; which is a different definition, not missing data.</li>
+              <li>Figures are resolved, ingested events as of the nightly refresh (see <em>Data as of</em> in the header) — not a sample or a modeled estimate.</li>
+            </ul>
           </div>
-          <button className="toolbar-btn">Export CSV</button>
+          <button className="toolbar-btn" style={{ flexShrink: 0 }}>Export CSV</button>
         </div>
 
         <div className="grid-3">
