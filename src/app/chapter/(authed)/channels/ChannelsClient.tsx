@@ -186,14 +186,21 @@ function AffinityMatrix({
           <tbody>
             {channels.map(srcKey => {
               const srcView = sortedChannels.find(c => c.key === srcKey)!;
+              // CR1: co-occurrence % is "of chapters where ROW appears" — so the
+              // ROW's own chapter count is the denominator. Below the floor the
+              // whole row is noise (e.g. a channel in 1 chapter shows a spurious
+              // "100%"). Fade the row + drop the heat coloring so it isn't read
+              // as a hot spot, and flag it with the same low-sample pill.
+              const lowSample = srcView.chapters < LOW_SAMPLE_N;
               return (
-                <tr key={srcKey}>
+                <tr key={srcKey} style={lowSample ? { opacity: 0.5 } : undefined}>
                   <td style={{ background: "#FDF1E6", borderRight: "2px solid #000" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <span style={{ width: 18, height: 18, background: srcView.channel.color, color: "white", display: "grid", placeItems: "center", borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
                         {srcView.channel.short}
                       </span>
                       <span style={{ fontWeight: 600, fontSize: 13, color: "#9A4F15" }}>{srcView.channel.name}</span>
+                      <LowSamplePill n={srcView.chapters} />
                     </div>
                   </td>
                   {channels.map(dstKey => {
@@ -205,8 +212,14 @@ function AffinityMatrix({
                     const pct = lookup.get(`${srcKey}|${dstKey}`) ?? 0;
                     return (
                       <td key={dstKey} className="num"
-                          style={{ background: cellBg(pct), color: cellTextColor(pct), fontWeight: pct >= 50 ? 600 : 400 }}
-                          title={`${srcView.channel.name} → ${sortedChannels.find(c => c.key === dstKey)?.channel.name}: ${pct.toFixed(1)}% co-occurrence`}>
+                          style={{
+                            background: lowSample ? "transparent" : cellBg(pct),
+                            color: lowSample ? "var(--ink-3)" : cellTextColor(pct),
+                            fontWeight: !lowSample && pct >= 50 ? 600 : 400,
+                          }}
+                          title={lowSample
+                            ? `${srcView.channel.name} appears in only ${srcView.chapters} chapter${srcView.chapters === 1 ? "" : "s"} — this co-occurrence % is too low-sample to trust`
+                            : `${srcView.channel.name} → ${sortedChannels.find(c => c.key === dstKey)?.channel.name}: ${pct.toFixed(1)}% co-occurrence`}>
                         {pct > 0 ? `${pct.toFixed(0)}%` : "—"}
                       </td>
                     );
