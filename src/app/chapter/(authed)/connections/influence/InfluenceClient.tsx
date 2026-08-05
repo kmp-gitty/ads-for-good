@@ -1212,7 +1212,7 @@ export default function InfluenceClient({
         {/* Foot — descriptive-only disclaimer + Lagged Impact link */}
         <div className="card" style={{ padding: "14px 18px", fontSize: 12, color: "var(--ink-3)", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <strong style={{ color: "var(--ink-2)" }}>Descriptive only.</strong> Connections shown are co-occurrence + sequence — not causal estimates. <em>{outcomeWindowDays}d outcome</em> is the share of identities that reached a purchase within {outcomeWindowDays} days of the connection touch.
+            <strong style={{ color: "var(--ink-2)" }}>Descriptive only.</strong> Connections shown are co-occurrence + sequence — not causal estimates. <em>{outcomeWindowDays}d outcome</em> is the share of identities that reached a purchase within {outcomeWindowDays} days of the connection touch. <em>Lift</em> compares each connection to a baseline: for channels, the rate across everyone active in the same window; for pages and campaigns, the share of all identities who touched it over the last 90 days — a stable long-run popularity rate, so page/campaign lift reads relative to that.
           </div>
           <div>
             Want to measure these relationships? → <a href={`/chapter/connections/lagged-impact?client=${clientKey}&range=${range}`} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 500 }}>Lagged Impact →</a>
