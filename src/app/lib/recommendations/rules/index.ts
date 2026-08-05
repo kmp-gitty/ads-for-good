@@ -38,6 +38,9 @@ import { R2_5 } from "./R2_5";
 import { R4_4 } from "./R4_4";
 import { R4_5 } from "./R4_5";
 import { R5_4 } from "./R5_4";
+// R5 tier-migration built as a value-momentum pair (cumulative LTV x windowed trend).
+import { R5_5 } from "./R5_5";
+import { R5_6 } from "./R5_6";
 
 export const RULE_EVALUATORS: Record<string, RuleEvaluator> = {
   "R1.1": R1_1,
@@ -65,4 +68,6 @@ export const RULE_EVALUATORS: Record<string, RuleEvaluator> = {
   "R4.4": R4_4,
   "R4.5": R4_5,
   "R5.4": R5_4,
+  "R5.5": R5_5,
+  "R5.6": R5_6,
 };
