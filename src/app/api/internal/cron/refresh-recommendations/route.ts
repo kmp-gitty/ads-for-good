@@ -53,6 +53,20 @@ type RuleConfig = {
   enabled: boolean;
 };
 
+// Flywheel — a "surprise" is an emerging-pattern / outlier finding that is new
+// or newly escalated this run. Collected per client and posted as one digest to
+// Chapter Data Alerts so an operator can review it and, if it's worth watching
+// everywhere, promote the pattern to a named rule that runs for all tenants.
+type SurpriseFinding = {
+  client_key: string;
+  rule_id: string;
+  rule_name: string;
+  subject_key: string | null;
+  headline: string;
+  confidence: string;
+  state: "new" | "changed";
+};
+
 type RunSummary = {
   client_key: string;
   ok: boolean;
@@ -61,12 +75,29 @@ type RunSummary = {
   rules_skipped: number;
   api_calls: number;
   fallback_renders: number;
+  surprises: SurpriseFinding[];
   error?: string;
 };
 
 export async function GET(req: NextRequest) {
   const unauthorized = unauthorizedIfNotCron(req);
   if (unauthorized) return unauthorized;
+
+  // One-shot verification affordance — `?test_flywheel=1` posts a clearly-marked
+  // SAMPLE surprise digest to the Chapter Data Alerts space (to confirm routing +
+  // format) without running the engine. Cron-auth gated like the rest of the route.
+  if (new URL(req.url).searchParams.get("test_flywheel") === "1") {
+    const sample: SurpriseFinding[] = [
+      { client_key: "eos_fabrics", rule_id: "R6.3", rule_name: "Outlier behavior detected", subject_key: "revenue", headline: "Daily revenue hit $3,120 this day — outside the normal range of $400-$1,900.", confidence: "strong", state: "new" },
+      { client_key: "not_so_cavalier", rule_id: "R6.2", rule_name: "Sustained directional trend across the lifecycle", subject_key: "time_to_close", headline: "Median time-to-close rose for 5 consecutive periods.", confidence: "moderate", state: "changed" },
+    ];
+    try {
+      await postToGChat({ text: "🧪 *TEST (sample data)* — " + buildSurpriseDigest(sample) });
+      return NextResponse.json({ ok: true, test_flywheel: "posted" });
+    } catch (err) {
+      return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
+    }
+  }
 
   const summaries: RunSummary[] = [];
   let topLevelError: string | null = null;
@@ -122,6 +153,19 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Flywheel — post new/escalated outlier + emerging-pattern findings to the
+  // Chapter Data Alerts space (same webhook as the operational alerts) so an
+  // operator can review a surprise and promote worthwhile patterns to named
+  // rules that then run for every tenant. Silent when there's nothing new.
+  const surprises = summaries.flatMap((s) => s.surprises ?? []);
+  if (surprises.length > 0) {
+    try {
+      await postToGChat({ text: buildSurpriseDigest(surprises) });
+    } catch (err) {
+      console.error("[refresh-recommendations] flywheel GChat post failed:", err);
+    }
+  }
+
   return NextResponse.json({
     ok: !topLevelError && failures.length === 0,
     summaries,
@@ -144,6 +188,7 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
     return {
       client_key: clientKey, ok: false,
       rules_evaluated: 0, rules_fired: 0, rules_skipped: 0, api_calls: 0, fallback_renders: 0,
+      surprises: [],
       error: runErr?.message ?? "could not open run row",
     };
   }
@@ -156,6 +201,7 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
   let fallbacks = 0;
   let inserted = 0;
   let updated = 0;
+  const surprises: SurpriseFinding[] = [];
   // Timestamp captured once at run start — used as the "touched this run"
   // marker for the stale-findings sweep. Any active finding whose
   // last_observed_at < run_started_at didn't fire this run → resolved.
@@ -205,6 +251,23 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
         if (writeResult.action === "inserted") inserted++;
         else updated++;
         fired++;
+
+        // Flywheel — an emerging-pattern / outlier finding that's new or newly
+        // escalated is a "surprise" worth an operator's eyes this week.
+        if (
+          ruleCfg.theme === "emerging_patterns" &&
+          (writeResult.state === "new" || writeResult.state === "changed")
+        ) {
+          surprises.push({
+            client_key: clientKey,
+            rule_id: ruleCfg.rule_id,
+            rule_name: ruleCfg.name,
+            subject_key: result.subject_key,
+            headline: rendered.card.headline,
+            confidence: result.confidence,
+            state: writeResult.state,
+          });
+        }
       } catch (err) {
         console.warn(`[refresh-recommendations] rule ${ruleCfg.rule_id} failed for ${clientKey}:`, err);
         skipped++;
@@ -235,6 +298,7 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
       client_key: clientKey, ok: true,
       rules_evaluated: evaluated, rules_fired: fired, rules_skipped: skipped,
       api_calls: apiCalls, fallback_renders: fallbacks,
+      surprises,
     };
   } catch (err) {
     const errMsg = err instanceof Error
@@ -253,7 +317,7 @@ async function runForClient(clientKey: string, ruleConfigs: RuleConfig[]): Promi
     return {
       client_key: clientKey, ok: false,
       rules_evaluated: evaluated, rules_fired: fired, rules_skipped: skipped,
-      api_calls: apiCalls, fallback_renders: fallbacks, error: errMsg,
+      api_calls: apiCalls, fallback_renders: fallbacks, surprises, error: errMsg,
     };
   }
 }
@@ -484,6 +548,29 @@ async function markStaleAsResolved(clientKey: string, runStartedAt: Date): Promi
   if (error) {
     console.warn(`[refresh-recommendations] markStaleAsResolved failed for ${clientKey}:`, error);
   }
+}
+
+// Build the flywheel digest — one message summarizing this run's new/escalated
+// surprises across all clients, with the promote-to-a-named-rule call to action.
+function buildSurpriseDigest(surprises: SurpriseFinding[]): string {
+  const n = surprises.length;
+  const lines: string[] = [];
+  lines.push(`🔎 *Recommendations — ${n} new surprise${n === 1 ? "" : "s"} to review*`);
+  lines.push(
+    `The outlier + emerging-pattern scanner flagged ${n === 1 ? "a finding that is" : "findings that are"} new or newly escalated this run. Review, and if a pattern is worth watching everywhere, promote it to a named rule so it runs for every tenant.`,
+  );
+  lines.push("");
+  for (const s of surprises) {
+    const subj = s.subject_key ? ` · ${s.subject_key}` : "";
+    lines.push(`• \`${s.client_key}\` — ${s.rule_name}${subj}: ${truncate(s.headline, 140)} _(${s.confidence}, ${s.state})_`);
+  }
+  lines.push("");
+  lines.push(`→ Dashboard → Recommendations (Emerging Patterns)`);
+  return lines.join("\n");
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : s.slice(0, n - 1) + "…";
 }
 
 // JSON.stringify with a tolerant fallback for circular refs or BigInts.
