@@ -22,12 +22,14 @@ import type {
 type Tab = "correlation" | "incrementality" | "contribution";
 
 type Props = {
-  correlation:    CorrelationChannelRow[];
-  incrementality: Record<IncrementalityAxis, IncrementalityRow[]>;
-  axisMetadata:   IncrementalityAxisMetadataRow | null;
-  contribution:   ContributionChannelRow[];
-  clientKey:      string;
-  range:          string;
+  correlation:      CorrelationChannelRow[];
+  correlationPrior: CorrelationChannelRow[];
+  priorRangeLabel:  string;
+  incrementality:   Record<IncrementalityAxis, IncrementalityRow[]>;
+  axisMetadata:     IncrementalityAxisMetadataRow | null;
+  contribution:     ContributionChannelRow[];
+  clientKey:        string;
+  range:            string;
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -256,7 +258,12 @@ function MethodRail({ active }: { active: Tab }) {
   );
 }
 
-function CorrelationCard({ row }: { row: CorrelationChannelRow }) {
+function CorrelationCard({ row, priorRow, showPrior, priorLabel }: {
+  row:        CorrelationChannelRow;
+  priorRow?:  CorrelationChannelRow | null;
+  showPrior?: boolean;
+  priorLabel?: string;
+}) {
   const { client } = useChapter();
   const gates = buildGates(row);
   const channelName = formatChannelName(row.channel);
@@ -388,6 +395,36 @@ function CorrelationCard({ row }: { row: CorrelationChannelRow }) {
         <Icon name="info" size={13} />
         <span>{caveat}</span>
       </div>
+
+      {/* CR2 — opt-in period-over-period on the headline metric. Compares this
+          period's relative delta to the prior period's, but only asserts a trend
+          when BOTH periods cleared the confidence gate — otherwise the noise of
+          two small samples would manufacture a "trend" that isn't there. */}
+      {showPrior && priorRow && (() => {
+        const priorGates = buildGates(priorRow);
+        const cur = gates[headlineKey];
+        const pri = priorGates[headlineKey];
+        const fmtRel = (v: number | null) => v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
+        const bothConfident = cur.state === "confident" && pri.state === "confident" && cur.delta_rel != null && pri.delta_rel != null;
+        return (
+          <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px dashed var(--line-2)", fontSize: 11, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ textTransform: "uppercase", letterSpacing: ".08em", fontSize: 9, fontWeight: 600, color: "var(--ink-4)" }}>vs prior · {priorLabel}</span>
+            {bothConfident ? (() => {
+              const c = cur.delta_rel as number, p = pri.delta_rel as number;
+              const sameSign = (c >= 0) === (p >= 0);
+              const label = !sameSign ? "reversed" : Math.abs(c) > Math.abs(p) ? "stronger" : Math.abs(c) < Math.abs(p) ? "weaker" : "steady";
+              return (
+                <>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{cur.label}: {fmtRel(p)} <span style={{ color: "var(--ink-4)" }}>&rarr;</span> <strong style={{ color: "var(--ink)" }}>{fmtRel(c)}</strong></span>
+                  <span className="pill" style={{ background: "var(--bg-2)", color: "var(--ink-2)", fontSize: 9, textTransform: "uppercase", letterSpacing: ".06em" }}>{label}</span>
+                </>
+              );
+            })() : (
+              <span style={{ opacity: 0.85 }}>{cur.label} wasn&rsquo;t confident in both periods — no reliable trend.</span>
+            )}
+          </div>
+        );
+      })()}
 
       {/* C3 — this is a descriptive tab: the honest action is "form a hypothesis,
           then go explore/test it." Deep-link each card into the surfaces built for
@@ -1262,10 +1299,16 @@ function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
 // Main component
 // ────────────────────────────────────────────────────────────────────────────
 
-export default function LiftClient({ correlation, incrementality, axisMetadata, contribution, clientKey: _clientKey, range }: Props) {
+export default function LiftClient({ correlation, correlationPrior, priorRangeLabel, incrementality, axisMetadata, contribution, clientKey: _clientKey, range }: Props) {
   const { client } = useChapter();
   const [tab, setTab] = useState<Tab>("correlation");
   const [incAxis, setIncAxis] = useState<IncrementalityAxis>("subscriber");
+  // CR2 — opt-in period-over-period comparison on the Correlation tab.
+  const [compareCorr, setCompareCorr] = useState(false);
+  const priorByChannel = useMemo(
+    () => new Map(correlationPrior.map(r => [r.channel, r])),
+    [correlationPrior],
+  );
   void fmtMoney; void range; // imported for potential future use; quiet linter
 
   const correlationCount = correlation.length;
@@ -1453,7 +1496,40 @@ export default function LiftClient({ correlation, incrementality, axisMetadata, 
                 No channels detected in this window. Try a longer date range.
               </div>
             ) : (
-              correlation.map(row => <CorrelationCard key={row.channel} row={row} />)
+              <>
+                {/* CR2 — opt-in period-over-period comparison toggle. Off by
+                    default so the descriptive read stays uncluttered. */}
+                <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 11, color: "var(--ink-3)" }}>Compare to prior period ({priorRangeLabel})</span>
+                  <button
+                    onClick={() => setCompareCorr(v => !v)}
+                    role="switch"
+                    aria-checked={compareCorr}
+                    title="Show each channel's headline metric this period vs the prior period"
+                    style={{
+                      width: 38, height: 22, borderRadius: 11, border: "none", cursor: "pointer", padding: 2,
+                      background: compareCorr ? "var(--accent)" : "var(--line-2)", transition: "background .15s",
+                      display: "flex", justifyContent: compareCorr ? "flex-end" : "flex-start", alignItems: "center",
+                    }}
+                  >
+                    <span style={{ width: 18, height: 18, borderRadius: "50%", background: "white", display: "block" }} />
+                  </button>
+                </div>
+                {compareCorr && (
+                  <div style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.5, background: "rgba(227,100,16,0.05)", border: "1px solid rgba(227,100,16,0.16)", borderRadius: 8, padding: "10px 14px" }}>
+                    <strong style={{ color: "var(--ink-2)" }}>Read period movement with care.</strong> A trend is shown only where <em>both</em> periods cleared the confidence gate. Even so, comparison inherits data-depth limits — a shift in traffic volume or identity coverage between periods can move these numbers independently of channel behavior, so read a &ldquo;stronger / weaker&rdquo; label as directional, not definitive.
+                  </div>
+                )}
+                {correlation.map(row => (
+                  <CorrelationCard
+                    key={row.channel}
+                    row={row}
+                    priorRow={priorByChannel.get(row.channel) ?? null}
+                    showPrior={compareCorr}
+                    priorLabel={priorRangeLabel}
+                  />
+                ))}
+              </>
             )
           )}
           {tab === "incrementality" && (

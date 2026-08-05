@@ -18,7 +18,10 @@ import {
   cachedIncrementalityChannelOverview,
   cachedIncrementalityAxisMetadata,
   cachedContributionOverview,
+  priorWindow,
 } from "../../_lib/dashboard-rpc";
+
+const fmtDay = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
 type SearchParams = Promise<{ client?: string; range?: string }>;
 
@@ -36,10 +39,17 @@ export default async function LiftPage({ searchParams }: { searchParams: SearchP
     p_end_ts:   end.toISOString(),
   };
 
-  // Fetch correlation + all 3 incrementality axes + axis metadata in parallel.
-  // Each axis is independently cached so toggling axes is free after first load.
-  const [correlation, incSubscriber, incValueBand, incLocation, axisMeta, contribution] = await Promise.all([
+  // CR2 — prior window (same length, immediately preceding) for the Correlation
+  // tab's opt-in period-over-period comparison. Independently cached.
+  const prior = priorWindow(start, end);
+  const priorArgs = { p_client_key: clientKey, p_start_ts: prior.start.toISOString(), p_end_ts: prior.end.toISOString() };
+  const priorRangeLabel = `${fmtDay(prior.start)} – ${fmtDay(prior.end)}`;
+
+  // Fetch correlation (current + prior) + all 3 incrementality axes + axis
+  // metadata in parallel. Each is independently cached so toggling is free.
+  const [correlation, correlationPrior, incSubscriber, incValueBand, incLocation, axisMeta, contribution] = await Promise.all([
     cachedCorrelationChannelOverview(args),
+    cachedCorrelationChannelOverview(priorArgs),
     cachedIncrementalityChannelOverview({ ...args, p_cohort_axis: "subscriber" }),
     cachedIncrementalityChannelOverview({ ...args, p_cohort_axis: "value_band" }),
     cachedIncrementalityChannelOverview({ ...args, p_cohort_axis: "location" }),
@@ -50,6 +60,8 @@ export default async function LiftPage({ searchParams }: { searchParams: SearchP
   return (
     <LiftClient
       correlation={correlation}
+      correlationPrior={correlationPrior}
+      priorRangeLabel={priorRangeLabel}
       incrementality={{
         subscriber: incSubscriber,
         value_band: incValueBand,
