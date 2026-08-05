@@ -18,7 +18,7 @@ import { Icon } from "../../../_components/Icon";
 import { Dropdown } from "../../../_components/Dropdown";
 import { ChannelChip } from "../../../_components/ChannelChip";
 import { ChannelKey } from "../../../_components/mockdata";
-import type { LaggedImpactRow, LaggedImpactSeriesRow } from "../../../_lib/dashboard-rpc";
+import type { LaggedImpactRow, LaggedImpactSeriesRow, LaggedImpactRankedRow } from "../../../_lib/dashboard-rpc";
 
 const CHANNEL_OPTIONS: { value: string; label: string }[] = [
   { value: "(direct)",       label: "Direct" },
@@ -284,8 +284,110 @@ function LagTableHeader() {
   );
 }
 
+// LI3 — ranked discovery table. Every ordered channel pair scored at one
+// representative lag, so the operator sees which pairs actually drive returns
+// instead of hand-picking A/B. Ranked positive-lift first among confident
+// ('ok') pairs, then within-noise, then below-floor (faded). Numbers reconcile
+// with the per-lag card below (same underlying math). Click a row to analyze it.
+const RANKED_GRID = "minmax(150px,1.5fr) 104px 104px 84px 84px 118px";
+
+function RankedPairsTable({
+  pairs, lagDays, channelA, channelB, onSelect,
+}: {
+  pairs:     LaggedImpactRankedRow[];
+  lagDays:   number;
+  channelA:  string;
+  channelB:  string;
+  onSelect:  (a: string, b: string) => void;
+}) {
+  const gateRank = (s: string) => (s === "ok" ? 0 : s === "within_noise" ? 1 : 2);
+  const sorted = [...pairs].sort((x, y) => {
+    const gr = gateRank(x.cell_gate_status) - gateRank(y.cell_gate_status);
+    if (gr !== 0) return gr;
+    // positive lift first (this page is about A making B MORE likely)
+    return (Number(y.abs_lift_pp ?? -Infinity)) - (Number(x.abs_lift_pp ?? -Infinity));
+  });
+
+  if (sorted.length === 0) {
+    return (
+      <div style={{ padding: "16px 18px", fontSize: 12, color: "var(--ink-3)" }}>
+        No channel pairs to rank in this window.
+      </div>
+    );
+  }
+
+  const okCount = sorted.filter(p => p.cell_gate_status === "ok").length;
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <div style={{ minWidth: 640 }}>
+        {/* header */}
+        <div style={{
+          display: "grid", gridTemplateColumns: RANKED_GRID, columnGap: 0,
+          padding: "10px 16px", borderBottom: DIVIDER, background: "rgba(15,23,34,0.04)",
+          fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--ink-3)", fontWeight: 600,
+        }}>
+          <HeaderCell            bottom="Channel pair (A → B)" firstCell align="left" />
+          <HeaderCell top="A → B"  bottom="Treated rate" />
+          <HeaderCell top="¬A → B" bottom="Baseline rate" />
+          <HeaderCell top="Abs"    bottom="Lift (pp)" />
+          <HeaderCell top="Rel"    bottom="Lift (%)" />
+          <HeaderCell            bottom="Status" />
+        </div>
+        {/* rows */}
+        {sorted.map((p, i) => {
+          const isOk = p.cell_gate_status === "ok";
+          const isSelected = p.channel_a === channelA && p.channel_b === channelB;
+          const stripe = i % 2 === 1 ? "rgba(15,23,34,0.025)" : "transparent";
+          const dim: React.CSSProperties = isOk ? {} : { color: "var(--ink-3)", opacity: 0.8 };
+          return (
+            <button
+              key={`${p.channel_a}→${p.channel_b}`}
+              onClick={() => onSelect(p.channel_a, p.channel_b)}
+              title={`Analyze ${channelLabel(p.channel_a)} → ${channelLabel(p.channel_b)} across all lag windows`}
+              style={{
+                display: "grid", gridTemplateColumns: RANKED_GRID, columnGap: 0, width: "100%",
+                alignItems: "center", padding: "11px 16px", borderBottom: DIVIDER, textAlign: "left",
+                cursor: "pointer", border: "none", borderLeft: isSelected ? "3px solid var(--accent)" : "3px solid transparent",
+                background: isSelected ? "rgba(227,100,16,0.06)" : stripe, font: "inherit",
+              }}
+            >
+              <div style={{ ...cellDivided(true), display: "flex", alignItems: "center", gap: 7, fontWeight: 500 }}>
+                <ChannelChip ch={p.channel_a as ChannelKey} />
+                <span style={{ color: "var(--ink-4)" }}>→</span>
+                <ChannelChip ch={p.channel_b as ChannelKey} />
+              </div>
+              <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", ...dim }}>
+                {fmtPct(p.treated_return_rate)}
+                <div style={{ fontSize: 10, color: "var(--ink-4)" }}>n={p.treated_n}</div>
+              </div>
+              <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", ...dim }}>
+                {fmtPct(p.baseline_return_rate)}
+                <div style={{ fontSize: 10, color: "var(--ink-4)" }}>n={p.baseline_n}</div>
+              </div>
+              <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: isOk ? (Number(p.abs_lift_pp) > 0 ? "var(--good)" : "var(--bad)") : "var(--ink-3)" }}>
+                {fmtPp(p.abs_lift_pp)}
+              </div>
+              <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", ...dim }}>
+                {fmtRelLift(p.rel_lift_pct)}
+              </div>
+              <div style={{ ...cellDivided(false), display: "flex", justifyContent: "center" }}>
+                {gateBadge(p.cell_gate_status)}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ padding: "10px 16px", fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.5 }}>
+        Ranked at a <strong style={{ color: "var(--ink-2)" }}>{lagDays}-day</strong> lag · {okCount} of {sorted.length} pair{sorted.length === 1 ? "" : "s"} clear the confidence gate.
+        Click any pair to see all lag windows below. Rates and lift reconcile with the per-lag card once you select the same pair.
+      </div>
+    </div>
+  );
+}
+
 export default function LaggedImpactClient({
-  clientKey, range, channelA, channelB, treatmentStart, treatmentEnd, lookforwardDays, results, allLagDays, series,
+  clientKey, range, channelA, channelB, treatmentStart, treatmentEnd, lookforwardDays, results, allLagDays, rankedPairs, rankedLagDays, series,
 }: {
   clientKey:        string;
   range:            string;
@@ -296,6 +398,8 @@ export default function LaggedImpactClient({
   lookforwardDays:  number;
   results:          { lagDays: number; row: LaggedImpactRow | null }[];
   allLagDays:       number[];
+  rankedPairs:      LaggedImpactRankedRow[];
+  rankedLagDays:    number;
   series:           LaggedImpactSeriesRow[];
 }) {
   const router = useRouter();
@@ -330,6 +434,15 @@ export default function LaggedImpactClient({
     const next = new URLSearchParams(sp.toString());
     next.set("channel_a", channelB);
     next.set("channel_b", channelA);
+    navigate(next);
+  };
+
+  // LI3 — click a ranked pair to re-anchor the detail card below on it.
+  const selectPair = (a: string, b: string) => {
+    if (a === channelA && b === channelB) return;
+    const next = new URLSearchParams(sp.toString());
+    next.set("channel_a", a);
+    next.set("channel_b", b);
     navigate(next);
   };
 
@@ -428,6 +541,25 @@ export default function LaggedImpactClient({
             Treatment: <strong style={{ color: "var(--ink-2)" }}>{fmtRange(treatmentStart)} → {fmtRange(treatmentEnd)}</strong>
             <span style={{ marginLeft: 12 }}>Lookforward: <strong style={{ color: "var(--ink-2)" }}>{lookforwardDays}d</strong></span>
           </div>
+        </div>
+
+        {/* LI3 — ranked discovery table: which pairs matter, at a glance */}
+        <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column" }}>
+          <div className="card-head" style={{ padding: "16px 18px", borderBottom: DIVIDER }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>Which channel pairs drive later returns?</span>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                Every pair ranked by lagged return-lift — the strongest confident signals first. Pick one to dig into.
+              </span>
+            </div>
+          </div>
+          <RankedPairsTable
+            pairs={rankedPairs}
+            lagDays={rankedLagDays}
+            channelA={channelA}
+            channelB={channelB}
+            onSelect={selectPair}
+          />
         </div>
 
         {/* Pair card */}

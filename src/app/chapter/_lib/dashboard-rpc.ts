@@ -1057,6 +1057,41 @@ export const cachedLaggedImpactPair = unstable_cache(
   { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:lagged_impact_pair"] },
 );
 
+// LI3 — ranked lagged impact across every ordered channel pair at one lag.
+// Same math as lagged_impact_pair (validated byte-identical), computed in one
+// scan so the operator discovers which pairs matter rather than hand-picking.
+export type LaggedImpactRankedRow = {
+  channel_a:            string;
+  channel_b:            string;
+  treated_n:            number;
+  baseline_n:           number;
+  treated_return_n:     number;
+  baseline_return_n:    number;
+  treated_return_rate:  number | null;
+  baseline_return_rate: number | null;
+  abs_lift_pp:          number | null;
+  rel_lift_pct:         number | null;
+  cell_gate_status:     "ok" | "within_noise" | "below_n_floor";
+};
+
+export const cachedLaggedImpactRanked = unstable_cache(
+  async (args: {
+    p_client_key:      string;
+    p_treatment_start: string;
+    p_treatment_end:   string;
+    p_lag_days:        number;
+  }): Promise<LaggedImpactRankedRow[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc("lagged_impact_ranked", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] lagged_impact_ranked failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as LaggedImpactRankedRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:lagged_impact_ranked"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:lagged_impact_ranked"] },
+);
+
 // ─────── Observations engine ────────────────────────────────────────────────
 
 export type ObservationFinding = {

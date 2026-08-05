@@ -10,7 +10,7 @@
 
 import LaggedImpactClient from "./LaggedImpactClient";
 import { rangeToWindow } from "../../../_components/format";
-import { bucketedNow, cachedClientConfig, cachedLaggedImpactPair, cachedLaggedImpactPairSeries } from "../../../_lib/dashboard-rpc";
+import { bucketedNow, cachedClientConfig, cachedLaggedImpactPair, cachedLaggedImpactPairSeries, cachedLaggedImpactRanked } from "../../../_lib/dashboard-rpc";
 
 type SearchParams = Promise<{
   client?:     string;
@@ -45,10 +45,14 @@ export default async function LaggedImpactPage({ searchParams }: { searchParams:
   const lookforwardDays = Math.floor(lookforwardMs / (1000 * 60 * 60 * 24));
   const lagsToRun = LAG_DAYS_LIST.filter(d => d <= lookforwardDays);
 
-  // Run the lag-window calls and the time-series for the expander in
-  // parallel — the series is the entire analysis window, sampled into
-  // ~16 buckets.
-  const [results, series] = await Promise.all([
+  // LI3 — the discovery table ranks all pairs at ONE representative lag. Prefer
+  // 30d (a sensible mid lag); fall back to the largest lag that fits.
+  const rankedLagDays = lagsToRun.includes(30) ? 30 : (lagsToRun[lagsToRun.length - 1] ?? 30);
+
+  // Run the lag-window calls, the ranked-pairs discovery table, and the
+  // time-series for the expander in parallel — the series is the entire
+  // analysis window, sampled into ~16 buckets.
+  const [results, rankedPairs, series] = await Promise.all([
     Promise.all(
       lagsToRun.map(async (lagDays) => {
         const rows = await cachedLaggedImpactPair({
@@ -62,6 +66,12 @@ export default async function LaggedImpactPage({ searchParams }: { searchParams:
         return { lagDays, row: rows[0] ?? null };
       }),
     ),
+    cachedLaggedImpactRanked({
+      p_client_key:      clientKey,
+      p_treatment_start: start.toISOString(),
+      p_treatment_end:   treatmentEnd.toISOString(),
+      p_lag_days:        rankedLagDays,
+    }),
     cachedLaggedImpactPairSeries({
       p_client_key: clientKey,
       p_channel_a:  channelA,
@@ -83,6 +93,8 @@ export default async function LaggedImpactPage({ searchParams }: { searchParams:
       lookforwardDays={lookforwardDays}
       results={results}
       allLagDays={LAG_DAYS_LIST}
+      rankedPairs={rankedPairs}
+      rankedLagDays={rankedLagDays}
       series={series}
     />
   );
