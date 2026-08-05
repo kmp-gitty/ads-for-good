@@ -30,10 +30,12 @@ import { R5_3 } from "./R5_3";
 import { R6_1 } from "./R6_1";
 import { R6_2 } from "./R6_2";
 import { R6_3 } from "./R6_3";
-// Ported from / folded out of the Observations engine (Aug 5). C2 (funnel drop),
-// M1 (cannibalization), R5 (tier migration) deferred — see CLAUDE.md OB1 entry.
+// Folded out of the Observations engine (Aug 5): I3, A4, R2, R3 (Aug 5) + C2 as
+// R4.4 (cart-funnel drop). M1 (cannibalization) + R5 (tier migration) still
+// deferred — see CLAUDE.md OB1 entry.
 import { R1_5 } from "./R1_5";
 import { R2_5 } from "./R2_5";
+import { R4_4 } from "./R4_4";
 import { R4_5 } from "./R4_5";
 import { R5_4 } from "./R5_4";
 
@@ -60,6 +62,7 @@ export const RULE_EVALUATORS: Record<string, RuleEvaluator> = {
   "R6.3": R6_3,
   "R1.5": R1_5,
   "R2.5": R2_5,
+  "R4.4": R4_4,
   "R4.5": R4_5,
   "R5.4": R5_4,
 };
