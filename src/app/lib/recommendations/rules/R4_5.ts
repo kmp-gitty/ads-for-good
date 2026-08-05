@@ -4,8 +4,10 @@
 // consecutive purchases, current 4 weeks vs prior 4 weeks. A LENGTHENING gap is
 // an early retention signal — customers taking longer to come back; a SHORTENING
 // gap means they're returning faster. Reads consecutive-chapter gaps from the
-// canonical_v1 snapshot via chapter_reporting.rec_r2_repeat_tempo. Fires on a
-// >= 15% relative shift in either direction (>= 10 repeat purchases per window).
+// canonical_v2 snapshot (the COMPLETE buyer population — v1 is the session-only
+// subset and would miss no-session purchases, overstating the gaps) via
+// chapter_reporting.rec_r2_repeat_tempo. Fires on a >= 15% relative shift in
+// either direction (>= 10 repeat purchases per window).
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";

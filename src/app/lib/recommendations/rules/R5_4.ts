@@ -2,8 +2,9 @@
 //
 // Built fresh (Observations R3 had no runner). Known buyers whose LAST purchase
 // was 90–365 days ago — quiet but recoverable, and already identified. A warm
-// win-back audience. Reads last-purchase-per-customer from the canonical_v1
-// snapshot via chapter_reporting.rec_r3_lapsed_cohort. The RPC gates at >= 20
+// win-back audience. Reads last-purchase-per-customer from the canonical_v2
+// snapshot (the COMPLETE buyer population — v1 is the session-only subset, which
+// undercounts buyers by ~10%) via chapter_reporting.rec_r3_lapsed_cohort. Gates at >= 20
 // total buyers and >= 10 lapsed, so a returned row always fires; severity scales
 // with the lapsed share.
 
