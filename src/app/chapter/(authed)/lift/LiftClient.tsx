@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import Link from "next/link";
 import { TopBar } from "../../_components/TopBar";
 import { Icon } from "../../_components/Icon";
 import { Dropdown } from "../../_components/Dropdown";
 import { useChapter } from "../../_components/ChapterContext";
+import { chapterUrl } from "../../_lib/urls";
 import {
   CHANNELS,
   type ChannelKey,
@@ -255,6 +257,7 @@ function MethodRail({ active }: { active: Tab }) {
 }
 
 function CorrelationCard({ row }: { row: CorrelationChannelRow }) {
+  const { client } = useChapter();
   const gates = buildGates(row);
   const channelName = formatChannelName(row.channel);
   const color = channelColor(row.channel);
@@ -384,6 +387,23 @@ function CorrelationCard({ row }: { row: CorrelationChannelRow }) {
       <div className="lift-caveat">
         <Icon name="info" size={13} />
         <span>{caveat}</span>
+      </div>
+
+      {/* C3 — this is a descriptive tab: the honest action is "form a hypothesis,
+          then go explore/test it." Deep-link each card into the surfaces built for
+          that channel: Cross-Source Influence anchored on the channel, and Path
+          Patterns filtered to paths that contain it. No auto-prose — the operator
+          decides what to look at. */}
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--line-2)", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 14, fontSize: 11 }}>
+        <span style={{ color: "var(--ink-4)", textTransform: "uppercase", letterSpacing: ".08em", fontWeight: 600, fontSize: 10 }}>Explore this →</span>
+        <Link href={chapterUrl(client.id, "connections/influence", { anchor_type: "channel", anchor_channel: row.channel })}
+              style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>
+          {channelName}&rsquo;s connections
+        </Link>
+        <Link href={chapterUrl(client.id, "paths", { channel: row.channel })}
+              style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>
+          Its converting paths
+        </Link>
       </div>
     </div>
   );

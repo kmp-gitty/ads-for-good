@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { TopBar } from "../../_components/TopBar";
 import { Icon } from "../../_components/Icon";
@@ -8,6 +9,7 @@ import { Move } from "../../_components/Move";
 import { Dropdown } from "../../_components/Dropdown";
 import { PathRender } from "../../_components/ChannelChip";
 import { useChapter } from "../../_components/ChapterContext";
+import { chapterUrl } from "../../_lib/urls";
 import { fmtMoney, fmtNum } from "../../_components/format";
 import { type ChannelKey, type Kpi } from "../../_components/mockdata";
 import type { PathCombinationRow, PathMode } from "../../_lib/dashboard-rpc";
@@ -139,6 +141,19 @@ export default function PathsClient({
     return arr;
   }, [rows, sortBy]);
 
+  // C3 — arriving from a Correlation card's "Its converting paths" deep-link
+  // (?channel=<x>) narrows the table to combinations that contain that channel.
+  // Pure client-side filter over data already loaded; the clear link drops the
+  // param (preserving compare mode). channel vocab matches canonical_v1 paths so
+  // an exact membership test is correct.
+  const channelFilter = sp.get("channel");
+  const compare = sp.get("compare") ?? undefined;
+  const clearHref = chapterUrl(client.id, "paths", compare ? { compare } : undefined);
+  const filtered = useMemo(
+    () => channelFilter ? sorted.filter(r => (r.channels as string[]).includes(channelFilter)) : sorted,
+    [sorted, channelFilter],
+  );
+
   // Render the chips for a row using the mode-specific channels + gaps payload.
   const renderPath = (c: ComboRow) => (
     <PathRender channels={c.channels} mode={mode} gaps={c.gaps ?? undefined} />
@@ -163,7 +178,7 @@ export default function PathsClient({
     { label: "% Identified", value: identifiedPct,    move: moveIdentified ?? 0, good: moveIdentified != null && moveIdentified >= 0, semantic: "up-good" },
   ];
 
-  const empty = sorted.length === 0;
+  const empty = filtered.length === 0;
 
   return (
     <>
@@ -188,6 +203,14 @@ export default function PathsClient({
               </div>
             </div>
             <div className="filter-bar">
+              {channelFilter && (
+                <Link href={clearHref} className="toolbar-btn" title="Clear channel filter"
+                      style={{ textDecoration: "none", color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <span className="dim" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em" }}>Containing</span>
+                  <span style={{ fontWeight: 600 }}>{channelFilter.replace(/[()]/g, "")}</span>
+                  <span style={{ fontSize: 13, lineHeight: 1 }}>&times;</span>
+                </Link>
+              )}
               <Dropdown align="right" width={200} trigger={
                 <button className="toolbar-btn">
                   <span className="dim" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em" }}>Sort by</span>
@@ -216,7 +239,9 @@ export default function PathsClient({
 
         {empty ? (
           <div className="card" style={{ textAlign: "center", color: "var(--ink-3)", padding: 40 }}>
-            No converting paths in this window. Try a longer date range.
+            {channelFilter
+              ? <>No converting paths contain <strong>{channelFilter.replace(/[()]/g, "")}</strong> in this window. <Link href={clearHref} style={{ color: "var(--accent)" }}>Clear filter</Link></>
+              : "No converting paths in this window. Try a longer date range."}
           </div>
         ) : (
           <>
@@ -233,7 +258,7 @@ export default function PathsClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map(c => (
+                  {filtered.map(c => (
                     <tr key={c.id}>
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
