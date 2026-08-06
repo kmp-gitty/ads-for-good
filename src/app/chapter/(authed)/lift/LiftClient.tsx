@@ -1333,9 +1333,12 @@ export default function LiftClient({ correlation, correlationPrior, priorRangeLa
       case "subscriber":
         return (
           <>
-            <strong>Subscribers</strong> = identities sent any Mailchimp campaign
+            <strong>Subscribers</strong> = on the email list <em>before</em> their first purchase
             {m?.subscriber_count != null && <> ({m.subscriber_count.toLocaleString()} all-time)</>}.{" "}
-            <strong>Non-subscribers</strong> = converters with no email engagement. Comparisons stay within each bucket.
+            <strong>Non-subscribers</strong> = everyone else. Defining it pre-purchase excludes people who
+            only joined the list <em>after</em> buying (post-purchase flows, checkout opt-ins), whose list
+            membership is a <em>consequence</em> of conversion — counting them would bias the subscriber
+            lift upward. Comparisons stay within each bucket.
           </>
         );
       case "value_band":
