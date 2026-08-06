@@ -17,6 +17,7 @@ import type {
   IncrementalityRow, IncrementalityAxis,
   IncrementalityAxisMetadataRow,
   ContributionChannelRow,
+  SubscriberRetentionRow,
 } from "../../_lib/dashboard-rpc";
 
 type Tab = "correlation" | "incrementality" | "contribution";
@@ -25,6 +26,7 @@ type Props = {
   correlation:      CorrelationChannelRow[];
   correlationPrior: CorrelationChannelRow[];
   priorRangeLabel:  string;
+  retention:        SubscriberRetentionRow[];
   incrementality:   Record<IncrementalityAxis, IncrementalityRow[]>;
   axisMetadata:     IncrementalityAxisMetadataRow | null;
   contribution:     ContributionChannelRow[];
@@ -1299,7 +1301,65 @@ function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
 // Main component
 // ────────────────────────────────────────────────────────────────────────────
 
-export default function LiftClient({ correlation, correlationPrior, priorRangeLabel, incrementality, axisMetadata, contribution, clientKey: _clientKey, range }: Props) {
+// R3 — the empirical retention answer that touch-level incrementality can't see
+// (V5). Observational repeat-rate + LTV of pre-purchase subscribers vs non-
+// subscriber buyers, with a tenure-matched repeat rate to defuse the most obvious
+// mechanical confounder, and an explicit self-selection caveat.
+function RetentionLensCard({ retention }: { retention: SubscriberRetentionRow[] }) {
+  const sub = retention.find(r => r.cohort === "pre_purchase_subscriber");
+  const non = retention.find(r => r.cohort === "non_subscriber");
+  if (!sub || !non || sub.buyers < 30 || non.buyers < 30) return null;
+
+  const n = (v: number | null) => (v == null ? 0 : Number(v));
+  const repeatSub = n(sub.repeat_rate_pct), repeatNon = n(non.repeat_rate_pct);
+  const ltvSub = n(sub.avg_ltv), ltvNon = n(non.avg_ltv);
+  const repeatRatio = repeatNon > 0 ? repeatSub / repeatNon : null;
+  const ltvLift = ltvNon > 0 ? ((ltvSub - ltvNon) / ltvNon) * 100 : null;
+  const mSub = n(sub.matched_repeat_rate_pct), mNon = n(non.matched_repeat_rate_pct);
+  const money = (v: number | null) => (v == null ? "—" : "$" + Number(v).toFixed(0));
+
+  const Col = ({ label, r, buyers, color }: { label: string; r: SubscriberRetentionRow; buyers: number; color: string }) => (
+    <div style={{ flex: "1 1 200px", padding: "14px 16px", background: "var(--bg-2)", borderRadius: 10, borderTop: `3px solid ${color}` }}>
+      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 700, color: "var(--ink-2)" }}>{label}</div>
+      <div style={{ fontSize: 10, color: "var(--ink-4)", marginBottom: 10 }}>{buyers.toLocaleString()} buyers</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 12px" }}>
+        <div><div style={{ fontSize: 19, fontWeight: 700, color: "var(--ink)" }}>{n(r.repeat_rate_pct).toFixed(1)}%</div><div style={{ fontSize: 10, color: "var(--ink-3)" }}>repeat rate</div></div>
+        <div><div style={{ fontSize: 19, fontWeight: 700, color: "var(--ink)" }}>{money(r.avg_ltv)}</div><div style={{ fontSize: 10, color: "var(--ink-3)" }}>avg LTV</div></div>
+        <div><div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>{money(r.median_ltv)}</div><div style={{ fontSize: 10, color: "var(--ink-3)" }}>median LTV</div></div>
+        <div><div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)" }}>{n(r.avg_purchases).toFixed(2)}</div><div style={{ fontSize: 10, color: "var(--ink-3)" }}>purchases / buyer</div></div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="card" style={{ padding: "18px 20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+        <h3 className="card-title" style={{ margin: 0 }}>Retention lens — the value of a subscriber</h3>
+        <span className="lift-method-tag obs">Observational</span>
+      </div>
+      <div style={{ fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.5, marginBottom: 14 }}>
+        The matched-incrementality read splits by subscriber status, so it structurally can&rsquo;t credit email for <em>creating</em> repeat customers. This is the outcome it misses: do people on the list <em>before</em> their first purchase go on to buy again and spend more?
+      </div>
+      <div style={{ display: "flex", gap: 12, alignItems: "stretch", flexWrap: "wrap" }}>
+        <Col label="Pre-purchase subscriber" r={sub} buyers={sub.buyers} color="#E36410" />
+        <Col label="Non-subscriber" r={non} buyers={non.buyers} color="#8A98AD" />
+      </div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 12, fontSize: 12.5, color: "var(--ink-2)" }}>
+        {repeatRatio != null && <span>Subscribers repeat <strong style={{ color: "var(--good)" }}>{repeatRatio.toFixed(1)}×</strong> as often</span>}
+        {ltvLift != null && <span>and carry <strong style={{ color: "var(--good)" }}>{ltvLift >= 0 ? "+" : ""}{ltvLift.toFixed(0)}%</strong> higher average LTV.</span>}
+      </div>
+      <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.5 }}>
+        <strong style={{ color: "var(--ink-2)" }}>Not just tenure.</strong> Within buyers of comparable time-since-first-purchase (&lt; 120 days: {sub.matched_buyers} vs {non.matched_buyers}), the repeat gap holds — <strong>{mSub.toFixed(1)}%</strong> vs <strong>{mNon.toFixed(1)}%</strong> — so the difference isn&rsquo;t just subscribers having had more time to come back.
+      </div>
+      <div className="lift-caveat" style={{ marginTop: 10 }}>
+        <Icon name="info" size={13} />
+        <span><strong>Observational, not causal.</strong> People who subscribe before buying self-select for engagement, so part of this gap is who they are, not what email did. Read it as the retention value email is <em>associated with</em> — an upper bound on its contribution, and the counterweight to a naïve &ldquo;email is within noise&rdquo; read on the touch-level panel.</span>
+      </div>
+    </div>
+  );
+}
+
+export default function LiftClient({ correlation, correlationPrior, priorRangeLabel, retention, incrementality, axisMetadata, contribution, clientKey: _clientKey, range }: Props) {
   const { client } = useChapter();
   const [tab, setTab] = useState<Tab>("correlation");
   const [incAxis, setIncAxis] = useState<IncrementalityAxis>("subscriber");
@@ -1562,6 +1622,8 @@ export default function LiftClient({ correlation, correlationPrior, priorRangeLa
                 <>
                   <ContributionMatrix channels={computed} />
                   {computed.map(c => <ContributionCard key={c.channel} c={c} />)}
+                  {/* R3 — empirical retention evidence for the DO-NOT-CUT verdicts. */}
+                  <RetentionLensCard retention={retention} />
                 </>
               );
             })()

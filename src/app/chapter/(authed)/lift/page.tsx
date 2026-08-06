@@ -18,6 +18,7 @@ import {
   cachedIncrementalityChannelOverview,
   cachedIncrementalityAxisMetadata,
   cachedContributionOverview,
+  cachedSubscriberRetentionLens,
   priorWindow,
 } from "../../_lib/dashboard-rpc";
 
@@ -47,7 +48,7 @@ export default async function LiftPage({ searchParams }: { searchParams: SearchP
 
   // Fetch correlation (current + prior) + all 3 incrementality axes + axis
   // metadata in parallel. Each is independently cached so toggling is free.
-  const [correlation, correlationPrior, incSubscriber, incValueBand, incLocation, axisMeta, contribution] = await Promise.all([
+  const [correlation, correlationPrior, incSubscriber, incValueBand, incLocation, axisMeta, contribution, retention] = await Promise.all([
     cachedCorrelationChannelOverview(args),
     cachedCorrelationChannelOverview(priorArgs),
     cachedIncrementalityChannelOverview({ ...args, p_cohort_axis: "subscriber" }),
@@ -55,6 +56,8 @@ export default async function LiftPage({ searchParams }: { searchParams: SearchP
     cachedIncrementalityChannelOverview({ ...args, p_cohort_axis: "location" }),
     cachedIncrementalityAxisMetadata(args),
     cachedContributionOverview(args),
+    // R3 — all-time buyer population (not window-scoped); p_now bucketed for cache stability.
+    cachedSubscriberRetentionLens({ p_client_key: clientKey, p_now: bucketedNow().toISOString() }),
   ]);
 
   return (
@@ -62,6 +65,7 @@ export default async function LiftPage({ searchParams }: { searchParams: SearchP
       correlation={correlation}
       correlationPrior={correlationPrior}
       priorRangeLabel={priorRangeLabel}
+      retention={retention}
       incrementality={{
         subscriber: incSubscriber,
         value_band: incValueBand,

@@ -1092,6 +1092,34 @@ export const cachedLaggedImpactRanked = unstable_cache(
   { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:lagged_impact_ranked"] },
 );
 
+// R3 — subscriber retention lens. Observational repeat-rate + LTV comparison of
+// pre-purchase subscribers vs non-subscriber buyers (the retention value the
+// touch-level incrementality can't see). Returns one row per cohort.
+export type SubscriberRetentionRow = {
+  cohort:                  "pre_purchase_subscriber" | "non_subscriber";
+  buyers:                  number;
+  repeat_rate_pct:         number | null;
+  avg_ltv:                 number | null;
+  median_ltv:              number | null;
+  avg_purchases:           number | null;
+  median_tenure_days:      number | null;
+  matched_buyers:          number;
+  matched_repeat_rate_pct: number | null;
+};
+
+export const cachedSubscriberRetentionLens = unstable_cache(
+  async (args: { p_client_key: string; p_now: string }): Promise<SubscriberRetentionRow[]> => {
+    const r = await supabase.schema("chapter_reporting").rpc("subscriber_retention_lens", args);
+    if (r.error) {
+      console.error("[dashboard-rpc] subscriber_retention_lens failed:", { ...r.error });
+      return [];
+    }
+    return (Array.isArray(r.data) ? r.data : []) as SubscriberRetentionRow[];
+  },
+  ["dashboard-rpc:chapter_reporting:subscriber_retention_lens"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:subscriber_retention_lens"] },
+);
+
 // ─────── Observations engine ────────────────────────────────────────────────
 
 export type ObservationFinding = {
