@@ -14,10 +14,6 @@ export function Sidebar({ inquiryUnreadCount = 0 }: { inquiryUnreadCount?: numbe
   const { client, setClient, sidebarOpen, setSidebarOpen, user, accessibleClientKeys, entitlement } = useChapter();
   const pathname = usePathname();
   const isClientEmployee = user?.role === "client_employee";
-  // 1.1 — Observations is retired from the operator surface; staff-only for
-  // firing inspection + threshold tuning. user === null = legacy CHAPTER_DASH_TOKEN
-  // operator, treated as staff (mirrors the roleLabel fallback below).
-  const isStaff = !user || user.role === "chapter_staff";
 
   // Phase 2 self-serve — a tools-only tenant (no "chapter" analytics
   // entitlement) gets a stripped shell instead of the full analytics nav.
@@ -55,7 +51,7 @@ export function Sidebar({ inquiryUnreadCount = 0 }: { inquiryUnreadCount?: numbe
   // 5-group nav per the June 11 reorg work order.
   //   Actions     — Recommendations (top-of-mind synthesis, theme-grouped)
   //   Summary     — Lifecycle Overview (default landing post-login)
-  //   Connections — Observations + Cross-Source Influence + Lagged Impact
+  //   Connections — Cross-Source Influence + Lagged Impact
   //   Analysis    — Lift / Attribution / Channel Roles
   //   Data        — Path Patterns / Journeys / Raw Performance
   const actions: NavItem[] = [
@@ -64,11 +60,13 @@ export function Sidebar({ inquiryUnreadCount = 0 }: { inquiryUnreadCount?: numbe
   const summary: NavItem[] = [
     { key: "overview", label: "Lifecycle Overview", icon: "overview" },
   ];
-  const connections: NavItem[] = ([
-    { key: "observations",              label: "Observations",           icon: "observations", badge: "8 new", locked: client.tier === "Starter" },
+  // Observations fully retired (engine cron removed Aug 5) — dropped from nav
+  // for everyone incl. staff. The /chapter/observations route now redirects to
+  // Recommendations so old bookmarks don't 404.
+  const connections: NavItem[] = [
     { key: "connections/influence",     label: "Cross-Source Influence", icon: "influence" },
     { key: "connections/lagged-impact", label: "Lagged Impact",          icon: "lagged" },
-  ] as NavItem[]).filter((it) => it.key !== "observations" || isStaff); // 1.1 — Observations staff-only
+  ];
   const analysis: NavItem[] = [
     { key: "lift",        label: "Lift, Incrementality & Value", icon: "lift" },
     { key: "attribution", label: "Attribution Models",           icon: "attribution" },
