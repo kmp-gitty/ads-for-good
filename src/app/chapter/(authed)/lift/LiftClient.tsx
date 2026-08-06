@@ -973,7 +973,14 @@ type ContribComputed = {
   contribution_index: number;     // 0-1 average
   // 2×2 quadrant assigned after median split
   quadrant: "core_driver" | "connective_tissue" | "niche_punchy" | "safe_to_cut" | "unscored";
+  low_presence: boolean;          // < LOW_PRESENCE_FLOOR touched chapters — noise
 };
+
+// Channels touching fewer than this many chapters are too thin to score honestly:
+// their single-bucket incrementals are noise, so we (a) exclude them from the
+// median split that quadrants the real channels, and (b) fade + flag their cards
+// rather than assign a confident verdict. Mirrors CR1's LOW_SAMPLE_N.
+const LOW_PRESENCE_FLOOR = 20;
 
 function computeContribution(rows: ContributionChannelRow[]): ContribComputed[] {
   if (rows.length === 0) return [];
@@ -1032,20 +1039,23 @@ function computeContribution(rows: ContributionChannelRow[]): ContribComputed[] 
       fractional_revenue: fractional,
       recurrence_score: recurrence,
       participation_norm, fractional_norm, recurrence_norm, contribution_index,
+      low_presence: touched < LOW_PRESENCE_FLOOR,
     };
   });
 
-  // 2. Median split for quadrant assignment. Channels with no incremental data
-  //    get 'unscored'.
-  const incScored = partial.filter(c => c.incremental_rate != null);
+  // 2. Median split for quadrant assignment. The median is computed over
+  //    ABOVE-FLOOR, incremental-scored channels only — a thin channel's noisy
+  //    single-bucket incremental must not shift where the real channels land.
+  //    Channels with no incremental data OR below the presence floor get 'unscored'.
+  const incScored = partial.filter(c => c.incremental_rate != null && !c.low_presence);
   const sortedInc = [...incScored].map(c => c.incremental_rate!).sort((a, b) => a - b);
-  const sortedCon = [...partial].map(c => c.contribution_index).sort((a, b) => a - b);
+  const sortedCon = [...partial.filter(c => !c.low_presence)].map(c => c.contribution_index).sort((a, b) => a - b);
   const medianInc = sortedInc.length > 0 ? sortedInc[Math.floor(sortedInc.length / 2)] : 0;
   const medianCon = sortedCon.length > 0 ? sortedCon[Math.floor(sortedCon.length / 2)] : 0;
 
   return partial.map(c => {
     let quadrant: ContribComputed["quadrant"] = "unscored";
-    if (c.incremental_rate != null) {
+    if (c.incremental_rate != null && !c.low_presence) {
       const hiInc = c.incremental_rate >= medianInc;
       const hiCon = c.contribution_index >= medianCon;
       quadrant = hiInc && hiCon ? "core_driver"
@@ -1091,9 +1101,11 @@ function ContributionCard({ c }: { c: ContribComputed }) {
   // projection + "cut / do-not-cut" verdict are nonsensical for it. Reframe as a
   // return-visitor floor: a baseline to read, not a lever to pull.
   const isDirect = c.channel === "(direct)";
-  const headline = isDirect
-    ? "Direct is a return-visitor floor, not a channel you can turn off — read its footprint as your loyalty baseline, not a lever."
-    : measureAHeadline;
+  const headline = c.low_presence
+    ? `Only ${c.touched_chapters} chapter${c.touched_chapters === 1 ? "" : "s"} touched ${c.channelName} in this window — too thin to score reliably.`
+    : isDirect
+      ? "Direct is a return-visitor floor, not a channel you can turn off — read its footprint as your loyalty baseline, not a lever."
+      : measureAHeadline;
   // V5 — retention channels are structurally under-measured by matched
   // incrementality: splitting by subscriber status conditions on the channel's
   // OWN outcome (email's job is to create subscribers + repeat habit), so the
@@ -1101,7 +1113,7 @@ function ContributionCard({ c }: { c: ContribComputed }) {
   const isRetentionChannel = RETENTION_CHANNELS.has(c.channel);
 
   return (
-    <div className="lift-card">
+    <div className="lift-card" style={c.low_presence ? { opacity: 0.6 } : undefined}>
       <div className="lift-card-head">
         <div className="lift-card-head-left">
           <span className="lift-chip" style={{ background: c.color }}>{c.short}</span>
@@ -1110,7 +1122,9 @@ function ContributionCard({ c }: { c: ContribComputed }) {
             <h3 className="lift-card-headline" style={{ fontSize: 15, lineHeight: 1.4 }}>{headline}</h3>
           </div>
         </div>
-        <span className={`lift-method-tag ${c.quadrant === "connective_tissue" ? "causal" : "obs"}`}>{qd.title}</span>
+        {c.low_presence
+          ? <span className="pill" style={{ background: "var(--bg-2)", color: "var(--ink-3)", fontSize: 10, textTransform: "uppercase", letterSpacing: ".06em", whiteSpace: "nowrap" }}>Low sample</span>
+          : <span className={`lift-method-tag ${c.quadrant === "connective_tissue" ? "causal" : "obs"}`}>{qd.title}</span>}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 16, alignItems: "stretch" }}>
@@ -1190,7 +1204,10 @@ function ContributionCard({ c }: { c: ContribComputed }) {
 // axes with quadrant backgrounds + labels. Inline SVG, no chart library.
 function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
   if (channels.length === 0) return null;
-  const scored = channels.filter(c => c.incremental_rate != null);
+  // Exclude below-presence-floor channels from the plot AND the median split so a
+  // thin channel's noisy incremental doesn't move the quadrant boundaries (matches
+  // computeContribution). They render as faded "low sample" cards below instead.
+  const scored = channels.filter(c => c.incremental_rate != null && !c.low_presence);
   if (scored.length === 0) {
     return (
       <div className="card" style={{ textAlign: "center", color: "var(--ink-3)", padding: 30 }}>
@@ -1204,7 +1221,7 @@ function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
   const xMin = -0.3, xMax = 0.5;
   const yMin = 0,    yMax = 1;
   const sortedInc = scored.map(c => c.incremental_rate!).sort((a, b) => a - b);
-  const sortedCon = channels.map(c => c.contribution_index).sort((a, b) => a - b);
+  const sortedCon = channels.filter(c => !c.low_presence).map(c => c.contribution_index).sort((a, b) => a - b);
   const medianInc = sortedInc[Math.floor(sortedInc.length / 2)];
   const medianCon = sortedCon[Math.floor(sortedCon.length / 2)];
 

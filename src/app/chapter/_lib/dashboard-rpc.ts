@@ -645,14 +645,19 @@ export const cachedContributionOverview = unstable_cache(
 );
 
 async function incrementalitySnapshotLookup(args: IncrementalityArgs): Promise<IncrementalityRow[] | null> {
-  if (args.p_cohort_axis !== "subscriber") return null;
+  // All three axes (subscriber / location / value_band) are snapshotted at the
+  // default 90d window by refresh-derived-snapshots. Serve whichever axis has a
+  // snapshot row; a missing row (custom window, or axis not yet populated) returns
+  // null → live-RPC fallback. This is load-bearing for the location axis: its live
+  // RPC (~75-130s) exceeds the dashboard timeout, so without the snapshot the tab
+  // renders empty.
   if (!matchesDefaultWindow(args, 90)) return null;
   const r = await supabase
     .schema("chapter_reporting")
     .from("incrementality_snapshot_v1")
     .select("rows")
     .eq("client_key", args.p_client_key)
-    .eq("cohort_axis", "subscriber")
+    .eq("cohort_axis", args.p_cohort_axis)
     .eq("window_days", 90)
     .maybeSingle();
   if (r.error || !r.data) return null;

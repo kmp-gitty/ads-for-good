@@ -12,13 +12,17 @@ import { unauthorizedIfNotCron } from "@/app/lib/monitoring/auth";
 // 10-13 min on cold buffers (REFRESH MATERIALIZED VIEW CONCURRENTLY scans
 // source tables to compute diff even when there are zero new rows), so the
 // snapshot loops never reached completion. Splitting gives each section its
-// own budget. This route is fast (~30-60s for all 4 clients + global) so
-// 300s maxDuration is comfortable.
+// own budget.
+//
+// maxDuration bumped 300 -> 800 (Vercel Pro max) because the location-axis
+// incrementality snapshot runs the slow per-identity region-resolution RPC
+// (~75-130s on the largest client) via the direct connection (10-min statement
+// timeout); the wall-clock budget, not the DB, is the constraint.
 //
 // Schedule: 04:25 UTC, 25 minutes after refresh-dashboard-mvs starts. By
 // then the MV refresh has had time to complete (typical ~7-10 min) and the
 // snapshots read fresh source data.
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 type SnapshotResult =
   | { snapshot: string; client_key: string; ok: true; refresh_ms: number; rows: number }
@@ -52,6 +56,50 @@ const DASHBOARD_RPC_SNAPSHOTS = [
         (now() - interval '90 days')::timestamptz,
         now(),
         'subscriber'
+      ) t
+      ON CONFLICT (client_key, cohort_axis, window_days) DO UPDATE SET
+        rows = EXCLUDED.rows,
+        snapshot_ts_hi = EXCLUDED.snapshot_ts_hi,
+        built_at = now()
+    `,
+  },
+  {
+    // location axis is slow live (per-identity region-resolution join, ~75-130s on
+    // the largest client) — it exceeded the dashboard PostgREST timeout and rendered
+    // the location cohort tab empty. Snapshot it here (same pattern as subscriber) so
+    // the tab reads from the snapshot instead of the live RPC.
+    snapshot: "incrementality_snapshot_v1 (90d location)",
+    sqlTemplate: `
+      INSERT INTO chapter_reporting.incrementality_snapshot_v1
+        (client_key, cohort_axis, window_days, rows, snapshot_ts_hi)
+      SELECT $1::text, 'location', 90,
+             COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb), now()
+      FROM chapter_reporting.incrementality_channel_overview(
+        $1::text,
+        (now() - interval '90 days')::timestamptz,
+        now(),
+        'location'
+      ) t
+      ON CONFLICT (client_key, cohort_axis, window_days) DO UPDATE SET
+        rows = EXCLUDED.rows,
+        snapshot_ts_hi = EXCLUDED.snapshot_ts_hi,
+        built_at = now()
+    `,
+  },
+  {
+    // value_band is fast live (~110ms) but snapshot it too so the wrapper can serve
+    // all three axes uniformly from the snapshot at the default window.
+    snapshot: "incrementality_snapshot_v1 (90d value_band)",
+    sqlTemplate: `
+      INSERT INTO chapter_reporting.incrementality_snapshot_v1
+        (client_key, cohort_axis, window_days, rows, snapshot_ts_hi)
+      SELECT $1::text, 'value_band', 90,
+             COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb), now()
+      FROM chapter_reporting.incrementality_channel_overview(
+        $1::text,
+        (now() - interval '90 days')::timestamptz,
+        now(),
+        'value_band'
       ) t
       ON CONFLICT (client_key, cohort_axis, window_days) DO UPDATE SET
         rows = EXCLUDED.rows,
