@@ -1462,6 +1462,13 @@ export default function LiftClient({ correlation, correlationPrior, priorRangeLa
               <div className="lift-hero-body">
                 Three methodologies answer the same question — <em>does this channel actually contribute?</em> — at ascending rigor. Pick a tab to see findings under that methodology. Each finding flags its caveats so you don&apos;t over-claim a correlation as causal.
               </div>
+              {/* P1 — positioning: the defensible claim isn't the methods (matched
+                  incrementality, footprint scoring, the 2×2 are all recognizable),
+                  it's the substrate they run on. Isolation is DB-enforced (per-
+                  client roles + RLS), so this is a fact, not a marketing promise. */}
+              <div style={{ marginTop: 12, paddingLeft: 12, borderLeft: "3px solid var(--accent)", fontSize: 12.5, color: "rgba(255,255,255,0.82)", lineHeight: 1.5 }}>
+                <strong style={{ color: "white" }}>Your identity graph, not ours.</strong> Every metric here is computed per unified cross-session, cross-device customer journey — on an identity graph built from <em>your</em> first-party data alone, isolated to your business at the database level and never pooled across clients.
+              </div>
             </div>
           </div>
           <MethodRail active={tab} />
