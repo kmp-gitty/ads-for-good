@@ -1,24 +1,23 @@
-// R1.3 — Identity stitching coverage dropped vs the client's own baseline.
+// R1.3 — Identity-resolution coverage dropped vs the client's own baseline.
 //
-// Stance: "Your journey-stitching coverage has fallen meaningfully below where
-// it normally runs — recent attribution is more fragmented than usual."
-// (Theme: Data Integrity)
+// Stance: "The share of your engaged traffic that we can tie to a known identity
+// has fallen meaningfully below where it normally runs." (Theme: Data Integrity)
 //
-// REC2 — the trigger is now RELATIVE to the client's own trailing 3-month
-// baseline, not an arbitrary absolute 40% floor. Different businesses have
-// different structural stitch ceilings (a Shopify store that collects email at
-// checkout vs a booking site), so a one-size floor mislabels a client whose
-// healthy norm is 25%. A chronically-low-but-stable rate is that client's
-// structural norm, not a recommendation; we only fire when coverage DROPS from
-// where it has been. (An outlier-vs-peers check is the future surprise-scanner.)
+// FIX (Aug 6, 2026): the old metric was (non-bot multi-event journeys) / (ALL
+// journeys) — the denominator had NO bot filter, so the rate equalled
+// (100 − bot_share) and fired a HIGH-severity false alarm whenever bot/crawler
+// traffic surged (e.g. the Aug meta-externalads spike), NOT on any real change in
+// identity stitching. (The old code also assumed journey_resolved_v1 has a
+// canonical_identity_key column — it doesn't — so it never actually measured
+// resolution.) Now measured by chapter_reporting.rec_r1_3_stitch_coverage: the
+// known-identity rate among NON-BOT ENGAGED journeys (canonical resolved via
+// journeys.last_identity_key → identity_canon). Both numerator and denominator are
+// non-bot-engaged, so bot volume can't move it.
 //
-// Trigger: current 4-week stitch rate is below the trailing 3-month baseline by
-//   - >= 3 percentage points, OR
-//   - >= 15% relative.
-//
-// Stitching = share of non-bot journeys with multi-event activity that resolve
-// to a canonical identity, approximated via journey_resolved_v1 (same
-// dashboard-canonical filter used elsewhere).
+// Only fires where identity resolution is a MATERIAL quantity (baseline ≥
+// MIN_BASELINE_RATE) — a pure-anonymous ecom store whose structural identification
+// is ~1% shouldn't alarm on noise. Trigger: current 4-week rate below the trailing
+// 3-month baseline by ≥ 3pt OR ≥ 15% relative.
 
 import { createClient } from "@supabase/supabase-js";
 import type { RuleEvaluator, RuleEvaluationResult } from "../types";
@@ -30,8 +29,10 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
-const DROP_THRESHOLD_PT = 3;    // absolute percentage-point drop
-const DROP_THRESHOLD_REL = 15;  // OR relative % drop vs baseline
+const DROP_THRESHOLD_PT = 3;      // absolute percentage-point drop
+const DROP_THRESHOLD_REL = 15;    // OR relative % drop vs baseline
+const MIN_BASELINE_RATE = 0.05;   // only meaningful where resolution is material (≥5%)
+const MIN_ENGAGED_CURRENT = 100;  // avoid tiny-sample noise
 
 export const R1_3: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | null> => {
   const oneWeekMs = 7 * 24 * 3600 * 1000;
@@ -43,11 +44,13 @@ export const R1_3: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
   const baselineStart = new Date(end.getTime() - 16 * oneWeekMs);
   const baselineEnd   = currentStart;
 
-  const current  = await stitchingRateFor(ctx.client_key, currentStart, end);
-  const baseline = await stitchingRateFor(ctx.client_key, baselineStart, baselineEnd);
-  // No baseline (client younger than ~3 months, or no traffic) → don't fire.
-  if (current === null || baseline === null) return null;
+  const cur  = await coverageFor(ctx.client_key, currentStart, end);
+  const base = await coverageFor(ctx.client_key, baselineStart, baselineEnd);
+  if (!cur || !base) return null;                       // young client / no traffic
+  if (cur.engaged < MIN_ENGAGED_CURRENT) return null;   // too little real traffic to judge
+  if (base.rate < MIN_BASELINE_RATE) return null;       // resolution isn't material for this client
 
+  const current = cur.rate, baseline = base.rate;
   const droppedPt     = (baseline - current) * 100;
   const droppedRelPct = baseline > 0 ? ((baseline - current) / baseline) * 100 : 0;
   const fired = droppedPt >= DROP_THRESHOLD_PT || droppedRelPct >= DROP_THRESHOLD_REL;
@@ -60,28 +63,20 @@ export const R1_3: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
   const confidence: "strong" | "moderate" | "early_signal" =
     droppedPt >= 6 || droppedRelPct >= 30 ? "strong" : "moderate";
 
-  const floorOrDropClause =
-    `down from its trailing 3-month average of ${priorPct}% (a ${ptChange}pt drop)`;
-
   return {
     rule_id: "R1.3",
     fired: true,
     subject_key: null,
     data: {
-      stitching_share: currentPct,
-      floor_or_drop_clause: floorOrDropClause,
-      prior_rate: priorPct,
+      known_rate_now: currentPct,
+      known_rate_prior: priorPct,
       pt_change: ptChange,
+      floor_or_drop_clause: `down from its trailing 3-month average of ${priorPct}% (a ${ptChange}pt drop)`,
     },
     evidence: [
       {
-        source: "Raw Performance",
-        fact: `Stitching coverage now: ${currentPct}% of journeys resolved to a canonical identity`,
-        deeplink: chapterUrl(ctx.client_key, "raw"),
-      },
-      {
         source: "Customer Journeys",
-        fact: `Trailing 3-month baseline: ${priorPct}% — current is a ${ptChange}pt drop`,
+        fact: `${currentPct}% of engaged journeys resolved to a known identity — down from a ${priorPct}% trailing-3-month baseline (a ${ptChange}pt drop)`,
         deeplink: chapterUrl(ctx.client_key, "journeys"),
       },
     ],
@@ -91,33 +86,22 @@ export const R1_3: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
   };
 };
 
-async function stitchingRateFor(
+async function coverageFor(
   client_key: string,
   start: Date,
   end: Date,
-): Promise<number | null> {
-  // Total non-bot journeys vs subset with multi-event activity (proxy for
-  // stitched). canonical_identity_key on journey_resolved_v1 is always
-  // populated when bot_class indicates a real human signal.
-  const total = await supabase
+): Promise<{ rate: number; engaged: number } | null> {
+  const { data, error } = await supabase
     .schema("chapter_reporting")
-    .from("journey_resolved_v1")
-    .select("*", { count: "exact", head: true })
-    .eq("client_key", client_key)
-    .gte("entry_ts", start.toISOString())
-    .lt("entry_ts", end.toISOString());
-
-  const stitched = await supabase
-    .schema("chapter_reporting")
-    .from("journey_resolved_v1")
-    .select("*", { count: "exact", head: true })
-    .eq("client_key", client_key)
-    .in("bot_class", ["human_likely", "suspect"])
-    .gt("event_count", 1)
-    .gte("entry_ts", start.toISOString())
-    .lt("entry_ts", end.toISOString());
-
-  if (total.error || stitched.error) return null;
-  if (!total.count || total.count === 0) return null;
-  return (stitched.count ?? 0) / total.count;
+    .rpc("rec_r1_3_stitch_coverage", {
+      p_client_key: client_key,
+      p_start_ts: start.toISOString(),
+      p_end_ts: end.toISOString(),
+    });
+  if (error) return null;
+  const row = (Array.isArray(data) ? data[0] : null) as
+    | { engaged: number; known_n: number; known_rate: number }
+    | undefined;
+  if (!row || !row.engaged) return null;
+  return { rate: Number(row.known_rate ?? 0) / 100, engaged: Number(row.engaged) };
 }
