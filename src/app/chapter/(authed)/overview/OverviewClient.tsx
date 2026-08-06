@@ -262,11 +262,14 @@ export default function OverviewClient({
       foot: `90% Max = ${p90Days} days`,
     },
     {
-      label: "Multi-touch share",
+      // Counts chapters with >1 DISTINCT channel (not >1 touch), so "channel" is
+      // the accurate label + consistent with the "more than one channel" copy below.
+      // good: null → neutral pill: multi-channel mix is informative, not good/bad.
+      label: "Multi-channel share",
       value: lifecycle?.multi_touch_pct != null ? Number(lifecycle.multi_touch_pct).toFixed(0) : "—",
       unit: "%",
       move: moveMultiTouch ?? 0,
-      good: true,
+      good: null,
       foot: "of converting chapters",
     },
     {
