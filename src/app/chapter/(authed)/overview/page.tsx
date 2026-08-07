@@ -20,7 +20,9 @@ import {
   cachedPathCombinationsOverview,
   cachedPurchaseOverview,
   cachedJourneyOverview,
+  cachedJourneyCompleteness,
   cachedEngagementQuality,
+  cachedRecommendationsCurrent,
   priorWindow,
 } from "../../_lib/dashboard-rpc";
 
@@ -70,6 +72,8 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
     channels, combosSet, combosCollapsed, combosRaw,
     purchase, journey, engagement,
     purchasePrior, journeyPrior, engagementPrior,
+    completeness, completenessPrior,
+    recommendations,
   ] = await Promise.all([
     cachedLifecycleOverview(winArgs),
     cachedLifecycleOverview(priorArgs),
@@ -87,6 +91,9 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
     cachedPurchaseOverview(priorArgs),
     cachedJourneyOverview(priorArgs),
     cachedEngagementQuality(priorArgs),
+    cachedJourneyCompleteness(winArgs),
+    cachedJourneyCompleteness(priorArgs),
+    cachedRecommendationsCurrent({ clientKey }),
   ]);
 
   return (
@@ -102,6 +109,9 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
       priorSummary={purchasePrior[0] ?? null}
       priorJourney={journeyPrior[0] ?? null}
       priorEngagement={engagementPrior[0] ?? null}
+      completeness={completeness[0] ?? null}
+      priorCompleteness={completenessPrior[0] ?? null}
+      recommendations={recommendations}
       clientKey={clientKey}
       range={range}
     />

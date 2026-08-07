@@ -12,11 +12,12 @@ import { PathRender } from "../../_components/ChannelChip";
 import { useChapter } from "../../_components/ChapterContext";
 import { fmtMoney, fmtMoneyK, fmtNum } from "../../_components/format";
 import {
-  CHANNELS, OBSERVATIONS, type ChannelKey, type Kpi,
+  CHANNELS, type ChannelKey, type Kpi,
 } from "../../_components/mockdata";
 import type {
   LifecycleOverviewRow, PathLengthTrendRow,
   ChannelRoleRow, PathCombinationRow, PathMode,
+  RecommendationFinding,
 } from "../../_lib/dashboard-rpc";
 import { chapterUrl } from "../../_lib/urls";
 import type { TrendWindow } from "./page";
@@ -51,6 +52,9 @@ type Props = {
     pct_identified: number | null;
   } | null;
   priorEngagement: { engagement_rate: number | null } | null;
+  completeness: { known_customers: number | null; completeness_pct: number | null } | null;
+  priorCompleteness: { completeness_pct: number | null } | null;
+  recommendations: RecommendationFinding[];
   clientKey: string;
   range: string;
 };
@@ -78,6 +82,7 @@ function fmtBucketLabel(iso: string): string {
 }
 
 function PathLengthChart({ data }: { data: PathLengthTrendRow[] }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   if (data.length === 0) {
     return <div style={{ padding: 30, textAlign: "center", color: "var(--ink-3)" }}>No trend data in window.</div>;
   }
@@ -119,40 +124,85 @@ function PathLengthChart({ data }: { data: PathLengthTrendRow[] }) {
   const ticks: number[] = [];
   for (let t = yMin; t <= yMax; t += tickStep) ticks.push(t);
 
+  const fmtTouch = (v: number) => (Number.isFinite(v) ? v.toFixed(1) : "—");
+  const hovered = hoverIdx != null && hoverIdx >= 0 && hoverIdx < points.length ? points[hoverIdx] : null;
+
+  // Map mouse X (in the rendered, stretched element) back to the nearest bucket.
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const svgX = ((e.clientX - rect.left) / rect.width) * w; // back to viewBox space
+    const step = (w - pad.l - pad.r) / Math.max(points.length - 1, 1);
+    const idx = Math.round((svgX - pad.l) / step);
+    setHoverIdx(Math.max(0, Math.min(points.length - 1, idx)));
+  };
+
+  // Tooltip placement: anchor left/center/right near the edges so it doesn't clip.
+  const hoverLeftPct = hovered ? (xs(hovered.i) / w) * 100 : 0;
+  const tipTransform = hoverLeftPct < 18 ? "translateX(0)" : hoverLeftPct > 82 ? "translateX(-100%)" : "translateX(-50%)";
+  const dotRow = (color: string, label: string, v: number) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <span style={{ color, fontSize: 9 }}>●</span>{label}: <strong>{fmtTouch(v)}</strong> touches
+    </div>
+  );
+
   return (
-    <svg className="chart-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      {ticks.map(g => (
-        <g key={g}>
-          <line className="grid" x1={pad.l} x2={w - pad.r} y1={ys(g)} y2={ys(g)} />
-          <text className="ticks" x={pad.l - 6} y={ys(g) + 3} textAnchor="end">{g}</text>
-        </g>
-      ))}
-      <path className="area" d={areaD} />
-      {/* Median = solid accent orange */}
-      <path className="line" d={medianD} />
-      {/* Average = dashed steel blue — clearly different hue from median */}
-      <path d={avgD} stroke="#2D7AC9" strokeWidth="1.75" strokeDasharray="6 3" fill="none" />
-      {/* 90% Max = dotted violet — third distinct hue */}
-      <path d={p90D} stroke="#8E5DA8" strokeWidth="1.5" strokeDasharray="2 3" fill="none" />
-      {validMedian.map(p => (
-        <circle key={"d" + p.i} className="dot" cx={xs(p.i)} cy={ys(p.median)} r="3" />
-      ))}
-      {/* Real bucket start dates instead of "W1, W3, ..." labels. Show every
-          other bucket to keep room (12 buckets → 6 labels). Anchor the first
-          and last to the edges so the window's true bounds are always visible. */}
-      {points.map((p, i) => {
-        const isFirst = i === 0;
-        const isLast  = i === points.length - 1;
-        const showEveryOther = i % 2 === 0;
-        if (!isFirst && !isLast && !showEveryOther) return null;
-        const anchor: "start" | "middle" | "end" = isFirst ? "start" : isLast ? "end" : "middle";
-        return (
-          <text key={"x" + i} className="ticks" x={xs(p.i)} y={h - pad.b + 16} textAnchor={anchor}>
-            {fmtBucketLabel(p.bucket_start)}
-          </text>
-        );
-      })}
-    </svg>
+    <div style={{ position: "relative" }} onMouseMove={handleMove} onMouseLeave={() => setHoverIdx(null)}>
+      <svg className="chart-svg" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+        {ticks.map(g => (
+          <g key={g}>
+            <line className="grid" x1={pad.l} x2={w - pad.r} y1={ys(g)} y2={ys(g)} />
+            <text className="ticks" x={pad.l - 6} y={ys(g) + 3} textAnchor="end">{g}</text>
+          </g>
+        ))}
+        <path className="area" d={areaD} />
+        {/* Median = solid accent orange */}
+        <path className="line" d={medianD} />
+        {/* Average = dashed steel blue — clearly different hue from median */}
+        <path d={avgD} stroke="#2D7AC9" strokeWidth="1.75" strokeDasharray="6 3" fill="none" />
+        {/* 90% Max = dotted violet — third distinct hue */}
+        <path d={p90D} stroke="#8E5DA8" strokeWidth="1.5" strokeDasharray="2 3" fill="none" />
+        {/* Hover guide line + emphasis dots on each line at the hovered bucket */}
+        {hovered && (
+          <line x1={xs(hovered.i)} x2={xs(hovered.i)} y1={pad.t} y2={h - pad.b}
+                stroke="var(--ink-3)" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+        )}
+        {validMedian.map(p => (
+          <circle key={"d" + p.i} className="dot" cx={xs(p.i)} cy={ys(p.median)} r="3" />
+        ))}
+        {hovered && Number.isFinite(hovered.median) && <circle cx={xs(hovered.i)} cy={ys(hovered.median)} r="4.5" fill="var(--accent)" />}
+        {hovered && Number.isFinite(hovered.avg)    && <circle cx={xs(hovered.i)} cy={ys(hovered.avg)}    r="4.5" fill="#2D7AC9" />}
+        {hovered && Number.isFinite(hovered.p90)    && <circle cx={xs(hovered.i)} cy={ys(hovered.p90)}    r="4.5" fill="#8E5DA8" />}
+        {/* Real bucket start dates instead of "W1, W3, ..." labels. Show every
+            other bucket to keep room (12 buckets → 6 labels). Anchor the first
+            and last to the edges so the window's true bounds are always visible. */}
+        {points.map((p, i) => {
+          const isFirst = i === 0;
+          const isLast  = i === points.length - 1;
+          const showEveryOther = i % 2 === 0;
+          if (!isFirst && !isLast && !showEveryOther) return null;
+          const anchor: "start" | "middle" | "end" = isFirst ? "start" : isLast ? "end" : "middle";
+          return (
+            <text key={"x" + i} className="ticks" x={xs(p.i)} y={h - pad.b + 16} textAnchor={anchor}>
+              {fmtBucketLabel(p.bucket_start)}
+            </text>
+          );
+        })}
+      </svg>
+      {hovered && (
+        <div style={{
+          position: "absolute", left: `${hoverLeftPct}%`, top: 4, transform: tipTransform,
+          background: "#1F2D43", color: "white", borderRadius: 8, padding: "8px 10px",
+          fontSize: 11, lineHeight: 1.5, pointerEvents: "none", whiteSpace: "nowrap",
+          boxShadow: "0 4px 14px rgba(15,23,34,0.25)", zIndex: 5,
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{fmtBucketLabel(hovered.bucket_start)}</div>
+          {dotRow("#E36410", "Median", hovered.median)}
+          {dotRow("#2D7AC9", "Average", hovered.avg)}
+          {dotRow("#8E5DA8", "90% Max", hovered.p90)}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -201,6 +251,8 @@ export default function OverviewClient({
   channels, combos,
   summary, journey, engagement,
   priorSummary, priorJourney, priorEngagement,
+  completeness, priorCompleteness,
+  recommendations,
   clientKey: _clientKey, range,
 }: Props) {
   const { client } = useChapter();
@@ -243,6 +295,7 @@ export default function OverviewClient({
     journey?.pct_identified != null ? Number(journey.pct_identified) * 100 : null,
     priorJourney?.pct_identified != null ? Number(priorJourney.pct_identified) * 100 : null,
   );
+  const moveCompleteness       =  ppDelta(completeness?.completeness_pct, priorCompleteness?.completeness_pct);
 
   const lcmMetrics = [
     {
@@ -279,6 +332,19 @@ export default function OverviewClient({
       move: moveIdRate ?? 0,
       good: true,
       foot: "of non-bot journeys",
+    },
+    {
+      // DEPTH companion to Identification rate (breadth). Of known customers active
+      // in the window, % whose journey is stitched across >1 session (vs caught in a
+      // single session). Higher = more complete journey capture, so up=good.
+      // NB: anonymous-to-anonymous "stitch rate" is intentionally held for later —
+      // near-zero until durable-identity work matures.
+      label: "Journey completeness",
+      value: completeness?.completeness_pct != null ? Number(completeness.completeness_pct).toFixed(0) : "—",
+      unit: "%",
+      move: moveCompleteness ?? 0,
+      good: true,
+      foot: `of ${completeness?.known_customers ?? 0} known customers stitched across sessions`,
     },
   ];
 
@@ -320,6 +386,14 @@ export default function OverviewClient({
   const topCombos = [...combos[comboMode]]
     .sort((a, b) => Number(b.revenue ?? 0) - Number(a.revenue ?? 0))
     .slice(0, 5);
+  const totalCombos = combos[comboMode].length;
+
+  // Top 3 active recommendations, highest effective severity first (the list
+  // arrives already sorted by recency, so equal-severity ties keep recency order).
+  const sevRank = (s: string) => (s === "high" ? 0 : s === "medium" ? 1 : 2);
+  const topRecs = [...recommendations]
+    .sort((a, b) => sevRank(a.severity_override ?? a.severity_weight) - sevRank(b.severity_override ?? b.severity_weight))
+    .slice(0, 3);
 
   // Trend headline subtitle: compare first vs last bucket with data
   const validTrend = trend.filter(t => t.median_touches != null);
@@ -363,7 +437,7 @@ export default function OverviewClient({
             {lcmMetrics.map((m, i) => <Lcm key={i} {...m} />)}
             <div className="lcm">
               <LcmStat
-                label="Returning this window"
+                label="Repeat Buyers This Window"
                 value={returningInWindowValue}
                 unit="%"
                 move={moveReturningInWindow ?? 0}
@@ -377,10 +451,7 @@ export default function OverviewClient({
           <div className="card">
             <div className="card-head">
               <div>
-                <h3 className="card-title">
-                  Path length trend
-                  <span className="what" title="Touches to close per chapter, bucketed across the selected window. Median = typical chapter, Average = sum/count (pulled by outliers), 90% Max = 90% of chapters fall below this threshold.">?</span>
-                </h3>
+                <h3 className="card-title">Path length trend</h3>
                 <div className="card-sub" style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Dropdown align="left" width={160} trigger={
                     <button className="toolbar-btn compact" style={{ padding: "2px 8px", fontSize: 11 }}>
@@ -418,29 +489,38 @@ export default function OverviewClient({
           <div className="card">
             <div className="card-head">
               <div>
-                <h3 className="card-title">Chapter observations this week</h3>
-                <div className="card-sub" style={{ color: "var(--ink-4)" }}>Mock preview — question-library engine not built yet</div>
+                <h3 className="card-title">Recommendations this week</h3>
+                <div className="card-sub">Highest-priority active signals</div>
               </div>
-              <Link className="card-link" href={chapterUrl(client.id, "observations")}>View all <Icon name="chevR" size={12}/></Link>
+              <Link className="card-link" href={chapterUrl(client.id, "recommendations")}>View all <Icon name="chevR" size={12}/></Link>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {OBSERVATIONS.slice(0, 3).map(o => {
-                const railColor = o.severity === "high" ? "var(--sev-high)" : o.severity === "med" ? "var(--sev-med)" : "var(--sev-low)";
-                return (
-                  <div key={o.id} style={{ display: "flex", gap: 12, paddingBottom: 12, borderBottom: "1px solid var(--line-2)" }}>
-                    <div style={{ width: 3, borderRadius: 3, flexShrink: 0, background: railColor }}></div>
-                    <div style={{ flex: 1 }}>
-                      <div className="obs-meta" style={{ marginBottom: 6 }}>
-                        <span className={`obs-tag sev-${o.severity}`}>{o.severity === "high" ? "High" : o.severity === "med" ? "Medium" : "Low"} severity</span>
-                        {o.state === "new" && <span className="obs-tag new">New this week</span>}
-                        {o.state === "changed" && <span className="obs-tag">Changed</span>}
+            {topRecs.length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "8px 2px" }}>
+                No active recommendations right now — all clear.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {topRecs.map(r => {
+                  const eff = r.severity_override ?? r.severity_weight;
+                  const sevKey = eff === "high" ? "high" : eff === "medium" ? "med" : "low";
+                  const railColor = eff === "high" ? "var(--sev-high)" : eff === "medium" ? "var(--sev-med)" : "var(--sev-low)";
+                  const sevLabel = eff === "high" ? "High" : eff === "medium" ? "Medium" : "Low";
+                  return (
+                    <div key={r.id} style={{ display: "flex", gap: 12, paddingBottom: 12, borderBottom: "1px solid var(--line-2)" }}>
+                      <div style={{ width: 3, borderRadius: 3, flexShrink: 0, background: railColor }}></div>
+                      <div style={{ flex: 1 }}>
+                        <div className="obs-meta" style={{ marginBottom: 6 }}>
+                          <span className={`obs-tag sev-${sevKey}`}>{sevLabel} severity</span>
+                          {r.state === "new" && <span className="obs-tag new">New this week</span>}
+                          {r.state === "changed" && <span className="obs-tag">Changed</span>}
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.45, color: "var(--ink)" }}>{r.headline}</div>
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.45, color: "var(--ink)" }}>{o.headline}</div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -528,7 +608,11 @@ export default function OverviewClient({
             </div>
             <div className="row-list">
               <div className="lrow head" style={{ gridTemplateColumns: "1fr 70px 90px" }}>
-                <div>Combination</div>
+                <div>Combination
+                  <span style={{ fontSize: 12, color: "var(--ink-3)", textTransform: "none", letterSpacing: 0, fontWeight: 400, marginLeft: 6 }}>
+                    {fmtNum(totalCombos)} total
+                  </span>
+                </div>
                 <div style={{ textAlign: "right" }}>Chapters</div>
                 <div style={{ textAlign: "right" }}>Revenue</div>
               </div>

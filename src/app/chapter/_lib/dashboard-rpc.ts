@@ -87,6 +87,15 @@ export type JourneyOverviewRow = {
   sessions_per_identification: number | null;
 };
 
+// Journey Completeness — depth companion to Identification rate (breadth). Of the
+// known customers active in the window, what share have their cross-session journey
+// stitched (>1 journey) vs caught in a single session.
+export type JourneyCompletenessRow = {
+  known_customers: number | null;
+  multi_session_customers: number | null;
+  completeness_pct: number | null;
+};
+
 export type EngagementQualityRow = {
   total_journeys: number | null;
   journeys_with_time: number | null;
@@ -133,6 +142,7 @@ export type ChapterPurchaseSummaryRow = {
 
 export const cachedPurchaseOverview       = makeCachedRpc<PurchaseOverviewRow>("purchase_overview");
 export const cachedJourneyOverview        = makeCachedRpc<JourneyOverviewRow>("journey_overview");
+export const cachedJourneyCompleteness    = makeCachedRpc<JourneyCompletenessRow>("journey_completeness");
 export const cachedEngagementQuality      = makeCachedRpc<EngagementQualityRow>("engagement_quality");
 export const cachedFunnelOverview         = makeCachedRpc<FunnelStepRow>("funnel_overview");
 export const cachedChannelPerformance     = makeCachedRpc<ChannelPerformanceRow>("channel_performance_overview");

@@ -295,18 +295,17 @@
 .chapter-app .role-legend .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
 
 .chapter-app .role-tip {
-  background: var(--ink); color: white; padding: 8px 12px; border-radius: 8px;
+  background: var(--accent); color: white; padding: 8px 12px; border-radius: 8px;
   font-size: 11px; white-space: nowrap;
-  box-shadow: 0 8px 24px rgba(31,45,67,0.32); z-index: 20; pointer-events: none;
+  box-shadow: 0 8px 24px rgba(227,100,16,0.38); z-index: 20; pointer-events: none;
 }
 .chapter-app .role-tip::after {
   content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
-  border: 5px solid transparent; border-top-color: var(--ink);
+  border: 5px solid transparent; border-top-color: var(--accent);
 }
-.chapter-app .role-tip-row { display: flex; align-items: center; gap: 6px; font-weight: 600; }
-.chapter-app .role-tip-row .sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
-.chapter-app .role-tip-val { color: rgba(255,255,255,0.7); font-weight: 500; margin-left: 4px; }
-.chapter-app .role-tip-desc { font-size: 10px; color: rgba(255,255,255,0.7); margin-top: 4px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.chapter-app .role-tip-row { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.chapter-app .role-tip-val { color: rgba(255,255,255,0.9); font-weight: 600; margin-left: 4px; }
+.chapter-app .role-tip-desc { font-size: 10px; color: rgba(255,255,255,0.82); margin-top: 4px; font-weight: 400; text-transform: none; letter-spacing: 0; }
 
 /* ============ Channel role cards ============ */
 .chapter-app .role-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }

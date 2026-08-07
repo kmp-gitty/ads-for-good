@@ -13,7 +13,7 @@ type Seg = {
 };
 
 export function RoleBar({
-  dist, showTooltip = false,
+  dist, showTooltip = true,
 }: {
   dist: { only: number; open: number; mid: number; close: number };
   showTooltip?: boolean;
@@ -25,11 +25,9 @@ export function RoleBar({
     { key: "mid",   label: "Mid",        val: dist.mid,   cls: "mid",   desc: "Assisting touch between first and close" },
     { key: "close", label: "Closer",     val: dist.close, cls: "close", desc: "Last touch before conversion" },
   ];
-  const tipColor = (cls: Seg["cls"]) =>
-    cls === "only" ? "var(--navy)"
-    : cls === "open" ? "#6F86A8"
-    : cls === "mid"  ? "#BFAE85"
-    : "var(--accent)";
+  // No native `title` — its ~1s browser delay is what made the tooltip feel slow.
+  // The custom .role-tip renders instantly on mouseenter (React state), styled as a
+  // Chapter callout (orange fill, white text).
   return (
     <div className="role-bar-wrap" style={{ position: "relative" }}>
       <div className="role-bar">
@@ -38,15 +36,13 @@ export function RoleBar({
                className={`seg ${s.cls}`}
                style={{ width: s.val + "%" }}
                onMouseEnter={() => showTooltip && setHover(s)}
-               onMouseLeave={() => showTooltip && setHover(null)}
-               title={`${s.label}: ${s.val}%`}>
+               onMouseLeave={() => showTooltip && setHover(null)}>
           </div>
         ) : null)}
       </div>
       {showTooltip && hover && (
         <div className="role-tip" style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)" }}>
           <div className="role-tip-row">
-            <span className="sw" style={{ background: tipColor(hover.cls) }}></span>
             <strong>{hover.label}</strong>
             <span className="role-tip-val">{hover.val}%</span>
           </div>
