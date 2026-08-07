@@ -1107,6 +1107,31 @@ export const cachedLaggedImpactRanked = unstable_cache(
   { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:lagged_impact_ranked"] },
 );
 
+// Earliest + latest session entry for a client — the client's available data
+// span. Used by the Lagged Impact page to run its analysis over ALL available
+// history (treatment window = all-time) instead of a short calendar slice, so
+// the A-touch cohorts are as large as possible. Two indexed (client_key,
+// entry_ts) reads; cheap.
+export type ClientDataSpanRow = { first_ts: string | null; last_ts: string | null };
+export const cachedClientDataSpan = unstable_cache(
+  async (clientKey: string): Promise<ClientDataSpanRow> => {
+    const [minR, maxR] = await Promise.all([
+      supabase.schema("chapter_reporting").from("session_channel_entries_v1")
+        .select("entry_ts").eq("client_key", clientKey).order("entry_ts", { ascending: true }).limit(1),
+      supabase.schema("chapter_reporting").from("session_channel_entries_v1")
+        .select("entry_ts").eq("client_key", clientKey).order("entry_ts", { ascending: false }).limit(1),
+    ]);
+    if (minR.error) console.error("[dashboard-rpc] client_data_span (min) failed:", { ...minR.error });
+    if (maxR.error) console.error("[dashboard-rpc] client_data_span (max) failed:", { ...maxR.error });
+    return {
+      first_ts: (minR.data?.[0] as { entry_ts?: string } | undefined)?.entry_ts ?? null,
+      last_ts:  (maxR.data?.[0] as { entry_ts?: string } | undefined)?.entry_ts ?? null,
+    };
+  },
+  ["dashboard-rpc:client_data_span"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:client_data_span"] },
+);
+
 // R3 — subscriber retention lens. Observational repeat-rate + LTV comparison of
 // pre-purchase subscribers vs non-subscriber buyers (the retention value the
 // touch-level incrementality can't see). Returns one row per cohort.

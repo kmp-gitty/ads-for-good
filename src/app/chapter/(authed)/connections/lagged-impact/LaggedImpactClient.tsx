@@ -320,7 +320,7 @@ function LagTableHeader() {
         title="Treated rate minus baseline rate, in percentage points. Positive = touching A makes a later B-return more likely than baseline." />
       <HeaderCell top="Rel"             bottom="Lift (%)"
         title="Absolute lift as a percentage of the baseline rate — the proportional increase over the counterfactual." />
-      <HeaderCell top="95% CI"          bottom="(abs diff)"
+      <HeaderCell top="95% CI"          bottom="Lift (PP)"
         title="95% confidence interval on the absolute lift. If it straddles 0, the effect is within noise; if it clears 0 (and n ≥ 30), it's confident." />
       <HeaderCell                       bottom="Status"
         title="Confidence gate: OK = n ≥ 30 on both cohorts and the CI excludes 0; within-noise = CI straddles 0; below floor = under the 30-identity minimum." />
@@ -363,12 +363,17 @@ function RankedPairsTable({
   const okCount = sorted.filter(p => p.cell_gate_status === "ok").length;
 
   return (
-    <div style={{ overflowX: "auto" }}>
+    // Scroll region so the header can freeze: overflow:auto keeps horizontal
+    // scroll on narrow screens AND makes this the vertical scroll container the
+    // sticky header pins to. maxHeight caps the table so long lists scroll
+    // inside it (header stays) instead of running down the page.
+    <div style={{ overflow: "auto", maxHeight: "70vh" }}>
       <div style={{ minWidth: 780 }}>
-        {/* header */}
+        {/* header — frozen on scroll */}
         <div style={{
           display: "grid", gridTemplateColumns: RANKED_GRID, columnGap: 0,
-          padding: "10px 16px", borderBottom: DIVIDER, background: "rgba(15,23,34,0.04)",
+          padding: "10px 16px", borderBottom: DIVIDER, background: "#F5F6F7",
+          position: "sticky", top: 0, zIndex: 2,
           fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--ink-3)", fontWeight: 600,
         }}>
           <HeaderCell            bottom="Channel pair (A → B)" firstCell align="left"
@@ -381,7 +386,7 @@ function RankedPairsTable({
             title="Treated rate minus baseline rate, in percentage points. Positive = touching A makes a later B-return more likely than baseline." />
           <HeaderCell top="Rel"    bottom="Lift (%)"
             title="Absolute lift as a percentage of the baseline rate — the proportional increase over the counterfactual." />
-          <HeaderCell top="95% CI"  bottom="(abs diff)"
+          <HeaderCell top="95% CI"  bottom="Lift (PP)"
             title="95% confidence interval on the absolute lift. If it straddles 0, the effect is within noise; if it clears 0 (and n ≥ 30), it's confident. Same formula as the per-pair drill-in." />
           <HeaderCell            bottom="Status"
             title="Confidence gate: OK = n ≥ 30 on both cohorts and the CI excludes 0; within-noise = CI straddles 0; below floor = under the 30-identity minimum." />
@@ -445,7 +450,7 @@ function RankedPairsTable({
 }
 
 export default function LaggedImpactClient({
-  clientKey, range, channelA, channelB, treatmentStart, treatmentEnd, lookforwardDays, results, allLagDays, rankedPairs, rankedLagDays, series,
+  clientKey, range, channelA, channelB, treatmentStart, treatmentEnd, spanDays, results, allLagDays, rankedPairs, rankedLagDays, rankedLagOptions, series,
 }: {
   clientKey:        string;
   range:            string;
@@ -453,11 +458,12 @@ export default function LaggedImpactClient({
   channelB:         string;
   treatmentStart:   string;
   treatmentEnd:     string;
-  lookforwardDays:  number;
+  spanDays:         number;
   results:          { lagDays: number; row: LaggedImpactRow | null }[];
   allLagDays:       number[];
   rankedPairs:      LaggedImpactRankedRow[];
   rankedLagDays:    number;
+  rankedLagOptions: number[];
   series:           LaggedImpactSeriesRow[];
 }) {
   const router = useRouter();
@@ -532,7 +538,7 @@ export default function LaggedImpactClient({
                 How this page works
               </div>
               <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
-                Pick a channel pair (A → B). The page splits the analysis range into a <strong>treatment window</strong> (when A could occur — first third) and a <strong>lookforward window</strong> (when we count B returns — remaining two-thirds). For each default lag (7 / 14 / 30 / 60 / 90 days), we compare the B-return rate of identities touched by A against comparable identities who weren&apos;t touched by A — neither cohort had touched B during the treatment window. <strong>Default lags are shown together so a &ldquo;best lag&rdquo; can&apos;t be cherry-picked.</strong> Touches too recent for their full lag window to have elapsed are excluded from each cell, so return rates aren&apos;t undercounted by activity we can&apos;t observe yet — larger lags therefore analyze a slightly earlier slice of the window.
+For a channel pair (A → B), we pool <strong>every A touch across all your available history</strong> (the treatment window — bigger cohorts, tighter confidence) and, for the chosen <strong>lag window</strong>, compare the B-return rate of identities touched by A against comparable identities who weren&apos;t — neither cohort had touched B during that history. The <strong>lag window</strong> is what you vary: how long after an A touch we keep watching for a B return. <strong>Ranked pairs</strong> scores every pair at one lag you pick; <strong>Explore</strong> shows a single pair across all lag windows (7 / 14 / 30 / 60 / 90d) so a &ldquo;best lag&rdquo; can&apos;t be cherry-picked. Touches too recent for their full lag window to have elapsed are excluded, so return rates aren&apos;t undercounted by activity we can&apos;t observe yet — longer lags therefore analyze a slightly earlier slice of the history.
               </div>
             </div>
             <div style={{ color: "rgba(255,255,255,0.55)" }}>
@@ -615,9 +621,10 @@ export default function LaggedImpactClient({
             )}
           </Dropdown>
 
-          <div style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)" }}>
+          <div style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)", cursor: "help" }}
+               title={"Treatment window = all available history for this client. A-touches are pooled across the whole span; the RPC excludes touches too recent for their full lag window to have elapsed."}>
             Treatment: <strong style={{ color: "var(--ink-2)" }}>{fmtRange(treatmentStart)} → {fmtRange(treatmentEnd)}</strong>
-            <span style={{ marginLeft: 12 }}>Lookforward: <strong style={{ color: "var(--ink-2)" }}>{lookforwardDays}d</strong></span>
+            <span style={{ marginLeft: 12 }}>all history · <strong style={{ color: "var(--ink-2)" }}>{spanDays}d</strong></span>
           </div>
         </div>
         )}
@@ -625,13 +632,37 @@ export default function LaggedImpactClient({
         {/* LI3 — ranked discovery table: which pairs matter, at a glance (Ranked tab) */}
         {view === "ranked" && (
         <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column" }}>
-          <div className="card-head" style={{ padding: "16px 18px", borderBottom: DIVIDER }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+          <div className="card-head" style={{ padding: "16px 18px", borderBottom: DIVIDER, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
               <span style={{ fontWeight: 600, fontSize: 14 }}>Which channel pairs drive later returns?</span>
               <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
                 Every pair ranked by lagged return-lift — the strongest confident signals first. Pick one to dig into.
               </span>
             </div>
+            {/* Lag-window selector — how long after an A touch we count a B return. */}
+            <Dropdown align="right" width={180} trigger={
+              <button className="toolbar-btn" title="How long after an A touch we keep watching for a B return">
+                <span className="dim" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em" }}>Lag window</span>
+                <span style={{ fontWeight: 500 }}>{rankedLagDays}d</span>
+                <span className="chev"><Icon name="chev" size={12}/></span>
+              </button>
+            }>
+              {(close) => (
+                <>
+                  <div className="dd-label">Days after an A touch to count a B return</div>
+                  {rankedLagOptions.map(d => (
+                    <button
+                      key={d}
+                      className={`dd-item ${rankedLagDays === d ? "active" : ""}`}
+                      onClick={() => { setParam("ranked_lag_days", String(d)); close(); }}
+                    >
+                      <span>{d} days</span>
+                      {rankedLagDays === d && <span className="check"><Icon name="check" size={14}/></span>}
+                    </button>
+                  ))}
+                </>
+              )}
+            </Dropdown>
           </div>
           <RankedPairsTable
             pairs={rankedPairs}
