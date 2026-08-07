@@ -79,24 +79,61 @@ const cellDivided = (firstCell: boolean): React.CSSProperties => ({
 // 7 columns: lag · treated rate · baseline rate · abs lift · rel lift · CI · gate
 const GRID = "60px 100px 100px 90px 90px minmax(120px,1fr) 130px";
 
-function HeaderCell({ top, bottom, firstCell = false, align = "center" }: {
-  top?: string; bottom: string; firstCell?: boolean; align?: "left" | "center" | "right";
+function HeaderCell({ top, bottom, firstCell = false, align = "center", title }: {
+  top?: string; bottom: string; firstCell?: boolean; align?: "left" | "center" | "right"; title?: string;
 }) {
+  // Instant navy info-box tooltip (matches the other dashboard pages) instead
+  // of a delayed gray native title.
+  const [hover, setHover] = useState(false);
   return (
-    <div style={{
-      ...cellDivided(firstCell),
-      textAlign: align,
-      whiteSpace: "nowrap",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: align === "left" ? "flex-start" : align === "right" ? "flex-end" : "center",
-      gap: 2,
-      lineHeight: 1.1,
-    }}>
+    <div
+      onMouseEnter={() => title && setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        ...cellDivided(firstCell),
+        position: "relative",
+        textAlign: align,
+        whiteSpace: "nowrap",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: align === "left" ? "flex-start" : align === "right" ? "flex-end" : "center",
+        gap: 2,
+        lineHeight: 1.1,
+        cursor: title ? "help" : undefined,
+      }}
+    >
       <span style={{ color: "var(--ink-4)", fontWeight: 500 }}>{top ?? " "}</span>
       <span>{bottom}</span>
+      {title && hover && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 9px)", left: "50%", transform: "translateX(-50%)",
+          width: 240, background: "#1F2D43", color: "white", borderRadius: 8, padding: "9px 11px",
+          fontSize: 11, lineHeight: 1.5, fontWeight: 400, letterSpacing: 0, textTransform: "none",
+          whiteSpace: "normal", textAlign: "left",
+          boxShadow: "0 8px 24px rgba(15,23,34,0.28)", zIndex: 30, pointerEvents: "none",
+        }}>
+          {title}
+          <span aria-hidden style={{
+            position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
+            border: "5px solid transparent", borderBottomColor: "#1F2D43",
+          }} />
+        </div>
+      )}
     </div>
   );
+}
+
+// 95% CI on the absolute lift (percentage points), computed client-side from
+// the returned counts using the SAME formula as lagged_impact_pair
+// (se = sqrt(p_t(1-p_t)/n_t + p_b(1-p_b)/n_b), ±1.96·se), so the ranked table
+// reconciles byte-for-byte with the per-pair drill-in.
+function absLiftCiPp(treatedN: number, treatedReturnN: number, baselineN: number, baselineReturnN: number): { low: number; high: number } | null {
+  if (!treatedN || !baselineN) return null;
+  const pt = treatedReturnN / treatedN;
+  const pb = baselineReturnN / baselineN;
+  const absDiff = pt - pb;
+  const se = Math.sqrt((pt * (1 - pt)) / treatedN + (pb * (1 - pb)) / baselineN);
+  return { low: (absDiff - 1.96 * se) * 100, high: (absDiff + 1.96 * se) * 100 };
 }
 
 function LagRow({ lagDays, row, index }: { lagDays: number; row: LaggedImpactRow | null; index: number }) {
@@ -273,13 +310,20 @@ function LagTableHeader() {
       color: "var(--ink-3)",
       fontWeight: 600,
     }}>
-      <HeaderCell                       bottom="Lag"          firstCell align="left" />
-      <HeaderCell top="A → B"           bottom="Treated rate" />
-      <HeaderCell top="¬A → B"          bottom="Baseline rate" />
-      <HeaderCell top="Abs"             bottom="Lift (pp)" />
-      <HeaderCell top="Rel"             bottom="Lift (%)" />
-      <HeaderCell top="95% CI"          bottom="(abs diff)" />
-      <HeaderCell                       bottom="Status" />
+      <HeaderCell                       bottom="Lag"          firstCell align="left"
+        title="Days after the A touch that we look for a later return via B." />
+      <HeaderCell top="A → B"           bottom="Treated rate"
+        title="Share of identities touched by A (during treatment) that later returned via B within the lag window. n = the treated cohort." />
+      <HeaderCell top="¬A → B"          bottom="Baseline rate"
+        title="Share of comparable identities NOT touched by A that returned via B in the same lag window — neither cohort had touched B during treatment. This is the counterfactual." />
+      <HeaderCell top="Abs"             bottom="Lift (pp)"
+        title="Treated rate minus baseline rate, in percentage points. Positive = touching A makes a later B-return more likely than baseline." />
+      <HeaderCell top="Rel"             bottom="Lift (%)"
+        title="Absolute lift as a percentage of the baseline rate — the proportional increase over the counterfactual." />
+      <HeaderCell top="95% CI"          bottom="(abs diff)"
+        title="95% confidence interval on the absolute lift. If it straddles 0, the effect is within noise; if it clears 0 (and n ≥ 30), it's confident." />
+      <HeaderCell                       bottom="Status"
+        title="Confidence gate: OK = n ≥ 30 on both cohorts and the CI excludes 0; within-noise = CI straddles 0; below floor = under the 30-identity minimum." />
     </div>
   );
 }
@@ -289,7 +333,7 @@ function LagTableHeader() {
 // instead of hand-picking A/B. Ranked positive-lift first among confident
 // ('ok') pairs, then within-noise, then below-floor (faded). Numbers reconcile
 // with the per-lag card below (same underlying math). Click a row to analyze it.
-const RANKED_GRID = "minmax(150px,1.5fr) 104px 104px 84px 84px 118px";
+const RANKED_GRID = "minmax(150px,1.4fr) 100px 100px 80px 80px 132px 110px";
 
 function RankedPairsTable({
   pairs, lagDays, channelA, channelB, onSelect,
@@ -320,19 +364,27 @@ function RankedPairsTable({
 
   return (
     <div style={{ overflowX: "auto" }}>
-      <div style={{ minWidth: 640 }}>
+      <div style={{ minWidth: 780 }}>
         {/* header */}
         <div style={{
           display: "grid", gridTemplateColumns: RANKED_GRID, columnGap: 0,
           padding: "10px 16px", borderBottom: DIVIDER, background: "rgba(15,23,34,0.04)",
           fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--ink-3)", fontWeight: 600,
         }}>
-          <HeaderCell            bottom="Channel pair (A → B)" firstCell align="left" />
-          <HeaderCell top="A → B"  bottom="Treated rate" />
-          <HeaderCell top="¬A → B" bottom="Baseline rate" />
-          <HeaderCell top="Abs"    bottom="Lift (pp)" />
-          <HeaderCell top="Rel"    bottom="Lift (%)" />
-          <HeaderCell            bottom="Status" />
+          <HeaderCell            bottom="Channel pair (A → B)" firstCell align="left"
+            title="The ordered pair — does touching A make a later return via B more likely? Ranked at one representative lag; click to see all lag windows." />
+          <HeaderCell top="A → B"  bottom="Treated rate"
+            title="Share of identities touched by A (during treatment) that later returned via B within the lag window. n = the treated cohort." />
+          <HeaderCell top="¬A → B" bottom="Baseline rate"
+            title="Share of comparable identities NOT touched by A that returned via B in the same window — neither cohort had touched B during treatment. The counterfactual." />
+          <HeaderCell top="Abs"    bottom="Lift (pp)"
+            title="Treated rate minus baseline rate, in percentage points. Positive = touching A makes a later B-return more likely than baseline." />
+          <HeaderCell top="Rel"    bottom="Lift (%)"
+            title="Absolute lift as a percentage of the baseline rate — the proportional increase over the counterfactual." />
+          <HeaderCell top="95% CI"  bottom="(abs diff)"
+            title="95% confidence interval on the absolute lift. If it straddles 0, the effect is within noise; if it clears 0 (and n ≥ 30), it's confident. Same formula as the per-pair drill-in." />
+          <HeaderCell            bottom="Status"
+            title="Confidence gate: OK = n ≥ 30 on both cohorts and the CI excludes 0; within-noise = CI straddles 0; below floor = under the 30-identity minimum." />
         </div>
         {/* rows */}
         {sorted.map((p, i) => {
@@ -370,6 +422,12 @@ function RankedPairsTable({
               </div>
               <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", ...dim }}>
                 {fmtRelLift(p.rel_lift_pct)}
+              </div>
+              <div style={{ ...cellDivided(false), textAlign: "center", fontVariantNumeric: "tabular-nums", fontSize: 11, color: "var(--ink-3)" }}>
+                {(() => {
+                  const ci = absLiftCiPp(p.treated_n, p.treated_return_n, p.baseline_n, p.baseline_return_n);
+                  return ci ? `[${fmtPp(ci.low)} → ${fmtPp(ci.high)}]` : "—";
+                })()}
               </div>
               <div style={{ ...cellDivided(false), display: "flex", justifyContent: "center" }}>
                 {gateBadge(p.cell_gate_status)}
@@ -430,6 +488,12 @@ export default function LaggedImpactClient({
 
   const [showWorkOpen, setShowWorkOpen] = useState(false);
 
+  // Two tabs: "ranked" (the pre-baked pairs Chapter surfaces — the landing)
+  // and "explore" (pick Channel A/B and dig into one pair). URL-driven via
+  // ?view= so it's shareable and survives the pair-select navigation.
+  const view = sp.get("view") === "explore" ? "explore" : "ranked";
+  const setView = (v: "ranked" | "explore") => setParam("view", v);
+
   const swapAB = () => {
     const next = new URLSearchParams(sp.toString());
     next.set("channel_a", channelB);
@@ -437,12 +501,12 @@ export default function LaggedImpactClient({
     navigate(next);
   };
 
-  // LI3 — click a ranked pair to re-anchor the detail card below on it.
+  // LI3 — click a ranked pair → jump into the Explore tab anchored on it.
   const selectPair = (a: string, b: string) => {
-    if (a === channelA && b === channelB) return;
     const next = new URLSearchParams(sp.toString());
     next.set("channel_a", a);
     next.set("channel_b", b);
+    next.set("view", "explore");
     navigate(next);
   };
 
@@ -468,7 +532,7 @@ export default function LaggedImpactClient({
                 How this page works
               </div>
               <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
-                Pick a channel pair (A → B). The page splits the analysis range into a <strong>treatment window</strong> (when A could occur — first third) and a <strong>lookforward window</strong> (when we count B returns — remaining two-thirds). For each default lag (7 / 14 / 30 / 60 / 90 days), we compare the B-return rate of identities touched by A against comparable identities who weren't touched by A — neither cohort had touched B during the treatment window. <strong>Default lags are shown together so a "best lag" can't be cherry-picked.</strong> Touches too recent for their full lag window to have elapsed are excluded from each cell, so return rates aren&apos;t undercounted by activity we can&apos;t observe yet — larger lags therefore analyze a slightly earlier slice of the window.
+                Pick a channel pair (A → B). The page splits the analysis range into a <strong>treatment window</strong> (when A could occur — first third) and a <strong>lookforward window</strong> (when we count B returns — remaining two-thirds). For each default lag (7 / 14 / 30 / 60 / 90 days), we compare the B-return rate of identities touched by A against comparable identities who weren&apos;t touched by A — neither cohort had touched B during the treatment window. <strong>Default lags are shown together so a &ldquo;best lag&rdquo; can&apos;t be cherry-picked.</strong> Touches too recent for their full lag window to have elapsed are excluded from each cell, so return rates aren&apos;t undercounted by activity we can&apos;t observe yet — larger lags therefore analyze a slightly earlier slice of the window.
               </div>
             </div>
             <div style={{ color: "rgba(255,255,255,0.55)" }}>
@@ -485,7 +549,21 @@ export default function LaggedImpactClient({
           </div>
         </div>
 
-        {/* Pair picker */}
+        {/* Tab bar — land on the ranked pairs Chapter surfaces; Explore to pick your own A → B */}
+        <div className="filter-bar" style={{ alignItems: "center", gap: 12 }}>
+          <div className="toggle-group">
+            <button className={view === "ranked" ? "active" : ""} onClick={() => setView("ranked")}>Ranked pairs</button>
+            <button className={view === "explore" ? "active" : ""} onClick={() => setView("explore")}>Explore a pair</button>
+          </div>
+          <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+            {view === "ranked"
+              ? "Every pair Chapter sees, ranked by lagged return-lift — pick one to dig in."
+              : "Choose Channel A → B and see how they relate across lag windows."}
+          </span>
+        </div>
+
+        {/* Pair picker (Explore tab) */}
+        {view === "explore" && (
         <div className="filter-bar" style={{ alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <Dropdown align="left" width={220} trigger={
             <button className="toolbar-btn">
@@ -542,8 +620,10 @@ export default function LaggedImpactClient({
             <span style={{ marginLeft: 12 }}>Lookforward: <strong style={{ color: "var(--ink-2)" }}>{lookforwardDays}d</strong></span>
           </div>
         </div>
+        )}
 
-        {/* LI3 — ranked discovery table: which pairs matter, at a glance */}
+        {/* LI3 — ranked discovery table: which pairs matter, at a glance (Ranked tab) */}
+        {view === "ranked" && (
         <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-head" style={{ padding: "16px 18px", borderBottom: DIVIDER }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
@@ -561,8 +641,10 @@ export default function LaggedImpactClient({
             onSelect={selectPair}
           />
         </div>
+        )}
 
-        {/* Pair card */}
+        {/* Pair card (Explore tab) */}
+        {view === "explore" && (
         <div className="card" style={{ padding: 0, display: "flex", flexDirection: "column" }}>
           <div className="card-head" style={{ padding: "16px 18px", borderBottom: DIVIDER }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -632,6 +714,7 @@ export default function LaggedImpactClient({
             )}
           </div>
         </div>
+        )}
 
         {/* Foot — cross-reference + caveat */}
         <div className="card" style={{ padding: "14px 18px", fontSize: 12, color: "var(--ink-3)", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
