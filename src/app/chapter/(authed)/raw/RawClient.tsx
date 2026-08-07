@@ -205,7 +205,6 @@ export default function RawClient({
               <li>Figures are resolved, ingested events as of the nightly refresh (see <em>Data as of</em> in the header) — not a sample or a modeled estimate.</li>
             </ul>
           </div>
-          <button className="toolbar-btn" style={{ flexShrink: 0 }}>Export CSV</button>
         </div>
 
         <div className="grid-3">
