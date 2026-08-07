@@ -424,21 +424,25 @@ export default function OverviewClient({
             {/* Both returning-purchaser stats live in the hero header (using the
                 blank space beside the headline) so the bottom metrics row stays a
                 clean single row of five with no orphaned tile. */}
-            <div style={{ flex: "0 0 auto", display: "flex", gap: 40, padding: "2px 0 0 0" }}>
-              <LcmStat
-                label="All-time returning purchasers"
-                value={returningAllTimeValue}
-                unit="%"
-                move={moveReturningAllTime ?? 0}
-                foot={firstTimePct ? `vs. ${firstTimePct}% first-time` : ""}
-              />
-              <LcmStat
-                label="Repeat Buyers This Window"
-                value={returningInWindowValue}
-                unit="%"
-                move={moveReturningInWindow ?? 0}
-                foot={inWindowOnceOnly ? `vs. ${inWindowOnceOnly}% bought once this window` : ""}
-              />
+            <div style={{ flex: "0 0 auto", display: "flex", gap: 48, padding: "2px 0 0 0" }}>
+              <div style={{ minWidth: 190 }}>
+                <LcmStat
+                  label="All-time returning purchasers"
+                  value={returningAllTimeValue}
+                  unit="%"
+                  move={moveReturningAllTime ?? 0}
+                  foot={firstTimePct ? `vs. ${firstTimePct}% first-time` : ""}
+                />
+              </div>
+              <div style={{ minWidth: 190 }}>
+                <LcmStat
+                  label="Repeat Buyers This Window"
+                  value={returningInWindowValue}
+                  unit="%"
+                  move={moveReturningInWindow ?? 0}
+                  foot={inWindowOnceOnly ? `vs. ${inWindowOnceOnly}% bought once this window` : ""}
+                />
+              </div>
             </div>
           </div>
           <div className="lifecycle-metrics">
