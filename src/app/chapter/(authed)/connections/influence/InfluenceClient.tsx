@@ -380,6 +380,23 @@ function Panel({
   );
 }
 
+// Labels a cluster of filter controls: uppercase identifier on top, the
+// controls in a row, and a horizontal ⎣___⎦ bracket underneath tying them
+// together. Kept inline in the single-row filter bar.
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".12em", color: "var(--ink-3)", fontWeight: 700, whiteSpace: "nowrap" }}>
+        {label}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative", paddingBottom: 10 }}>
+        {children}
+        <span aria-hidden style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 7, borderLeft: "2px solid var(--ink-4)", borderRight: "2px solid var(--ink-4)", borderBottom: "2px solid var(--ink-4)", borderRadius: "0 0 5px 5px", opacity: 0.5, pointerEvents: "none" }} />
+      </div>
+    </div>
+  );
+}
+
 // Anchor-specific definition + example reading rendered in the navy hero.
 // Picks the top downstream row (or upstream if no downstream) as a concrete
 // example so the reading uses the operator's actual numbers.
@@ -625,7 +642,8 @@ export default function InfluenceClient({
         </div>
 
         {/* Anchor picker bar — all controls in one row */}
-        <div className="filter-bar" style={{ alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+        <div className="filter-bar" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: 18 }}>
+          <FilterGroup label="Anchor Filters">
           {/* Anchor type tabs */}
           <div className="toggle-group">
             {ANCHOR_TYPES.map(t => (
@@ -846,9 +864,12 @@ export default function InfluenceClient({
             </Dropdown>
           )}
 
+          </FilterGroup>
+
           {/* 9.3 — connection dimension toggle. "All" unions channel + page +
               campaign connections into one lift-ranked panel; the others narrow
               to a single dimension. Shown for every anchor type. */}
+          <FilterGroup label="Upstream / Downstream Connection Filters">
           <div className="toggle-group">
             <button
               className={connectionView === "all" ? "active" : ""}
@@ -880,6 +901,10 @@ export default function InfluenceClient({
             </button>
           </div>
 
+          </FilterGroup>
+
+          {/* Lag + Outcome window dropdowns + anchor-window readout */}
+          <FilterGroup label="Timing Window Filters">
           {/* Lag window dropdown — controls connection proximity to anchor */}
           <Dropdown align="left" width={180} trigger={
             <button className="toolbar-btn" title="How close to the anchor a connection must occur">
@@ -930,13 +955,14 @@ export default function InfluenceClient({
             )}
           </Dropdown>
 
-          {/* Anchor window — read-only readout of the top Date Range selector.
-              Stacked label-over-value, pushed to the right end of the row. */}
-          <div style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)", cursor: "help", display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.35, whiteSpace: "nowrap" }}
+          {/* Anchor window — read-only readout of the top Date Range selector,
+              inside the timing bracket. Stacked label-over-value. */}
+          <div style={{ fontSize: 12, color: "var(--ink-3)", cursor: "help", display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.35, whiteSpace: "nowrap", paddingLeft: 4 }}
                title={"Three different windows on this page:\n• Anchor window (this) — the date range Chapter scans for anchor moments, set by the Range control at the top.\n• Lag window — how close to the anchor moment a connection touch must occur to count.\n• Outcome window — how long after a connection touch we keep watching for a purchase."}>
             <span>Anchor window:</span>
             <strong style={{ color: "var(--ink-2)" }}>{range}</strong>
           </div>
+          </FilterGroup>
         </div>
 
         {anchorEmpty ? (
