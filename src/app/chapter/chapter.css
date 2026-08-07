@@ -353,6 +353,14 @@
 }
 .chapter-app .toggle-group button.active { background: var(--ink); color: white; }
 
+/* Cross-Source Influence filter bar: keep all three labeled groups on ONE
+   line — force nowrap + shrink the controls a touch. Scoped so other pages'
+   toolbars are unaffected. No overflow here (it would clip dropdown popovers). */
+.chapter-app .filter-bar.csi-compact { flex-wrap: nowrap; }
+.chapter-app .filter-bar.csi-compact .toggle-group button { padding: 5px 11px; font-size: 11px; }
+.chapter-app .filter-bar.csi-compact .toolbar-btn { padding: 6px 10px; font-size: 11px; }
+.chapter-app .filter-bar.csi-compact .toolbar-btn .dim { font-size: 10px !important; }
+
 .chapter-app .path-seq { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .chapter-app .path-seq .arrow { color: var(--ink-4); font-size: 12px; }
 .chapter-app .path-seq .gap {

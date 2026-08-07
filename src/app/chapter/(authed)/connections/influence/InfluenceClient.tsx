@@ -389,7 +389,7 @@ function FilterGroup({ label, children }: { label: string; children: React.React
       <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".12em", color: "var(--ink-3)", fontWeight: 700, whiteSpace: "nowrap" }}>
         {label}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative", paddingBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative", paddingBottom: 10 }}>
         {children}
         <span aria-hidden style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 7, borderLeft: "2px solid var(--ink-4)", borderRight: "2px solid var(--ink-4)", borderBottom: "2px solid var(--ink-4)", borderRadius: "0 0 5px 5px", opacity: 0.5, pointerEvents: "none" }} />
       </div>
@@ -642,7 +642,7 @@ export default function InfluenceClient({
         </div>
 
         {/* Anchor picker bar — all controls in one row */}
-        <div className="filter-bar" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: 18 }}>
+        <div className="filter-bar csi-compact" style={{ alignItems: "flex-start", gap: 12 }}>
           <FilterGroup label="Anchor Filters">
           {/* Anchor type tabs */}
           <div className="toggle-group">
