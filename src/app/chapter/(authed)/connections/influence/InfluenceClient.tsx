@@ -55,37 +55,6 @@ function channelLabel(v: string): string {
   return CHANNEL_OPTIONS.find(o => o.value === v)?.label ?? v;
 }
 
-// ── Breadcrumb encoding ─────────────────────────────────────────────────────
-// Trail format in URL: ?bc=<type>:<value>|<type>:<value>|…
-// Each entry encodes one anchor that was previously selected before we hopped
-// to the current one. Pipe + colon are URL-safe-enough for the values we emit
-// (channel names are tokens, page paths get encodeURIComponent'd).
-
-type BreadcrumbEntry = { anchorType: string; value: string };
-
-function encodeBcEntry(e: BreadcrumbEntry): string {
-  return `${e.anchorType}:${encodeURIComponent(e.value)}`;
-}
-function decodeBcEntry(s: string): BreadcrumbEntry | null {
-  const colon = s.indexOf(":");
-  if (colon === -1) return null;
-  return { anchorType: s.slice(0, colon), value: decodeURIComponent(s.slice(colon + 1)) };
-}
-function encodeBcTrail(trail: BreadcrumbEntry[]): string {
-  return trail.map(encodeBcEntry).join("|");
-}
-function decodeBcTrail(s: string | null): BreadcrumbEntry[] {
-  if (!s) return [];
-  return s.split("|").map(decodeBcEntry).filter((e): e is BreadcrumbEntry => e !== null);
-}
-
-// Breadcrumb display label per entry.
-function bcEntryLabel(e: BreadcrumbEntry): string {
-  if (e.anchorType === "channel") return channelLabel(e.value);
-  if (e.anchorType === "page") return e.value;
-  return e.value; // campaign/cohort use the raw id; the breadcrumb is back-button-flavored, not pretty-name
-}
-
 function fmtPct(n: number | null | undefined, digits = 1): string {
   if (n == null) return "—";
   return (Number(n) * 100).toFixed(digits) + "%";
@@ -414,23 +383,6 @@ function Panel({
 // Anchor-specific definition + example reading rendered in the navy hero.
 // Picks the top downstream row (or upstream if no downstream) as a concrete
 // example so the reading uses the operator's actual numbers.
-// Groups a cluster of filter controls under a shared uppercase label, with a
-// horizontal bottom bracket ⎣___⎦ tying the controls together visually. Used to
-// label the two filter clusters on the anchor bar.
-function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".12em", color: "var(--ink-3)", fontWeight: 700, whiteSpace: "nowrap" }}>
-        {label}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative", paddingBottom: 10 }}>
-        {children}
-        <span aria-hidden style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 7, borderLeft: "2px solid var(--ink-4)", borderRight: "2px solid var(--ink-4)", borderBottom: "2px solid var(--ink-4)", borderRadius: "0 0 5px 5px", opacity: 0.5, pointerEvents: "none" }} />
-      </div>
-    </div>
-  );
-}
-
 function AnchorExplanation({
   anchorType, anchorChannelLabel, anchorPagePath, campaignName, cohortName,
   nAnchor, windowDays, outcomeWindowDays,
@@ -537,20 +489,9 @@ export default function InfluenceClient({
     router.replace(`${pathname}?${next.toString()}`);
   };
 
-  // ── Breadcrumb state + handlers ────────────────────────────────────────
-  const trail = decodeBcTrail(sp.get("bc"));
-
-  // Push a row click → new anchor. Current anchor moves to the breadcrumb
-  // trail. Uses router.push so browser back works.
+  // Push a row click → new anchor. Uses router.push so browser back works.
   const rehomeOn = (row: ConnectionsPanelRow) => {
-    const currentAnchorValue =
-      anchorType === "channel"  ? anchorChannel    :
-      anchorType === "page"     ? anchorPagePath   :
-      anchorType === "campaign" ? anchorCampaignId :
-      anchorType === "cohort"   ? anchorCohortId   : "";
-    const newTrail = [...trail, { anchorType, value: currentAnchorValue }].slice(-6); // cap at 6 deep
     const next = new URLSearchParams(sp.toString());
-    next.set("bc", encodeBcTrail(newTrail));
 
     if (row.connected_thing_type === "channel") {
       next.set("anchor_type",    "channel");
@@ -577,33 +518,6 @@ export default function InfluenceClient({
       next.delete("connection_type");
     }
     router.push(`${pathname}?${next.toString()}`);
-  };
-
-  // Click breadcrumb entry → restore THAT anchor; chop trail at that point.
-  const rehomeToBreadcrumb = (idx: number) => {
-    const entry = trail[idx];
-    if (!entry) return;
-    const newTrail = trail.slice(0, idx);
-    const next = new URLSearchParams(sp.toString());
-    if (newTrail.length === 0) next.delete("bc");
-    else next.set("bc", encodeBcTrail(newTrail));
-    next.set("anchor_type", entry.anchorType);
-    next.delete("anchor_channel");
-    next.delete("anchor_page_path");
-    next.delete("anchor_campaign_id");
-    next.delete("anchor_cohort_id");
-    next.delete("connection_type");
-    if (entry.anchorType === "channel")  next.set("anchor_channel",      entry.value);
-    if (entry.anchorType === "page")     next.set("anchor_page_path",    entry.value);
-    if (entry.anchorType === "campaign") next.set("anchor_campaign_id",  entry.value);
-    if (entry.anchorType === "cohort")   next.set("anchor_cohort_id",    entry.value);
-    router.push(`${pathname}?${next.toString()}`);
-  };
-
-  const clearTrail = () => {
-    const next = new URLSearchParams(sp.toString());
-    next.delete("bc");
-    router.replace(`${pathname}?${next.toString()}`);
   };
 
   const nAnchor = resolve?.n_identities ?? 0;
@@ -659,7 +573,7 @@ export default function InfluenceClient({
     <>
       <TopBar
         title="Cross-Source Influence"
-        subtitle={<span>Pick something — currently a channel — and see what's connected to it across the identity graph. Descriptive co-occurrence + sequence, not cause.</span>}
+        subtitle={<span>Pick something — currently a channel — and see what&apos;s connected to it across the identity graph. Descriptive co-occurrence + sequence, not cause.</span>}
         showCompare={false}
       />
       <div className="content">
@@ -710,45 +624,8 @@ export default function InfluenceClient({
           </div>
         </div>
 
-        {/* Breadcrumb trail — only renders when the operator has hopped at
-            least once via click-to-rehome. Each entry takes them back to that
-            anchor and chops the trail there. */}
-        {trail.length > 0 && (
-          <div className="card" style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--ink-3)", fontWeight: 600 }}>
-              You came from
-            </span>
-            {trail.map((e, i) => (
-              <React.Fragment key={i}>
-                <button
-                  onClick={() => rehomeToBreadcrumb(i)}
-                  className="toolbar-btn"
-                  style={{ fontSize: 11, padding: "4px 10px" }}
-                  title={`Back to ${e.anchorType} · ${bcEntryLabel(e)}`}
-                >
-                  <span style={{ color: "var(--ink-3)", marginRight: 4 }}>{e.anchorType}</span>
-                  <span style={{ fontWeight: 500 }}>{bcEntryLabel(e)}</span>
-                </button>
-                <span style={{ color: "var(--ink-4)", fontSize: 14 }}>→</span>
-              </React.Fragment>
-            ))}
-            <span style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 500 }}>
-              now: <strong>{anchorType} · {anchorDisplay}</strong>
-            </span>
-            <button
-              onClick={clearTrail}
-              className="toolbar-btn icon-only"
-              style={{ marginLeft: "auto" }}
-              title="Clear breadcrumb trail"
-            >
-              <Icon name="x" size={12} />
-            </button>
-          </div>
-        )}
-
-        {/* Anchor picker bar */}
-        <div className="filter-bar" style={{ alignItems: "flex-start", justifyContent: "center", flexWrap: "wrap", gap: 18 }}>
-          <FilterGroup label="Anchor Filters">
+        {/* Anchor picker bar — all controls in one row */}
+        <div className="filter-bar" style={{ alignItems: "center", flexWrap: "wrap", gap: 14 }}>
           {/* Anchor type tabs */}
           <div className="toggle-group">
             {ANCHOR_TYPES.map(t => (
@@ -969,12 +846,9 @@ export default function InfluenceClient({
             </Dropdown>
           )}
 
-          </FilterGroup>
-
           {/* 9.3 — connection dimension toggle. "All" unions channel + page +
               campaign connections into one lift-ranked panel; the others narrow
               to a single dimension. Shown for every anchor type. */}
-          <FilterGroup label="Upstream / Downstream Connection Filters">
           <div className="toggle-group">
             <button
               className={connectionView === "all" ? "active" : ""}
@@ -1006,10 +880,6 @@ export default function InfluenceClient({
             </button>
           </div>
 
-          </FilterGroup>
-
-          {/* Lag + Outcome window dropdowns + anchor-window readout */}
-          <FilterGroup label="Timing Window Filters">
           {/* Lag window dropdown — controls connection proximity to anchor */}
           <Dropdown align="left" width={180} trigger={
             <button className="toolbar-btn" title="How close to the anchor a connection must occur">
@@ -1060,13 +930,13 @@ export default function InfluenceClient({
             )}
           </Dropdown>
 
-          {/* Anchor window — read-only readout of the top Date Range selector,
-              placed inside the timing bracket next to Lag/Outcome. */}
-          <div style={{ fontSize: 12, color: "var(--ink-3)", cursor: "help", whiteSpace: "nowrap" }}
+          {/* Anchor window — read-only readout of the top Date Range selector.
+              Stacked label-over-value, pushed to the right end of the row. */}
+          <div style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)", cursor: "help", display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.35, whiteSpace: "nowrap" }}
                title={"Three different windows on this page:\n• Anchor window (this) — the date range Chapter scans for anchor moments, set by the Range control at the top.\n• Lag window — how close to the anchor moment a connection touch must occur to count.\n• Outcome window — how long after a connection touch we keep watching for a purchase."}>
-            Anchor window: <strong style={{ color: "var(--ink-2)" }}>{range}</strong>
+            <span>Anchor window:</span>
+            <strong style={{ color: "var(--ink-2)" }}>{range}</strong>
           </div>
-          </FilterGroup>
         </div>
 
         {anchorEmpty ? (
