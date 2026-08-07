@@ -534,20 +534,42 @@ export default function LaggedImpactClient({
         {/* How-this-page-works hero */}
         <div className="card" style={{ background: "var(--navy)", color: "white", border: "none", padding: "20px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 18, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 320px", maxWidth: 760 }}>
+            <div style={{ flex: "1 1 380px", maxWidth: 620 }}>
               <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600, marginBottom: 8 }}>
                 How this page works
               </div>
               <ul style={{ fontSize: 13.5, lineHeight: 1.5, color: "rgba(255,255,255,0.85)", margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
                 <li>For a channel pair (A → B), we pool <strong>every A visit across all your available history</strong>.</li>
-                <li>For the chosen <strong>lag window</strong>, we compare whether users who visited via A returned via B — versus comparable users who did not.</li>
+                <li>For the chosen <strong>lag window</strong>, we compare whether users who visited via A returned via B
+                  <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
+                    <li>Versus comparable users who did not.</li>
+                  </ul>
+                </li>
                 <li>The <strong>lag window</strong> is what you vary: how long after an A touch we keep watching for a B return.</li>
                 <li><strong>Ranked</strong> tab flags pairs that are connected in the data.</li>
                 <li><strong>Explore</strong> tab lets you choose single pairs across different lag windows (7 / 14 / 30 / 60 / 90d).</li>
               </ul>
             </div>
-            <div style={{ color: "rgba(255,255,255,0.55)" }}>
-              <Icon name="lagged" size={28} />
+
+            {/* How To Interpret — static condensed example + metric definitions */}
+            <div style={{ flex: "1 1 300px", borderLeft: "1px solid rgba(255,255,255,0.12)", paddingLeft: 22 }}>
+              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600, marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>How To Interpret</span>
+                <span style={{ color: "rgba(255,255,255,0.35)" }}><Icon name="lagged" size={16} /></span>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8, padding: "8px 11px", marginBottom: 12, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "5px 14px", fontSize: 11.5, color: "rgba(255,255,255,0.9)" }}>
+                <span>Treated <strong>24.0%</strong></span>
+                <span>Baseline <strong>15.1%</strong></span>
+                <span style={{ color: "#7FD1A8" }}>Lift <strong>+8.9pp</strong> · +59%</span>
+                <span>95% CI <strong>[+1.8 → +16.1pp]</strong></span>
+                <span style={{ background: "rgba(46,125,91,0.32)", color: "#BFE9D2", padding: "1px 7px", borderRadius: 4, fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>Confident</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: 12.5, lineHeight: 1.45, color: "rgba(255,255,255,0.72)" }}>
+                <div><strong style={{ color: "white", fontWeight: 600 }}>Treated rate</strong> — % of users who visited via A and then came back via B.</div>
+                <div><strong style={{ color: "white", fontWeight: 600 }}>Baseline rate</strong> — % of users who did <em>not</em> visit via A but still came in via B.</div>
+                <div><strong style={{ color: "white", fontWeight: 600 }}>Lift (pp &amp; %)</strong> — Treated minus Baseline: the impact of A on B.</div>
+                <div><strong style={{ color: "white", fontWeight: 600 }}>95% CI</strong> — how confident we are the result isn&apos;t random — i.e. would they have come via B anyway, or not?</div>
+              </div>
             </div>
           </div>
         </div>
