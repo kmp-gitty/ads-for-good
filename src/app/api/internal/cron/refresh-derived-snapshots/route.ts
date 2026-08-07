@@ -146,6 +146,25 @@ const DASHBOARD_RPC_SNAPSHOTS = [
         built_at = now()
     `,
   },
+  {
+    snapshot: "journeys_overview_stats_snapshot_v1 (30d, default filters)",
+    sqlTemplate: `
+      INSERT INTO chapter_reporting.journeys_overview_stats_snapshot_v1
+        (client_key, window_days, stats, snapshot_ts_hi)
+      SELECT $1::text, 30, to_jsonb(t), now()
+      FROM chapter_reporting.journeys_overview_stats(
+        $1::text,
+        (now() - interval '30 days')::timestamptz,
+        now(),
+        NULL,
+        NULL
+      ) t
+      ON CONFLICT (client_key, window_days) DO UPDATE SET
+        stats = EXCLUDED.stats,
+        snapshot_ts_hi = EXCLUDED.snapshot_ts_hi,
+        built_at = now()
+    `,
+  },
 ];
 
 // Global (non per-client) snapshot loaders.

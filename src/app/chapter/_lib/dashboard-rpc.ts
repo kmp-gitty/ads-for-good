@@ -388,8 +388,28 @@ export type JourneysListRow = {
   outcome:                 string;     // 'converted' | 'open'
 };
 
+// Snapshot-first (Sprint-9 pattern): journeys_overview_stats can run ~35s cold
+// → blows the 8s PostgREST timeout on the replica → the summary card went "—".
+// Serve the default-window snapshot; non-default windows fall back to live.
+async function journeysStatsSnapshotLookup(args: JourneysFilterArgs): Promise<JourneysStatsRow[] | null> {
+  if (args.p_action != null) return null;
+  if (args.p_outcome != null) return null;
+  if (!matchesDefaultWindow(args, 30)) return null;
+  const r = await supabase
+    .schema("chapter_reporting")
+    .from("journeys_overview_stats_snapshot_v1")
+    .select("stats")
+    .eq("client_key", args.p_client_key)
+    .eq("window_days", 30)
+    .maybeSingle();
+  if (r.error || !r.data) return null;
+  return [r.data.stats as JourneysStatsRow];
+}
+
 export const cachedJourneysStats = unstable_cache(
   async (args: JourneysFilterArgs): Promise<JourneysStatsRow[]> => {
+    const snap = await journeysStatsSnapshotLookup(args);
+    if (snap !== null) return snap;
     const r = await supabase.schema("chapter_reporting").rpc("journeys_overview_stats", args);
     if (r.error) {
       console.error("[dashboard-rpc] journeys_overview_stats failed:", { ...r.error });
@@ -397,8 +417,8 @@ export const cachedJourneysStats = unstable_cache(
     }
     return (Array.isArray(r.data) ? r.data : []) as JourneysStatsRow[];
   },
-  ["dashboard-rpc:chapter_reporting:journeys_overview_stats"],
-  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_stats"] },
+  ["dashboard-rpc:chapter_reporting:journeys_overview_stats:v2"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_stats:v2"] },
 );
 
 // Sprint 9 Phase 2 — snapshot-first lookup for journeys_overview_list.
