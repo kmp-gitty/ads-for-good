@@ -27,8 +27,26 @@ type Props = {
   range:             string;
   action:            string;  // 'all' | 'identify' | 'add_to_cart' | ...
   outcome:           string;  // 'all' | 'converted' | 'open'
+  sort:              string;  // 'lifetime_value' | 'window_value' | 'time_to_close'
   boundaryEvent:     string;  // from chapter_config.clients (e.g. 'purchase' or 'lead_submission')
 };
+
+// Sort options for the identity list. label = dropdown text; col = the metric
+// column header shown when this sort is active.
+const SORT_OPTIONS: { value: string; label: string; col: string }[] = [
+  { value: "lifetime_value", label: "Lifetime value", col: "LTV" },
+  { value: "window_value",   label: "Window value",   col: "Window $" },
+  { value: "time_to_close",  label: "Fastest time to close", col: "Avg close" },
+];
+
+// Compact duration from seconds → "Xm" / "X.Xh" / "X.Xd".
+function fmtDuration(seconds: number | null | undefined): string {
+  if (seconds == null) return "—";
+  const s = Number(seconds);
+  if (s < 3600)  return `${Math.round(s / 60)}m`;
+  if (s < 172800) return `${(s / 3600).toFixed(1)}h`;
+  return `${(s / 86400).toFixed(1)}d`;
+}
 
 // Curated action filter — matches user-friendly labels to underlying event_name
 // values that lifecycle_chapters_snapshot exposes. Order follows the natural
@@ -178,7 +196,7 @@ function SearchResultBanner({ result }: { result: IdentitySearchResult }) {
 
 export default function JourneysClient({
   stats, list, selectedIdentity, selectedInList, chapters, events, aliases,
-  clientKey, range: _range, action, outcome, boundaryEvent,
+  clientKey, range: _range, action, outcome, sort, boundaryEvent,
 }: Props) {
   const { client } = useChapter();
   const router = useRouter();
@@ -198,6 +216,15 @@ export default function JourneysClient({
   function selectIdentity(id: string) {
     updateParam("identity", id);
   }
+  // Multi-key URL update (used to set ?identity + ?searched together on a hit).
+  function updateParams(entries: Record<string, string | null>) {
+    const next = new URLSearchParams(sp.toString());
+    for (const [k, v] of Object.entries(entries)) {
+      if (v === null || v === "all") next.delete(k);
+      else next.set(k, v);
+    }
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  }
 
   // 8.2 — identity search. Resolves via a server action (shared hash.ts,
   // client-scoped, audited, rate-limited); on a hit we navigate to ?identity so
@@ -212,8 +239,16 @@ export default function JourneysClient({
     startSearch(async () => {
       const res = await resolveIdentitySearch(clientKey, term);
       setSearchResult(res);
-      if (res.status === "found" || res.status === "no_journeys") selectIdentity(res.canonical);
+      // Set ?searched=1 alongside ?identity so the left list FILTERS to this
+      // customer (a plain list click sets only ?identity → browsing stays).
+      if (res.status === "found" || res.status === "no_journeys") updateParams({ identity: res.canonical, searched: "1" });
     });
+  }
+  // Clear the search → back to the top-customers browse list.
+  function clearSearch() {
+    setSearchTerm("");
+    setSearchResult(null);
+    updateParams({ identity: null, searched: null });
   }
 
   const selectedRow = list.find(r => r.canonical_identity_key === selectedIdentity);
@@ -228,6 +263,46 @@ export default function JourneysClient({
     ? selectedRow.outcome === "converted"
     : chapters.some(c => Number(c.revenue ?? 0) > 0);
   const detailLastPurchase = selectedRow?.last_purchase_ts ?? null;
+
+  // 8.2 search-filter: when ?searched=1, show a single row for the found
+  // customer (built from the already-fetched detail, all-time — matches the
+  // right panel and works even for customers outside the window / top-50).
+  const searched = sp.get("searched") === "1";
+  const lastActivityTs =
+    events.length     ? events.reduce((m, e) => (e.event_ts > m ? e.event_ts : m), events[0].event_ts)
+    : chapters.length ? chapters.reduce((m, c) => (c.boundary_ts > m ? c.boundary_ts : m), chapters[0].boundary_ts)
+    : null;
+  const lastPurchaseTs = detailLastPurchase ?? (() => {
+    const paid = chapters.filter(c => Number(c.revenue ?? 0) > 0);
+    return paid.length ? paid.reduce((m, c) => (c.boundary_ts > m ? c.boundary_ts : m), paid[0].boundary_ts) : null;
+  })();
+  const avgSecondsToClose = (() => {
+    const conv = chapters.filter(c => Number(c.revenue ?? 0) > 0);
+    if (!conv.length) return null;
+    const total = conv.reduce((s, c) => s + (new Date(c.boundary_ts).getTime() - new Date(c.first_ts).getTime()) / 1000, 0);
+    return total / conv.length;
+  })();
+  const searchedRow: JourneysListRow | null = (searched && selectedIdentity)
+    ? {
+        canonical_identity_key: selectedIdentity,
+        matching_events:        null,
+        lifetime_chapters:      chapters.length,
+        lifetime_value:         detailLtv,
+        window_value:           detailLtv,
+        avg_seconds_to_close:   avgSecondsToClose,
+        last_purchase_ts:       lastPurchaseTs,
+        last_activity_ts:       lastActivityTs,
+        outcome:                detailConverted ? "converted" : "open",
+      }
+    : null;
+  const displayList = searchedRow ? [searchedRow] : list;
+
+  // Metric shown in the list's adaptive column, per the active sort.
+  const sortCol = SORT_OPTIONS.find(s => s.value === sort) ?? SORT_OPTIONS[0];
+  const sortMetricDisplay = (r: JourneysListRow): string =>
+    sort === "window_value"  ? fmtMoney(Number(r.window_value ?? 0))
+    : sort === "time_to_close" ? fmtDuration(r.avg_seconds_to_close)
+    : fmtMoney(Number(r.lifetime_value ?? 0));
 
   // Per-chapter expand state. Default = all collapsed (just header summary).
   // Resets when the selected identity changes so we don't carry stale ids over.
@@ -256,7 +331,7 @@ export default function JourneysClient({
     eventsByChapter.get(e.chapter_id)!.push(e);
   }
 
-  const isEmpty = list.length === 0;
+  const isEmpty = displayList.length === 0;
 
   return (
     <>
@@ -337,15 +412,41 @@ export default function JourneysClient({
                 </>
               )}
             </Dropdown>
+            <Dropdown align="left" width={220} trigger={
+              <button className="toolbar-btn">
+                <span className="dim" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".1em" }}>Sort</span>
+                <span style={{ fontWeight: 500 }}>{sortCol.label}</span>
+                <span className="chev"><Icon name="chev" size={12}/></span>
+              </button>
+            }>
+              {(close) => (
+                <>
+                  <div className="dd-label">Rank the list by</div>
+                  {SORT_OPTIONS.map(opt => (
+                    <button key={opt.value} className={`dd-item ${sort === opt.value ? "active" : ""}`} onClick={() => { updateParam("sort", opt.value === "lifetime_value" ? null : opt.value); close(); }}>
+                      <span>{opt.label}</span>
+                      {sort === opt.value && <span className="check"><Icon name="check" size={14}/></span>}
+                    </button>
+                  ))}
+                </>
+              )}
+            </Dropdown>
           </div>
-          <div style={{ fontSize: 12, color: "var(--ink-3)", cursor: "help" }}
-               title={action === "all"
-                 ? "The list shows the 50 highest-lifetime-value customers in this window, ranked by value."
-                 : `The list shows the 50 highest-lifetime-value customers who did “${actionLabel.toLowerCase()}” in this window. Because high-value customers tend to have done every action, the ranking can look similar across filters — the ×N badge on each row shows how many times they did the selected action.`}>
-            {action === "all"
-              ? <>{list.length} shown · top 50 by lifetime value</>
-              : <>{list.length} shown · did &ldquo;{actionLabel.toLowerCase()}&rdquo; · top 50 by value</>}
-          </div>
+          {searched ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Filtered to your search result</span>
+              <button type="button" className="toolbar-btn compact" onClick={clearSearch} style={{ fontSize: 11 }}>
+                ← Back to top customers
+              </button>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "var(--ink-3)", cursor: "help" }}
+                 title={`The list shows the top 50 customers in this window${action === "all" ? "" : ` who did “${actionLabel.toLowerCase()}”`}, ranked by ${sortCol.label.toLowerCase()}.${sort === "window_value" ? " Window value = lifetime revenue that fell inside the selected date range." : sort === "time_to_close" ? " Fastest = shortest average time from first touch to purchase across their converting chapters." : ""}`}>
+              {action === "all"
+                ? <>{list.length} shown · top 50 by {sortCol.label.toLowerCase()}</>
+                : <>{list.length} shown · did &ldquo;{actionLabel.toLowerCase()}&rdquo; · top 50 by {sortCol.label.toLowerCase()}</>}
+            </div>
+          )}
         </div>
 
         {/* ── Two-col layout ─────────────────────────────────────────────── */}
@@ -361,12 +462,12 @@ export default function JourneysClient({
                 <thead style={{ position: "sticky", top: 0, background: "var(--panel)", zIndex: 1 }}>
                   <tr>
                     <th>Identity</th>
-                    <th className="num">LTV</th>
+                    <th className="num">{sortCol.col}</th>
                     <th className="num">Chapters</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map(r => (
+                  {displayList.map(r => (
                     <tr key={r.canonical_identity_key}
                         style={{ cursor: "pointer", background: selectedIdentity === r.canonical_identity_key ? "var(--bg-2)" : "transparent" }}
                         onClick={() => selectIdentity(r.canonical_identity_key)}>
@@ -390,7 +491,7 @@ export default function JourneysClient({
                           Last activity · {fmtDateShort(r.last_activity_ts)}
                         </div>
                       </td>
-                      <td className="num">{fmtMoney(Number(r.lifetime_value ?? 0))}</td>
+                      <td className="num">{sortMetricDisplay(r)}</td>
                       <td className="num">{fmtNum(Number(r.lifetime_chapters ?? 0))}</td>
                     </tr>
                   ))}
@@ -407,7 +508,7 @@ export default function JourneysClient({
               </div>
             ) : (
               <>
-                {selectedIdentity && !selectedInList && (
+                {selectedIdentity && !selectedInList && !searched && (
                   <div style={{ marginBottom: 14, padding: "8px 12px", borderRadius: 8, background: "var(--bg-2)", border: "1px solid var(--line-2)", fontSize: 12, color: "var(--ink-2)" }}>
                     Showing a searched customer — not in the top-50-by-value list on the left, so no row is highlighted there.
                   </div>

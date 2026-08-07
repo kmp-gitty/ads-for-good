@@ -39,7 +39,10 @@ type SearchParams = Promise<{
   action?:   string;
   outcome?:  string;
   identity?: string;
+  sort?:     string;
 }>;
+
+const SORT_OPTIONS = ["lifetime_value", "window_value", "time_to_close"] as const;
 
 export default async function JourneysPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -48,6 +51,8 @@ export default async function JourneysPage({ searchParams }: { searchParams: Sea
   const action    = (params.action && params.action.trim() && params.action !== "all")  ? params.action : null;
   const outcome   = (params.outcome && params.outcome.trim() && params.outcome !== "all") ? params.outcome : null;
   const identity  = (params.identity && params.identity.trim()) || null;
+  const sortRaw   = (params.sort && params.sort.trim()) || "lifetime_value";
+  const sort      = (SORT_OPTIONS as readonly string[]).includes(sortRaw) ? sortRaw : "lifetime_value";
 
   // Fetch per-client config first — needed for tz-aware date math.
   // Subsequent unstable_cache hit makes this near-free for repeat visits.
@@ -65,7 +70,7 @@ export default async function JourneysPage({ searchParams }: { searchParams: Sea
   // is selected.
   const [statsRows, listRows] = await Promise.all([
     cachedJourneysStats(filterArgs),
-    cachedJourneysList({ ...filterArgs, p_limit: 50 }),
+    cachedJourneysList({ ...filterArgs, p_limit: 50, p_sort: sort }),
   ]);
 
   const stats = statsRows[0] ?? null;
@@ -131,6 +136,7 @@ export default async function JourneysPage({ searchParams }: { searchParams: Sea
       range={range}
       action={action ?? "all"}
       outcome={outcome ?? "all"}
+      sort={sort}
       boundaryEvent={clientConfig.boundary_event_name}
     />
   );

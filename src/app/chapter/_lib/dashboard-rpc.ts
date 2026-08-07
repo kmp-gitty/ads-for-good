@@ -360,6 +360,7 @@ export type JourneysFilterArgs = RpcArgs & {
   p_action?:  string | null;
   p_outcome?: string | null;
   p_limit?:   number;
+  p_sort?:    string;  // 'lifetime_value' (default) | 'window_value' | 'time_to_close'
 };
 
 export type JourneysStatsRow = {
@@ -380,6 +381,8 @@ export type JourneysListRow = {
   matching_events:         number | null;
   lifetime_chapters:       number | null;
   lifetime_value:          number | null;
+  window_value:            number | null;   // LTV within the selected window
+  avg_seconds_to_close:    number | null;    // avg (boundary − first) over converting chapters
   last_purchase_ts:        string | null;
   last_activity_ts:        string | null;
   outcome:                 string;     // 'converted' | 'open'
@@ -405,6 +408,7 @@ async function journeysListSnapshotLookup(args: JourneysFilterArgs): Promise<Jou
   if (args.p_action != null) return null;
   if (args.p_outcome != null) return null;
   if (args.p_limit !== undefined && args.p_limit !== 50) return null;
+  if (args.p_sort != null && args.p_sort !== "lifetime_value") return null;  // snapshot is default-sort only
   if (!matchesDefaultWindow(args, 30)) return null;
 
   const r = await supabase
