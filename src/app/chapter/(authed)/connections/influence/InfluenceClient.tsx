@@ -280,11 +280,16 @@ function ConnectionRow({ row, index, onClick, gate }: { row: ConnectionsPanelRow
 function HeaderCell({
   top, bottom, firstCell = false, title,
 }: { top?: string; bottom: string; firstCell?: boolean; title?: string }) {
+  // Custom instant tooltip matching the Lifecycle Overview info box (navy fill,
+  // white text, rounded, shadow) instead of the delayed gray native `title`.
+  const [hover, setHover] = useState(false);
   return (
     <div
-      title={title}
+      onMouseEnter={() => title && setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         ...cellDivided(firstCell),
+        position: "relative",
         textAlign: firstCell ? "left" : "center",
         whiteSpace: "nowrap",
         display: "flex",
@@ -297,6 +302,21 @@ function HeaderCell({
     >
       <span style={{ color: "var(--ink-4)", fontWeight: 500 }}>{top ?? " "}</span>
       <span>{bottom}</span>
+      {title && hover && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 9px)", left: "50%", transform: "translateX(-50%)",
+          width: 240, background: "#1F2D43", color: "white", borderRadius: 8, padding: "9px 11px",
+          fontSize: 11, lineHeight: 1.5, fontWeight: 400, letterSpacing: 0, textTransform: "none",
+          whiteSpace: "normal", textAlign: "left",
+          boxShadow: "0 8px 24px rgba(15,23,34,0.28)", zIndex: 30, pointerEvents: "none",
+        }}>
+          {title}
+          <span aria-hidden style={{
+            position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
+            border: "5px solid transparent", borderBottomColor: "#1F2D43",
+          }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -661,9 +681,6 @@ export default function InfluenceClient({
                 <li>Left shows what those same identities touched <strong>{windowDays} days before</strong> the anchor.</li>
                 <li>Right shows what those same identities touched <strong>{windowDays} days after</strong> the anchor.</li>
               </ul>
-              <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "rgba(255,255,255,0.85)", marginTop: 12 }}>
-                <strong>This describes connections in your data — it does not estimate cause.</strong> The measured cousin lives at <em>Lagged Impact</em>.
-              </div>
             </div>
 
             {/* RIGHT — anchor-specific definition + example reading */}
@@ -685,6 +702,11 @@ export default function InfluenceClient({
                 downstreamTop={downstream[0] ?? null}
               />
             </div>
+          </div>
+          {/* Full-width caveat, centered across both columns — keeps the banner
+              compact by not stacking under the left column. */}
+          <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "rgba(255,255,255,0.85)", textAlign: "center", marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+            <strong>This describes connections in your data — it does not estimate cause.</strong> The measured cousin lives at <em>Lagged Impact</em>.
           </div>
         </div>
 
@@ -725,7 +747,7 @@ export default function InfluenceClient({
         )}
 
         {/* Anchor picker bar */}
-        <div className="filter-bar" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: 18 }}>
+        <div className="filter-bar" style={{ alignItems: "flex-start", justifyContent: "center", flexWrap: "wrap", gap: 18 }}>
           <FilterGroup label="Anchor Filters">
           {/* Anchor type tabs */}
           <div className="toggle-group">
@@ -986,8 +1008,8 @@ export default function InfluenceClient({
 
           </FilterGroup>
 
-          {/* Lag + Outcome window dropdowns — the two timing controls */}
-          <FilterGroup label="Timing Windows">
+          {/* Lag + Outcome window dropdowns + anchor-window readout */}
+          <FilterGroup label="Timing Window Filters">
           {/* Lag window dropdown — controls connection proximity to anchor */}
           <Dropdown align="left" width={180} trigger={
             <button className="toolbar-btn" title="How close to the anchor a connection must occur">
@@ -1037,12 +1059,14 @@ export default function InfluenceClient({
               </>
             )}
           </Dropdown>
-          </FilterGroup>
 
-          <div style={{ marginLeft: "auto", marginTop: 22, fontSize: 12, color: "var(--ink-3)", cursor: "help" }}
+          {/* Anchor window — read-only readout of the top Date Range selector,
+              placed inside the timing bracket next to Lag/Outcome. */}
+          <div style={{ fontSize: 12, color: "var(--ink-3)", cursor: "help", whiteSpace: "nowrap" }}
                title={"Three different windows on this page:\n• Anchor window (this) — the date range Chapter scans for anchor moments, set by the Range control at the top.\n• Lag window — how close to the anchor moment a connection touch must occur to count.\n• Outcome window — how long after a connection touch we keep watching for a purchase."}>
             Anchor window: <strong style={{ color: "var(--ink-2)" }}>{range}</strong>
           </div>
+          </FilterGroup>
         </div>
 
         {anchorEmpty ? (
