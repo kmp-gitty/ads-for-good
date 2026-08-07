@@ -421,9 +421,10 @@ export default function OverviewClient({
                 ? <>No closed chapters in this window. Try a longer date range.</>
                 : <>Customers close in a <span className="num">median of {medianTouches} touches over {medianDays} days</span>, with <span className="num">{multiTouchPct}</span> of conversions involving more than one channel.</>}
             </h2>
-            {/* All-time returning purchaser stat — promoted into the hero header
-                area so the bottom metrics tile doesn't get vertically crowded. */}
-            <div style={{ flex: "0 0 auto", minWidth: 200, padding: "2px 0 0 0" }}>
+            {/* Both returning-purchaser stats live in the hero header (using the
+                blank space beside the headline) so the bottom metrics row stays a
+                clean single row of five with no orphaned tile. */}
+            <div style={{ flex: "0 0 auto", display: "flex", gap: 40, padding: "2px 0 0 0" }}>
               <LcmStat
                 label="All-time returning purchasers"
                 value={returningAllTimeValue}
@@ -431,11 +432,6 @@ export default function OverviewClient({
                 move={moveReturningAllTime ?? 0}
                 foot={firstTimePct ? `vs. ${firstTimePct}% first-time` : ""}
               />
-            </div>
-          </div>
-          <div className="lifecycle-metrics">
-            {lcmMetrics.map((m, i) => <Lcm key={i} {...m} />)}
-            <div className="lcm">
               <LcmStat
                 label="Repeat Buyers This Window"
                 value={returningInWindowValue}
@@ -444,6 +440,9 @@ export default function OverviewClient({
                 foot={inWindowOnceOnly ? `vs. ${inWindowOnceOnly}% bought once this window` : ""}
               />
             </div>
+          </div>
+          <div className="lifecycle-metrics">
+            {lcmMetrics.map((m, i) => <Lcm key={i} {...m} />)}
           </div>
         </div>
 
