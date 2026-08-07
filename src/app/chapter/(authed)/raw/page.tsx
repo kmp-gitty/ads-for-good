@@ -11,7 +11,7 @@
 // Defaults: client_key=eos_fabrics, range=30d.
 
 import RawClient from "./RawClient";
-import { rangeToWindow } from "../../_components/format";
+import { rangeToWindow, compareWindow } from "../../_components/format";
 import {
   bucketedNow,
   cachedClientConfig,
@@ -27,32 +27,37 @@ import {
 type SearchParams = Promise<{
   client?: string;
   range?: string;
+  compare?: string;
 }>;
 
 export default async function RawPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
   const range = (params.range && params.range.trim()) || "30d";
+  const compareCode = (params.compare && params.compare.trim()) || "prior";
 
   // Snap "now" to a 5-min bucket so cache keys are stable for everyone in the
   // same bucket. Dashboard data is up to 5 min stale (acceptable for analytics).
   const clientConfig = await cachedClientConfig(clientKey);
-  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
+  const now = bucketedNow();
+  const { start, end } = rangeToWindow(range, now, clientConfig.display_tz);
   const args = {
     p_client_key: clientKey,
     p_start_ts: start.toISOString(),
     p_end_ts:   end.toISOString(),
   };
 
-  // Prior-period window: same-duration window immediately preceding [start, end).
-  // We call the headline tile RPCs again with shifted args to compute movement
-  // deltas. Cached separately because the args are different.
-  const prior = priorWindow(start, end);
-  const priorArgs = {
-    p_client_key: clientKey,
-    p_start_ts: prior.start.toISOString(),
-    p_end_ts:   prior.end.toISOString(),
-  };
+  // Comparison window driven by the global Compare control:
+  //   prior → immediately-preceding same-length window
+  //   yoy   → same window one year earlier
+  //   none  → no comparison (client hides the deltas)
+  // 'all' range has no defined prior → fall back to prior-period.
+  const cmpWin = compareCode === "none"
+    ? null
+    : (compareWindow(range, compareCode, now, clientConfig.display_tz) ?? priorWindow(start, end));
+  const priorArgs = cmpWin
+    ? { p_client_key: clientKey, p_start_ts: cmpWin.start.toISOString(), p_end_ts: cmpWin.end.toISOString() }
+    : null;
 
   const [
     purchase, journey, engagement, funnel, channels, timeseries,
@@ -64,9 +69,9 @@ export default async function RawPage({ searchParams }: { searchParams: SearchPa
     cachedFunnelOverview(args),
     cachedChannelPerformance(args),
     cachedDashboardTimeseries({ ...args, p_n_buckets: 12 }),
-    cachedPurchaseOverview(priorArgs),
-    cachedJourneyOverview(priorArgs),
-    cachedEngagementQuality(priorArgs),
+    priorArgs ? cachedPurchaseOverview(priorArgs) : Promise.resolve([]),
+    priorArgs ? cachedJourneyOverview(priorArgs) : Promise.resolve([]),
+    priorArgs ? cachedEngagementQuality(priorArgs) : Promise.resolve([]),
   ]);
 
   const summary    = purchase[0]   ?? null;

@@ -9,6 +9,8 @@ import { Dropdown } from "../../_components/Dropdown";
 import { RoleBar } from "../../_components/RoleBar";
 import { useChapter } from "../../_components/ChapterContext";
 import { fmtMoney, fmtNum } from "../../_components/format";
+import Link from "next/link";
+import { chapterUrl } from "../../_lib/urls";
 import { CHANNELS, type ChannelKey, type Kpi } from "../../_components/mockdata";
 import type { ChannelRoleRow, ChannelAffinityRow } from "../../_lib/dashboard-rpc";
 
@@ -133,10 +135,11 @@ function roleSentence(channelName: string, dom: Dominant, dist: ChannelView["dis
 // ALSO contain col channel". Asymmetric by design — direct ⇄ email differ
 // because direct has many solo chapters but email rarely appears alone.
 function AffinityMatrix({
-  affinity, sortedChannels,
+  affinity, sortedChannels, clientKey,
 }: {
   affinity: ChannelAffinityRow[];
   sortedChannels: ChannelView[];
+  clientKey: string;
 }) {
   // Use channel order from the sorted main table for visual consistency.
   const channels = sortedChannels.map(c => c.key);
@@ -229,6 +232,11 @@ function AffinityMatrix({
             })}
           </tbody>
         </table>
+      </div>
+      <div style={{ padding: "12px 16px 4px", fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.5 }}>
+        This is a high-level summary of channel interactions. To see how one channel may impact another over time check{" "}
+        <Link href={chapterUrl(clientKey, "connections/lagged-impact")} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 500 }}>Lagged Impact</Link>, and to see correlation of a channel against your mix check{" "}
+        <Link href={chapterUrl(clientKey, "connections/influence")} style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 500 }}>Cross-Source Influence</Link>.
       </div>
     </div>
   );
@@ -465,8 +473,8 @@ export default function ChannelsClient({
                     <th className="num">Mid</th>
                     <th className="num">Closer</th>
                     <th className="num">Presence</th>
+                    {showDelta && <th className="num" style={{ fontWeight: 400, color: "var(--ink-4)" }}>Change</th>}
                     <th className="num">Revenue touched</th>
-                    {showDelta && <th className="num">Move</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -484,15 +492,15 @@ export default function ChannelsClient({
                       <td className="num">{r.dist.mid}%</td>
                       <td className="num">{r.dist.close}%</td>
                       <td className="num">{r.presence_pct.toFixed(1)}%</td>
-                      <td className="num">{fmtMoney(r.revenue_touched)}</td>
                       {showDelta && <td className="num"><Move value={r.presence_move} semantic="up-good" /></td>}
+                      <td className="num">{fmtMoney(r.revenue_touched)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            <AffinityMatrix affinity={affinity} sortedChannels={sorted} />
+            <AffinityMatrix affinity={affinity} sortedChannels={sorted} clientKey={client.id} />
           </>
         )}
       </div>

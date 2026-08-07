@@ -28,6 +28,17 @@ export function RoleBar({
   // No native `title` — its ~1s browser delay is what made the tooltip feel slow.
   // The custom .role-tip renders instantly on mouseenter (React state), styled as a
   // Chapter callout (orange fill, white text).
+  //
+  // Position the tooltip over the CENTER of the hovered segment (not the bar
+  // center) so the callout points at the part you're actually on. Segment vals
+  // sum to 100, so each center = (sum of prior widths) + val/2. Clamp so the
+  // nowrap callout doesn't spill off the bar ends at extreme segments.
+  const centerByKey: Record<string, number> = {};
+  {
+    let acc = 0;
+    for (const s of segs) { if (s.val > 0) { centerByKey[s.key] = acc + s.val / 2; acc += s.val; } }
+  }
+  const centerPct = hover ? Math.max(12, Math.min(88, centerByKey[hover.key] ?? 50)) : 50;
   return (
     <div className="role-bar-wrap" style={{ position: "relative" }}>
       <div className="role-bar">
@@ -41,7 +52,7 @@ export function RoleBar({
         ) : null)}
       </div>
       {showTooltip && hover && (
-        <div className="role-tip" style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)" }}>
+        <div className="role-tip" style={{ position: "absolute", bottom: "calc(100% + 8px)", left: `${centerPct}%`, transform: "translateX(-50%)" }}>
           <div className="role-tip-row">
             <strong>{hover.label}</strong>
             <span className="role-tip-val">{hover.val}%</span>

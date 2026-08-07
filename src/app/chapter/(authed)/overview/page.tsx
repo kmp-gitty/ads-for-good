@@ -10,7 +10,7 @@
 // library engine exists (per CLAUDE.md Future Work).
 
 import OverviewClient from "./OverviewClient";
-import { rangeToWindow } from "../../_components/format";
+import { rangeToWindow, compareWindow } from "../../_components/format";
 import {
   bucketedNow,
   cachedClientConfig,
@@ -26,7 +26,7 @@ import {
   priorWindow,
 } from "../../_lib/dashboard-rpc";
 
-type SearchParams = Promise<{ client?: string; range?: string }>;
+type SearchParams = Promise<{ client?: string; range?: string; compare?: string }>;
 
 // Path-length trend has its own per-tile time-range picker (4w/12w/26w/52w).
 // Pre-fetch all 4 windows server-side so the picker toggles instantly with no
@@ -40,20 +40,24 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
   const params = await searchParams;
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
   const range = (params.range && params.range.trim()) || "30d";
+  const compareCode = (params.compare && params.compare.trim()) || "prior";
 
   const clientConfig = await cachedClientConfig(clientKey);
-  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
+  const now = bucketedNow();
+  const { start, end } = rangeToWindow(range, now, clientConfig.display_tz);
   const winArgs = {
     p_client_key: clientKey,
     p_start_ts: start.toISOString(),
     p_end_ts:   end.toISOString(),
   };
-  const prior = priorWindow(start, end);
-  const priorArgs = {
-    p_client_key: clientKey,
-    p_start_ts: prior.start.toISOString(),
-    p_end_ts:   prior.end.toISOString(),
-  };
+  // Comparison window driven by the global Compare control (prior / yoy / none).
+  // 'all' range has no defined prior → fall back to prior-period.
+  const cmpWin = compareCode === "none"
+    ? null
+    : (compareWindow(range, compareCode, now, clientConfig.display_tz) ?? priorWindow(start, end));
+  const priorArgs = cmpWin
+    ? { p_client_key: clientKey, p_start_ts: cmpWin.start.toISOString(), p_end_ts: cmpWin.end.toISOString() }
+    : null;
 
   // Build the 4 trend windows. End ts is snapped to the 5-min bucket so cache
   // keys stay stable across rapid reloads. Bucket counts stay at 12 across all
@@ -76,7 +80,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
     recommendations,
   ] = await Promise.all([
     cachedLifecycleOverview(winArgs),
-    cachedLifecycleOverview(priorArgs),
+    priorArgs ? cachedLifecycleOverview(priorArgs) : Promise.resolve([]),
     cachedPathLengthTrend(trendArgsFor(TREND_WINDOWS["4w"])),
     cachedPathLengthTrend(trendArgsFor(TREND_WINDOWS["12w"])),
     cachedPathLengthTrend(trendArgsFor(TREND_WINDOWS["26w"])),
@@ -88,11 +92,11 @@ export default async function OverviewPage({ searchParams }: { searchParams: Sea
     cachedPurchaseOverview(winArgs),
     cachedJourneyOverview(winArgs),
     cachedEngagementQuality(winArgs),
-    cachedPurchaseOverview(priorArgs),
-    cachedJourneyOverview(priorArgs),
-    cachedEngagementQuality(priorArgs),
+    priorArgs ? cachedPurchaseOverview(priorArgs) : Promise.resolve([]),
+    priorArgs ? cachedJourneyOverview(priorArgs) : Promise.resolve([]),
+    priorArgs ? cachedEngagementQuality(priorArgs) : Promise.resolve([]),
     cachedJourneyCompleteness(winArgs),
-    cachedJourneyCompleteness(priorArgs),
+    priorArgs ? cachedJourneyCompleteness(priorArgs) : Promise.resolve([]),
     cachedRecommendationsCurrent({ clientKey }),
   ]);
 

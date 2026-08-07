@@ -8,7 +8,7 @@
 //   ?range  = window       (7d / 14d / 30d / 60d / 90d / mtd / qtd / ytd / custom-ISO-pair)
 
 import AttributionClient from "./AttributionClient";
-import { rangeToWindow } from "../../_components/format";
+import { rangeToWindow, compareWindow } from "../../_components/format";
 import {
   bucketedNow,
   cachedClientConfig,
@@ -24,6 +24,7 @@ import {
 type SearchParams = Promise<{
   client?: string;
   range?: string;
+  compare?: string;
   lookback?: string;
 }>;
 
@@ -31,6 +32,7 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
   const params = await searchParams;
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
   const range = (params.range && params.range.trim()) || "30d";
+  const compareCode = (params.compare && params.compare.trim()) || "prior";
 
   // 6.4 — attribution lookback: how many days before EACH boundary to count
   // touches. Default unlimited (null → RPC reproduces today's numbers exactly).
@@ -38,7 +40,8 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
   const lookbackDays = /^\d+$/.test(lookback) ? Number(lookback) : null;
 
   const clientConfig = await cachedClientConfig(clientKey);
-  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
+  const now = bucketedNow();
+  const { start, end } = rangeToWindow(range, now, clientConfig.display_tz);
   const args = {
     p_client_key: clientKey,
     p_start_ts: start.toISOString(),
@@ -46,12 +49,14 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
   };
   // attribution_overview alone takes the lookback; the other RPCs are 3-arg.
   const attributionArgs = { ...args, p_lookback_days: lookbackDays };
-  const prior = priorWindow(start, end);
-  const priorArgs = {
-    p_client_key: clientKey,
-    p_start_ts: prior.start.toISOString(),
-    p_end_ts:   prior.end.toISOString(),
-  };
+  // Comparison window driven by the global Compare control (prior / yoy / none).
+  // 'all' range has no defined prior → fall back to prior-period.
+  const cmpWin = compareCode === "none"
+    ? null
+    : (compareWindow(range, compareCode, now, clientConfig.display_tz) ?? priorWindow(start, end));
+  const priorArgs = cmpWin
+    ? { p_client_key: clientKey, p_start_ts: cmpWin.start.toISOString(), p_end_ts: cmpWin.end.toISOString() }
+    : null;
 
   // attribution_overview powers the bump chart + allocation table.
   // The other 3 RPCs feed the standard TopBar KPI strip (Orders/Revenue/AOV/
@@ -69,9 +74,9 @@ export default async function AttributionPage({ searchParams }: { searchParams: 
     cachedPurchaseOverview(args),
     cachedJourneyOverview(args),
     cachedEngagementQuality(args),
-    cachedPurchaseOverview(priorArgs),
-    cachedJourneyOverview(priorArgs),
-    cachedEngagementQuality(priorArgs),
+    priorArgs ? cachedPurchaseOverview(priorArgs) : Promise.resolve([]),
+    priorArgs ? cachedJourneyOverview(priorArgs) : Promise.resolve([]),
+    priorArgs ? cachedEngagementQuality(priorArgs) : Promise.resolve([]),
   ]);
 
   return (

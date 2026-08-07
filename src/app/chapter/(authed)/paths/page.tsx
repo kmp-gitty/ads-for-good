@@ -5,7 +5,7 @@
 // 5 min by unstable_cache so toggle-between-modes is free after first load.
 
 import PathsClient from "./PathsClient";
-import { rangeToWindow } from "../../_components/format";
+import { rangeToWindow, compareWindow } from "../../_components/format";
 import {
   bucketedNow,
   cachedClientConfig,
@@ -18,19 +18,28 @@ import {
 type SearchParams = Promise<{
   client?: string;
   range?: string;
+  compare?: string;
 }>;
 
 export default async function PathsPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
   const range = (params.range && params.range.trim()) || "30d";
+  const compareCode = (params.compare && params.compare.trim()) || "prior";
 
   const clientConfig = await cachedClientConfig(clientKey);
-  const { start, end } = rangeToWindow(range, bucketedNow(), clientConfig.display_tz);
+  const now = bucketedNow();
+  const { start, end } = rangeToWindow(range, now, clientConfig.display_tz);
   const baseArgs = { p_client_key: clientKey };
   const window = { p_start_ts: start.toISOString(), p_end_ts: end.toISOString() };
-  const prior = priorWindow(start, end);
-  const priorWin = { p_start_ts: prior.start.toISOString(), p_end_ts: prior.end.toISOString() };
+  // Comparison window driven by the global Compare control (prior / yoy / none).
+  // 'all' range has no defined prior → fall back to prior-period.
+  const cmpWin = compareCode === "none"
+    ? null
+    : (compareWindow(range, compareCode, now, clientConfig.display_tz) ?? priorWindow(start, end));
+  const priorWin = cmpWin
+    ? { p_start_ts: cmpWin.start.toISOString(), p_end_ts: cmpWin.end.toISOString() }
+    : null;
 
   const [
     setCur, collapsedCur, rawCur,
@@ -40,13 +49,13 @@ export default async function PathsPage({ searchParams }: { searchParams: Search
     cachedPathCombinationsOverview({ ...baseArgs, ...window,    p_mode: "set" }),
     cachedPathCombinationsOverview({ ...baseArgs, ...window,    p_mode: "collapsed" }),
     cachedPathCombinationsOverview({ ...baseArgs, ...window,    p_mode: "raw" }),
-    cachedPathCombinationsOverview({ ...baseArgs, ...priorWin,  p_mode: "set" }),
-    cachedPathCombinationsOverview({ ...baseArgs, ...priorWin,  p_mode: "collapsed" }),
-    cachedPathCombinationsOverview({ ...baseArgs, ...priorWin,  p_mode: "raw" }),
+    priorWin ? cachedPathCombinationsOverview({ ...baseArgs, ...priorWin, p_mode: "set" })       : Promise.resolve([]),
+    priorWin ? cachedPathCombinationsOverview({ ...baseArgs, ...priorWin, p_mode: "collapsed" }) : Promise.resolve([]),
+    priorWin ? cachedPathCombinationsOverview({ ...baseArgs, ...priorWin, p_mode: "raw" })       : Promise.resolve([]),
     cachedPurchaseOverview({ ...baseArgs, ...window }),
     cachedJourneyOverview({ ...baseArgs, ...window }),
-    cachedPurchaseOverview({ ...baseArgs, ...priorWin }),
-    cachedJourneyOverview({ ...baseArgs, ...priorWin }),
+    priorWin ? cachedPurchaseOverview({ ...baseArgs, ...priorWin }) : Promise.resolve([]),
+    priorWin ? cachedJourneyOverview({ ...baseArgs, ...priorWin })  : Promise.resolve([]),
   ]);
 
   return (
