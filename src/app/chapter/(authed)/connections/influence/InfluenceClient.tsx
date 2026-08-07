@@ -394,69 +394,92 @@ function Panel({
 // Anchor-specific definition + example reading rendered in the navy hero.
 // Picks the top downstream row (or upstream if no downstream) as a concrete
 // example so the reading uses the operator's actual numbers.
+// Groups a cluster of filter controls under a shared uppercase label, with a
+// horizontal bottom bracket ⎣___⎦ tying the controls together visually. Used to
+// label the two filter clusters on the anchor bar.
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".12em", color: "var(--ink-3)", fontWeight: 700, whiteSpace: "nowrap" }}>
+        {label}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, position: "relative", paddingBottom: 10 }}>
+        {children}
+        <span aria-hidden style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 7, borderLeft: "2px solid var(--ink-4)", borderRight: "2px solid var(--ink-4)", borderBottom: "2px solid var(--ink-4)", borderRadius: "0 0 5px 5px", opacity: 0.5, pointerEvents: "none" }} />
+      </div>
+    </div>
+  );
+}
+
 function AnchorExplanation({
-  anchorType, anchorChannelLabel, anchorPagePath, campaignName, campaignUniqueClickers,
-  cohortName, cohortKind, cohortTotalUploaded, cohortTotalMatched,
-  matchRate, nAnchor, windowDays, outcomeWindowDays, connectionsNoun,
-  exampleRow, exampleDir,
+  anchorType, anchorChannelLabel, anchorPagePath, campaignName, cohortName,
+  nAnchor, windowDays, outcomeWindowDays,
+  upstreamTop, downstreamTop,
 }: {
-  anchorType:           string;
-  anchorChannelLabel:   string;
-  anchorPagePath:       string;
-  campaignName:         string | null | undefined;
-  campaignUniqueClickers: number | null | undefined;
-  cohortName:           string | null | undefined;
-  cohortKind:           string | null | undefined;
-  cohortTotalUploaded:  number | null | undefined;
-  cohortTotalMatched:   number | null | undefined;
-  matchRate:            number | null;
-  nAnchor:              number;
-  windowDays:           number;
-  outcomeWindowDays:    number;
-  connectionsNoun:      string;
-  exampleRow:           ConnectionsPanelRow | null;
-  exampleDir:           "upstream" | "downstream" | null;
+  anchorType:         string;
+  anchorChannelLabel: string;
+  anchorPagePath:     string;
+  campaignName:       string | null | undefined;
+  cohortName:         string | null | undefined;
+  nAnchor:            number;
+  windowDays:         number;
+  outcomeWindowDays:  number;
+  upstreamTop:        ConnectionsPanelRow | null;
+  downstreamTop:      ConnectionsPanelRow | null;
 }) {
-  const para: React.CSSProperties = { fontSize: 13.5, lineHeight: 1.55, color: "rgba(255,255,255,0.85)" };
-  const sub: React.CSSProperties  = { fontSize: 12.5, lineHeight: 1.5, color: "rgba(255,255,255,0.70)", marginTop: 8 };
-  const accent: React.CSSProperties = { color: "var(--accent)", fontWeight: 600 };
+  const anchorLabel =
+    anchorType === "channel"  ? anchorChannelLabel :
+    anchorType === "page"     ? anchorPagePath :
+    anchorType === "campaign" ? (campaignName || "this campaign") :
+                                (cohortName || "this cohort");
+  const anchorVerb =
+    anchorType === "channel"  ? "entered via" :
+    anchorType === "page"     ? "viewed" :
+    anchorType === "campaign" ? "clicked" : "matched";
+  // Verb for a CONNECTION row, based on that connection's own type.
+  const connVerb = (t: string) =>
+    t === "channel"  ? "entered via" :
+    t === "page"     ? "viewed" :
+    t === "campaign" ? "clicked" : "touched";
 
-  let definition: React.ReactNode;
-  let reading: React.ReactNode;
-
-  if (anchorType === "channel") {
-    definition = <>An anchor of <span style={accent}>Channel</span> is the session-<em>entry</em> channel of a journey — Email, Direct, Organic Search, etc. — for any session a person started during the anchor window.</>;
-    reading = exampleRow
-      ? <>E.g. of <strong>{nAnchor.toLocaleString()}</strong> identities anchored on {anchorChannelLabel}, <strong>{Number(exampleRow.n_identities).toLocaleString()}</strong> ({((Number(exampleRow.pct_of_anchor) || 0) * 100).toFixed(1)}%) also entered via <strong>{exampleRow.connected_thing_label}</strong> a median {fmtLag(exampleRow.median_lag_days)} ({exampleDir}); <strong>{((Number(exampleRow.outcome_rate) || 0) * 100).toFixed(0)}%</strong> of those went on to purchase within {outcomeWindowDays} days of that touch.</>
-      : <>No connection rows surfaced yet — try a busier channel or widen the lag window.</>;
-  } else if (anchorType === "page") {
-    definition = <>An anchor of <span style={accent}>Page</span> is <em>any</em> page-view event matching the chosen path during the anchor window — not just session-entry. Same session, different session, doesn&apos;t matter — if they loaded that URL, they&apos;re in the set.</>;
-    reading = exampleRow
-      ? <>E.g. of <strong>{nAnchor.toLocaleString()}</strong> identities who viewed <strong>{anchorPagePath}</strong>, <strong>{Number(exampleRow.n_identities).toLocaleString()}</strong> ({((Number(exampleRow.pct_of_anchor) || 0) * 100).toFixed(1)}%) also touched <strong>{exampleRow.connected_thing_label}</strong> a median {fmtLag(exampleRow.median_lag_days)} ({exampleDir}); <strong>{((Number(exampleRow.outcome_rate) || 0) * 100).toFixed(0)}%</strong> of those purchased within {outcomeWindowDays} days of that {connectionsNoun === "pages" ? "page view" : "channel touch"}.</>
-      : <>No connection rows surfaced yet — try a higher-traffic page or widen the lag window.</>;
-  } else if (anchorType === "campaign") {
-    const matchedPct = matchRate != null ? Math.round(Number(matchRate) * 100) : null;
-    definition = <>An anchor of <span style={accent}>Campaign</span> is a <em>click event</em> from the ESP&apos;s records (Mailchimp Reports API) during the anchor window. Opens are excluded — too much bot noise. Recipients are resolved via email_sha256 against your identity graph; the unmatched are real clickers we&apos;ve just never seen on-site.</>;
-    reading = exampleRow ? (
-      <>E.g. of <strong>{campaignUniqueClickers != null ? Number(campaignUniqueClickers).toLocaleString() : "—"}</strong> total clickers, we resolved <strong>{nAnchor.toLocaleString()}</strong>{matchedPct != null ? <> ({matchedPct}%)</> : null} to identities. Of those, <strong>{Number(exampleRow.n_identities).toLocaleString()}</strong> touched <strong>{exampleRow.connected_thing_label}</strong> a median {fmtLag(exampleRow.median_lag_days)} ({exampleDir}); <strong>{((Number(exampleRow.outcome_rate) || 0) * 100).toFixed(0)}%</strong> of those purchased within {outcomeWindowDays} days.</>
-    ) : <>No connection rows surfaced yet — at low resolved-clicker counts the gate (≥5 identities per row) may not clear.</>;
-  } else {
-    // cohort
-    const isSystem = cohortKind === "system";
-    definition = isSystem ? (
-      <>An anchor of <span style={accent}>Cohort</span> (built-in) is a pre-defined identity set computed nightly from your data — e.g. tercile splits by lifetime purchase value, or all identities with a known email. For built-in cohorts the anchor moment is the midpoint of the analysis window, so upstream and downstream lag windows straddle it symmetrically.</>
-    ) : (
-      <>An anchor of <span style={accent}>Cohort</span> (uploaded) is a hashed email list you provided that we matched against your identity graph. Raw emails are never stored — SHA-256 only. Anchor moment is the upload timestamp (editable later to match the actual converge moment, e.g. a conference date).</>
-    );
-    reading = exampleRow ? (
-      <>E.g. <strong>{cohortName || "this cohort"}</strong> resolves to <strong>{nAnchor.toLocaleString()}</strong> identities{!isSystem && cohortTotalUploaded ? <> ({Number(cohortTotalMatched ?? 0).toLocaleString()} of {Number(cohortTotalUploaded).toLocaleString()} uploaded matched)</> : null}. Of those, <strong>{Number(exampleRow.n_identities).toLocaleString()}</strong> ({((Number(exampleRow.pct_of_anchor) || 0) * 100).toFixed(1)}%) touched <strong>{exampleRow.connected_thing_label}</strong> a median {fmtLag(exampleRow.median_lag_days)} ({exampleDir}); <strong>{((Number(exampleRow.outcome_rate) || 0) * 100).toFixed(0)}%</strong> of those purchased within {outcomeWindowDays} days.</>
-    ) : <>No connection rows surfaced yet — try widening the lag window, or this cohort may be too thin for ≥5-identity rows.</>;
-  }
+  const sideCol: React.CSSProperties = { flex: 1, minWidth: 0 };
+  const termLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: "white", marginBottom: 3 };
+  const termDef: React.CSSProperties = { fontSize: 12, lineHeight: 1.45, color: "rgba(255,255,255,0.70)" };
 
   return (
     <>
-      <div style={para}>{definition}</div>
-      <div style={sub}>{reading}</div>
+      {/* Dynamic worked example built from the current anchor + the top row of
+          each side panel, so the reading tracks whatever the operator selects. */}
+      <ul style={{ fontSize: 13.5, lineHeight: 1.5, color: "rgba(255,255,255,0.85)", margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
+        <li>
+          <strong>Anchor: {anchorLabel}.</strong> {nAnchor.toLocaleString()} identities {anchorVerb} {anchorLabel} for the timeframe selected.
+        </li>
+        <li>
+          <strong>Left:</strong>{" "}
+          {upstreamTop
+            ? <>{Number(upstreamTop.n_identities).toLocaleString()} people {connVerb(upstreamTop.connected_thing_type)} <strong>{upstreamTop.connected_thing_label}</strong> {windowDays} days before the {anchorLabel} touch</>
+            : <span style={{ color: "rgba(255,255,255,0.6)" }}>no connections above the sample floor yet</span>}
+        </li>
+        <li>
+          <strong>Right:</strong>{" "}
+          {downstreamTop
+            ? <>{Number(downstreamTop.n_identities).toLocaleString()} people {connVerb(downstreamTop.connected_thing_type)} <strong>{downstreamTop.connected_thing_label}</strong> {windowDays} days after the {anchorLabel} touch</>
+            : <span style={{ color: "rgba(255,255,255,0.6)" }}>no connections above the sample floor yet</span>}
+        </li>
+      </ul>
+
+      {/* Lag / Outcome window definitions, side by side. Current values shown so
+          the definitions tie to the live settings. */}
+      <div style={{ display: "flex", gap: 20, marginTop: 14, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 12 }}>
+        <div style={sideCol}>
+          <div style={termLabel}>Lag Window <span style={{ color: "var(--accent)" }}>· {windowDays}d</span></div>
+          <div style={termDef}>Timeframe of Left &amp; Right panel you want to see.</div>
+        </div>
+        <div style={sideCol}>
+          <div style={termLabel}>Outcome Window <span style={{ color: "var(--accent)" }}>· {outcomeWindowDays}d</span></div>
+          <div style={termDef}>Timeframe after a Connection to count a purchase.</div>
+        </div>
+      </div>
     </>
   );
 }
@@ -631,15 +654,22 @@ export default function InfluenceClient({
               <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600, marginBottom: 8 }}>
                 How this page works
               </div>
-              <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
-                Anchor on a <strong>{anchorType === "channel" ? "channel" : anchorType === "page" ? "page" : anchorType === "campaign" ? "campaign" : "cohort"}</strong>{anchorType === "channel" ? <> (the channel identities <em>entered</em> on)</> : null} above. The middle column shows the identity set selected. The two side panels show OTHER {connectionsNoun} those same identities touched within {windowDays} days before (left) or after (right) their anchor moment. <strong>This describes connections in your data — it does not estimate cause.</strong> The measured cousin lives at <em>Lagged Impact</em>.
+              <ul style={{ fontSize: 13.5, lineHeight: 1.5, color: "rgba(255,255,255,0.85)", margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
+                <li><strong>Choose an Anchor:</strong> Channel, Page, or Campaign — identifies the session-entry channel of a journey.</li>
+                <li>Middle column shows the identities for the selected anchor.</li>
+                <li>Left &amp; Right panels show connections to the identities in the anchor.</li>
+                <li>Left shows what those same identities touched <strong>{windowDays} days before</strong> the anchor.</li>
+                <li>Right shows what those same identities touched <strong>{windowDays} days after</strong> the anchor.</li>
+              </ul>
+              <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "rgba(255,255,255,0.85)", marginTop: 12 }}>
+                <strong>This describes connections in your data — it does not estimate cause.</strong> The measured cousin lives at <em>Lagged Impact</em>.
               </div>
             </div>
 
             {/* RIGHT — anchor-specific definition + example reading */}
             <div style={{ flex: "1 1 360px", borderLeft: "1px solid rgba(255,255,255,0.12)", paddingLeft: 22 }}>
               <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>About this anchor</span>
+                <span>How To Interpret</span>
                 <span style={{ color: "rgba(255,255,255,0.35)" }}><Icon name="influence" size={16} /></span>
               </div>
               <AnchorExplanation
@@ -647,18 +677,12 @@ export default function InfluenceClient({
                 anchorChannelLabel={channelLabel(anchorChannel)}
                 anchorPagePath={anchorPagePath}
                 campaignName={selectedCampaign?.campaign_name || anchorCampaignId}
-                campaignUniqueClickers={selectedCampaign?.unique_clickers}
                 cohortName={selectedCohort?.name}
-                cohortKind={selectedCohort?.kind}
-                cohortTotalUploaded={selectedCohort?.total_uploaded}
-                cohortTotalMatched={selectedCohort?.total_matched}
-                matchRate={resolve?.match_rate ?? null}
                 nAnchor={nAnchor}
                 windowDays={windowDays}
                 outcomeWindowDays={outcomeWindowDays}
-                connectionsNoun={connectionsNoun}
-                exampleRow={downstream[0] ?? upstream[0] ?? null}
-                exampleDir={downstream[0] ? "downstream" : upstream[0] ? "upstream" : null}
+                upstreamTop={upstream[0] ?? null}
+                downstreamTop={downstream[0] ?? null}
               />
             </div>
           </div>
@@ -701,7 +725,8 @@ export default function InfluenceClient({
         )}
 
         {/* Anchor picker bar */}
-        <div className="filter-bar" style={{ alignItems: "center", flexWrap: "wrap", gap: 14 }}>
+        <div className="filter-bar" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: 18 }}>
+          <FilterGroup label="Anchor Filters">
           {/* Anchor type tabs */}
           <div className="toggle-group">
             {ANCHOR_TYPES.map(t => (
@@ -922,9 +947,12 @@ export default function InfluenceClient({
             </Dropdown>
           )}
 
+          </FilterGroup>
+
           {/* 9.3 — connection dimension toggle. "All" unions channel + page +
               campaign connections into one lift-ranked panel; the others narrow
               to a single dimension. Shown for every anchor type. */}
+          <FilterGroup label="Upstream / Downstream Connection Filters">
           <div className="toggle-group">
             <button
               className={connectionView === "all" ? "active" : ""}
@@ -956,6 +984,10 @@ export default function InfluenceClient({
             </button>
           </div>
 
+          </FilterGroup>
+
+          {/* Lag + Outcome window dropdowns — the two timing controls */}
+          <FilterGroup label="Timing Windows">
           {/* Lag window dropdown — controls connection proximity to anchor */}
           <Dropdown align="left" width={180} trigger={
             <button className="toolbar-btn" title="How close to the anchor a connection must occur">
@@ -1005,8 +1037,9 @@ export default function InfluenceClient({
               </>
             )}
           </Dropdown>
+          </FilterGroup>
 
-          <div style={{ marginLeft: "auto", fontSize: 12, color: "var(--ink-3)", cursor: "help" }}
+          <div style={{ marginLeft: "auto", marginTop: 22, fontSize: 12, color: "var(--ink-3)", cursor: "help" }}
                title={"Three different windows on this page:\n• Anchor window (this) — the date range Chapter scans for anchor moments, set by the Range control at the top.\n• Lag window — how close to the anchor moment a connection touch must occur to count.\n• Outcome window — how long after a connection touch we keep watching for a purchase."}>
             Anchor window: <strong style={{ color: "var(--ink-2)" }}>{range}</strong>
           </div>

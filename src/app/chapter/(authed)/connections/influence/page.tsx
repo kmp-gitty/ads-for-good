@@ -40,7 +40,11 @@ const DEFAULT_CHANNEL             = "email";
 const DEFAULT_PAGE_PATH_FALLBACK  = "/";
 const DEFAULT_WINDOW_DAYS         = 30;
 const DEFAULT_OUTCOME_WINDOW_DAYS = 30;
-const DEFAULT_RANGE               = "90d";
+// Anchor window follows the top Date Range selector (?range=, written by
+// setDateRange). Default MUST match the global TopBar/context default ("30d")
+// so the "Anchor window" readout agrees with the selector on first load —
+// otherwise the top shows "Last 30 days" while this page silently used 90d.
+const DEFAULT_RANGE               = "30d";
 
 export default async function CrossSourceInfluencePage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
