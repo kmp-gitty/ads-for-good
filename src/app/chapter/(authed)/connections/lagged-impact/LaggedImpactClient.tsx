@@ -528,6 +528,7 @@ export default function LaggedImpactClient({
         title="Lagged Impact"
         subtitle={<span>Does touching one channel make people more likely to come back via another later — beyond what comparable untouched people did? Measured cousin to <em>Cross-Source Influence</em>.</span>}
         showCompare={false}
+        showRange={false}
       />
       <div className="content" style={{ opacity: isPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
         {/* How-this-page-works hero */}
@@ -537,9 +538,13 @@ export default function LaggedImpactClient({
               <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".14em", color: "var(--accent)", fontWeight: 600, marginBottom: 8 }}>
                 How this page works
               </div>
-              <div style={{ fontSize: 13.5, lineHeight: 1.55, color: "rgba(255,255,255,0.85)" }}>
-For a channel pair (A → B), we pool <strong>every A touch across all your available history</strong> (the treatment window — bigger cohorts, tighter confidence) and, for the chosen <strong>lag window</strong>, compare the B-return rate of identities touched by A against comparable identities who weren&apos;t — neither cohort had touched B during that history. The <strong>lag window</strong> is what you vary: how long after an A touch we keep watching for a B return. <strong>Ranked pairs</strong> scores every pair at one lag you pick; <strong>Explore</strong> shows a single pair across all lag windows (7 / 14 / 30 / 60 / 90d) so a &ldquo;best lag&rdquo; can&apos;t be cherry-picked. Touches too recent for their full lag window to have elapsed are excluded, so return rates aren&apos;t undercounted by activity we can&apos;t observe yet — longer lags therefore analyze a slightly earlier slice of the history.
-              </div>
+              <ul style={{ fontSize: 13.5, lineHeight: 1.5, color: "rgba(255,255,255,0.85)", margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
+                <li>For a channel pair (A → B), we pool <strong>every A visit across all your available history</strong>.</li>
+                <li>For the chosen <strong>lag window</strong>, we compare whether users who visited via A returned via B — versus comparable users who did not.</li>
+                <li>The <strong>lag window</strong> is what you vary: how long after an A touch we keep watching for a B return.</li>
+                <li><strong>Ranked</strong> tab flags pairs that are connected in the data.</li>
+                <li><strong>Explore</strong> tab lets you choose single pairs across different lag windows (7 / 14 / 30 / 60 / 90d).</li>
+              </ul>
             </div>
             <div style={{ color: "rgba(255,255,255,0.55)" }}>
               <Icon name="lagged" size={28} />

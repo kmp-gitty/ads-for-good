@@ -15,12 +15,14 @@ import {
 import { fmtRangeSubtitle, rangeToWindow, compareWindow, fmtDateRange } from "./format";
 
 export function TopBar({
-  title, subtitle, showModel = false, showCompare = true, kpis, extraAction,
+  title, subtitle, showModel = false, showCompare = true, showRange = true, kpis, extraAction,
 }: {
   title: string;
   subtitle: React.ReactNode;
   showModel?: boolean;
   showCompare?: boolean;
+  /** Hide the date-range calendar (e.g. Lagged Impact runs over all-time). */
+  showRange?: boolean;
   /** Live KPI strip data. When omitted, KpiStrip falls back to mock so
    *  unwired pages still render something. */
   kpis?: Kpi[];
@@ -129,6 +131,7 @@ export function TopBar({
           </Dropdown>
         )}
 
+        {showRange && (
         <div className="topbar-dd-with-sub">
           <Dropdown align="right" width={220} trigger={
             <button className="toolbar-btn">
@@ -151,6 +154,7 @@ export function TopBar({
           </Dropdown>
           <div className="topbar-dd-sub">{rangeSubtitle}</div>
         </div>
+        )}
 
         {showCompare && (
           <div className="topbar-dd-with-sub">
