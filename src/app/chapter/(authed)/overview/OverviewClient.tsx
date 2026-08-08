@@ -142,7 +142,7 @@ function PathLengthChart({ data }: { data: PathLengthTrendRow[] }) {
   const tipTransform = hoverLeftPct < 18 ? "translateX(0)" : hoverLeftPct > 82 ? "translateX(-100%)" : "translateX(-50%)";
   const dotRow = (color: string, label: string, v: number) => (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-      <span style={{ color, fontSize: 9 }}>●</span>{label}: <strong>{fmtTouch(v)}</strong> touches
+      <span style={{ color, fontSize: 9 }}>●</span>{label}: <strong>{fmtTouch(v)}</strong> visits
     </div>
   );
 
@@ -299,9 +299,9 @@ export default function OverviewClient({
 
   const lcmMetrics = [
     {
-      label: "Median touches to close",
+      label: "Median visits to close",
       value: lifecycle?.median_touches != null ? Number(lifecycle.median_touches).toFixed(1) : "—",
-      unit: " touches",
+      unit: " visits",
       move: moveTouches ?? 0,
       good: false, // shorter paths = better
       foot: `across ${lifecycle?.total_chapters ?? 0} closed chapters`,
@@ -419,7 +419,7 @@ export default function OverviewClient({
             <h2 style={{ marginBottom: 22, flex: "1 1 480px", minWidth: 0 }}>
               {isOverviewEmpty
                 ? <>No closed chapters in this window. Try a longer date range.</>
-                : <>Customers close in a <span className="num">median of {medianTouches} touches over {medianDays} days</span>, with <span className="num">{multiTouchPct}</span> of conversions involving more than one channel.</>}
+                : <>Customers close in a <span className="num">median of {medianTouches} visits over {medianDays} days</span>, with <span className="num">{multiTouchPct}</span> of conversions involving more than one channel.</>}
             </h2>
             {/* Both returning-purchaser stats live in the hero header (using the
                 blank space beside the headline) so the bottom metrics row stays a
@@ -474,7 +474,7 @@ export default function OverviewClient({
                       </>
                     )}
                   </Dropdown>
-                  <span>· touches to close</span>
+                  <span>· visits to close</span>
                 </div>
               </div>
             </div>
@@ -482,7 +482,7 @@ export default function OverviewClient({
             <ChartLegend />
             {trendStartVal && trendEndVal && (
               <div className="callout" style={{ marginTop: 14 }}>
-                <span className="em">Median moved from {trendStartVal} → {trendEndVal} touches</span> over {trendWindowLabel[trendWindow]}{" "}
+                <span className="em">Median moved from {trendStartVal} → {trendEndVal} visits</span> over {trendWindowLabel[trendWindow]}{" "}
                 {trendDelta > 0 ? "— a lengthening trend." : trendDelta < 0 ? "— a shortening trend." : "— roughly flat."}{" "}
                 Worth investigating: are new audience sources producing longer paths, or has consideration cycle shifted?
               </div>

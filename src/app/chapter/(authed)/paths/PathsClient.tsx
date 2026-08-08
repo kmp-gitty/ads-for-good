@@ -197,8 +197,8 @@ export default function PathsClient({
                 <button className={mode === "raw" ? "active" : ""} onClick={() => setMode("raw")}>Raw path</button>
               </div>
               <div style={{ fontSize: 12, color: "var(--ink-3)", maxWidth: 380 }}>
-                {mode === "set" && "Order-independent. Channels in any order group together. Ex: Direct → Email & Email → Direct is the same."}
-                {mode === "collapsed" && "First touch → N middle steps → Last touch. Same first/last/step-count groups together."}
+                {mode === "set" && <>Order-independent. Channels in any order group together.<br />Ex: Direct → Email &amp; Email → Direct is the same.</>}
+                {mode === "collapsed" && <>First touch → N middle steps → Last touch.<br />Same first/last/step-count groups together.</>}
                 {mode === "raw" && "Exact full sequence as it occurred. Every unique order is its own row."}
               </div>
             </div>
