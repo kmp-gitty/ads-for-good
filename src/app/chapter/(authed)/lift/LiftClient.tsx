@@ -1212,6 +1212,13 @@ const QUAD_DEFS = {
 } as const;
 type QuadKey = keyof typeof QUAD_DEFS;
 
+// Bulleted definitions for the Contribution tab headline rectangle.
+const CONTRIB_MEASURES: { term: string; def: string }[] = [
+  { term: "Footprint score (0–100)", def: "how embedded a channel is with your customer base. An equal-weight blend of participation, linear credit, and recurrence." },
+  { term: "Incrementality (matched-cohort)", def: "the conversion lift for buyers WITH the channel vs comparable buyers WITHOUT it, matched within cohorts to control for who uses it; observational, not a randomized holdout." },
+  { term: "Incremental loss", def: "if the channel disappeared, the projected order loss, shown as a RANGE not a point, because matched comparison says many touched buyers would substitute via other channels." },
+];
+
 function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
   const [hoverQuad, setHoverQuad] = useState<QuadKey | null>(null);
   if (channels.length === 0) return null;
@@ -1244,34 +1251,34 @@ function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
       <div style={{ marginBottom: 8 }}>
         <h3 className="card-title">Channel Value Matrix</h3>
         <div className="card-sub">
-          <strong style={{ color: "#E36410" }}>Bottom-right</strong> = the connective-tissue warning a ROAS-only tool would mis-cut.
+          <strong style={{ color: "#E36410" }}>The connective-tissue warning:</strong> a ROAS-only tool would mis-cut connective-tissue channels because they have low incrementality.
         </div>
       </div>
       <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: "auto", display: "block" }}>
-        {/* Quadrant backgrounds (median split lines). <title> gives a native
-            hover explainer for each quadrant (V3). */}
+        {/* Quadrant backgrounds (median split lines). Hover lives on the corner
+            labels below, not the whole quadrant. */}
         <rect x={pad.l} y={pad.t} width={xs(medianInc) - pad.l} height={ys(medianCon) - pad.t}
-              fill="#E36410" opacity="0.04" style={{ cursor: "default" }}
-              onMouseEnter={() => setHoverQuad("connective")} onMouseLeave={() => setHoverQuad(null)} />
+              fill="#E36410" opacity="0.04" />
         <rect x={xs(medianInc)} y={pad.t} width={(w - pad.r) - xs(medianInc)} height={ys(medianCon) - pad.t}
-              fill="#2E7D5B" opacity="0.05" style={{ cursor: "default" }}
-              onMouseEnter={() => setHoverQuad("core")} onMouseLeave={() => setHoverQuad(null)} />
+              fill="#2E7D5B" opacity="0.05" />
         <rect x={pad.l} y={ys(medianCon)} width={xs(medianInc) - pad.l} height={(h - pad.b) - ys(medianCon)}
-              fill="#9CA0A8" opacity="0.04" style={{ cursor: "default" }}
-              onMouseEnter={() => setHoverQuad("coasting")} onMouseLeave={() => setHoverQuad(null)} />
+              fill="#9CA0A8" opacity="0.04" />
         <rect x={xs(medianInc)} y={ys(medianCon)} width={(w - pad.r) - xs(medianInc)} height={(h - pad.b) - ys(medianCon)}
-              fill="#6F86A8" opacity="0.05" style={{ cursor: "default" }}
-              onMouseEnter={() => setHoverQuad("spark")} onMouseLeave={() => setHoverQuad(null)} />
+              fill="#6F86A8" opacity="0.05" />
 
         {/* Median split lines */}
         <line x1={xs(medianInc)} x2={xs(medianInc)} y1={pad.t} y2={h - pad.b} stroke="var(--line-2)" strokeWidth="1" strokeDasharray="3 3" />
         <line x1={pad.l} x2={w - pad.r} y1={ys(medianCon)} y2={ys(medianCon)} stroke="var(--line-2)" strokeWidth="1" strokeDasharray="3 3" />
 
-        {/* Quadrant corner labels (small, top-anchor of each quadrant) */}
-        <text x={pad.l + 8}            y={pad.t + 14}  fontSize="10" fill="var(--ink-3)" fontWeight="600">Connective tissue</text>
-        <text x={w - pad.r - 8}        y={pad.t + 14}  fontSize="10" fill="var(--ink-3)" fontWeight="600" textAnchor="end">Core driver</text>
-        <text x={pad.l + 8}            y={h - pad.b - 6} fontSize="10" fill="var(--ink-3)" fontWeight="600">Coasting</text>
-        <text x={w - pad.r - 8}        y={h - pad.b - 6} fontSize="10" fill="var(--ink-3)" fontWeight="600" textAnchor="end">Closing spark</text>
+        {/* Quadrant corner labels — hovering a label pops its definition. */}
+        <text x={pad.l + 8}            y={pad.t + 14}  fontSize="10" fill="var(--ink-3)" fontWeight="600" style={{ cursor: "help" }}
+              onMouseEnter={() => setHoverQuad("connective")} onMouseLeave={() => setHoverQuad(null)}>Connective tissue</text>
+        <text x={w - pad.r - 8}        y={pad.t + 14}  fontSize="10" fill="var(--ink-3)" fontWeight="600" textAnchor="end" style={{ cursor: "help" }}
+              onMouseEnter={() => setHoverQuad("core")} onMouseLeave={() => setHoverQuad(null)}>Core driver</text>
+        <text x={pad.l + 8}            y={h - pad.b - 6} fontSize="10" fill="var(--ink-3)" fontWeight="600" style={{ cursor: "help" }}
+              onMouseEnter={() => setHoverQuad("coasting")} onMouseLeave={() => setHoverQuad(null)}>Coasting</text>
+        <text x={w - pad.r - 8}        y={h - pad.b - 6} fontSize="10" fill="var(--ink-3)" fontWeight="600" textAnchor="end" style={{ cursor: "help" }}
+              onMouseEnter={() => setHoverQuad("spark")} onMouseLeave={() => setHoverQuad(null)}>Closing spark</text>
 
         {/* Axes */}
         <line x1={pad.l} x2={w - pad.r} y1={h - pad.b} y2={h - pad.b} stroke="var(--ink-4)" strokeWidth="1" />
@@ -1488,7 +1495,7 @@ export default function LiftClient({ correlation, correlationPrior, priorRangeLa
     contribution: {
       title: "Contribution",
       sub: "Footprint + projected loss",
-      body: "Three measures per channel, kept separate. (1) Footprint Score (0–100) — how embedded the channel is in your customer base: an equal-weight blend of participation (% of converting chapters it appears in), linear revenue credit, and recurrence (its presence in repeat-buyer journeys), each ranked across your channels. A footprint, NOT a causal claim. (2) Incrementality (matched-cohort) — the conversion lift for buyers WITH the channel vs comparable buyers WITHOUT it, matched within cohorts to control for who uses it; observational, not a randomized holdout. (3) Incremental Loss — if the channel disappeared, the projected order loss, shown as a RANGE not a point, because matched comparison says many touched buyers would substitute via other channels. The 2×2 plots Footprint (y) against Incrementality (x): high-footprint + low-incremental = connective tissue — do not cut.",
+      body: "Three measures on this page:",
       claim: "If [channel] disappeared, projected order loss is N–M (~X% of touched). Footprint Score: [score]/100 (footprint, not causal).",
       count: contribution.length,
     },
@@ -1599,7 +1606,16 @@ export default function LiftClient({ correlation, correlationPrior, priorRangeLa
               <div className="lift-method-explainer-claim-body">&quot;{m.claim}&quot;</div>
             </div>
           </div>
-          <div className="lift-method-explainer-body">{m.body}</div>
+          <div className="lift-method-explainer-body">
+            {m.body}
+            {tab === "contribution" && (
+              <ul style={{ margin: "8px 0 0", paddingLeft: 18, display: "flex", flexDirection: "column", gap: 8 }}>
+                {CONTRIB_MEASURES.map(mm => (
+                  <li key={mm.term}><strong>{mm.term}</strong> — {mm.def}</li>
+                ))}
+              </ul>
+            )}
+          </div>
           {tab === "correlation" && (
             <div style={{ marginTop: 10, fontSize: 11, color: "var(--ink-3)" }}>
               Confidence gate: a delta renders in color when |Δ|/SE ≥ 2 (~95% confidence). Below that threshold it shows grayed as &quot;within noise.&quot; If either arm has fewer than 30 samples, that metric is hidden entirely.
