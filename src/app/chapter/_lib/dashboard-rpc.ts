@@ -207,11 +207,14 @@ export const cachedAttributionOverview = makeCachedRpc<AttributionOverviewRow>("
 //   avg_share_of_path = when a channel is present, avg share of the path it occupies
 export type AttributionModelIndicatorRow = {
   channel: string;
-  last_touch_chapters: number | null;
-  assisted_chapters:   number | null;
-  pct_assisted:        number | null;
-  present_chapters:    number | null;
-  avg_share_of_path:   number | null;
+  first_touch_chapters: number | null;
+  continued_chapters:   number | null;
+  pct_continued:        number | null;
+  last_touch_chapters:  number | null;
+  assisted_chapters:    number | null;
+  pct_assisted:         number | null;
+  present_chapters:     number | null;
+  avg_share_of_path:    number | null;
 };
 
 export const cachedAttributionModelIndicators =

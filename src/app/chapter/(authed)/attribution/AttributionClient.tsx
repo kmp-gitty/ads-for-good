@@ -20,6 +20,13 @@ const CHANNEL_FALLBACK = { name: "Unknown", color: "#9CA0A8", short: "—" };
 // under the floor is listed as low-sample rather than given a headline number.
 const INDICATOR_SAMPLE_FLOOR = 20;
 
+// Hidden for now: the "Channel rank shifts" bump chart only earns its keep when
+// ranks actually cross between models (a paid-mix client). For current clients
+// ranks are stable, so it just restates the allocation table below it. Flip to
+// true to bring it back. The BumpChart component (incl. per-node % labels) is
+// kept intact for that future use.
+const SHOW_RANK_BUMP_CHART = false;
+
 // 6.2 — each model states its allocation rule on-page (visible without hovering).
 // Linear's wording explicitly covers the repeat-touch case, matching the SQL
 // (attribution_overview splits per touch, not per distinct channel).
@@ -198,16 +205,26 @@ function BumpChart({ models, data }: { models: AttributionModel[]; data: Channel
           return (
             <g key={c.channel}>
               <path d={d} stroke={ch.color} strokeWidth={hot ? 2.5 : 1.5} fill="none" opacity={hot ? 1 : 0.55} />
-              {pts.map((p, i) => (
-                <circle key={i} cx={p[0]} cy={p[1]} r={hot ? 6 : 4.5} fill={ch.color} stroke="white" strokeWidth="1.5" />
-              ))}
+              {pts.map((p, i) => {
+                const m = models[i];
+                return (
+                  <g key={i}>
+                    <circle cx={p[0]} cy={p[1]} r={hot ? 6 : 4.5} fill={ch.color} stroke="white" strokeWidth="1.5" />
+                    {/* Each node shows this channel's attributed-revenue % under THAT model. */}
+                    <text x={p[0]} y={p[1] - 10} textAnchor="middle"
+                          style={{ fontSize: 9.5, fill: hot ? "var(--ink-2)" : "var(--ink-3)", fontWeight: hot ? 600 : 500 }}>
+                      {(c[m] as number).toFixed(1)}%
+                    </text>
+                  </g>
+                );
+              })}
               <text x={xs(0) - 12} y={ys(ranks[c.channel][models[0]]) + 4} textAnchor="end"
                     style={{ fontSize: 11, fill: hot ? "var(--ink)" : "var(--ink-2)", fontWeight: hot ? 600 : 500 }}>
                 {ch.name}
               </text>
               <text x={xs(models.length - 1) + 12} y={ys(ranks[c.channel][lastModel]) + 4}
                     style={{ fontSize: 11, fill: hot ? "var(--ink)" : "var(--ink-2)", fontWeight: hot ? 600 : 500 }}>
-                #{ranks[c.channel][lastModel]} · {(c[lastModel] as number).toFixed(1)}%
+                #{ranks[c.channel][lastModel]}
               </text>
             </g>
           );
@@ -270,69 +287,30 @@ function AllocTable({ models, data }: { models: AttributionModel[]; data: Channe
 }
 
 // 6.5 — per-model blind-spot slot. One consistent line stating what the model
-// hides, with the supporting per-channel numbers. Copy states facts, no advice.
-//   last   → 6.5(b) % assisted (closing chapters that had an earlier, different channel)
-//   linear → 6.5(c) share of path a channel actually occupies when present
-//   first  → 6.5(a) coverage readout needs the attribution-lookback control (not shipped);
-//            we state the blind spot without fabricating the number
+// hides + the supporting per-channel numbers, plus a right-side "how to read
+// this" panel. Copy states facts, no advice. All three models share one block:
+//   first  → % continued (opening chapters where another channel touched later)
+//   last   → % assisted   (closing chapters that had an earlier, different channel)
+//   linear → avg share of path a channel actually occupies when present
+// first-touch also appends the 6.5(a) lookback-coverage note when a lookback is set.
 function ModelBlindSpot({ model, indicators, coverage, lookback }: {
   model: AttributionModel; indicators: AttributionModelIndicatorRow[];
   coverage: AttributionFirstTouchCoverageRow[]; lookback: string;
 }) {
-  if (model === "first") {
-    // 6.5(a) — under a lookback, show the coverage gap: of the chapters where a
-    // channel is first-touch (within the window), what share actually had an
-    // earlier touch that got cut off. Only meaningful when a lookback is set.
-    if (lookback === "unlimited") {
-      return (
-        <div className="card-sub" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line-2)", lineHeight: 1.5 }}>
-          <strong style={{ color: "var(--ink-2)" }}>What first-touch hides:</strong> everything after the first click. Set an <strong>attribution lookback</strong> above to see, per channel, what share of these “first touches” actually had an earlier touch outside the window.
-        </div>
-      );
-    }
-    const rows = coverage
-      .map((r) => ({ channel: r.channel, chapters: Number(r.chapters ?? 0), pct: r.pct_beyond == null ? null : Number(r.pct_beyond) }))
-      .filter((r) => r.pct != null && r.chapters >= INDICATOR_SAMPLE_FLOOR)
-      .sort((a, b) => (b.pct! - a.pct!));
-    const lowSample = coverage
-      .map((r) => ({ channel: r.channel, chapters: Number(r.chapters ?? 0) }))
-      .filter((r) => r.chapters > 0 && r.chapters < INDICATOR_SAMPLE_FLOOR)
-      .map((r) => r.channel);
-    return (
-      <div className="card-sub" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line-2)", lineHeight: 1.6 }}>
-        <strong style={{ color: "var(--ink-2)" }}>What first-touch hides:</strong> share of each channel’s first-touch chapters whose <em>true</em> first touch was earlier than your {lookbackLabel(lookback)} window (so the shown first touch is not the real one):
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 6 }}>
-          {rows.map((r) => {
-            const ch = CHANNELS[r.channel as ChannelKey] ?? CHANNEL_FALLBACK;
-            return (
-              <span key={r.channel} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 10, height: 10, background: ch.color, borderRadius: 3 }}></span>
-                <span style={{ color: "var(--ink-2)" }}>{ch.name}</span>
-                <span style={{ fontWeight: 600 }}>{r.pct!.toFixed(0)}%</span>
-              </span>
-            );
-          })}
-        </div>
-        {lowSample.length > 0 && (
-          <div style={{ marginTop: 6, color: "var(--ink-3)" }}>
-            Low sample (under {INDICATOR_SAMPLE_FLOOR} chapters), not shown: {lowSample.map((c) => (CHANNELS[c as ChannelKey] ?? CHANNEL_FALLBACK).name).join(", ")}.
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  const isLast = model === "last";
-  const label = isLast ? "What last-touch hides" : "What an even split hides";
-  const lead = isLast
-    ? "share of each channel’s closing chapters that were assisted — had an earlier, different channel:"
+  const isFirst = model === "first";
+  const isLast  = model === "last";
+  const label = isFirst ? "What first-touch hides" : isLast ? "What last-touch hides" : "What an even split hides";
+  const lead = isFirst
+    ? "for each channel that opened a chapter, the share of those opens where a different channel touched the customer later in the journey (so first-touch gave it 100% of the credit, but the journey kept going):"
+    : isLast
+    ? "for each channel that closed a chapter, the share of those closes where a different channel touched the customer earlier in the journey (so last-touch gave it 100% of the credit, but it didn’t act alone):"
     : "share of the path each channel actually occupies when it appears (a channel repeated across touches is not an even split):";
 
   // Pick the model-appropriate metric + sample column, gate on the floor, rank desc.
   const rows = indicators
     .map((r) => {
-      const n = isLast ? Number(r.last_touch_chapters ?? 0) : Number(r.present_chapters ?? 0);
-      const val = isLast ? r.pct_assisted : r.avg_share_of_path;
+      const n = isFirst ? Number(r.first_touch_chapters ?? 0) : isLast ? Number(r.last_touch_chapters ?? 0) : Number(r.present_chapters ?? 0);
+      const val = isFirst ? r.pct_continued : isLast ? r.pct_assisted : r.avg_share_of_path;
       return { channel: r.channel, n, val: val == null ? null : Number(val) };
     })
     .filter((r) => r.val != null);
@@ -341,26 +319,112 @@ function ModelBlindSpot({ model, indicators, coverage, lookback }: {
 
   if (shown.length === 0 && lowSample.length === 0) return null;
 
+  // 6.5(a) — optional coverage note, only when an attribution lookback is set:
+  // of a channel's first-touch chapters, the share whose TRUE first touch was
+  // earlier than the window. Preserved for when the lookback control ships;
+  // hidden in the default unlimited view.
+  const coverageRows = isFirst && lookback !== "unlimited"
+    ? coverage
+        .map((r) => ({ channel: r.channel, chapters: Number(r.chapters ?? 0), pct: r.pct_beyond == null ? null : Number(r.pct_beyond) }))
+        .filter((r) => r.pct != null && r.chapters >= INDICATOR_SAMPLE_FLOOR)
+        .sort((a, b) => (b.pct! - a.pct!))
+    : [];
+
+  // Right-side "How to read this" panel — defines the exact metric behind the
+  // per-channel numbers, model-aware, with a worked example. States that the
+  // figure is computed over chapters that closed in the selected timeframe.
+  const howTo = isFirst
+    ? {
+        metric: "% continued",
+        def: "Of the chapters a channel opened (first touch = 100% of the credit), the share where a different channel touched the customer later — over chapters that closed in the selected timeframe.",
+        example: [
+          "Email → Direct   ·   continued (Direct later)",
+          "Email → Organic → Direct   ·   continued",
+          "Email   ·   not continued (Email only)",
+          "Email → Email   ·   not continued",
+          "→ 2 of 4 opens continued = 50%",
+        ],
+        footer: "High % means the channel rarely converts on its own — yet first-touch gives it 100% of the credit.",
+      }
+    : isLast
+    ? {
+        metric: "% assisted",
+        def: "Of the chapters a channel closed (last touch = 100% of the credit), the share where a different channel touched the customer earlier — over chapters that closed in the selected timeframe.",
+        example: [
+          "Direct → Email   ·   assisted (Direct earlier)",
+          "Organic → Direct → Email   ·   assisted",
+          "Email   ·   not assisted (Email only)",
+          "Email → Email   ·   not assisted",
+          "→ 2 of 4 closes assisted = 50%",
+        ],
+        footer: "High % means the channel rarely closes alone.",
+      }
+    : {
+        metric: "avg_share_of_path",
+        def: "When a channel appears in a chapter, the average share of that chapter’s touches it occupies — averaged over chapters that closed in the selected timeframe.",
+        example: [
+          "Email → Email → Direct   ·   Email = 2 of 3 = 67%",
+          "Direct → Email → Direct → Organic   ·   Email = 1 of 4 = 25%",
+          "avg = (67% + 25%) / 2 = 46%",
+        ],
+        footer: "Not the same as how often a channel appears (presence) — that lives on Channel Roles.",
+      };
+
   return (
     <div className="card-sub" style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--line-2)", lineHeight: 1.6 }}>
-      <strong style={{ color: "var(--ink-2)" }}>{label}:</strong> {lead}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 6 }}>
-        {shown.map((r) => {
-          const ch = CHANNELS[r.channel as ChannelKey] ?? CHANNEL_FALLBACK;
-          return (
-            <span key={r.channel} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 10, height: 10, background: ch.color, borderRadius: 3 }}></span>
-              <span style={{ color: "var(--ink-2)" }}>{ch.name}</span>
-              <span style={{ fontWeight: 600 }}>{r.val!.toFixed(0)}%</span>
-            </span>
-          );
-        })}
-      </div>
-      {lowSample.length > 0 && (
-        <div style={{ marginTop: 6, color: "var(--ink-3)" }}>
-          Low sample (under {INDICATOR_SAMPLE_FLOOR} chapters), not shown: {lowSample.map((c) => (CHANNELS[c as ChannelKey] ?? CHANNEL_FALLBACK).name).join(", ")}.
+      <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
+        {/* Left: the per-channel numbers */}
+        <div style={{ flex: "1 1 400px", minWidth: 0 }}>
+          <strong style={{ color: "var(--ink-2)" }}>{label}:</strong> {lead}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 6 }}>
+            {shown.map((r) => {
+              const ch = CHANNELS[r.channel as ChannelKey] ?? CHANNEL_FALLBACK;
+              return (
+                <span key={r.channel} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 10, height: 10, background: ch.color, borderRadius: 3 }}></span>
+                  <span style={{ color: "var(--ink-2)" }}>{ch.name}</span>
+                  <span style={{ fontWeight: 600 }}>{r.val!.toFixed(0)}%</span>
+                </span>
+              );
+            })}
+          </div>
+          {lowSample.length > 0 && (
+            <div style={{ marginTop: 6, color: "var(--ink-3)" }}>
+              Low sample (under {INDICATOR_SAMPLE_FLOOR} chapters), not shown: {lowSample.map((c) => (CHANNELS[c as ChannelKey] ?? CHANNEL_FALLBACK).name).join(", ")}.
+            </div>
+          )}
+          {coverageRows.length > 0 && (
+            <div style={{ marginTop: 10, color: "var(--ink-3)" }}>
+              <strong style={{ color: "var(--ink-2)" }}>Beyond your {lookbackLabel(lookback)} lookback:</strong> share of each channel’s first-touch chapters whose true first touch was earlier than the window (so the shown opener isn’t the real one):
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 14px", marginTop: 6 }}>
+                {coverageRows.map((r) => {
+                  const ch = CHANNELS[r.channel as ChannelKey] ?? CHANNEL_FALLBACK;
+                  return (
+                    <span key={r.channel} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 10, height: 10, background: ch.color, borderRadius: 3 }}></span>
+                      <span style={{ color: "var(--ink-2)" }}>{ch.name}</span>
+                      <span style={{ fontWeight: 600 }}>{r.pct!.toFixed(0)}%</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
-      )}
+        {/* Right: how to read the metric */}
+        <div style={{ flex: "1 1 280px", minWidth: 0, borderLeft: "1px solid var(--line-2)", paddingLeft: 16 }}>
+          <div style={{ fontWeight: 600, color: "var(--ink-2)", marginBottom: 4 }}>How to read this</div>
+          <div style={{ color: "var(--ink-2)" }}>
+            <span style={{ fontFamily: "var(--font-mono, ui-monospace, monospace)", fontSize: 11.5, fontWeight: 600 }}>{howTo.metric}</span> — {howTo.def}
+          </div>
+          <ul style={{ margin: "8px 0 0 0", paddingLeft: 16, color: "var(--ink-2)", fontSize: 11.5 }}>
+            {howTo.example.map((line, i) => (
+              <li key={i} style={{ marginBottom: 2 }}>{line}</li>
+            ))}
+          </ul>
+          <div style={{ marginTop: 8, color: "var(--ink-3)" }}>{howTo.footer}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -621,15 +685,17 @@ export default function AttributionClient({
               </div>
             </div>
 
-            <div className="card">
-              <div className="card-head">
-                <div>
-                  <h3 className="card-title">Channel rank shifts across attribution models</h3>
-                  <div className="card-sub">Biggest swings highlighted — channels with rank change ≥ 3 across selected models.{scope === "paid" && " Paid channels only."}</div>
+            {SHOW_RANK_BUMP_CHART && (
+              <div className="card">
+                <div className="card-head">
+                  <div>
+                    <h3 className="card-title">Channel rank shifts across attribution models</h3>
+                    <div className="card-sub">Biggest swings highlighted — channels with rank change ≥ 3 across selected models.{scope === "paid" && " Paid channels only."}</div>
+                  </div>
                 </div>
+                <BumpChart models={bumpModels} data={scopedData} />
               </div>
-              <BumpChart models={bumpModels} data={scopedData} />
-            </div>
+            )}
 
             <div className="card flush">
               <AllocTable models={tableModels} data={scopedData} />
