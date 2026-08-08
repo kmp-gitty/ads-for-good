@@ -1202,7 +1202,18 @@ function ContributionCard({ c }: { c: ContribComputed }) {
 
 // 2×2 portfolio plot — channels as positioned chips on incremental × contribution
 // axes with quadrant backgrounds + labels. Inline SVG, no chart library.
+// Quadrant definitions for the instant hover tooltips on the 2×2 (mirrors the
+// navy callout used on other tabs). Footprint = y, Incrementality = x.
+const QUAD_DEFS = {
+  connective: { label: "Connective tissue", def: "High footprint, low incrementality. Deeply embedded across your customer base, but matched-cohort lift is small. Do not cut — removing it ripples through many journeys even though its marginal lift looks low." },
+  core:       { label: "Core driver",       def: "High footprint, high incrementality. Both deeply embedded and causally lifting conversions vs comparable buyers without it. Protect it, and scale where you can." },
+  coasting:   { label: "Coasting",          def: "Low footprint, low incrementality. Least load-bearing — little embedded presence and little measured lift. The safest place to trim if you must." },
+  spark:      { label: "Closing spark",     def: "Low footprint, high incrementality. Rarely appears, but converts strongly when it does. A precision channel — small reach, real punch." },
+} as const;
+type QuadKey = keyof typeof QUAD_DEFS;
+
 function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
+  const [hoverQuad, setHoverQuad] = useState<QuadKey | null>(null);
   if (channels.length === 0) return null;
   // Exclude below-presence-floor channels from the plot AND the median split so a
   // thin channel's noisy incremental doesn't move the quadrant boundaries (matches
@@ -1240,21 +1251,17 @@ function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
         {/* Quadrant backgrounds (median split lines). <title> gives a native
             hover explainer for each quadrant (V3). */}
         <rect x={pad.l} y={pad.t} width={xs(medianInc) - pad.l} height={ys(medianCon) - pad.t}
-              fill="#E36410" opacity="0.04">
-          <title>Connective tissue — high footprint, low incremental. DO NOT CUT: heavily embedded in the customer base even though matched-cohort lift is small.</title>
-        </rect>
+              fill="#E36410" opacity="0.04" style={{ cursor: "default" }}
+              onMouseEnter={() => setHoverQuad("connective")} onMouseLeave={() => setHoverQuad(null)} />
         <rect x={xs(medianInc)} y={pad.t} width={(w - pad.r) - xs(medianInc)} height={ys(medianCon) - pad.t}
-              fill="#2E7D5B" opacity="0.05">
-          <title>Core driver — high footprint, high incremental. Protect: both deeply embedded AND causally lifting conversions.</title>
-        </rect>
+              fill="#2E7D5B" opacity="0.05" style={{ cursor: "default" }}
+              onMouseEnter={() => setHoverQuad("core")} onMouseLeave={() => setHoverQuad(null)} />
         <rect x={pad.l} y={ys(medianCon)} width={xs(medianInc) - pad.l} height={(h - pad.b) - ys(medianCon)}
-              fill="#9CA0A8" opacity="0.04">
-          <title>Coasting — low footprint, low incremental. Least load-bearing: little embedded footprint and little measured lift.</title>
-        </rect>
+              fill="#9CA0A8" opacity="0.04" style={{ cursor: "default" }}
+              onMouseEnter={() => setHoverQuad("coasting")} onMouseLeave={() => setHoverQuad(null)} />
         <rect x={xs(medianInc)} y={ys(medianCon)} width={(w - pad.r) - xs(medianInc)} height={(h - pad.b) - ys(medianCon)}
-              fill="#6F86A8" opacity="0.05">
-          <title>Closing spark — low footprint, high incremental. Rarely appears, but converts when it does.</title>
-        </rect>
+              fill="#6F86A8" opacity="0.05" style={{ cursor: "default" }}
+              onMouseEnter={() => setHoverQuad("spark")} onMouseLeave={() => setHoverQuad(null)} />
 
         {/* Median split lines */}
         <line x1={xs(medianInc)} x2={xs(medianInc)} y1={pad.t} y2={h - pad.b} stroke="var(--line-2)" strokeWidth="1" strokeDasharray="3 3" />
@@ -1309,6 +1316,30 @@ function ContributionMatrix({ channels }: { channels: ContribComputed[] }) {
             </g>
           );
         })}
+
+        {/* Instant navy tooltip on quadrant hover — matches the callout used on
+            other tabs. foreignObject lets the HTML box wrap normally; positioned
+            in the hovered quadrant's corner, clamped inside the plot. */}
+        {hoverQuad && (() => {
+          const FO_W = 250, FO_H = 132;
+          const left = hoverQuad === "connective" || hoverQuad === "coasting";
+          const top  = hoverQuad === "connective" || hoverQuad === "core";
+          const fx = left ? pad.l + 6 : w - pad.r - FO_W - 6;
+          const fy = top ? pad.t + 20 : h - pad.b - FO_H - 6;
+          const d = QUAD_DEFS[hoverQuad];
+          return (
+            <foreignObject x={fx} y={fy} width={FO_W} height={FO_H} style={{ pointerEvents: "none", overflow: "visible" }}>
+              <div style={{
+                background: "#1F2D43", color: "#fff", borderRadius: 8, padding: "9px 12px",
+                fontSize: 11.5, lineHeight: 1.45, fontWeight: 400, letterSpacing: 0, textTransform: "none",
+                boxShadow: "0 6px 18px rgba(0,0,0,0.28)",
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 3 }}>{d.label}</div>
+                <div>{d.def}</div>
+              </div>
+            </foreignObject>
+          );
+        })()}
       </svg>
     </div>
   );
@@ -1457,8 +1488,8 @@ export default function LiftClient({ correlation, correlationPrior, priorRangeLa
     contribution: {
       title: "Contribution",
       sub: "Footprint + projected loss",
-      body: "Two clearly-separated measures per channel: (1) Incremental Loss — if the channel disappeared, projected order loss is a RANGE not a point, because matched comparison says most touched buyers would substitute via other channels. (2) Contribution Index — how embedded the channel is in the customer base (participation, linear credit, recurrence). Footprint, NOT a causal claim. The 2×2 plot reconciles them: low-incremental + high-contribution = connective tissue; do not cut.",
-      claim: "If [channel] disappeared, projected order loss is N–M (~X% of touched). Contribution Index: [score]/100 (footprint, not causal).",
+      body: "Three measures per channel, kept separate. (1) Footprint Score (0–100) — how embedded the channel is in your customer base: an equal-weight blend of participation (% of converting chapters it appears in), linear revenue credit, and recurrence (its presence in repeat-buyer journeys), each ranked across your channels. A footprint, NOT a causal claim. (2) Incrementality (matched-cohort) — the conversion lift for buyers WITH the channel vs comparable buyers WITHOUT it, matched within cohorts to control for who uses it; observational, not a randomized holdout. (3) Incremental Loss — if the channel disappeared, the projected order loss, shown as a RANGE not a point, because matched comparison says many touched buyers would substitute via other channels. The 2×2 plots Footprint (y) against Incrementality (x): high-footprint + low-incremental = connective tissue — do not cut.",
+      claim: "If [channel] disappeared, projected order loss is N–M (~X% of touched). Footprint Score: [score]/100 (footprint, not causal).",
       count: contribution.length,
     },
   } as const;
