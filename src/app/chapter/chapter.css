@@ -723,6 +723,16 @@
 .chapter-app .lift-match-q strong { color: var(--ink-2); }
 
 .chapter-app .lift-stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px; padding: 14px 16px; }
+
+/* Correlation cards laid out 2-up on wide screens. Each metric group has exactly
+   two metrics, so inside the grid the stat-rows go 2-col (they fill each half
+   instead of leaving an empty right side); the SAMPLE stat spans full width via
+   an inline gridColumn:1/-1. Collapses to a single column below 1180px. */
+.chapter-app .lift-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.chapter-app .lift-card-grid .lift-stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1180px) {
+  .chapter-app .lift-card-grid { grid-template-columns: 1fr; }
+}
 .chapter-app .lift-stat { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .chapter-app .lift-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3); font-weight: 600; }
 .chapter-app .lift-stat-pair { display: flex; flex-direction: column; gap: 2px; }

@@ -136,7 +136,7 @@ function buildGates(row: CorrelationChannelRow): Record<MetricKey, MetricGate> {
   const days    = buildContinuous("days",    "Time to close",  "days",
     row.days_with    != null ? Number(row.days_with)    : null, row.days_sd_with    != null ? Number(row.days_sd_with)    : null,
     row.days_without != null ? Number(row.days_without) : null, row.days_sd_without != null ? Number(row.days_sd_without) : null);
-  const touches = buildContinuous("touches", "Touches",        "touches",
+  const touches = buildContinuous("touches", "Visits",         "touches",
     row.touches_with    != null ? Number(row.touches_with)    : null, row.touches_sd_with    != null ? Number(row.touches_sd_with)    : null,
     row.touches_without != null ? Number(row.touches_without) : null, row.touches_sd_without != null ? Number(row.touches_sd_without) : null);
 
@@ -370,24 +370,24 @@ function CorrelationCard({ row, priorRow, showPrior, priorLabel }: {
           <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".1em", color: "var(--ink-3)", fontWeight: 600, marginBottom: 6 }}>Path character</div>
           <div className="lift-stat-row">{CHARACTER_METRICS.map(renderMetric)}</div>
           <div style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 4, lineHeight: 1.4 }}>
-            Time to close and touches describe path shape and usually move together — read them as one signal, not two.
+            Time to close and visits describe path shape and usually move together — read them as one signal, not two.
           </div>
         </div>
       </div>
 
       <div className="lift-stat-row" style={{ marginTop: 8 }}>
-        <div className="lift-stat" style={{ flex: 1 }}>
+        <div className="lift-stat" style={{ gridColumn: "1 / -1" }}>
           <div className="lift-stat-label">Sample</div>
           <div className="lift-stat-pair">
             <div className="with">
-              {gates.conv_rate.n_with.toLocaleString()} <span className="tag">identities with</span>
-              {" · "}
-              {gates.aov.n_with.toLocaleString()} <span className="tag">chapters with</span>
+              <span style={{ whiteSpace: "nowrap" }}>{gates.conv_rate.n_with.toLocaleString()} <span className="tag">identities with</span></span>
+              <span style={{ padding: "0 14px", color: "var(--ink-4)" }}>·</span>
+              <span style={{ whiteSpace: "nowrap" }}>{gates.aov.n_with.toLocaleString()} <span className="tag">chapters with</span></span>
             </div>
             <div className="without">
-              {gates.conv_rate.n_without.toLocaleString()} <span className="tag">without</span>
-              {" · "}
-              {gates.aov.n_without.toLocaleString()} <span className="tag">without</span>
+              <span style={{ whiteSpace: "nowrap" }}>{gates.conv_rate.n_without.toLocaleString()} <span className="tag">without</span></span>
+              <span style={{ padding: "0 14px", color: "var(--ink-4)" }}>·</span>
+              <span style={{ whiteSpace: "nowrap" }}>{gates.aov.n_without.toLocaleString()} <span className="tag">without</span></span>
             </div>
           </div>
         </div>
@@ -1607,15 +1607,17 @@ export default function LiftClient({ correlation, correlationPrior, priorRangeLa
                     <strong style={{ color: "var(--ink-2)" }}>Read period movement with care.</strong> A trend is shown only where <em>both</em> periods cleared the confidence gate. Even so, comparison inherits data-depth limits — a shift in traffic volume or identity coverage between periods can move these numbers independently of channel behavior, so read a &ldquo;stronger / weaker&rdquo; label as directional, not definitive.
                   </div>
                 )}
-                {correlation.map(row => (
-                  <CorrelationCard
-                    key={row.channel}
-                    row={row}
-                    priorRow={priorByChannel.get(row.channel) ?? null}
-                    showPrior={compareCorr}
-                    priorLabel={priorRangeLabel}
-                  />
-                ))}
+                <div className="lift-card-grid">
+                  {correlation.map(row => (
+                    <CorrelationCard
+                      key={row.channel}
+                      row={row}
+                      priorRow={priorByChannel.get(row.channel) ?? null}
+                      showPrior={compareCorr}
+                      priorLabel={priorRangeLabel}
+                    />
+                  ))}
+                </div>
               </>
             )
           )}
