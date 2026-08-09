@@ -12,8 +12,17 @@ import { Icon } from "../../_components/Icon";
 import { Dropdown } from "../../_components/Dropdown";
 import { useChapter } from "../../_components/ChapterContext";
 import { SubmitQuestionDrawer } from "../../_components/SubmitQuestionDrawer";
-import type { RecommendationFinding } from "../../_lib/dashboard-rpc";
+import { fmtNum, fmtMoney } from "../../_components/format";
+import type { Kpi } from "../../_components/mockdata";
+import type { RecommendationFinding, PurchaseOverviewRow, JourneyOverviewRow } from "../../_lib/dashboard-rpc";
 import OverrideMenu from "./OverrideMenu";
+
+function pctDelta(current: number | null | undefined, prior: number | null | undefined): number | null {
+  if (current == null || prior == null) return null;
+  const c = Number(current), p = Number(prior);
+  if (!Number.isFinite(c) || !Number.isFinite(p) || p === 0) return null;
+  return ((c - p) / p) * 100;
+}
 
 type Theme = RecommendationFinding["theme"];
 type Conf  = RecommendationFinding["confidence"];
@@ -194,12 +203,28 @@ function RecommendationCard({ rec }: { rec: RecommendationFinding }) {
 
 export default function RecommendationsClient({
   clientKey, current, history,
+  summary, journey, priorSummary, priorJourney,
 }: {
   clientKey: string;
   current:   RecommendationFinding[];
   history:   RecommendationFinding[];
+  summary:      PurchaseOverviewRow | null;
+  journey:      JourneyOverviewRow | null;
+  priorSummary: PurchaseOverviewRow | null;
+  priorJourney: JourneyOverviewRow | null;
 }) {
   const { client } = useChapter();
+
+  // Business-context KPI strip (orders / revenue / AOV / journeys / % identified)
+  // for the selected range — per-client live data, not the mock fallback. Deltas
+  // are vs the prior period (this page has no Compare control).
+  const kpis: Kpi[] = [
+    { label: "Orders",       value: summary?.total_orders    != null ? fmtNum(Number(summary.total_orders))            : "—", move: pctDelta(summary?.total_orders,        priorSummary?.total_orders)        ?? 0, good: null, semantic: "up-good" },
+    { label: "Revenue",      value: summary?.total_revenue   != null ? fmtMoney(Number(summary.total_revenue))          : "—", move: pctDelta(summary?.total_revenue,       priorSummary?.total_revenue)       ?? 0, good: null, semantic: "up-good" },
+    { label: "AOV",          value: summary?.avg_order_value != null ? "$" + Number(summary.avg_order_value).toFixed(2) : "—", move: pctDelta(summary?.avg_order_value,     priorSummary?.avg_order_value)     ?? 0, good: null, semantic: "up-good" },
+    { label: "Journeys",     value: journey?.total_journeys  != null ? fmtNum(Number(journey.total_journeys))           : "—", move: pctDelta(journey?.total_journeys,      priorJourney?.total_journeys)      ?? 0, good: null, semantic: "neutral" },
+    { label: "% Identified", value: journey?.pct_identified  != null ? (Number(journey.pct_identified) * 100).toFixed(1) + "%" : "—", move: pctDelta(journey?.identified_journeys, priorJourney?.identified_journeys) ?? 0, good: null, semantic: "up-good" },
+  ];
   const [view,         setView]         = useState<"current" | "history">("current");
   const [confFilter,   setConfFilter]   = useState<"all" | Conf>("all");
   const [stateFilter,  setStateFilter]  = useState<"all" | "new" | "standing" | "changed">("all");
@@ -254,6 +279,7 @@ export default function RecommendationsClient({
         title="Recommendations"
         subtitle={<span>Synthesizing this week&apos;s findings across the data Chapter is collecting for: <span style={{ color: "var(--ink-2)", fontWeight: 500 }}>{client.name}</span></span>}
         showCompare={false}
+        kpis={kpis}
         extraAction={
           <button
             type="button"
