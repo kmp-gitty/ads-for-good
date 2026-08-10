@@ -1,9 +1,5 @@
-import { notFound } from "next/navigation";
-import ClientPortalDashboard from "../_components/ClientPortalDashboard";
-import { getPortalData } from "../_lib/portal-data";
+import ClientBulletin from "../_components/ClientBulletin";
 
-export default async function TigerbyteDigitalPortalPage() {
-  const data = await getPortalData("tigerbyte_digital");
-  if (!data) notFound();
-  return <ClientPortalDashboard data={data} />;
+export default function TigerbyteSummaryPage() {
+  return <ClientBulletin clientKey="tigerbyte_digital" />;
 }

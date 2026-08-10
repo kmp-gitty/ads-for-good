@@ -9,14 +9,6 @@ const tabs = [
     label: "Services & Payments",
     path: "/services-payments"
   },
-  {
-    label: "Projects & Status",
-    path: "/projects-status"
-  },
-  {
-    label: "Reporting & Links",
-    path: "/reporting-links"
-  },
 ];
 
 export default function ClientPortalTabs() {

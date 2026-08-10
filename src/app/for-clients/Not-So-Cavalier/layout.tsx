@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import ClientPortalHeader from "@/components/ClientPortalHeader";
+import ClientPortalTabs from "@/components/ClientPortalTabs";
 
 export const metadata: Metadata = {
-  title: "Not-So-Cavalier Client Portal | Ads for Good",
+  title: "Not-So-Cavalier Client Portal | ads for Good",
   robots: {
     index: false,
     follow: false,
@@ -28,7 +29,8 @@ export default function NotSoCavalierLayout({
           brandLogoSrc="/images/ads4Good_Logo_500x500.png"
           clientLogoSrc="/images/NotSoCavalierLogo.png"
         />
-        <section className="mt-10 pb-20">{children}</section>
+        <ClientPortalTabs />
+        <section className="mt-6 pb-20">{children}</section>
       </div>
     </main>
   );

@@ -1,9 +1,5 @@
-import { notFound } from "next/navigation";
-import ClientPortalDashboard from "../_components/ClientPortalDashboard";
-import { getPortalData } from "../_lib/portal-data";
+import ClientBulletin from "../_components/ClientBulletin";
 
-export default async function NotSoCavalierPortalPage() {
-  const data = await getPortalData("not_so_cavalier");
-  if (!data) notFound();
-  return <ClientPortalDashboard data={data} />;
+export default function NotSoCavalierSummaryPage() {
+  return <ClientBulletin clientKey="not_so_cavalier" />;
 }
