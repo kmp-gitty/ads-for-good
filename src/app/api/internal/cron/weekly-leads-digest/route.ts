@@ -82,16 +82,24 @@ export async function GET(req: NextRequest) {
                  COALESCE(pv.pages_viewed, 0) AS pages_viewed, pv.first_seen,
                  j.entry_channel
           FROM chapter_engagement.captured_leads l
+          -- captured_leads.journey_id is text; pixel_events.journey_id + journeys.id
+          -- are uuid. Validate + cast once so both joins are uuid = uuid (keeps the
+          -- index), and a null/malformed value yields no match instead of a cast error.
+          CROSS JOIN LATERAL (
+            SELECT CASE
+              WHEN l.journey_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+              THEN l.journey_id::uuid END AS jid
+          ) g
           LEFT JOIN LATERAL (
             SELECT COUNT(*) FILTER (WHERE pe.event_name = 'page_view') AS pages_viewed,
                    MIN(pe.ts) AS first_seen
             FROM chapter_ingest.pixel_events pe
-            WHERE pe.journey_id = l.journey_id
+            WHERE pe.journey_id = g.jid
           ) pv ON true
           LEFT JOIN LATERAL (
             SELECT COALESCE(jj.first_touch->>'utm_source', jj.first_touch->>'referrer', 'direct') AS entry_channel
             FROM chapter_journey.journeys jj
-            WHERE jj.id = l.journey_id
+            WHERE jj.id = g.jid
             LIMIT 1
           ) j ON true
           WHERE l.client_key = ${clientKey}
