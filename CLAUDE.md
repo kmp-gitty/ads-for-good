@@ -192,6 +192,13 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of August 4, 2026)
 
+### NSC 1P domain hardened — CNAME → A-record for ITP durability (Aug 11, 2026)
+- **Flipped `chapter.notsocavalier.com` from CNAME → A-record `76.76.21.21`** (Vercel's anycast IP; the exact one Test 1 proved evades Safari ITP's 7-day cookie cap). **Hostname unchanged on purpose** — NSC keeps `chapter.` (all its Book Now links on Lovable point at `chapter.notsocavalier.com/r/...` and are immutable). Only the DNS record TYPE changed. **All OTHER/new clients get `go.` going forward; NSC is the one client that stays `chapter.`** (documented exception).
+- **Zero code / DB / link changes.** `chapter_config.clients.redirect_host` stays `https://chapter.notsocavalier.com`; links_host/collect_host/legacy_host stay null. Resolver + cookies unchanged.
+- **Cutover was zero-downtime** (old CNAME and new A both route to Vercel). Verified post-change: A record served by 1.1.1.1 + 8.8.8.8 (no CNAME left), Book Now redirect still `HTTP 302` with `chid`/`jid` identity handoff intact, SSL cert green (Let's Encrypt, valid → Sep 14), Vercel domain still "Valid Configuration", and a live Book Now click on NSC's site worked.
+- **Why:** closes the identity-durability gap behind the weak cross-session tie we measured — 263 google-ads clickers → only 1–2 later Book Now clicks / 1 stitched-to-known, because Safari ITP capped the `.notsocavalier.com` anon cookie at ~7 days while the typical ad→return gap is ~8 days. A-record subdomain evades the cap. **Durability is forward-looking** (fixes cookies set from now on; existing capped ones stay capped).
+- **⏳ RE-MEASURE TRIGGER ≈ early Sep 2026** (2–4 weeks out): re-run the cross-session tie (ad-click → Book Now click, ad-click → booking) on NSC. Baseline to beat: **263 gads clickers → 1–2 book-now crossovers → 1 stitched-to-known**. Rising crossover/stitch numbers = the A-record durability working. (Mirrors the EOS ~Aug 28 1P re-measure.)
+
 ### Chapter Links — internal reporting surface, mirrors + extends self-serve (Aug 11, 2026)
 - **The internal builder (`/internal/redirect-rules`) previously showed only per-rule `hit_count`.** Added a full per-client analytics surface that reuses the self-serve reporting RPCs (already multi-tenant) + extends them, so it works for EVERY client using Chapter Links (NSC Book Now, EOS/adsforgood outreach, etc.), not just self-serve tenants.
 - **RPCs extended ADDITIVELY (via MCP, not git; self-serve consumes the same fns + ignores new keys):**
