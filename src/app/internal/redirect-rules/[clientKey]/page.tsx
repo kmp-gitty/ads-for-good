@@ -90,12 +90,20 @@ export default async function ClientRedirectRulesPage({
             {rules?.length ?? 0} rules across {bySlug.size} slug{bySlug.size === 1 ? "" : "s"}.
           </p>
         </div>
-        <Link
-          href={`/internal/redirect-rules/${clientKey}/new`}
-          style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 18px", borderRadius: 10, whiteSpace: "nowrap" }}
-        >
-          + New rule
-        </Link>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Link
+            href={`/internal/redirect-rules/${clientKey}/analytics`}
+            style={{ background: "white", color: INK, fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 18px", borderRadius: 10, whiteSpace: "nowrap", border: `1px solid ${LINE}` }}
+          >
+            📊 Analytics
+          </Link>
+          <Link
+            href={`/internal/redirect-rules/${clientKey}/new`}
+            style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 18px", borderRadius: 10, whiteSpace: "nowrap" }}
+          >
+            + New rule
+          </Link>
+        </div>
       </div>
 
       {bySlug.size === 0 ? (
