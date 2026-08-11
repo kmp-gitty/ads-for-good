@@ -89,7 +89,7 @@ function pct(n: number, d: number): string {
   return ((n / d) * 100).toFixed(1) + "%";
 }
 
-export default function LinkStatsPanel({ stats }: { stats: LinkStats }) {
+export default function LinkStatsPanel({ stats, windowLabel }: { stats: LinkStats; windowLabel: string }) {
   const t = stats.totals;
   const purchaseRate = pct(stats.fulfillment.purchased, stats.fulfillment.visitors);
   const convRate = pct(stats.fulfillment.converted, stats.fulfillment.visitors);
@@ -98,7 +98,7 @@ export default function LinkStatsPanel({ stats }: { stats: LinkStats }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Headline tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-        <StatTile label={`Clicks · ${stats.window_days}d`} value={t.clicks.toLocaleString()} sub={`${t.clicks_all_time.toLocaleString()} all-time`} />
+        <StatTile label={`Clicks · ${windowLabel}`} value={t.clicks.toLocaleString()} sub={`${t.clicks_all_time.toLocaleString()} all-time`} />
         <StatTile label="Unique visitors" value={t.unique.toLocaleString()} />
         <StatTile label="Ad clicks" value={t.ad_clicks.toLocaleString()} sub={`${pct(t.ad_clicks, t.clicks)} of clicks`} />
         <StatTile label="Scanner / bot" value={t.scanner.toLocaleString()} sub={t.scanner > 0 ? "excluded" : "none"} accent={t.scanner > 0 ? ORANGE : undefined} />

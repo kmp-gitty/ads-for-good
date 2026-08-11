@@ -49,6 +49,18 @@ export type LinkStats = {
   fulfillment: { visitors: number; converted: number; purchased: number };
 };
 
+// Reporting window. "all" = all-time (default). The RPCs take an integer p_days,
+// so all-time maps to a very large day count.
+export type DaysKey = "7" | "14" | "30" | "90" | "all";
+export const DAYS_OPTIONS: DaysKey[] = ["7", "14", "30", "90", "all"];
+
+export function resolveDays(v: string | undefined): { key: DaysKey; pDays: number; label: string } {
+  const key: DaysKey = (DAYS_OPTIONS as string[]).includes(v ?? "") ? (v as DaysKey) : "all";
+  const pDays = key === "all" ? 36500 : Number(key);
+  const label = key === "all" ? "all-time" : `${key}d`;
+  return { key, pDays, label };
+}
+
 // Vercel geo city/region come URL-encoded (e.g. "Bryn%20Mawr"). Decode for display.
 export function decodeGeo(s: string): string {
   try {

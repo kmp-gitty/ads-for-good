@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import DaysToggle from "../DaysToggle";
 import LinkStatsPanel from "../LinkStatsPanel";
-import type { LinkStats } from "../types";
+import { resolveDays, type LinkStats } from "../types";
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
   auth: { persistSession: false },
@@ -13,11 +13,6 @@ export const dynamic = "force-dynamic";
 const INK = "#1F2D43";
 const MUTED = "#5C6B82";
 
-function parseDays(v: string | undefined): number {
-  const n = Number(v);
-  return [7, 30, 90].includes(n) ? n : 30;
-}
-
 export default async function LinkStatsPage({
   params,
   searchParams,
@@ -26,11 +21,11 @@ export default async function LinkStatsPage({
   searchParams: Promise<{ days?: string }>;
 }) {
   const { clientKey, slug } = await params;
-  const days = parseDays((await searchParams).days);
+  const { key, pDays, label } = resolveDays((await searchParams).days);
 
   const { data, error } = await supabase
     .schema("chapter_reporting")
-    .rpc("smart_link_stats", { p_client_key: clientKey, p_slug: slug, p_days: days });
+    .rpc("smart_link_stats", { p_client_key: clientKey, p_slug: slug, p_days: pDays });
   const stats = (data ?? null) as LinkStats | null;
 
   return (
@@ -38,7 +33,7 @@ export default async function LinkStatsPage({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
           <Link
-            href={`/internal/redirect-rules/${clientKey}/analytics?days=${days}`}
+            href={`/internal/redirect-rules/${clientKey}/analytics?days=${key}`}
             style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}
           >
             ← All links
@@ -50,7 +45,7 @@ export default async function LinkStatsPage({
             {clientKey}
           </p>
         </div>
-        <DaysToggle days={days} />
+        <DaysToggle dayKey={key} />
       </div>
 
       {error ? (
@@ -59,10 +54,10 @@ export default async function LinkStatsPage({
         </div>
       ) : !stats || stats.totals.clicks === 0 ? (
         <div style={{ border: "1px dashed #E5E0D4", background: "#FBFAF6", borderRadius: 12, padding: "40px 24px", textAlign: "center", color: MUTED, fontSize: 13.5 }}>
-          No clicks for this link in the last {days} days.
+          No clicks for this link in {label === "all-time" ? "any window" : "the last " + label}.
         </div>
       ) : (
-        <LinkStatsPanel stats={stats} />
+        <LinkStatsPanel stats={stats} windowLabel={label} />
       )}
     </div>
   );

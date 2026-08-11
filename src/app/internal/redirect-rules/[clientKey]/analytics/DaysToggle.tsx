@@ -2,17 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { DAYS_OPTIONS, type DaysKey } from "./types";
 
 const LINE = "#E5E0D4";
 const MUTED = "#5C6B82";
 const ORANGE = "#E36410";
 
-export default function DaysToggle({ days }: { days: number }) {
+export default function DaysToggle({ dayKey }: { dayKey: DaysKey }) {
   const pathname = usePathname();
   return (
     <div style={{ display: "inline-flex", border: `1px solid ${LINE}`, borderRadius: 999, overflow: "hidden" }}>
-      {[7, 30, 90].map((d) => {
-        const active = d === days;
+      {DAYS_OPTIONS.map((d) => {
+        const active = d === dayKey;
         return (
           <Link
             key={d}
@@ -26,7 +27,7 @@ export default function DaysToggle({ days }: { days: number }) {
               background: active ? ORANGE : "white",
             }}
           >
-            {d}d
+            {d === "all" ? "All" : `${d}d`}
           </Link>
         );
       })}

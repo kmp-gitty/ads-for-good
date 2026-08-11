@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import DaysToggle from "./DaysToggle";
-import type { LinksOverview } from "./types";
+import { resolveDays, type LinksOverview } from "./types";
 
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
   auth: { persistSession: false },
@@ -17,11 +17,6 @@ const TEAL = "#2E7D5B";
 const LINE = "#E5E0D4";
 const PANEL = "#FBFAF6";
 
-function parseDays(v: string | undefined): number {
-  const n = Number(v);
-  return [7, 30, 90].includes(n) ? n : 30;
-}
-
 export default async function LinkAnalyticsOverviewPage({
   params,
   searchParams,
@@ -30,11 +25,11 @@ export default async function LinkAnalyticsOverviewPage({
   searchParams: Promise<{ days?: string }>;
 }) {
   const { clientKey } = await params;
-  const days = parseDays((await searchParams).days);
+  const { key, pDays, label } = resolveDays((await searchParams).days);
 
   const { data, error } = await supabase
     .schema("chapter_reporting")
-    .rpc("smart_links_overview", { p_client_key: clientKey, p_days: days });
+    .rpc("smart_links_overview", { p_client_key: clientKey, p_days: pDays });
   const overview = (data ?? null) as LinksOverview | null;
 
   const th: React.CSSProperties = {
@@ -61,7 +56,7 @@ export default async function LinkAnalyticsOverviewPage({
             {clientKey}
           </p>
         </div>
-        <DaysToggle days={days} />
+        <DaysToggle dayKey={key} />
       </div>
 
       {error ? (
@@ -80,7 +75,7 @@ export default async function LinkAnalyticsOverviewPage({
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
             <div style={{ border: `1px solid ${LINE}`, borderRadius: 10, background: "white", padding: "12px 14px" }}>
               <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".08em", color: FAINT, fontWeight: 600 }}>
-                Clicks · {days}d
+                Clicks · {label}
               </div>
               <div style={{ fontSize: 22, fontWeight: 700, color: INK }}>{overview.totals.clicks.toLocaleString()}</div>
             </div>
@@ -120,7 +115,7 @@ export default async function LinkAnalyticsOverviewPage({
                     <tr key={l.slug} style={{ borderBottom: `1px solid ${LINE}` }}>
                       <td style={{ ...td, textAlign: "left" }}>
                         <Link
-                          href={`/internal/redirect-rules/${clientKey}/analytics/${encodeURIComponent(l.slug)}?days=${days}`}
+                          href={`/internal/redirect-rules/${clientKey}/analytics/${encodeURIComponent(l.slug)}?days=${key}`}
                           style={{ color: ORANGE, fontWeight: 600, textDecoration: "none", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
                         >
                           {l.slug}
