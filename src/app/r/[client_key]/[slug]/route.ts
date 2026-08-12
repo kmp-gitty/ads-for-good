@@ -27,6 +27,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { fetchRules, fetchAbExperiments, fetchClientRedirectConfig, incrementRuleHitCount } from "@/app/lib/redirect/rules";
 import { resolveIdentity, applyIdentityCookies } from "@/app/lib/redirect/identity";
+import { applyEntryRelayCookie, hasInboundAttribution, pickClickId } from "@/app/lib/redirect/entry-relay";
 import { resolveGeo } from "@/app/lib/redirect/geo";
 import { classifyUA } from "@/app/lib/redirect/device";
 import { resolveSegments } from "@/app/lib/redirect/segments";
@@ -283,6 +284,21 @@ export async function GET(
   // the graph unifies normally.
   if (consent.allowCollection && !scannerSuspected) {
     applyIdentityCookies(res, identity, hostname, client_key);
+
+    // Entry-relay cookie: on ENTRY clicks (carry inbound attribution), stash the
+    // handoff context on the apex so the pixel can thread this click to the
+    // on-site session even when an ad-network intermediary (e.g. google.com/asnc)
+    // strips our ?chid from the destination URL. Only set when attribution is
+    // present, so plain exit redirects (book-now → Square) never trigger it.
+    if (hasInboundAttribution(query)) {
+      applyEntryRelayCookie(res, hostname, client_key, {
+        identityKey: identity.identityKey,
+        journeyId: identity.journeyId,
+        slug,
+        gclid: pickClickId(query),
+        utmSource: query.utm_source ?? null,
+      });
+    }
   }
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
   res.headers.set("Cache-Control", "no-store");

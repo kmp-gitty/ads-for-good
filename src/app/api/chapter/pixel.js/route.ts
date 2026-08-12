@@ -456,16 +456,66 @@ if (!anonId) {
     }
   } catch (e) {}
 
+  // Entry-relay handoff (cookie-based, ?chid's ITP/redirect-proof sibling):
+  // a wrapped-link entry may have its ?chid stripped by an ad-network
+  // intermediary (e.g. google.com/asnc) before reaching this page. The redirect
+  // also stashed the same handoff context in a first-party chapter_entry
+  // cookie on the apex, which survives that detour. Read it, alias this pixel's
+  // anon to the entry identity (idempotent; once per session), and stamp the
+  // entry channel onto this page's page_view. We do NOT clear the cookie — the
+  // click id inside is reused server-side by the book-now redirect for the
+  // Google Ads conversion relay.
+  var chapterEntryCtx = null;
+  try {
+    var entryRaw = readCookieValue("chapter_entry_" + clientKey);
+    if (entryRaw) {
+      var entry = JSON.parse(decodeURIComponent(entryRaw));
+      var nowSec = Math.floor(Date.now() / 1000);
+      // Freshness guard: ignore a stale cookie left over from an earlier visit.
+      if (entry && entry.a && (!entry.t || nowSec - entry.t < 3600)) {
+        chapterEntryCtx = entry;
+        var entryAnon = cachedAnonId || getOrCreateIdWithCookieFallback(getAnonStorageKey(clientKey), "up_anon_" + clientKey);
+        cachedAnonId = entryAnon;
+        // Alias entry identity -> this pixel's anon. entry.a is prefixed
+        // (anonymous_id:<uuid>); entryAnon is the raw uuid.
+        var entryFlag = "__chapter_entry_" + clientKey;
+        if (entry.a !== "anonymous_id:" + entryAnon && sessionStorage.getItem(entryFlag) !== "1") {
+          sessionStorage.setItem(entryFlag, "1");
+          fetch(identifyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            keepalive: true,
+            body: JSON.stringify({
+              client_key: clientKey,
+              identity_key: entryAnon,
+              previous_identity_key: entry.a
+            })
+          }).catch(function () {});
+        }
+      }
+    }
+  } catch (e) {}
+
   replayBufferedEvents();
 
   for (var i = 0; i < queue.length; i++) {
     api.push(queue[i]);
   }
 
-  api.track("page_view", {
+  var pageViewProps = {
     page_title: document.title || null,
     page_type: "site_page"
-  });
+  };
+  // Stamp the landing page_view with the entry channel when this visit arrived
+  // via a wrapped link (entry-relay cookie). Lets attribution see the paid /
+  // campaign entry even when ?chid was stripped en route.
+  if (chapterEntryCtx) {
+    pageViewProps.entry_slug = chapterEntryCtx.s || null;
+    pageViewProps.entry_gclid = chapterEntryCtx.g || null;
+    pageViewProps.entry_utm_source = chapterEntryCtx.u || null;
+  }
+  api.track("page_view", pageViewProps);
 
   var scrollMarks = { 25: false, 50: false, 75: false, 90: false };
 

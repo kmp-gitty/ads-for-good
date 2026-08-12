@@ -76,6 +76,20 @@ export function resolveIdentity(req: NextRequest, clientKey: string): ResolvedId
   };
 }
 
+// Cookie domain: leading dot so the cookie is visible across subdomains of the
+// redirect host. For chapter.notsocavalier.com strip the leftmost subdomain to
+// get .notsocavalier.com — that's the shared apex with the storefront (where the
+// pixel runs). Without this, redirect-side cookies scope to
+// .chapter.notsocavalier.com only, invisible to the pixel on notsocavalier.com
+// → identity fragmentation. Returns undefined on localhost (host-only cookie).
+export function apexCookieDomain(hostname: string): string | undefined {
+  if (hostname === "localhost" || hostname.startsWith("127.")) return undefined;
+  const stripped = hostname.replace(/^www\./, "");
+  const parts = stripped.split(".");
+  if (parts.length <= 2) return `.${stripped}`;
+  return `.${parts.slice(1).join(".")}`;
+}
+
 // Attach Set-Cookie headers to a NextResponse. The redirect endpoint typically
 // returns a 302 — Set-Cookie is preserved by browsers across redirects.
 export function applyIdentityCookies(
@@ -86,19 +100,7 @@ export function applyIdentityCookies(
 ): NextResponse {
   const { journey, identity } = cookieNames(clientKey);
 
-  // Cookie domain: leading dot so the cookie is visible across subdomains of
-  // the redirect host. For chapter.notsocavalier.com strip the leftmost
-  // subdomain to get .notsocavalier.com — that's the shared apex with the
-  // storefront (where the pixel runs). Without this, redirect-side cookies
-  // scope to .chapter.notsocavalier.com only, invisible to the pixel on
-  // notsocavalier.com → identity fragmentation.
-  const domain = (() => {
-    if (hostname === "localhost" || hostname.startsWith("127.")) return undefined;
-    const stripped = hostname.replace(/^www\./, "");
-    const parts = stripped.split(".");
-    if (parts.length <= 2) return `.${stripped}`;
-    return `.${parts.slice(1).join(".")}`;
-  })();
+  const domain = apexCookieDomain(hostname);
 
   // On localhost we can't use SameSite=None (browsers require Secure with it
   // and localhost isn't https). Fall back to Lax for dev-only.
