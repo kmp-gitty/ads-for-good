@@ -52,8 +52,10 @@ export function pickClickId(query: Record<string, string>): string | null {
   return query.gclid || query.gbraid || query.wbraid || null;
 }
 
-// Compact JSON payload, percent-encoded for cookie-value safety. Keys are
-// single-letter to keep the cookie small (click ids are long).
+// Compact JSON payload. Keys are single-letter to keep the cookie small (click
+// ids are long). NOTE: return raw JSON — Next's cookies.set() URL-encodes the
+// value itself, so encoding here too would double-encode and the pixel's single
+// decodeURIComponent would leave invalid JSON. The pixel decodes exactly once.
 function encodePayload(ctx: EntryContext): string {
   const payload: Record<string, string | number> = {
     a: ctx.identityKey,
@@ -63,7 +65,7 @@ function encodePayload(ctx: EntryContext): string {
   };
   if (ctx.gclid) payload.g = ctx.gclid;
   if (ctx.utmSource) payload.u = ctx.utmSource;
-  return encodeURIComponent(JSON.stringify(payload));
+  return JSON.stringify(payload);
 }
 
 // Set the entry-relay cookie on the 302 response. SameSite=Lax (not None): the
