@@ -20,9 +20,10 @@
 //   wbraid / utm_source) — i.e. real ENTRY clicks. Plain exit redirects (e.g. a
 //   book-now click leaving to Square) carry none of these, so they never set it.
 //
-// The stored `g` (click id) is captured now for the forthcoming Google Ads
-// server-side conversion relay (the book-now redirect will read it), but the
-// only CONSUMER wired today is the pixel's identity alias + entry-channel stamp.
+// The stored click id + platform are captured now for a future per-platform
+// server-side conversion relay (Google Ads API / Meta CAPI / TikTok Events /
+// etc. — the book-now redirect will read them), but the only CONSUMER wired
+// today is the pixel's identity alias + entry-channel stamp.
 
 import { NextResponse } from "next/server";
 import { apexCookieDomain } from "./identity";
@@ -32,24 +33,47 @@ import { apexCookieDomain } from "./identity";
 // guarding against a stale cookie being consumed on an unrelated later visit.
 const ENTRY_TTL_SECONDS = 60 * 60;
 
+// Known ad-network click identifiers → platform, across every channel Chapter
+// recognizes (the redirect already extracts these into partner_ids). Drives
+// both the entry trigger and the click id we stash for a future per-platform
+// conversion relay. Order = match priority (one click carries one platform's id
+// in practice; Google's three are listed first).
+const CLICK_ID_PARAMS: ReadonlyArray<readonly [string, string]> = [
+  ["gclid", "google"],
+  ["gbraid", "google"],   // iOS app→web
+  ["wbraid", "google"],   // iOS web→web
+  ["fbclid", "meta"],
+  ["ttclid", "tiktok"],
+  ["msclkid", "microsoft"],
+  ["rdt_cid", "reddit"],
+];
+
 export type EntryContext = {
   identityKey: string;   // prefixed `anonymous_id:<uuid>` — matches ?chid shape
   journeyId: string;
   slug: string;
-  gclid?: string | null; // the strongest available Google click id
+  clickId?: string | null;      // the ad-network click id, whatever channel
+  clickPlatform?: string | null; // google / meta / tiktok / microsoft / reddit
   utmSource?: string | null;
 };
 
-// True when the click carries inbound attribution — the signal that this is an
-// entry worth relaying (vs a plain exit redirect).
+// True when the click carries inbound attribution from ANY ad channel (a known
+// click id) or a tagged campaign (utm_source) — the signal that this is an
+// entry worth relaying, vs a plain exit redirect. Channel-agnostic: a bare
+// fbclid / ttclid / msclkid / rdt_cid link triggers it even without utm.
 export function hasInboundAttribution(query: Record<string, string>): boolean {
-  return Boolean(query.gclid || query.gbraid || query.wbraid || query.utm_source);
+  if (query.utm_source) return true;
+  return CLICK_ID_PARAMS.some(([param]) => query[param]);
 }
 
-// Prefer the strongest click id: gclid (standard) → gbraid (iOS app) → wbraid
-// (iOS web). Any one is enough for the later conversion upload.
-export function pickClickId(query: Record<string, string>): string | null {
-  return query.gclid || query.gbraid || query.wbraid || null;
+// The strongest available click id + its platform, across every ad channel.
+// Returns null when none present (e.g. a utm-only campaign link — still an
+// entry, just no click id to relay).
+export function pickClickId(query: Record<string, string>): { id: string; platform: string } | null {
+  for (const [param, platform] of CLICK_ID_PARAMS) {
+    if (query[param]) return { id: query[param], platform };
+  }
+  return null;
 }
 
 // Compact JSON payload. Keys are single-letter to keep the cookie small (click
@@ -63,7 +87,8 @@ function encodePayload(ctx: EntryContext): string {
     s: ctx.slug,
     t: Math.floor(Date.now() / 1000),
   };
-  if (ctx.gclid) payload.g = ctx.gclid;
+  if (ctx.clickId) payload.g = ctx.clickId;
+  if (ctx.clickPlatform) payload.gt = ctx.clickPlatform;
   if (ctx.utmSource) payload.u = ctx.utmSource;
   return JSON.stringify(payload);
 }

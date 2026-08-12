@@ -291,11 +291,13 @@ export async function GET(
     // strips our ?chid from the destination URL. Only set when attribution is
     // present, so plain exit redirects (book-now → Square) never trigger it.
     if (hasInboundAttribution(query)) {
+      const click = pickClickId(query);
       applyEntryRelayCookie(res, hostname, client_key, {
         identityKey: identity.identityKey,
         journeyId: identity.journeyId,
         slug,
-        gclid: pickClickId(query),
+        clickId: click?.id ?? null,
+        clickPlatform: click?.platform ?? null,
         utmSource: query.utm_source ?? null,
       });
     }

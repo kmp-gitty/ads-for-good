@@ -512,7 +512,8 @@ if (!anonId) {
   // campaign entry even when ?chid was stripped en route.
   if (chapterEntryCtx) {
     pageViewProps.entry_slug = chapterEntryCtx.s || null;
-    pageViewProps.entry_gclid = chapterEntryCtx.g || null;
+    pageViewProps.entry_click_id = chapterEntryCtx.g || null;
+    pageViewProps.entry_click_platform = chapterEntryCtx.gt || null;
     pageViewProps.entry_utm_source = chapterEntryCtx.u || null;
   }
   api.track("page_view", pageViewProps);
