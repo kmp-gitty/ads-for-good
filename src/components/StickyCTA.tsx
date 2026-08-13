@@ -23,7 +23,7 @@ type StickyCTAProps = {
   topOffset?: number;
 };
 
-const CHECKOUT_URL = "https://checkout.page/s/vl1JYN47vSjL5";
+const CHECKOUT_URL = "https://buy.stripe.com/14AaEW9c97io1kGaBe0Ba00";
 
 export default function StickyCTA({
   targetId,
