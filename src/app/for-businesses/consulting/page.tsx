@@ -1,9 +1,10 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
-    title: "Marketing Consulting - Business Consulting | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/consulting" },
+    title: "Small Business Marketing Consultant | ads for Good",
     description:
-      "Talk through your marketing or general business problems with our team. Take the time to review ideas, mock strategies, and answer any business questions you have.",
+      "A small business marketing consultant you can talk things through with. Pressure-test ideas, get answers, and decide what makes sense before you commit.",
   };
   
   export default function ConsultancyPage() {
@@ -15,7 +16,7 @@ export const metadata = {
             {/* Left */}
 <div className="flex-1 min-w-0 flex flex-col">
   <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-    Marketing &amp; Business Consulting - Start with a Conversation
+    Small Business Marketing Consultant - Start With a Conversation
   </h1>
 
   <div className="mt-3 flex gap-2 text-xs font-medium">
@@ -25,8 +26,9 @@ export const metadata = {
 </div>
 
   <p className="mt-6 text-base sm:text-lg text-neutral-800 leading-relaxed">
-    There’s value in talking things through before taking action. If you want to discuss
-    strategy, challenges, or ideas before committing to execution, this is the right place.
+    Most small business owners don’t need a marketing consultant to hand them a deck. They
+    need someone to think it through with. If you want to discuss strategy, challenges, or
+    ideas before committing to execution, this is the right place.
     <br />
     <br />
     We’ll pressure-test plans, answer questions, and help you decide what actually makes
@@ -76,7 +78,7 @@ export const metadata = {
         <section className="w-full bg-orange-100">
           <div className="mx-auto w-full max-w-6xl px-4 py-16">
             <h2 className="text-2xl sm:text-3xl font-semibold text-neutral-900">
-              What can we help with?
+              What a small business marketing consultant can help with
             </h2>
             <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-4xl">
               Use us as your business consultants, ad agency, mini-marketing team, data source, or idea
@@ -249,6 +251,53 @@ export const metadata = {
             </div>
           </section>
   
+          {/* Credentials / Experience — copied verbatim from /for-businesses/marketing-advice */}
+          <section className="mt-12">
+            <h2 className="text-xl font-semibold tracking-tight text-orange-500">
+              Experience behind the advice
+            </h2>
+            <p className="mt-2 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-3xl">
+              We broke off on our own because we’re confident in what we know — and because we’ve done
+              great things in our corporate jobs. But we’re tired of keeping marketing to the big
+              brands. No buzzwords — just clear thinking from people who’ve been in the seat.
+            </p>
+
+            <div className="mt-6 grid gap-6 md:grid-cols-3 items-start">
+              <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+                <h3 className="text-sm font-semibold text-neutral-900">Where we’ve worked</h3>
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
+                  <li>In-house marketing teams</li>
+                  <li>Agencies &amp; consulting firms</li>
+                  <li>Growth roles across different industries</li>
+                  <li>Some of the largest brands in the world</li>
+                </ul>
+                <p className="mt-3 text-xs text-neutral-700">
+                  (To name a few: Adobe, Chevron, Yelp, Wavemaker Global)
+                </p>
+              </div>
+
+              <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+                <h3 className="text-sm font-semibold text-neutral-900">What we’ve done</h3>
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
+                  <li>Improved lead and client acquisition</li>
+                  <li>Diagnosed conversion + UX issues</li>
+                  <li>Built campaigns, departments, products, and brands</li>
+                  <li>Helped teams prioritize what matters</li>
+                </ul>
+              </div>
+
+              <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
+                <h3 className="text-sm font-semibold text-neutral-900">How we apply this to you</h3>
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
+                  <li>Direct answers + clear next steps</li>
+                  <li>We’ll say “do nothing” when that’s the best move</li>
+                  <li>We’ll flag risks before you waste money</li>
+                  <li>Simple and actionable guidance</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
           {/* FAQ */}
           <section className="mt-12">
             <h2 className="text-xl font-semibold tracking-tight text-neutral-900">FAQ</h2>
@@ -258,6 +307,10 @@ export const metadata = {
   
             <div className="mt-6 space-y-3 max-w-4xl">
               {[
+                {
+                  q: "What does this cost?",
+                  a: "Nothing on its own. Consulting hours are included in every plan level. You’re paying for the plan, not the conversation.",
+                },
                 {
                   q: "What can't we talk about?",
                   a: "You paid for our time, so we can talk about anything — but it’s best spent on marketing, advertising, and general business topics. (We’re not therapists if things get meta.)",

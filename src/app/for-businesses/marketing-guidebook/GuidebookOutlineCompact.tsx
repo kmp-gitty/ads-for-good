@@ -146,7 +146,7 @@ export default function GuidebookOutlineCompact() {
         </p>
 
         <p className="mt-3 text-sm text-neutral-500">
-          Topics / keywords:{" "}
+          Topics covered:{" "}
           <span className="text-neutral-600">{active.keywords.join(", ")}</span>
         </p>
       </div>

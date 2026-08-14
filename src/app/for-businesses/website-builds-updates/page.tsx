@@ -1,9 +1,10 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
-    title: "Website Builds - Website Updates | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/website-builds-updates" },
+    title: "Website Maintenance, Redesign & Custom Builds | ads for Good",
     description:
-      "Get a new custom website, update your existing website, or maintain site performance - clear scope, simple pricing, clean execution.",
+      "Website maintenance, redesigns, and custom builds for small businesses. Human-built and monitored, with clear scope up front and no surprise invoices.",
   };
   
   export default function WebsiteBuildsUpdatesPage() {
@@ -15,7 +16,7 @@ export const metadata = {
             {/* Left: Hero copy */}
 <div className="flex-1 min-w-0 flex flex-col">
   <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight text-orange-500">
-    Website Services: New, Existing, and Upkeep
+    Website Builds, Redesigns, and Ongoing Maintenance
   </h1>
 
   <div className="mt-3 flex gap-2 text-xs font-medium">
@@ -92,7 +93,7 @@ export const metadata = {
               <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
                 <h3 className="text-sm font-semibold text-neutral-900">New Builds:</h3>
                 <p className="mt-2 text-xs text-neutral-700">
-                  Straightfoward - we build what you want & need.
+                  Straightforward - we build what you want & need.
                 </p>
                 <ul className="mt-2 space-y-1 text-xs text-neutral-700">
                   <li className="flex items-start gap-2">
@@ -132,9 +133,9 @@ export const metadata = {
               </div>
   
               <div className="rounded-3xl bg-white border border-orange-100 px-5 py-4 shadow-sm">
-                <h3 className="text-sm font-semibold text-neutral-900">Maintenance:</h3>
+                <h3 className="text-sm font-semibold text-neutral-900">Website Maintenance:</h3>
                 <p className="mt-2 text-xs text-neutral-700">
-                 Looking for a better webmaster & on-call udpates?
+                 Looking for a better webmaster & on-call updates?
                 </p>
                 <ul className="mt-2 space-y-1 text-xs text-neutral-700">
                   <li className="flex items-start gap-2">
@@ -150,6 +151,16 @@ export const metadata = {
                     Proactively flag any issues or necessary updates
                   </li>
                 </ul>
+                <p className="mt-3 text-xs text-neutral-700">
+                  Not sure what this should cost? Here&apos;s{" "}
+                  <a
+                    href="/for-people/education/website-maintenance-cost"
+                    className="text-orange-500 underline hover:text-orange-600"
+                  >
+                    what website maintenance actually costs
+                  </a>
+                  .
+                </p>
               </div>
             </div>
           </div>
@@ -184,7 +195,7 @@ export const metadata = {
               What&apos;s the process?
             </h2>
             <p className="mt-2 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-3xl">
-              Each services has a slightly different process, but all geared toward making it as easy as possible for you to hand-off the reigns for your website needs.
+              Each service has a slightly different process, but all geared toward making it as easy as possible for you to hand off the reins for your website needs.
             </p>
   
             <div className="mt-6 grid gap-6 md:grid-cols-3 items-start">
@@ -269,14 +280,14 @@ export const metadata = {
               {[
                 {
                   q: "Are all of these monthly services?",
-                  a: "No, Builds & Updates are a one-time fee and project. Mainteance is a monthly service.",
+                  a: "No, Builds & Updates are a one-time fee and project. Maintenance is a monthly service.",
                 },
                 {
                   q: "Do I need to give you access to anything?",
                   a: "You might. If you have an existing site, and want to keep it where it's hosted - we'll need access to make changes / monitor for you.",
                 },
                 {
-                  q: "Is this services to help my website's SEO?",
+                  q: "Is this service to help my website's SEO?",
                   a: (
                     <>
                       Not exactly. Web performance goes into your site's ranking, and any Builds or Updates will have SEO best practices baked in. However, if you're looking for SEO-only services, please check our{" "}
@@ -292,7 +303,7 @@ export const metadata = {
                 },
                 {
                   q: "If you build a website for me, do I HAVE to buy ongoing maintenance?",
-                  a: "No, not if you don't want to. Our Mintenance service is separate from Builds & Updates. But, keep in mind, your website still has ongoing maintenance costs - which we'll make clear if you want to maintain your own site after we build.",
+                  a: "No, not if you don't want to. Our Maintenance service is separate from Builds & Updates. But, keep in mind, your website still has ongoing maintenance costs - which we'll make clear if you want to maintain your own site after we build.",
                 },
               ].map((item) => (
                 <details

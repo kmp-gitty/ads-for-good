@@ -2,7 +2,8 @@ import ProfileOutlineCompact from "./ProfileOutlineCompact";
 import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
-  title: "Digital Profile Management for Small Businesses | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/digital-profile-management" },
+  title: "Google Business Profile & Listing Management | ads for Good",
   description:
     "Ongoing profile management services. We maintain Google Business, Yelp, Facebook, and other key listings to keep your digital presence accurate, consistent, and responsive.",
 };
@@ -51,7 +52,7 @@ export default function DigitalProfileManagementPage() {
             {/* Image */}
             <div className="mb-4 h-40 w-full overflow-hidden rounded-2xl bg-neutral-100">
               <img
-                src="/images/MarketingGuidebook.png"
+                src="/images/OwnaBusiness.png"
                 alt="Digital Profile Management"
                 className="object-contain w-full h-full"
               />

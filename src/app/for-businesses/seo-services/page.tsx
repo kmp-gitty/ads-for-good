@@ -1,7 +1,8 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
-    title: "SEO Services for Small Businesses | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/seo-services" },
+    title: "SEO Services for Small Businesses | ads for Good",
     description:
       "Practical SEO services for small businesses and local search. Improve Google and other search rankings with clean setup, technical fixes, and sustainable organic growth.",
   };
@@ -51,7 +52,7 @@ export const metadata = {
                 <div className="mb-4 h-40 w-full overflow-hidden rounded-2xl bg-neutral-100">
                   <img
                     src="/images/Consulting.png"
-                    alt="Consulting Session Illustration"
+                    alt="Small business SEO planning illustration"
                     width={500}
                     height={500}
                     className="object-contain w-full h-full"
@@ -274,9 +275,20 @@ export const metadata = {
                   a: "Hopefully your rankings are growing, you're satisfied, and we continue month to month monitoring. But, if not, we stop.",
                 },
                 {
-                    q: "How does the initial payment work?",
-                    a: "The $250 analysis and planning fee begins the process, then we start your monthly service fee the next calendar month after our planning phase.",
-                  },
+                  q: "How does pricing work?",
+                  a: (
+                    <>
+                      SEO runs as a marketing project inside our on-demand plans, so it&apos;s covered by your plan price.{" "}
+                      <a
+                        href="https://www.ads4good.com/for-businesses"
+                        className="text-orange-500 underline hover:text-orange-600"
+                      >
+                        See plan pricing
+                      </a>
+                      .
+                    </>
+                  ),
+                },
                 {
                   q: "What if I want help with ads instead?",
                   a: (

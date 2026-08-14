@@ -2,7 +2,8 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
-  title: "Outsourced Marketing Team for Small Businesses | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/marketing-team" },
+  title: "Outsourced Marketing Team for Small Businesses | ads for Good",
   description:
     "Work with an experienced outsourced marketing team for your small business. Strategy, execution, SEO, paid ads, and ongoing support - without the cost of a full-time hire.",
 };

@@ -1,7 +1,8 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
-    title: "Ask a Marketing Expert – Business Advice On Demand | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/marketing-advice" },
+    title: "Unlimited Marketing Advice, Included in Every Plan | ads for Good",
     description:
       "Have business questions, but want something flexible? Get guidance and information from marketing and entrepreneurial pros that have done it before.",
   };
@@ -226,7 +227,7 @@ export const metadata = {
                       For this service, we can answer questions and guide you. If you want an in-depth
                       review, see our{" "}
                       <a
-                        href="https://www.ads4good.com/for-businesses//digital-health-check"
+                        href="https://www.ads4good.com/for-businesses/digital-health-check"
                         className="text-orange-500 underline hover:text-orange-600"
                       >
                         Digital Health Check

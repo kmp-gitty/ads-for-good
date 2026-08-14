@@ -5,7 +5,8 @@ import AutobooksCheckoutModal from "@/components/AutobooksCheckoutModal";
 import GuidebookCheckoutCTA from "@/components/GuidebookCheckoutCTA";
 
 export const metadata = {
-  title: "Small Business Marketing Guide - DIY Strategy & Playbooks | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/marketing-guidebook" },
+  title: "Small Business Marketing Guide - DIY Strategy & Playbooks | ads for Good",
   description:
     "Prefer to do things on your own, but just need a little help? Use our downloadable digital guidebook to learn how marketing is done by fortune 500 companies to make their strategies your own.",
 };
@@ -184,7 +185,7 @@ export default function MarketingGuidebookPage() {
           <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
             <h3 className="text-sm font-semibold text-neutral-900">Who this is for</h3>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-              <li>Business owners doing marketing theselves</li>
+              <li>Business owners doing marketing themselves</li>
               <li>Anyone curious about simple improvements</li>
               <li>Owners in-between “I think there's more” and “I don't know how”</li>
             </ul>

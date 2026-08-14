@@ -2,9 +2,10 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
-    title: "Digital Health Check for Digital Properties | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/digital-health-check" },
+    title: "Digital Presence Audit: Website & Business Profiles | ads for Good",
     description:
-      "A full review of your website and digital business profiles to understand what exists, what’s broken, and what to improve or add.",
+      "A human review of your website and every business profile customers check before they call. What's broken, what's missing, and what to fix first. 3-5 business days.",
   };
   
   export default function DigitalPropertyAuditPage() {
@@ -62,8 +63,8 @@ export const metadata = {
                 <h2 className="text-sm font-semibold text-neutral-900">What you get.</h2>
   
                 <p className="mt-3 text-xs sm:text-sm text-neutral-800 leading-relaxed">
-                  A full digital health check — including assessment, prioritized fixes,
-                  clear recommendations, and I can make the changes for you.
+                  A full audit — including assessment, prioritized fixes,
+                  clear recommendations, and we can make the changes for you.
                   <br />
                   <br />
                   We&apos;ll ask what&apos;s concerning you most and start there, but will do some sleuthing

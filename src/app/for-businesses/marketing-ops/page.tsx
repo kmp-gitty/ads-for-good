@@ -2,9 +2,10 @@ import InquiryLauncher from "@/components/InquiryLauncher";
 import StickyCTA from "@/components/StickyCTA";
 
 export const metadata = {
-    title: "Direct Mail Marketing | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/marketing-ops" },
+    title: "Marketing Operations for Small Businesses | ads for Good",
     description:
-      "Professional and affordable direct mail marketing for your business. Reach local households with relevant messaging to get more business.",
+      "Marketing operations support for small businesses. Get your CRM organized, your tools connected, and your marketing measurable. Part of our on-demand plans.",
   };
   
   export default function LocalMarketingDetailPage() {
@@ -38,16 +39,14 @@ export const metadata = {
               <div className="rounded-3xl border border-orange-200 bg-white shadow-sm px-6 py-6">
                 <div className="mb-4 h-40 w-full overflow-hidden rounded-2xl bg-neutral-100">
                   <img
-                    src="/images/LocalMail.png"
-                    alt="Local Marketing Visual"
+                    src="/images/Consulting.png"
+                    alt="Marketing operations systems illustration"
                     className="object-contain w-full h-full"
                   />
                 </div>
   
                 <h2 className="text-sm font-semibold text-neutral-900">
-                  <a href="#ways-to-participate" className="text-orange-500 hover:underline">
-                   What This Can Include:
-                  </a>
+                  What This Can Include:
                 </h2>
   
                 <p className="mt-3 text-xs sm:text-sm text-neutral-800 leading-relaxed">
@@ -62,7 +61,7 @@ export const metadata = {
                   Technologies: Marketing stack ideation and integration
                   <br />
                   <br />
-                  Processes: worflow setup, automation setup, and process documentation
+                  Processes: workflow setup, automation setup, and process documentation
                 </p>
               </div>
             </div>
@@ -88,7 +87,7 @@ export const metadata = {
           </div>
         </section>
   
-{/* Full-width Direct Mail CTA */}
+{/* Full-width Marketing Ops CTA */}
 <section className="mx-auto w-full max-w-6xl px-4 py-10">
   <div className="rounded-3xl border border-orange-200 bg-orange-50 px-6 py-8 sm:px-10 sm:py-10 flex justify-center">
   <div id="primary-cta">
@@ -111,7 +110,7 @@ export const metadata = {
               <h3 className="text-sm font-semibold text-neutral-900">Who this is for</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
                 <li>Business owners looking for help cleaning up processes</li>
-                <li>Entrepreneurs wanting to to know where leads are coming from</li>
+                <li>Entrepreneurs wanting to know where leads are coming from</li>
                 <li>Owners looking to automate relevant processes</li>
               </ul>
             </div>
@@ -119,9 +118,9 @@ export const metadata = {
             <div className="rounded-3xl border border-orange-700 bg-orange-50/60 px-5 sm:px-6 py-5 sm:py-6">
               <h3 className="text-sm font-semibold text-neutral-900">Who this is not for</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm sm:text-base text-neutral-800">
-                <li>Businesses looking for a digital campaign</li>
-                <li>Teams looking for ads consulting on free tools</li>
-                <li>Anyone just looking for instructions on direct mail campaigns</li>
+                <li>Businesses looking for campaign execution before their systems are in place</li>
+                <li>Teams who want a tool recommended and nothing else</li>
+                <li>Anyone looking for DIY instructions to connect their own stack</li>
               </ul>
             </div>
           </section>
@@ -196,7 +195,7 @@ export const metadata = {
       {/* RIGHT COLUMN */}
       <div>
         <h3 className="mt-4 md:mt-4 text-lg font-semibold text-neutral-900">
-          Need help beyond a mailer campaign?
+          Need help beyond your marketing systems?
         </h3>
 
         <p className="mt-2 text-sm text-neutral-700">

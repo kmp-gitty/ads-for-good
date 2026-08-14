@@ -1,9 +1,10 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
-    title: "Digital Advertising Services - Search, Social & Paid Media | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/digital-ads" },
+    title: "PPC & Paid Ads Management for Small Business | ads for Good",
     description:
-      "Paid digital ads management for small and medium businesses. Plan, buy, report, and manage paid ads campaigns for your business.",
+      "Paid ads management for small businesses across search, social, ecommerce, and more. We plan, build, run, and report on your campaigns. You keep the accounts.",
   };
   
   export default function DigitalAdsPage() {
@@ -14,7 +15,7 @@ export const metadata = {
           {/* Hero / Intro */}
           <section className="text-left">
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-orange-500">
-              Digital Advertising Services for Small & Medium Businesses
+              Paid Ads Management for Small & Medium Businesses
             </h1>
 
             <div className="mt-3 flex gap-2 text-xs font-medium">
@@ -43,16 +44,23 @@ export const metadata = {
                 <br />
                 <br />
                 What's a digital foundation? Do you have a professional looking website? Google profile? Facebook page? Do you have a digital presence that signals: I'm a real business, and I'm serious about serving you with whatever I'm claiming to do / provide?
+                <br />
+                <br />
+                Not sure what any of this should cost? Here&apos;s{" "}
+                <a href="/for-people/education/ppc-management-pricing" className="text-orange-500 underline hover:text-orange-600">
+                  how paid ads pricing usually works
+                </a>
+                .
               </p>
             </div>
-  
+
             <div>
               <h2 className="text-xl font-semibold text-orange-500">When Ads Don't Make Sense</h2>
               <p className="mt-4 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-prose">
-                If your business isn't ready for growth, doesn't have a plan, or isn't ready to spend an amount to make an attempt at advertising meaningul - budget is better spent elsewhere.
+                If your business isn't ready for growth, doesn't have a plan, or isn't ready to spend an amount to make an attempt at advertising meaningful - budget is better spent elsewhere.
                 <br />
                 <br />
-                If you're inflexible about making website updates or learning new tools to measure performance - budget is better spend elsewhere.
+                If you're inflexible about making website updates or learning new tools to measure performance - budget is better spent elsewhere.
                 <br />
                 <br />
                 If you're going to ask for assistance, but rather just do things your way - budget is better spent elsewhere.
@@ -65,7 +73,7 @@ export const metadata = {
             {/* Left card */}
             <div className="rounded-3xl border border-orange-200 bg-orange-50 px-5 sm:px-6 py-6 sm:py-8">
               <h2 className="text-lg font-semibold text-orange-500">
-                What does ads management mean?
+                What paid ads management actually means
               </h2>
               <p className="mt-3 text-sm sm:text-base text-neutral-800 leading-relaxed max-w-prose">
                 We analyze what you've done in the past, research best practices for your category, then plan & execute ads on your behalf.
@@ -265,8 +273,19 @@ export const metadata = {
                   a: "Hopefully your ads are performing better, you're satisfied, and we continue month to month. But, if not, we stop."
                 },
                 {
-                  q: "How does the initial payment work?",
-                  a: "$250 for initial analysis & planning then $100 a month per channel. Say you want us to manage Google & FB ads - Your initial 2 month period will cost you $450, then $200 month to month after that if you continue.",
+                  q: "How much does this cost?",
+                  a: (
+                    <>
+                      Paid ads management is a marketing project inside our on-demand plans, so it&apos;s covered by your plan price rather than billed separately per channel.{" "}
+                      <a href="/for-businesses" className="text-orange-500 underline hover:text-orange-600">
+                        See plan pricing
+                      </a>
+                      .
+                      <br />
+                      <br />
+                      Ad spend is separate — that goes straight to Google, Meta, or wherever you&apos;re advertising, and it stays in your accounts.
+                    </>
+                  ),
                 },
                 {
                     q: "What if I want help with organic (non-paid) activity instead?",

@@ -1,7 +1,8 @@
 import InquiryLauncher from "@/components/InquiryLauncher";
 
 export const metadata = {
-    title: "Email Marketing Services | Ads for Good",
+  alternates: { canonical: "https://www.ads4good.com/for-businesses/email-marketing" },
+    title: "Email Marketing Services | ads for Good",
     description:
       "Email marketing support for strategy, setup, segmentation, execution, and performance analysis.",
   };
@@ -31,7 +32,7 @@ export default function DigitalProfileManagementPage() {
   <section id="primary-cta" className="mt-8">
   <InquiryLauncher
     label="Talk To Us About On-Demand Marketing Plans"
-    defaultServices={["Email Marketing"]}
+    defaultServices={["Email Marketing Services"]}
     sourceLabel="Email Marketing — Hero CTA"
     className="inline-flex w-fit items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-600"
   />
@@ -45,8 +46,8 @@ export default function DigitalProfileManagementPage() {
             {/* Image */}
             <div className="mb-4 h-40 w-full overflow-hidden rounded-2xl bg-neutral-100">
               <img
-                src="/images/MarketingGuidebook.png"
-                alt="Digital Profile Management"
+                src="/images/LocalNewsletter.png"
+                alt="Email marketing campaign illustration"
                 className="object-contain w-full h-full"
               />
             </div>
@@ -138,7 +139,7 @@ export default function DigitalProfileManagementPage() {
             {[
               {
                 q: "What's the process for this?",
-                a: "Sign up for service. Tell us which profiles to maintain. Provide access. That's it.",
+                a: "Sign up for service. Tell us which campaigns and lists you want handled. Provide platform access. That's it.",
               },
               {
                 q: "Which ESP platforms do you manage?",
@@ -154,7 +155,7 @@ export default function DigitalProfileManagementPage() {
               },
               {
                 q: "Do you manage existing email campaigns only?",
-                a: "No, if you want to set up your first campaign - we cand to that too!",
+                a: "No, if you want to set up your first campaign - we can do that too!",
               },
             ].map((item) => (
               <details
