@@ -54,6 +54,7 @@ export type EntryContext = {
   slug: string;
   clickId?: string | null;      // the ad-network click id, whatever channel
   clickPlatform?: string | null; // google / meta / tiktok / microsoft / reddit
+  clickKind?: string | null;    // exact param: gclid / gbraid / wbraid / fbclid / ...
   utmSource?: string | null;
 };
 
@@ -66,12 +67,14 @@ export function hasInboundAttribution(query: Record<string, string>): boolean {
   return CLICK_ID_PARAMS.some(([param]) => query[param]);
 }
 
-// The strongest available click id + its platform, across every ad channel.
-// Returns null when none present (e.g. a utm-only campaign link — still an
-// entry, just no click id to relay).
-export function pickClickId(query: Record<string, string>): { id: string; platform: string } | null {
+// The strongest available click id + its platform + its exact kind (the param
+// name — gclid/gbraid/wbraid/fbclid/...), across every ad channel. Returns null
+// when none present (e.g. a utm-only campaign link — still an entry, just no
+// click id to relay). The kind lets the Google Ads feed place gclid vs gbraid vs
+// wbraid in their distinct columns.
+export function pickClickId(query: Record<string, string>): { id: string; platform: string; kind: string } | null {
   for (const [param, platform] of CLICK_ID_PARAMS) {
-    if (query[param]) return { id: query[param], platform };
+    if (query[param]) return { id: query[param], platform, kind: param };
   }
   return null;
 }
@@ -89,6 +92,7 @@ function encodePayload(ctx: EntryContext): string {
   };
   if (ctx.clickId) payload.g = ctx.clickId;
   if (ctx.clickPlatform) payload.gt = ctx.clickPlatform;
+  if (ctx.clickKind) payload.gk = ctx.clickKind;
   if (ctx.utmSource) payload.u = ctx.utmSource;
   return JSON.stringify(payload);
 }

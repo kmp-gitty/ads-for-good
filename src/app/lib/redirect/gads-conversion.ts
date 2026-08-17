@@ -26,7 +26,7 @@ export type GadsConfig = {
   default_value: number;
 };
 
-export type EntryClick = { clickId: string; platform: string; tsSec: number | null };
+export type EntryClick = { clickId: string; platform: string; kind: string | null; tsSec: number | null };
 
 // 5-min in-memory cache of enabled config per (client, slug). null = no config.
 const configCache = new Map<string, { at: number; cfg: GadsConfig | null }>();
@@ -52,6 +52,7 @@ export function readEntryClick(req: NextRequest, clientKey: string): EntryClick 
   return {
     clickId: obj.g,
     platform: typeof obj.gt === "string" ? obj.gt : "google",
+    kind: typeof obj.gk === "string" ? obj.gk : null,
     tsSec: typeof obj.t === "number" ? obj.t : null,
   };
 }
@@ -86,6 +87,7 @@ export async function recordGadsConversion(input: {
   clientKey: string;
   clickId: string;
   clickPlatform: string;
+  clickKind: string | null;
   cfg: GadsConfig;
 }): Promise<void> {
   try {
@@ -97,6 +99,7 @@ export async function recordGadsConversion(input: {
           client_key: input.clientKey,
           click_id: input.clickId,
           click_platform: input.clickPlatform,
+          click_kind: input.clickKind,
           conversion_action_name: input.cfg.conversion_action_name,
           conversion_ts: new Date().toISOString(),
           value: input.cfg.default_value,

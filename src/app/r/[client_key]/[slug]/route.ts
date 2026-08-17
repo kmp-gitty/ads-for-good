@@ -290,6 +290,7 @@ export async function GET(
           clientKey: client_key,
           clickId: entryClick.clickId,
           clickPlatform: entryClick.platform,
+          clickKind: entryClick.kind,
           cfg: gadsCfg,
         });
       }
@@ -323,6 +324,7 @@ export async function GET(
         slug,
         clickId: click?.id ?? null,
         clickPlatform: click?.platform ?? null,
+        clickKind: click?.kind ?? null,
         utmSource: query.utm_source ?? null,
       });
     }
