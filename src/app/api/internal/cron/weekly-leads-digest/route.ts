@@ -65,6 +65,11 @@ export async function GET(req: NextRequest) {
       FROM chapter_engagement.captured_leads l
       JOIN chapter_config.clients c ON c.client_key = l.client_key
       WHERE c.deletion_requested_at IS NULL
+        -- Skip tenants whose leads already sync to a CRM (crm_provider set):
+        -- the email digest would duplicate what's already in crm.prospects +
+        -- the Leads view. Covers the agency-internal adsforgood_prod tenant,
+        -- which has no client_employee owner to address the digest to anyway.
+        AND c.crm_provider IS NULL
         AND (
           c.tools_enabled IS NULL
           OR 'chapter' = ANY(c.tools_enabled)
