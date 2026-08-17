@@ -28,6 +28,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { fetchRules, fetchAbExperiments, fetchClientRedirectConfig, incrementRuleHitCount } from "@/app/lib/redirect/rules";
 import { resolveIdentity, applyIdentityCookies } from "@/app/lib/redirect/identity";
 import { applyEntryRelayCookie, hasInboundAttribution, pickClickId } from "@/app/lib/redirect/entry-relay";
+import { readEntryClick, fetchGadsConfig, recordGadsConversion } from "@/app/lib/redirect/gads-conversion";
 import { resolveGeo } from "@/app/lib/redirect/geo";
 import { classifyUA } from "@/app/lib/redirect/device";
 import { resolveSegments } from "@/app/lib/redirect/segments";
@@ -269,6 +270,30 @@ export async function GET(
   // no-rule paths (default-destination via ?to= isn't tied to a stored rule).
   if (matchedRuleId) {
     after(() => incrementRuleHitCount(matchedRuleId));
+  }
+
+  // Google Ads server-side conversion capture. If this slug is the client's
+  // configured conversion slug (chapter_config.gads_conversions, enabled) AND
+  // the entry-relay cookie carries an ad click id, record a conversion (deduped)
+  // for the delivery layer to hand to Google Ads. Fired server-side in after(),
+  // so it adds no latency and can't be lost to the mobile-Safari beacon race the
+  // client-side gtag tag suffered. readEntryClick is cheap (no DB) and bails when
+  // there's no ad click, so the config lookup only runs for ad-attributed clicks.
+  // Same consent + non-scanner gate as the other writes.
+  if (consent.allowCollection && !scannerSuspected) {
+    after(async () => {
+      const entryClick = readEntryClick(req, client_key);
+      if (!entryClick) return;
+      const gadsCfg = await fetchGadsConfig(client_key, slug);
+      if (gadsCfg && entryClick.platform === gadsCfg.platform) {
+        await recordGadsConversion({
+          clientKey: client_key,
+          clickId: entryClick.clickId,
+          clickPlatform: entryClick.platform,
+          cfg: gadsCfg,
+        });
+      }
+    });
   }
 
   const hostname = req.nextUrl.hostname;
