@@ -6,6 +6,11 @@ type SatellitePage = {
     url: string;
   };
 
+// Shared inline-link style. rel="noopener" (NOT nofollow, NOT noreferrer) so
+// these pass link equity AND a referrer to our own network sites — dofollow.
+const LINK =
+  "text-orange-500 underline underline-offset-4 hover:text-orange-600";
+
 const SATELLITE_PAGES: Record<string, SatellitePage> = {
     steps2miles: {
         title: "Steps2Miles",
@@ -114,7 +119,7 @@ const SATELLITE_PAGES: Record<string, SatellitePage> = {
                 rel="noreferrer"
                 className="font-medium text-orange-500 underline underline-offset-4 hover:text-orange-600"
               >
-                Read more about "for Good" here.
+                Read more about &ldquo;for Good&rdquo; here.
               </a>
             </p>
       
@@ -125,7 +130,98 @@ const SATELLITE_PAGES: Record<string, SatellitePage> = {
         ),
         url: "https://calculateovertimepay.com",
       },
-//Copy above and paste below for new satellite sites      
+
+      utilitycommons: {
+        title: "Utility Commons",
+        description: (
+          <div className="space-y-4">
+            <p>
+              <span className="font-semibold">What:</span>{" "}
+              <a href="https://utilitycommons.com/" target="_blank" rel="noopener" className={LINK}>
+                Utility Commons
+              </a>{" "}
+              is a free collection of calculators, conversions, reference charts,
+              and quizzes built to answer everyday questions fast. It spans{" "}
+              <a href="https://utilitycommons.com/calculators/" target="_blank" rel="noopener" className={LINK}>
+                everyday calculators
+              </a>{" "}
+              like the{" "}
+              <a href="https://utilitycommons.com/calculators/everyday/age-calculator/" target="_blank" rel="noopener" className={LINK}>
+                age calculator
+              </a>{" "}
+              and{" "}
+              <a href="https://utilitycommons.com/calculators/health-fitness/body-fat-percentage/" target="_blank" rel="noopener" className={LINK}>
+                body fat percentage calculator
+              </a>
+              ,{" "}
+              <a href="https://utilitycommons.com/charts/" target="_blank" rel="noopener" className={LINK}>
+                reference charts
+              </a>{" "}
+              including a{" "}
+              <a href="https://utilitycommons.com/charts/metric-conversion-chart/" target="_blank" rel="noopener" className={LINK}>
+                metric conversion chart
+              </a>{" "}
+              and{" "}
+              <a href="https://utilitycommons.com/charts/tv-size-distance-chart/" target="_blank" rel="noopener" className={LINK}>
+                TV size and viewing distance chart
+              </a>
+              ,{" "}
+              <a href="https://utilitycommons.com/conversions/" target="_blank" rel="noopener" className={LINK}>
+                unit conversions
+              </a>{" "}
+              like{" "}
+              <a href="https://utilitycommons.com/conversions/cups-to-ounces/" target="_blank" rel="noopener" className={LINK}>
+                cups to ounces
+              </a>{" "}
+              and our{" "}
+              <a href="https://utilitycommons.com/conversions/roman-numerals/" target="_blank" rel="noopener" className={LINK}>
+                Roman numeral converter
+              </a>
+              , plus a set of{" "}
+              <a href="https://utilitycommons.com/quizzes/" target="_blank" rel="noopener" className={LINK}>
+                quizzes
+              </a>{" "}
+              for when you&rsquo;d rather find out{" "}
+              <a href="https://utilitycommons.com/quizzes/spirit-animal/" target="_blank" rel="noopener" className={LINK}>
+                which animal matches you
+              </a>
+              .
+            </p>
+
+            <p>
+              <span className="font-semibold">Why:</span>{" "}
+              Utility Commons is where our network grows up. We started by building
+              single-purpose micro-sites for everyday needs &mdash; and they work.
+              But a search for &ldquo;how many cups in an ounce&rdquo; and a search
+              for &ldquo;what&rsquo;s my shoe size&rdquo; deserve the same quality
+              of answer in the same place, without a dozen scattered domains.
+              Utility Commons is the common ground: one site, built to be genuinely
+              more useful than whatever currently shows up first.
+            </p>
+
+            <p>
+              <span className="font-semibold">for Good:</span>{" "}
+              20% of revenue from this site and others like it go to community
+              &amp; non-profit organizations.{" "}
+              <a
+                href="https://www.ads4good.com/for-good"
+                target="_blank"
+                rel="noopener"
+                className="font-medium text-orange-500 underline underline-offset-4 hover:text-orange-600"
+              >
+                Read more about our for Good aspect if you&rsquo;d like.
+              </a>
+            </p>
+
+            <p>
+              We get bored easily, we like building things, and we like helping
+              people. Utility Commons keeps all three going at once.
+            </p>
+          </div>
+        ),
+        url: "https://utilitycommons.com/",
+      },
+//Copy above and paste below for new satellite sites
 };
 
 export default async function NetworkDetailPage({

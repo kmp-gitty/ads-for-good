@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -9,15 +9,59 @@ type Satellite = {
   name: string;
   category: string;
   tagline: string;
-  description: string;
-  slug: string; // for future internal articles, e.g. /network/home-tips-companion
-  image: string;
+  description: ReactNode; // string, or JSX with inline links
+  slug: string; // internal detail page, e.g. /network/utilitycommons
+  image?: string; // optional — falls back to a branded placeholder tile
+  url?: string; // external site; defaults to https://<slug>.com
+  ctaLabel?: string; // external CTA label; defaults to "Go to Calculator"
 };
 
 const SITES_PER_LOAD = 8;
 
 // Placeholder satellites – replace / expand as you create real sites
 const satellites: Satellite[] = [
+  {
+    id: 4,
+    name: "Utility Commons",
+    category: "Everyday Tools",
+    tagline: "A growing family of everyday calculators, charts, and quizzes.",
+    description: (
+      <>
+        The umbrella site for quick answers — from a{" "}
+        <a
+          href="https://utilitycommons.com/calculators/finance/tip-calculator/"
+          target="_blank"
+          rel="noopener"
+          className="text-orange-500 hover:underline"
+        >
+          tip calculator
+        </a>{" "}
+        and{" "}
+        <a
+          href="https://utilitycommons.com/calculators/finance/take-home-pay-calculator/"
+          target="_blank"
+          rel="noopener"
+          className="text-orange-500 hover:underline"
+        >
+          take-home pay calculator
+        </a>{" "}
+        to a full{" "}
+        <a
+          href="https://utilitycommons.com/charts/shoe-size-chart/"
+          target="_blank"
+          rel="noopener"
+          className="text-orange-500 hover:underline"
+        >
+          shoe size chart
+        </a>
+        . Over 40 tools and counting.
+      </>
+    ),
+    slug: "utilitycommons",
+    image: "/images/UtilityCommons_Logo.png",
+    url: "https://utilitycommons.com/",
+    ctaLabel: "Go to Site",
+  },
   {
     id: 1,
     name: "Steps to Miles Calculator",
@@ -104,16 +148,24 @@ export default function NetworkClient() {
                 key={site.id}
                 className="flex flex-col rounded-3xl bg-orange-50/40 border border-orange-100 overflow-hidden shadow-sm"
               >
-                {/* Top media area (image placeholder) */}
+                {/* Top media area (image, or branded placeholder if none) */}
                 <div className="relative h-40 bg-neutral-200/60">
-                    <Image
+                    {site.image ? (
+                      <Image
                         src={site.image}
                         alt={`${site.name} preview`}
                         fill
                         className="object-cover"
                         sizes="(max-width: 768px) 100vw, 50vw"
                         priority={site.id === 1}
-                    />
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-100 to-orange-200">
+                        <span className="px-4 text-center text-lg font-bold text-orange-600">
+                          {site.name}
+                        </span>
+                      </div>
+                    )}
 
                   {/* Category badge */}
                   <div className="absolute bottom-2 right-2 rounded-full bg-white/90 px-3 py-1 text-[10px] font-medium text-neutral-700 shadow-sm">
@@ -129,7 +181,13 @@ export default function NetworkClient() {
                   <p className="mt-1 text-xs text-neutral-600">
                     {site.tagline}
                   </p>
-                  <p className="mt-2 text-sm text-neutral-700 line-clamp-3">
+                  <p
+                    className={
+                      typeof site.description === "string"
+                        ? "mt-2 text-sm text-neutral-700 line-clamp-3"
+                        : "mt-2 text-sm text-neutral-700"
+                    }
+                  >
                     {site.description}
                   </p>
 
@@ -150,12 +208,12 @@ export default function NetworkClient() {
                     </Link>
 
                     <a
-                        href={`https://${site.slug}.com`}
+                        href={site.url ?? `https://${site.slug}.com`}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener"
                         className="inline-flex items-center gap-2 text-sm font-medium text-black hover:underline"
                     >
-                        Go to Calculator <span aria-hidden="true">↑</span>
+                        {site.ctaLabel ?? "Go to Calculator"} <span aria-hidden="true">↑</span>
                     </a>
                     </div>
 
