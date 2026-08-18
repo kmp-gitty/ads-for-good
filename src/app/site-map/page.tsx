@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Sitemap | Ads for Good",
+  title: "Sitemap | ads for Good",
   description: "Browse all pages on Ads for Good.",
 };
 
@@ -141,6 +141,56 @@ export default function SitemapPage() {
                   Chapter: Lifecycle Attribution
                 </Link>
               </li>
+              <li>
+                <Link href="/for-businesses/smart-links" className="text-orange-500 hover:underline">
+                  Smart Links
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/for-businesses/smart-prompts"
+                  className="text-orange-500 hover:underline"
+                >
+                  Smart Prompts
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/for-businesses/email-marketing"
+                  className="text-orange-500 hover:underline"
+                >
+                  Email Marketing
+                </Link>
+              </li>
+              <li>
+                <Link href="/for-businesses/marketing-ops" className="text-orange-500 hover:underline">
+                  Marketing Operations
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/for-businesses/reduce-software-costs"
+                  className="text-orange-500 hover:underline"
+                >
+                  Subscription Freedom
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/for-businesses/ad-monetization"
+                  className="text-orange-500 hover:underline"
+                >
+                  Newsletter Monetization
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/for-businesses/newsletter-advertising"
+                  className="text-orange-500 hover:underline"
+                >
+                  Newsletter Advertising
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -176,7 +226,22 @@ export default function SitemapPage() {
                 </Link>
               </li>
               <li>
-                <Link href="/sitemap" className="text-orange-500 hover:underline">
+                <Link href="/network" className="text-orange-500 hover:underline">
+                  Utility Websites
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className="text-orange-500 hover:underline">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms-disclaimer" className="text-orange-500 hover:underline">
+                  Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link href="/site-map" className="text-orange-500 hover:underline">
                   Sitemap
                 </Link>
               </li>
