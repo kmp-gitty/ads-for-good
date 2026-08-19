@@ -484,6 +484,15 @@ if (!anonId) {
   // it. Runs BEFORE the reader below, so this same page_view still gets stamped.
   // Only fires when a known click id is present (no-op for organic traffic and
   // for utm-only wrapped links, whose 60-min redirect cookie is left untouched).
+  //
+  // TODO (durable upgrade, gated on data — see docs/nsc-gads-server-conversion-
+  // runbook.md Phase 4): this document.cookie write is capped at ~7 days on
+  // Safari (ITP caps JS-set cookies regardless of the 90-day Max-Age or the
+  // A-record). For the full window past 7 days, set chapter_entry SERVER-side
+  // via Set-Cookie on the collect endpoint's response (already on the A-record
+  // host), or resolve the durable server-set up_anon + DB-lookup the gclid at
+  // the book-now redirect. Only build once real bookings show up in the 1–4
+  // week post-click window on Safari.
   try {
     if (clientKey) {
       var CHAPTER_CLICK_IDS = [
