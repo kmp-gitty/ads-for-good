@@ -121,6 +121,23 @@ function readCookieValue(name) {
   return null;
 }
 
+// eTLD+1 with a leading dot, so a cookie set here on the storefront apex is
+// also sent to the chapter.<apex> redirect host (e.g. .notsocavalier.com is
+// readable by both notsocavalier.com and chapter.notsocavalier.com). Simple
+// last-two-labels heuristic — correct for the single-part TLDs every current
+// client uses; returns null for localhost / raw IP (host-only cookie).
+function chapterApexCookieDomain() {
+  try {
+    var h = location.hostname;
+    if (!h || h === "localhost" || /^[0-9.]+$/.test(h)) return null;
+    var parts = h.split(".");
+    if (parts.length <= 2) return "." + h;
+    return "." + parts.slice(-2).join(".");
+  } catch (e) {
+    return null;
+  }
+}
+
 function getOrCreateId(storageKey) {
   try {
     var existing = readStorage(storageKey);
@@ -452,6 +469,61 @@ if (!anonId) {
       var newUrl = window.location.pathname + (newQs ? "?" + newQs : "") + window.location.hash;
       if (window.history && window.history.replaceState) {
         window.history.replaceState({}, document.title, newUrl);
+      }
+    }
+  } catch (e) {}
+
+  // Client-side entry-relay CAPTURE (the ITP-proof companion to the redirect's
+  // server-set cookie). When a wrapped ad entry bounces through the ad network's
+  // own click tracker (e.g. google.com/asnc), Safari's bounce-tracking mitigation
+  // purges the chapter_entry cookie the redirect set mid-bounce — so it never
+  // reaches the book-now redirect. But auto-tagging still drops the click id on
+  // THIS landing URL, first-party. Capture it here — on the page the visitor
+  // actually loads, not during a cross-site bounce — and write chapter_entry
+  // ourselves, so the book-now redirect's server-side conversion relay can read
+  // it. Runs BEFORE the reader below, so this same page_view still gets stamped.
+  // Only fires when a known click id is present (no-op for organic traffic and
+  // for utm-only wrapped links, whose 60-min redirect cookie is left untouched).
+  try {
+    if (clientKey) {
+      var CHAPTER_CLICK_IDS = [
+        ["gclid", "google"], ["gbraid", "google"], ["wbraid", "google"],
+        ["fbclid", "meta"], ["ttclid", "tiktok"], ["msclkid", "microsoft"], ["rdt_cid", "reddit"]
+      ];
+      var landParams = new URLSearchParams(window.location.search);
+      var landClick = null;
+      for (var ci = 0; ci < CHAPTER_CLICK_IDS.length; ci++) {
+        var cidVal = landParams.get(CHAPTER_CLICK_IDS[ci][0]);
+        if (cidVal) { landClick = { id: cidVal, platform: CHAPTER_CLICK_IDS[ci][1], kind: CHAPTER_CLICK_IDS[ci][0] }; break; }
+      }
+      if (landClick && chapterReadConsent() !== "opt_out") {
+        var landAnon = cachedAnonId || getOrCreateIdWithCookieFallback(getAnonStorageKey(clientKey), "up_anon_" + clientKey);
+        cachedAnonId = landAnon;
+        var entryPayload = {
+          a: "anonymous_id:" + landAnon,
+          j: cachedJourneyId || null,
+          t: Math.floor(Date.now() / 1000),
+          g: landClick.id,
+          gt: landClick.platform,
+          gk: landClick.kind
+        };
+        var landUtm = landParams.get("utm_source");
+        if (landUtm) entryPayload.u = landUtm;
+        var chapterApex = chapterApexCookieDomain();
+        // 90-day life = Google's max click-through window. The book-now redirect
+        // dedupes per (client, click id, action), so at most one conversion fires
+        // per ad click no matter how many times the visitor returns; and the
+        // reader below re-stamps only within its own 1-hour freshness guard on
+        // its timestamp, so this long-lived cookie never mislabels a later
+        // organic session.
+        // encodeURIComponent to match the redirect's Next-set encoding (the
+        // pixel reader + book-now readEntryClick both handle that form).
+        document.cookie =
+          "chapter_entry_" + clientKey + "=" + encodeURIComponent(JSON.stringify(entryPayload)) +
+          "; Path=/; Max-Age=" + (60 * 60 * 24 * 90) +
+          (chapterApex ? "; Domain=" + chapterApex : "") +
+          "; SameSite=Lax" +
+          (location.protocol === "https:" ? "; Secure" : "");
       }
     }
   } catch (e) {}
