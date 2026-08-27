@@ -4,6 +4,7 @@ import { withClient, isKnownClient } from "@/app/lib/db/per-client";
 import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
 import { isEmailIgnored } from "@/app/lib/auth/tracking-ignore";
 import { isBotUserAgent } from "@/app/lib/auth/bot-ua";
+import { gpcSignalsOptOut } from "@/app/lib/consent/gpc";
 
 function safeString(v: any): string | null {
   if (v === null || v === undefined) return null;
@@ -56,6 +57,15 @@ export async function POST(req: NextRequest) {
     : null;
   if (prevEmailMatch && (await isEmailIgnored(client_key, prevEmailMatch[1].toLowerCase()))) {
     return withCors(req, NextResponse.json({ ok: true, suppressed: "tracking_ignore" }));
+  }
+
+  // GPC: honor the browser opt-out signal (Sec-GPC: 1) unless the visitor has an
+  // explicit opt_in (chapter_consent=opt_in cookie). Skip ALL identity writes AND
+  // cookie issuance — no new identifiers. (Cross-domain caveat: on a 3P install
+  // the opt_in cookie may not reach this origin, so a GPC visitor who opted in on
+  // the storefront can be conservatively over-blocked here — privacy-safe.)
+  if (gpcSignalsOptOut(req)) {
+    return withCors(req, NextResponse.json({ ok: true, skipped: "gpc" }));
   }
 
   // If previous_identity_key isn't provided, fall back to anon cookie (set by /api/pixel)

@@ -232,6 +232,9 @@ function getOrCreateIdWithCookieFallback(storageKey, cookieName) {
 
     function send(eventName, props) {
     if (!clientKey) return;
+    // GPC opt-out (unless explicit opt_in): fire nothing. Server also enforces
+    // Sec-GPC, but stopping here means we don't even send the request.
+    if (chapterGpcOptOut()) return;
 
     try {
       var journeyId = cachedJourneyId;
@@ -260,15 +263,14 @@ if (!anonId) {
         page_path: window.location.pathname,
         referrer: document.referrer || null,
         props: props || {},
-        // Actual visitor consent state read from chapter_consent cookie.
-        // Defaults to "unknown" when no cookie is set — the server's
-        // consent_mode policy decides what to do with "unknown".
+        // Visitor consent state from the chapter_consent cookie
+        // (opt_in / opt_out / unknown).
         consent_status: chapterReadConsent(),
-        // consent_mode = the per-client default policy when status is unknown.
-        // "opt_in" = US-style (collect unless explicit opt-out).
-        // "opt_out" = EU-strict (don't collect unless explicit opt-in).
-        // Today hardcoded "opt_out" matching prior behavior; future op a
-        // per-client config knob.
+        // consent_mode: the regime the SERVER applies to an "unknown" status.
+        // NOTE: with the value "opt_out" the server gate COLLECTS on unknown
+        // (US-style, collect-unless-explicit-opt-out) — the name reads backwards;
+        // see the /api/pixel should_track gate for the actual behavior. Hardcoded
+        // today; a per-client consent_mode column is the planned follow-up.
         consent_mode: "opt_out"
       };
 
@@ -327,6 +329,19 @@ if (!anonId) {
       return "unknown";
     } catch (e) {
       return "unknown";
+    }
+  }
+
+  // Global Privacy Control: navigator.globalPrivacyControl === true is a browser
+  // opt-out. Treated as opt_out UNLESS the visitor has an explicit opt_in cookie
+  // (which overrides). Re-checked per call, so a later setConsent("opt_in")
+  // immediately resumes collection. The server independently enforces the
+  // Sec-GPC header on /api/pixel + /api/identify + /r as the backstop.
+  function chapterGpcOptOut() {
+    try {
+      return navigator.globalPrivacyControl === true && chapterReadConsent() !== "opt_in";
+    } catch (e) {
+      return false;
     }
   }
 

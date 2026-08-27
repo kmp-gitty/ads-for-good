@@ -38,6 +38,7 @@ import { interpolateTemplate, isValidDestination, appendIdentityHandoff } from "
 import { logRedirectClick } from "@/app/lib/redirect/click-logger";
 import { isEmailIgnored, isUaIgnored } from "@/app/lib/auth/tracking-ignore";
 import { readConsentState, applyConsentPolicy } from "@/app/lib/redirect/consent";
+import { isCollectionEnabled } from "@/app/lib/consent/collection-switch";
 import { extractEmailHint, stripHintParams } from "@/app/lib/redirect/email-hint";
 import { resolveRecipientToken } from "@/app/lib/redirect/recipient-lookup";
 import { stitchIdentity } from "@/app/lib/redirect/identity-stitch";
@@ -75,7 +76,7 @@ export async function GET(
   // Consent gate: always-on, derived from `chapter_consent` cookie on this
   // apex. Visitor still gets routed to the right destination; we just skip
   // every write (click log + cookie issuance) when collection is not allowed.
-  const consent = applyConsentPolicy(readConsentState(req));
+  let consent = applyConsentPolicy(readConsentState(req));
 
   // Bot fast-path: never log bot clicks, redirect to default destination with
   // no further processing. Saves the entire 50ms budget for actual humans.
@@ -87,13 +88,17 @@ export async function GET(
     return new NextResponse("not_found", { status: 404 });
   }
 
-  // Parallel: rules + ab experiments + segments + cart.
-  const [rules, abExperiments, segments, cart] = await Promise.all([
+  // Parallel: rules + ab experiments + segments + cart + collection kill switch.
+  const [rules, abExperiments, segments, cart, collectionEnabled] = await Promise.all([
     fetchRules(client_key, slug),
     fetchAbExperiments(client_key),
     resolveSegments(client_key, identity.identityKey),
     resolveCart(client_key, identity.identityKey),
+    isCollectionEnabled(client_key),
   ]);
+  // Kill switch: collection_enabled=false behaves like opt_out (no writes, no
+  // cookies) — the visitor is still routed to their destination.
+  if (!collectionEnabled) consent = { ...consent, allowCollection: false };
 
   const ctx: EvalContext = {
     client_key,

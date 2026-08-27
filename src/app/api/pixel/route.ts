@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { withClient, isKnownClient } from "@/app/lib/db/per-client";
+import { hasGpcHeader } from "@/app/lib/consent/gpc";
+import { isCollectionEnabled } from "@/app/lib/consent/collection-switch";
 
 function getUtmFromUrl(urlStr: string) {
   try {
@@ -68,6 +70,13 @@ export async function POST(req: NextRequest) {
   if (!event_name) return NextResponse.json({ error: "Missing event_name" }, { status: 400 });
   if (!isKnownClient(client_key)) {
     return NextResponse.json({ error: "unknown_client" }, { status: 400 });
+  }
+
+  // Client-level kill switch. chapter_config.clients.collection_enabled=false is a
+  // hard stop — no event/identity writes, no new-identifier cookies. Cached 5 min;
+  // fail-open (a config-read error keeps collection on). Flip back to true to resume.
+  if (!(await isCollectionEnabled(client_key))) {
+    return new NextResponse(null, { status: 204 });
   }
 
   // Stable anon identity / incoming identity.
@@ -178,6 +187,16 @@ export async function POST(req: NextRequest) {
       ? (consent_mode_in as any)
       : (db_consent_mode ?? "opt_in");
 
+  // GPC: a browser opt-out signal (Sec-GPC: 1) forces opt_out unless the visitor
+  // has explicitly opted in (already folded into effective_consent above).
+  // Additive — only the Sec-GPC subset is affected; the collect-when-unknown
+  // default for all non-GPC traffic is unchanged. The pixel also stamps
+  // consent_status="opt_out" client-side under GPC, so this is defense-in-depth
+  // for the header (and covers non-pixel callers / stripped payloads).
+  if (hasGpcHeader(req) && effective_consent !== "opt_in") {
+    effective_consent = "opt_out";
+  }
+
   const should_track =
     effective_consent === "opt_in" ||
     (effective_consent === "unknown" && effective_mode === "opt_out");
@@ -189,18 +208,12 @@ export async function POST(req: NextRequest) {
     (effective_consent === "unknown" ? null : new Date().toISOString());
 
   if (!should_track) {
-    // 204 + cookies so the same journey continues if/when the user opts in.
+    // opt_out (explicit, sticky-from-journey, or GPC): no writes AND no new
+    // identifiers. Previously this set journey + anon cookies "to continue if
+    // they opt in"; removed 2026-08 to match the /r redirect path — neither path
+    // issues identifiers on opt_out. Existing cookies are NOT cleared (that's the
+    // consent banner's job on the property where the visitor opted out).
     const res = new NextResponse(null, { status: 204 });
-    res.cookies.set(cookieName, journey_id, {
-      domain: cookieDomain, httpOnly: false,
-      secure: !isLocalReq, sameSite: isLocalReq ? "lax" : "none",
-      path: "/", maxAge: 60 * 60 * 24 * 180,
-    });
-    res.cookies.set(anonCookieName, anon_id, {
-      domain: cookieDomain, httpOnly: false,
-      secure: !isLocalReq, sameSite: isLocalReq ? "lax" : "none",
-      path: "/", maxAge: 60 * 60 * 24 * 365,
-    });
     res.headers.set("X-Robots-Tag", "noindex, nofollow");
     return res;
   }

@@ -28,6 +28,7 @@
 // existing context. Routing is the service they're asking for by clicking.
 
 import type { NextRequest } from "next/server";
+import { hasGpcHeader } from "@/app/lib/consent/gpc";
 
 const CONSENT_COOKIE = "chapter_consent";
 
@@ -40,8 +41,13 @@ export type ConsentDecision = {
 
 export function readConsentState(req: NextRequest): ConsentState {
   const cookie = req.cookies.get(CONSENT_COOKIE)?.value;
-  if (cookie === "opt_out") return "opt_out";
+  // Explicit opt_in wins over everything, including GPC.
   if (cookie === "opt_in") return "opt_in";
+  if (cookie === "opt_out") return "opt_out";
+  // GPC (Sec-GPC: 1) is a browser opt-out signal → opt_out when there is no
+  // explicit opt_in above. Additive: no GPC + no cookie stays "unknown", which
+  // applyConsentPolicy resolves via the collect-when-unknown default.
+  if (hasGpcHeader(req)) return "opt_out";
   return "unknown";
 }
 
