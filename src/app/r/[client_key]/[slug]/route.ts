@@ -106,7 +106,7 @@ export async function GET(
   // eu = strict opt-in-only). Explicit opt_in/opt_out always wins over this.
   let consent = applyConsentPolicy(
     consentState,
-    policyCfg.consentDefault === "eu" ? "opt_out" : "opt_in",
+    policyCfg.consentDefault === "strict" ? "opt_out" : "opt_in",
   );
   // Kill switch: collection_enabled=false behaves like opt_out (no writes, no
   // cookies) — the visitor is still routed to their destination.
@@ -188,7 +188,7 @@ export async function GET(
   // Wrapped-link consented-channel measurement (policy flag, default off).
   // When a GPC-driven opt-out visitor clicks an ESP-wrapped link carrying a
   // recipient token (?rid/?rh/?re), that token proves they subscribed to that
-  // channel. With gpc_measure_consented_clicks on, we MEASURE that one click
+  // channel. With esp_link_click_attribution on, we MEASURE that one click
   // (log it + stitch to the known subscriber) but STOP at the browser — no
   // cookies, no ?chid handoff, no entry-relay (those stay under allowCollection).
   // Guards: applies ONLY to GPC-driven opt-out (not an explicit opt_out cookie,
@@ -200,7 +200,7 @@ export async function GET(
     !explicitOptOutCookie &&
     collectionEnabled;
   const allowConsentedMeasurement =
-    policyCfg.gpcMeasureConsented &&
+    policyCfg.espLinkClickAttribution &&
     gpcDrivenOptOut &&
     !!emailHint &&
     !suppressed &&

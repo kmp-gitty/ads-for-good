@@ -201,8 +201,13 @@ function getOrCreateIdWithCookieFallback(storageKey, cookieName) {
   var clientKey = getClientKey();
   var collectUrl = getCollectUrl();
   var identifyUrl = getIdentifyUrl();
-  var cachedJourneyId = clientKey ? getOrCreateIdWithCookieFallback(getJourneyStorageKey(clientKey), "up_journey_" + clientKey) : null;
-  var cachedAnonId = clientKey ? getOrCreateIdWithCookieFallback(getAnonStorageKey(clientKey), "up_anon_" + clientKey) : null;
+  // Do NOT mint identifiers on init for an opted-out browser (explicit opt_out
+  // cookie or GPC). Leaving these null means no localStorage/cookie identifier
+  // is written to an opted-out browser; they mint lazily in send() only once
+  // collection is allowed. (chapterCollectionBlocked is a hoisted declaration.)
+  var __chapterBlocked = clientKey ? chapterCollectionBlocked() : true;
+  var cachedJourneyId = (clientKey && !__chapterBlocked) ? getOrCreateIdWithCookieFallback(getJourneyStorageKey(clientKey), "up_journey_" + clientKey) : null;
+  var cachedAnonId = (clientKey && !__chapterBlocked) ? getOrCreateIdWithCookieFallback(getAnonStorageKey(clientKey), "up_anon_" + clientKey) : null;
 
     function shouldIgnoreChapterTracking() {
     try {
@@ -232,9 +237,11 @@ function getOrCreateIdWithCookieFallback(storageKey, cookieName) {
 
     function send(eventName, props) {
     if (!clientKey) return;
-    // GPC opt-out (unless explicit opt_in): fire nothing. Server also enforces
-    // Sec-GPC, but stopping here means we don't even send the request.
-    if (chapterGpcOptOut()) return;
+    // Opted out (explicit opt_out cookie OR GPC without explicit opt_in): fire
+    // nothing AND mint no identifiers. Server also enforces this, but stopping
+    // here means we neither send the request nor write a persistent identifier
+    // to an opted-out browser.
+    if (chapterCollectionBlocked()) return;
 
     try {
       var journeyId = cachedJourneyId;
@@ -264,14 +271,12 @@ if (!anonId) {
         referrer: document.referrer || null,
         props: props || {},
         // Visitor consent state from the chapter_consent cookie
-        // (opt_in / opt_out / unknown).
-        consent_status: chapterReadConsent(),
-        // consent_mode: the regime the SERVER applies to an "unknown" status.
-        // NOTE: with the value "opt_out" the server gate COLLECTS on unknown
-        // (US-style, collect-unless-explicit-opt-out) — the name reads backwards;
-        // see the /api/pixel should_track gate for the actual behavior. Hardcoded
-        // today; a per-client consent_mode column is the planned follow-up.
-        consent_mode: "opt_out"
+        // (opt_in / opt_out / unknown). The pixel does NOT send consent_mode:
+        // the regime applied to an "unknown" status is decided server-side per
+        // client (chapter_config.clients.consent_mode). A CMP-aware wrapper that
+        // knows the per-visitor decision may pass consent_mode in the payload,
+        // and it will win over the server default.
+        consent_status: chapterReadConsent()
       };
 
       pushToBuffer(clientKey, body);
@@ -340,6 +345,24 @@ if (!anonId) {
   function chapterGpcOptOut() {
     try {
       return navigator.globalPrivacyControl === true && chapterReadConsent() !== "opt_in";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // True when the browser has OPTED OUT — an explicit chapter_consent=opt_out
+  // cookie, OR a GPC signal without an explicit opt_in. When true the pixel
+  // mints NO identifiers (localStorage OR cookie) and sends no events, matching
+  // the /r redirect. "unknown" (no signal) is deliberately NOT blocked: the
+  // server's per-client consent_mode decides collect-on-unknown. The client
+  // only hard-stops on an actual opt-out, so we never write a persistent
+  // identifier to a browser that has opted out.
+  function chapterCollectionBlocked() {
+    try {
+      var c = chapterReadConsent();
+      if (c === "opt_in") return false;
+      if (c === "opt_out") return true;
+      return navigator.globalPrivacyControl === true;
     } catch (e) {
       return false;
     }
@@ -461,7 +484,7 @@ if (!anonId) {
   try {
     var params = new URLSearchParams(window.location.search);
     var chid = params.get("chid");
-    if (chid && clientKey) {
+    if (chid && clientKey && !chapterCollectionBlocked()) {
       var pixelAnonId = cachedAnonId || getOrCreateIdWithCookieFallback(getAnonStorageKey(clientKey), "up_anon_" + clientKey);
       cachedAnonId = pixelAnonId;
       if (chid !== pixelAnonId) {
@@ -520,7 +543,7 @@ if (!anonId) {
         var cidVal = landParams.get(CHAPTER_CLICK_IDS[ci][0]);
         if (cidVal) { landClick = { id: cidVal, platform: CHAPTER_CLICK_IDS[ci][1], kind: CHAPTER_CLICK_IDS[ci][0] }; break; }
       }
-      if (landClick && chapterReadConsent() !== "opt_out") {
+      if (landClick && !chapterCollectionBlocked()) {
         var landAnon = cachedAnonId || getOrCreateIdWithCookieFallback(getAnonStorageKey(clientKey), "up_anon_" + clientKey);
         cachedAnonId = landAnon;
         var entryPayload = {
@@ -564,7 +587,7 @@ if (!anonId) {
   var chapterEntryCtx = null;
   try {
     var entryRaw = readCookieValue("chapter_entry_" + clientKey);
-    if (entryRaw) {
+    if (entryRaw && !chapterCollectionBlocked()) {
       var entry = JSON.parse(decodeURIComponent(entryRaw));
       var nowSec = Math.floor(Date.now() / 1000);
       // Freshness guard: ignore a stale cookie left over from an earlier visit.

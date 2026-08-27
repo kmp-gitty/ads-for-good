@@ -153,9 +153,9 @@ export async function POST(req: NextRequest) {
   // ---------------------------------------------------------------------------
   const consent_status_in = String(payload?.consent_status || "unknown");
   // Per-request consent_mode wins when the pixel sends it; otherwise the
-  // per-client jurisdiction default decides ('us' → opt_out/collect-on-unknown,
-  // 'eu' → opt_in/strict). Server-authoritative default replaces the old
-  // hardcoded "opt_in" fallback. Cached, so cheap.
+  // per-client regime default decides ('permissive' → opt_out/collect-on-unknown,
+  // 'strict' → opt_in). Server-authoritative default replaces the old hardcoded
+  // "opt_in" fallback. Cached, so cheap.
   const consent_mode_raw =
     payload?.consent_mode === "opt_in" || payload?.consent_mode === "opt_out"
       ? (payload.consent_mode as "opt_in" | "opt_out")
