@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { withClient, isKnownClient } from "@/app/lib/db/per-client";
 import { hasGpcHeader } from "@/app/lib/consent/gpc";
 import { isCollectionEnabled } from "@/app/lib/consent/collection-switch";
+import { getConsentPolicyConfig, consentDefaultToMode } from "@/app/lib/consent/consent-config";
 
 function getUtmFromUrl(urlStr: string) {
   try {
@@ -151,7 +152,17 @@ export async function POST(req: NextRequest) {
   // Phase 1: Consent gate — read existing journey consent state if any.
   // ---------------------------------------------------------------------------
   const consent_status_in = String(payload?.consent_status || "unknown");
-  const consent_mode_in = String(payload?.consent_mode || "opt_in");
+  // Per-request consent_mode wins when the pixel sends it; otherwise the
+  // per-client jurisdiction default decides ('us' → opt_out/collect-on-unknown,
+  // 'eu' → opt_in/strict). Server-authoritative default replaces the old
+  // hardcoded "opt_in" fallback. Cached, so cheap.
+  const consent_mode_raw =
+    payload?.consent_mode === "opt_in" || payload?.consent_mode === "opt_out"
+      ? (payload.consent_mode as "opt_in" | "opt_out")
+      : null;
+  const client_default_mode = consentDefaultToMode(
+    (await getConsentPolicyConfig(client_key)).consentDefault,
+  );
 
   let db_consent: "opt_in" | "opt_out" | "unknown" = "unknown";
   let db_consent_mode: "opt_in" | "opt_out" | null = null;
@@ -182,10 +193,8 @@ export async function POST(req: NextRequest) {
       effective_consent = consent_status_in as any;
     }
   }
-  const effective_mode =
-    consent_mode_in === "opt_in" || consent_mode_in === "opt_out"
-      ? (consent_mode_in as any)
-      : (db_consent_mode ?? "opt_in");
+  const effective_mode: "opt_in" | "opt_out" =
+    consent_mode_raw ?? db_consent_mode ?? client_default_mode;
 
   // GPC: a browser opt-out signal (Sec-GPC: 1) forces opt_out unless the visitor
   // has explicitly opted in (already folded into effective_consent above).

@@ -39,6 +39,8 @@ import { logRedirectClick } from "@/app/lib/redirect/click-logger";
 import { isEmailIgnored, isUaIgnored } from "@/app/lib/auth/tracking-ignore";
 import { readConsentState, applyConsentPolicy } from "@/app/lib/redirect/consent";
 import { isCollectionEnabled } from "@/app/lib/consent/collection-switch";
+import { getConsentPolicyConfig } from "@/app/lib/consent/consent-config";
+import { hasGpcHeader } from "@/app/lib/consent/gpc";
 import { extractEmailHint, stripHintParams } from "@/app/lib/redirect/email-hint";
 import { resolveRecipientToken } from "@/app/lib/redirect/recipient-lookup";
 import { stitchIdentity } from "@/app/lib/redirect/identity-stitch";
@@ -74,9 +76,11 @@ export async function GET(
   const device = classifyUA(req.headers.get("user-agent"));
   const referrer = req.headers.get("referer");
   // Consent gate: always-on, derived from `chapter_consent` cookie on this
-  // apex. Visitor still gets routed to the right destination; we just skip
-  // every write (click log + cookie issuance) when collection is not allowed.
-  let consent = applyConsentPolicy(readConsentState(req));
+  // apex (+ GPC). Visitor still gets routed to the right destination; we just
+  // skip every write (click log + cookie issuance) when collection is denied.
+  // Raw state now; policy default (us vs eu) is applied after the per-client
+  // config resolves in the Promise.all below.
+  const consentState = readConsentState(req);
 
   // Bot fast-path: never log bot clicks, redirect to default destination with
   // no further processing. Saves the entire 50ms budget for actual humans.
@@ -88,14 +92,22 @@ export async function GET(
     return new NextResponse("not_found", { status: 404 });
   }
 
-  // Parallel: rules + ab experiments + segments + cart + collection kill switch.
-  const [rules, abExperiments, segments, cart, collectionEnabled] = await Promise.all([
+  // Parallel: rules + ab experiments + segments + cart + collection kill switch
+  // + per-client consent policy config.
+  const [rules, abExperiments, segments, cart, collectionEnabled, policyCfg] = await Promise.all([
     fetchRules(client_key, slug),
     fetchAbExperiments(client_key),
     resolveSegments(client_key, identity.identityKey),
     resolveCart(client_key, identity.identityKey),
     isCollectionEnabled(client_key),
+    getConsentPolicyConfig(client_key),
   ]);
+  // Apply the per-client jurisdiction default (us = collect-when-unknown,
+  // eu = strict opt-in-only). Explicit opt_in/opt_out always wins over this.
+  let consent = applyConsentPolicy(
+    consentState,
+    policyCfg.consentDefault === "eu" ? "opt_out" : "opt_in",
+  );
   // Kill switch: collection_enabled=false behaves like opt_out (no writes, no
   // cookies) — the visitor is still routed to their destination.
   if (!collectionEnabled) consent = { ...consent, allowCollection: false };
@@ -172,6 +184,28 @@ export async function GET(
   // ?chid= handoff on the destination.
   const scannerRisk = classifyForScannerRisk(req);
   const scannerSuspected = scannerRisk.suspicious && !suppressed;
+
+  // Wrapped-link consented-channel measurement (policy flag, default off).
+  // When a GPC-driven opt-out visitor clicks an ESP-wrapped link carrying a
+  // recipient token (?rid/?rh/?re), that token proves they subscribed to that
+  // channel. With gpc_measure_consented_clicks on, we MEASURE that one click
+  // (log it + stitch to the known subscriber) but STOP at the browser — no
+  // cookies, no ?chid handoff, no entry-relay (those stay under allowCollection).
+  // Guards: applies ONLY to GPC-driven opt-out (not an explicit opt_out cookie,
+  // not the kill switch), and only when a recipient token is present.
+  const explicitOptOutCookie = req.cookies.get("chapter_consent")?.value === "opt_out";
+  const gpcDrivenOptOut =
+    !consent.allowCollection &&
+    hasGpcHeader(req) &&
+    !explicitOptOutCookie &&
+    collectionEnabled;
+  const allowConsentedMeasurement =
+    policyCfg.gpcMeasureConsented &&
+    gpcDrivenOptOut &&
+    !!emailHint &&
+    !suppressed &&
+    !scannerSuspected;
+
   if (scannerSuspected) {
     // Route to the auth-audit table so the daily-digest cron can surface the
     // pattern. Fire-and-forget; never blocks the redirect.
@@ -206,7 +240,7 @@ export async function GET(
   // would kill the pending async on response and no stitch row would land.
   // Skipped under opt-out AND when suspected-scanner (would falsely bind the
   // real recipient's email_sha256 to a scanner's synthetic anonymous_id).
-  if (consent.allowCollection && emailHint && !suppressed && !scannerSuspected) {
+  if ((consent.allowCollection || allowConsentedMeasurement) && emailHint && !suppressed && !scannerSuspected) {
     after(async () => {
       try {
         let email_sha256: string | null = null;
@@ -248,7 +282,7 @@ export async function GET(
   // With that resolved, after() works cleanly and saves ~50-100ms on the
   // critical path. Skipped when consent gate denies collection OR when the
   // visitor's UA / hinted email is on the tracking ignore list.
-  if (consent.allowCollection && !suppressed) {
+  if ((consent.allowCollection || allowConsentedMeasurement) && !suppressed) {
     after(() =>
       logRedirectClick({
         client_key,
