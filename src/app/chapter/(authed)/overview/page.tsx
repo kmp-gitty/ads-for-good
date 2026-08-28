@@ -36,6 +36,11 @@ const WEEK_MS = 7 * 24 * 3600 * 1000;
 const TREND_WINDOWS = { "4w": 4, "12w": 12, "26w": 26, "52w": 52 } as const;
 export type TrendWindow = keyof typeof TREND_WINDOWS;
 
+// force-dynamic: analytics pages read searchParams + navigate via router.replace;
+// without this Next 16 caches the RSC and soft nav (row click / sort) shows stale
+// until a hard refresh. Dynamic classification -> Router Cache staleTime 0 -> refetch.
+export const dynamic = "force-dynamic";
+
 export default async function OverviewPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";

@@ -36,6 +36,11 @@ const LAG_DAYS_LIST      = [7, 14, 30, 60, 90];
 const DEFAULT_RANKED_LAG = 30;
 const DAY_MS             = 24 * 60 * 60 * 1000;
 
+// force-dynamic: analytics pages read searchParams + navigate via router.replace;
+// without this Next 16 caches the RSC and soft nav (row click / sort) shows stale
+// until a hard refresh. Dynamic classification -> Router Cache staleTime 0 -> refetch.
+export const dynamic = "force-dynamic";
+
 export default async function LaggedImpactPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";

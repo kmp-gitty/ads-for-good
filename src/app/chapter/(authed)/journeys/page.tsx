@@ -44,6 +44,11 @@ type SearchParams = Promise<{
 
 const SORT_OPTIONS = ["lifetime_value", "window_value", "time_to_close"] as const;
 
+// force-dynamic: analytics pages read searchParams + navigate via router.replace;
+// without this Next 16 caches the RSC and soft nav (row click / sort) shows stale
+// until a hard refresh. Dynamic classification -> Router Cache staleTime 0 -> refetch.
+export const dynamic = "force-dynamic";
+
 export default async function JourneysPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const clientKey = (params.client && params.client.trim()) || "eos_fabrics";
