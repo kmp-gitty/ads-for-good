@@ -245,7 +245,6 @@ export default function RawClient({
                 <h3 className="card-title">Funnel · page view → purchase</h3>
                 <div className="card-sub">Configured for ecommerce. Largest drop highlighted.</div>
               </div>
-              <button className="toolbar-btn compact">Configure</button>
             </div>
             <div className="funnel">
               {funnelSteps.map((f, i) => {

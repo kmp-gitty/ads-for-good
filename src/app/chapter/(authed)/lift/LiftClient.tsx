@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { TopBar } from "../../_components/TopBar";
 import { Icon } from "../../_components/Icon";
 import { Dropdown } from "../../_components/Dropdown";
@@ -1416,8 +1417,31 @@ function RetentionLensCard({ retention }: { retention: SubscriberRetentionRow[] 
 
 export default function LiftClient({ correlation, correlationPrior, priorRangeLabel, retention, incrementality, axisMetadata, contribution, clientKey: _clientKey, range }: Props) {
   const { client } = useChapter();
-  const [tab, setTab] = useState<Tab>("correlation");
-  const [incAxis, setIncAxis] = useState<IncrementalityAxis>("subscriber");
+  // Tab + cohort axis live in the URL so they survive a date-range change (which
+  // remounts this client — client-side useState would reset to the default).
+  // useSearchParams is reactive, so switching stays instant: all three tabs' data
+  // is already fetched as props, so no server refetch is needed on a switch.
+  const sp = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const tab: Tab = (() => {
+    const t = sp.get("tab");
+    return t === "incrementality" || t === "contribution" ? t : "correlation";
+  })();
+  const setTab = (t: Tab) => {
+    const next = new URLSearchParams(sp.toString());
+    if (t === "correlation") next.delete("tab"); else next.set("tab", t);
+    router.replace(next.toString() ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
+  };
+  const incAxis: IncrementalityAxis = (() => {
+    const a = sp.get("axis");
+    return a === "location" || a === "value_band" ? a : "subscriber";
+  })();
+  const setIncAxis = (a: IncrementalityAxis) => {
+    const next = new URLSearchParams(sp.toString());
+    if (a === "subscriber") next.delete("axis"); else next.set("axis", a);
+    router.replace(next.toString() ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
+  };
   // CR2 — opt-in period-over-period comparison on the Correlation tab.
   const [compareCorr, setCompareCorr] = useState(false);
   const priorByChannel = useMemo(

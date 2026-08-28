@@ -67,6 +67,17 @@ function gateBadge(status: GateStatus): React.ReactNode {
   return <span className="pill" style={{ background: "var(--bg-2)", color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: ".06em", fontSize: 10 }}>Need n ≥ 30</span>;
 }
 
+// Practical-significance floor. With very large n (short lag windows on near-zero
+// return rates), the 95% CI can clear zero on a trivially tiny effect — e.g.
+// -0.0pp / -100% reads "Confident" while being meaningless. Statistical
+// significance ≠ practical significance: downgrade "ok" → "within_noise" when the
+// absolute lift is below this floor. Applied everywhere the gate is consumed.
+const MIN_CONFIDENT_PP = 0.1;
+function effectiveGate(status: GateStatus, absLiftPp: number | string | null | undefined): GateStatus {
+  if (status === "ok" && Math.abs(Number(absLiftPp) || 0) < MIN_CONFIDENT_PP) return "within_noise";
+  return status;
+}
+
 const DIVIDER  = "1px solid var(--line)";
 const CELL_PAD = 10;
 
@@ -150,7 +161,7 @@ function LagRow({ lagDays, row, index }: { lagDays: number; row: LaggedImpactRow
     );
   }
 
-  const status = row.cell_gate_status;
+  const status = effectiveGate(row.cell_gate_status, row.abs_lift_pp);
   const isOk = status === "ok";
   const dim: React.CSSProperties = isOk ? {} : { color: "var(--ink-3)", opacity: 0.85 };
 
@@ -346,7 +357,7 @@ function RankedPairsTable({
 }) {
   const gateRank = (s: string) => (s === "ok" ? 0 : s === "within_noise" ? 1 : 2);
   const sorted = [...pairs].sort((x, y) => {
-    const gr = gateRank(x.cell_gate_status) - gateRank(y.cell_gate_status);
+    const gr = gateRank(effectiveGate(x.cell_gate_status, x.abs_lift_pp)) - gateRank(effectiveGate(y.cell_gate_status, y.abs_lift_pp));
     if (gr !== 0) return gr;
     // positive lift first (this page is about A making B MORE likely)
     return (Number(y.abs_lift_pp ?? -Infinity)) - (Number(x.abs_lift_pp ?? -Infinity));
@@ -360,7 +371,7 @@ function RankedPairsTable({
     );
   }
 
-  const okCount = sorted.filter(p => p.cell_gate_status === "ok").length;
+  const okCount = sorted.filter(p => effectiveGate(p.cell_gate_status, p.abs_lift_pp) === "ok").length;
 
   return (
     // Scroll region so the header can freeze: overflow:auto keeps horizontal
@@ -393,7 +404,7 @@ function RankedPairsTable({
         </div>
         {/* rows */}
         {sorted.map((p, i) => {
-          const isOk = p.cell_gate_status === "ok";
+          const isOk = effectiveGate(p.cell_gate_status, p.abs_lift_pp) === "ok";
           const isSelected = p.channel_a === channelA && p.channel_b === channelB;
           const stripe = i % 2 === 1 ? "rgba(15,23,34,0.025)" : "transparent";
           const dim: React.CSSProperties = isOk ? {} : { color: "var(--ink-3)", opacity: 0.8 };
@@ -435,7 +446,7 @@ function RankedPairsTable({
                 })()}
               </div>
               <div style={{ ...cellDivided(false), display: "flex", justifyContent: "center" }}>
-                {gateBadge(p.cell_gate_status)}
+                {gateBadge(effectiveGate(p.cell_gate_status, p.abs_lift_pp))}
               </div>
             </button>
           );
@@ -520,7 +531,7 @@ export default function LaggedImpactClient({
   const resultMap = new Map(results.map(r => [r.lagDays, r.row]));
   const allRows = allLagDays.map(d => ({ lagDays: d, row: resultMap.has(d) ? (resultMap.get(d) ?? null) : null, skipped: !resultMap.has(d) }));
 
-  const anyConfident = results.some(r => r.row?.cell_gate_status === "ok");
+  const anyConfident = results.some(r => r.row ? effectiveGate(r.row.cell_gate_status, r.row.abs_lift_pp) === "ok" : false);
 
   return (
     <>
