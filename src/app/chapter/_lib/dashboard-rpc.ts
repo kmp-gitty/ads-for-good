@@ -32,6 +32,21 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
+// Primary (non-replica) client for reading the tiny, pre-computed snapshot
+// tables. These are single-row indexed lookups (<1ms) that were just written on
+// primary, so there's no analytical load to insulate and no reason to route
+// them through the read replica. Doing so was the Customer Journeys blank-page
+// bug: under replica saturation from the heavy analytical RPCs, the trivial
+// snapshot SELECT would exceed the 8s PostgREST timeout, the lookup returned
+// null, and the code fell back to the 100s+ live RPC which ALSO timed out → the
+// health strip + identity list rendered empty. Snapshot reads → primary; the
+// heavy live-RPC fallbacks stay on the replica (`supabase`), which is its job.
+const supabasePrimary = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } },
+);
+
 const BUCKET_MS = 5 * 60 * 1000;
 /** Current time snapped to the start of the current 5-minute bucket.
  *  Pass this as `now` into rangeToWindow() so cache keys are stable across
@@ -398,7 +413,7 @@ async function journeysStatsSnapshotLookup(args: JourneysFilterArgs): Promise<Jo
   if (args.p_action != null) return null;
   if (args.p_outcome != null) return null;
   if (!matchesDefaultWindow(args, 30)) return null;
-  const r = await supabase
+  const r = await supabasePrimary
     .schema("chapter_reporting")
     .from("journeys_overview_stats_snapshot_v1")
     .select("stats")
@@ -434,7 +449,7 @@ async function journeysListSnapshotLookup(args: JourneysFilterArgs): Promise<Jou
   if (args.p_sort != null && args.p_sort !== "lifetime_value") return null;  // snapshot is default-sort only
   if (!matchesDefaultWindow(args, 30)) return null;
 
-  const r = await supabase
+  const r = await supabasePrimary
     .schema("chapter_reporting")
     .from("journeys_overview_list_snapshot_v1")
     .select("rows")
@@ -655,7 +670,7 @@ function matchesDefaultWindow(args: { p_start_ts: string; p_end_ts: string }, ex
 
 async function contributionSnapshotLookup(args: RpcArgs): Promise<ContributionChannelRow[] | null> {
   if (!matchesDefaultWindow(args, 90)) return null;
-  const r = await supabase
+  const r = await supabasePrimary
     .schema("chapter_reporting")
     .from("contribution_snapshot_v1")
     .select("rows")
@@ -689,7 +704,7 @@ async function incrementalitySnapshotLookup(args: IncrementalityArgs): Promise<I
   // RPC (~75-130s) exceeds the dashboard timeout, so without the snapshot the tab
   // renders empty.
   if (!matchesDefaultWindow(args, 90)) return null;
-  const r = await supabase
+  const r = await supabasePrimary
     .schema("chapter_reporting")
     .from("incrementality_snapshot_v1")
     .select("rows")
@@ -847,7 +862,7 @@ async function snapshotLookup(args: ConnectionsPanelArgs): Promise<ConnectionsPa
   const anchorKey = extractAnchorKey(args.p_anchor_type, args.p_anchor_payload as Record<string, unknown>);
   if (!anchorKey) return null;
 
-  const r = await supabase
+  const r = await supabasePrimary
     .schema("chapter_reporting")
     .from("connections_panel_snapshot_v1")
     .select("rows")
