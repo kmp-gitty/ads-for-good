@@ -212,6 +212,11 @@ export default function JourneysClient({
     if (value === null || value === "all") next.delete(key);
     else next.set(key, value);
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    // Guarantee the server component refetches for the new searchParams. With
+    // force-dynamic this is usually redundant, but router.refresh() is the
+    // deterministic fix for the "URL changed, screen didn't until hard refresh"
+    // Router-Cache behavior. Cheap now that the journeys RPCs are sub-ms.
+    router.refresh();
   }
   function selectIdentity(id: string) {
     updateParam("identity", id);
@@ -224,6 +229,7 @@ export default function JourneysClient({
       else next.set(k, v);
     }
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    router.refresh();
   }
 
   // 8.2 — identity search. Resolves via a server action (shared hash.ts,
