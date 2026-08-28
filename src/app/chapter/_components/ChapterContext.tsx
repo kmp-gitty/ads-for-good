@@ -215,6 +215,11 @@ export function ChapterProvider({
     }
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname);
+    // Guarantee the server component refetches for the new params. force-dynamic
+    // alone left the FIRST change (range/compare/model) serving a cached RSC
+    // until a hard refresh; router.refresh() forces it every time. Cheap now
+    // that the dashboard RPCs are fast.
+    router.refresh();
   }, [pathname, router, searchParams]);
 
   // setClient: if we're on a /chapter/<old_key>/<slug>... path, swap the
@@ -228,6 +233,7 @@ export function ChapterProvider({
       const newPath = "/" + parts.join("/");
       const qs = searchParams.toString();
       router.replace(qs ? `${newPath}?${qs}` : newPath);
+      router.refresh();
     } else {
       updateUrl({ client: c.id });
     }

@@ -504,6 +504,7 @@ export default function InfluenceClient({
     if (val == null) next.delete(key);
     else next.set(key, val);
     router.replace(`${pathname}?${next.toString()}`);
+    router.refresh();
   };
 
   // Push a row click → new anchor. Uses router.push so browser back works.
@@ -535,6 +536,7 @@ export default function InfluenceClient({
       next.delete("connection_type");
     }
     router.push(`${pathname}?${next.toString()}`);
+    router.refresh();
   };
 
   const nAnchor = resolve?.n_identities ?? 0;
@@ -580,6 +582,7 @@ export default function InfluenceClient({
         next.set("anchor_type", "cohort");
         next.set("anchor_cohort_id", res.cohort_id);
         router.replace(`${pathname}?${next.toString()}`);
+        router.refresh();
         setUploadName("");
         setUploadPasted("");
       }

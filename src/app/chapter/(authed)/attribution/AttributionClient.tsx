@@ -530,6 +530,7 @@ export default function AttributionClient({
     const next = new URLSearchParams(sp.toString());
     if (v === "unlimited") next.delete("lookback"); else next.set("lookback", v);
     router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    router.refresh();
   };
   const [selectedModels, setSelectedModels] = useState<AttributionModel[]>(["first", "linear", "last"]);
   // 6.3 — allocate by revenue or by conversion count. Both are in the payload.
