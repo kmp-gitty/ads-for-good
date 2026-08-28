@@ -428,15 +428,19 @@ export const cachedJourneysStats = unstable_cache(
   async (args: JourneysFilterArgs): Promise<JourneysStatsRow[]> => {
     const snap = await journeysStatsSnapshotLookup(args);
     if (snap !== null) return snap;
-    const r = await supabase.schema("chapter_reporting").rpc("journeys_overview_stats", args);
+    // Non-default views (filter/sort/window) skip the snapshot. The live RPC is
+    // now sub-ms (materialized human-set join), so run it on PRIMARY — the loaded
+    // replica could still time it out at the 8s PostgREST cap under contention,
+    // which blanked the filtered/sorted views. Cheap on primary now that it's fast.
+    const r = await supabasePrimary.schema("chapter_reporting").rpc("journeys_overview_stats", args);
     if (r.error) {
       console.error("[dashboard-rpc] journeys_overview_stats failed:", { ...r.error });
       return [];
     }
     return (Array.isArray(r.data) ? r.data : []) as JourneysStatsRow[];
   },
-  ["dashboard-rpc:chapter_reporting:journeys_overview_stats:v2"],
-  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_stats:v2"] },
+  ["dashboard-rpc:chapter_reporting:journeys_overview_stats:v3"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_stats:v3"] },
 );
 
 // Sprint 9 Phase 2 — snapshot-first lookup for journeys_overview_list.
@@ -464,15 +468,17 @@ export const cachedJourneysList = unstable_cache(
   async (args: JourneysFilterArgs): Promise<JourneysListRow[]> => {
     const snap = await journeysListSnapshotLookup(args);
     if (snap !== null) return snap;
-    const r = await supabase.schema("chapter_reporting").rpc("journeys_overview_list", args);
+    // Same as stats: non-default filter/sort/window views run the now-fast live
+    // RPC on PRIMARY to avoid the loaded-replica 8s timeout that blanked them.
+    const r = await supabasePrimary.schema("chapter_reporting").rpc("journeys_overview_list", args);
     if (r.error) {
       console.error("[dashboard-rpc] journeys_overview_list failed:", { ...r.error });
       return [];
     }
     return (Array.isArray(r.data) ? r.data : []) as JourneysListRow[];
   },
-  ["dashboard-rpc:chapter_reporting:journeys_overview_list:v2"],
-  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_list:v2"] },
+  ["dashboard-rpc:chapter_reporting:journeys_overview_list:v3"],
+  { revalidate: REVALIDATE_SEC, tags: ["dashboard-rpc:journeys_overview_list:v3"] },
 );
 
 // ── Detail RPCs (per identity, lifetime) ────────────────────────────────────
