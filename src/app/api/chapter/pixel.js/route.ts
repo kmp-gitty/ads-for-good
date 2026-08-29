@@ -177,10 +177,17 @@ function getOrCreateIdWithCookieFallback(storageKey, cookieName) {
     } catch (e) {}
   }
 
+  var CHAPTER_BUFFER_CAP = 100;
   function pushToBuffer(clientKey, body) {
     try {
       var events = readBuffer(clientKey);
       events.push(body);
+      // Cap the buffer so a prolonged outage can't grow it past the localStorage
+      // quota (which would make writeBuffer throw and drop everything). Keep the
+      // most recent CHAPTER_BUFFER_CAP events; discard the oldest.
+      if (events.length > CHAPTER_BUFFER_CAP) {
+        events = events.slice(events.length - CHAPTER_BUFFER_CAP);
+      }
       writeBuffer(clientKey, events);
     } catch (e) {}
   }
@@ -235,6 +242,75 @@ function getOrCreateIdWithCookieFallback(storageKey, cookieName) {
     return;
   }
 
+    // --- Collect circuit breaker + backoff (outage protection) -------------
+    // During a backend outage, stop hammering. After CHAPTER_CB_THRESHOLD
+    // consecutive failures the circuit opens for an exponential backoff window
+    // (with jitter), persisted in localStorage so a visitor moving across pages
+    // shares ONE cooldown instead of every page re-hammering. Events stay
+    // buffered while open and replay once a probe succeeds — nothing is lost,
+    // the load just backs off so the backend can recover.
+    var CHAPTER_CB_OPEN_KEY = "__chapter_cb_open";
+    var CHAPTER_CB_STEP_KEY = "__chapter_cb_step";
+    var chapterCbFails = 0;
+    var CHAPTER_CB_THRESHOLD = 5;
+    var CHAPTER_CB_BASE_MS = 30000;
+    var CHAPTER_CB_MAX_MS = 600000;
+
+    function chapterCircuitOpen() {
+      try {
+        return parseInt(localStorage.getItem(CHAPTER_CB_OPEN_KEY) || "0", 10) > Date.now();
+      } catch (e) { return false; }
+    }
+    function chapterCircuitTrip() {
+      try {
+        var step = parseInt(localStorage.getItem(CHAPTER_CB_STEP_KEY) || "0", 10);
+        var base = Math.min(CHAPTER_CB_BASE_MS * Math.pow(2, step), CHAPTER_CB_MAX_MS);
+        var jitter = Math.floor(Math.random() * (base / 2));
+        localStorage.setItem(CHAPTER_CB_OPEN_KEY, String(Date.now() + base + jitter));
+        localStorage.setItem(CHAPTER_CB_STEP_KEY, String(step + 1));
+      } catch (e) {}
+    }
+    function chapterCbOnSuccess() {
+      chapterCbFails = 0;
+      try {
+        localStorage.removeItem(CHAPTER_CB_OPEN_KEY);
+        localStorage.removeItem(CHAPTER_CB_STEP_KEY);
+      } catch (e) {}
+    }
+    function chapterCbOnFailure() {
+      chapterCbFails += 1;
+      var tripped = false;
+      try { tripped = parseInt(localStorage.getItem(CHAPTER_CB_STEP_KEY) || "0", 10) > 0; } catch (e) {}
+      // Fresh degradation needs THRESHOLD failures to open; once opened before
+      // (step>0), a single post-cooldown probe failure re-opens immediately with
+      // the next, longer backoff so we don't leak THRESHOLD requests per cycle.
+      if (chapterCbFails >= CHAPTER_CB_THRESHOLD || tripped) chapterCircuitTrip();
+    }
+
+    // Classify a collect response and update buffer + circuit accordingly.
+    // Shared by send() and replay so both handle failures identically.
+    // Only backend-outage signals (5xx / 429 / network error) trip the circuit;
+    // 4xx are permanent client errors — drop the event, don't back off.
+    function chapterHandleCollectResult(res, bufferId) {
+      if (res && (res.ok || res.status === 204)) {
+        removeFromBuffer(clientKey, bufferId);
+        chapterCbOnSuccess();
+        return;
+      }
+      var status = res ? res.status : 0; // 0 = network error / no response
+      if (status === 429 || status >= 500 || status === 0) {
+        // Backend overloaded / down / unreachable — keep buffered, back off.
+        chapterCbOnFailure();
+      } else if (status >= 400) {
+        // Permanent client error (bad payload, auth/CORS/consent reject): a retry
+        // will never succeed and this is NOT an outage signal — drop the event
+        // and do NOT trip the circuit.
+        removeFromBuffer(clientKey, bufferId);
+      } else {
+        chapterCbOnFailure();
+      }
+    }
+
     function send(eventName, props) {
     if (!clientKey) return;
     // Opted out (explicit opt_out cookie OR GPC without explicit opt_in): fire
@@ -281,6 +357,10 @@ if (!anonId) {
 
       pushToBuffer(clientKey, body);
 
+      // Circuit open (backend recently failing): keep the event buffered but do
+      // not send. It replays once the circuit closes and a probe succeeds.
+      if (chapterCircuitOpen()) return;
+
       fetch(collectUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -288,18 +368,16 @@ if (!anonId) {
         keepalive: true,
         body: JSON.stringify(body)
       })
-        .then(function (res) {
-          if (res && (res.ok || res.status === 204)) {
-            removeFromBuffer(clientKey, body._buffer_id);
-          }
-        })
-        .catch(function () {});
+        .then(function (res) { chapterHandleCollectResult(res, body._buffer_id); })
+        .catch(function () { chapterHandleCollectResult(null, body._buffer_id); });
     } catch (e) {}
   }
 
     function replayBufferedEvents() {
     try {
       if (!clientKey) return;
+      // Don't replay while backing off — one shared cooldown across pages.
+      if (chapterCircuitOpen()) return;
 
       var events = readBuffer(clientKey);
       if (!events || !events.length) return;
@@ -313,12 +391,8 @@ if (!anonId) {
             keepalive: true,
             body: JSON.stringify(bufferedBody)
           })
-            .then(function (res) {
-              if (res && (res.ok || res.status === 204)) {
-                removeFromBuffer(clientKey, bufferedBody._buffer_id);
-              }
-            })
-            .catch(function () {});
+            .then(function (res) { chapterHandleCollectResult(res, bufferedBody._buffer_id); })
+            .catch(function () { chapterHandleCollectResult(null, bufferedBody._buffer_id); });
         })(events[i]);
       }
     } catch (e) {}
