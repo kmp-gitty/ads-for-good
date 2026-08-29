@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/internal/monitoring/connection-health",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/internal/monitoring/stuck-runs",
       "schedule": "*/15 * * * *"
     },
