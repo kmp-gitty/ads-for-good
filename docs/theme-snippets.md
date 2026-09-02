@@ -71,32 +71,93 @@ window.ChapterPixel && window.ChapterPixel.setConsent
 See `docs/consent-integration.md` for per-CMP wiring. No banner ⇒ omit this;
 Chapter still honors GPC automatically for the visitors who send it.
 
-## 3. Add to cart (Shopify)
+## 3. Add to cart (Shopify) — network intercept
+
+Observe the cart network call, **not** a form `submit`. Modern themes add via
+AJAX "quick add" (no form submit), so a submit-listener silently misses them —
+verified on EOS (only form-submit adds landed; quick-adds were lost). Wrapping
+`fetch`/XHR to `/cart/add` catches every add flow; fires after the add succeeds,
+enriched from `/cart.js`. Never blocks the theme's own requests.
 
 ```html
 <script>
-  document.addEventListener("click", function (e) {
-    var t = e.target;
-    if (!t || !t.closest) return;
-    // Per-theme: tune this selector to the theme's add-to-cart control.
-    var btn = t.closest('form[action$="/cart/add"] [type="submit"], [name="add"], [data-add-to-cart]');
-    if (!btn) return;
-    (window.ChapterPixel = window.ChapterPixel || []).push(["track", "add_to_cart", {
-      page_url: window.location.href
-    }]);
-  }, true);
+(function () {
+  if (window.__chapter_cart_intercept_bound) return;
+  window.__chapter_cart_intercept_bound = true;
+  function normToken(t) { return t ? (String(t).split("?")[0] || null) : null; }
+  function fireAdd() {
+    fetch("/cart.js", { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (cart) {
+        (window.ChapterPixel = window.ChapterPixel || []).push(["track", "add_to_cart", {
+          cart_token: normToken(cart && cart.token),
+          item_count: cart && cart.item_count,
+          total_price: cart ? cart.total_price / 100 : null,
+          currency: cart && cart.currency,
+          page_url: window.location.href,
+          referrer: document.referrer || null,
+          source: "cart_add_intercept"
+        }]);
+      })
+      .catch(function () {
+        (window.ChapterPixel = window.ChapterPixel || []).push(["track", "add_to_cart", {
+          page_url: window.location.href, source: "cart_add_intercept_fallback"
+        }]);
+      });
+  }
+  function isAddUrl(u) { try { return /\/cart\/add(\.js)?($|\?)/.test(String(u || "")); } catch (e) { return false; } }
+  if (window.fetch) {
+    var of = window.fetch;
+    window.fetch = function () {
+      var url = ""; try { url = (arguments[0] && arguments[0].url) || arguments[0] || ""; } catch (e) {}
+      var add = isAddUrl(url);
+      var p = of.apply(this, arguments);
+      if (add) { try { p.then(function () { fireAdd(); }).catch(function () {}); } catch (e) {} }
+      return p;
+    };
+  }
+  if (window.XMLHttpRequest) {
+    var oo = XMLHttpRequest.prototype.open, os = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (m, u) { try { this.__ch_add = isAddUrl(u); } catch (e) {} return oo.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function () { if (this.__ch_add) this.addEventListener("load", fireAdd); return os.apply(this, arguments); };
+  }
+})();
 </script>
 ```
 
-## 4. Cart view (Shopify)
+## 4. Cart view (Shopify) — /cart page, fire-immediately with backstop
+
+For themes where the cart is a `/cart` **page** (not a drawer). Fires one
+`view_cart` immediately with an 800ms backstop, so a fast page-leave — a cart
+*abandoner*, exactly who you want — is still captured; enriches from `/cart.js`
+when it returns. For **drawer** themes, replace the path check with a
+cart-drawer-open detector (per-theme).
 
 ```html
 <script>
-  if (/(^|\/)cart(\/|$)/.test(window.location.pathname)) {
+(function () {
+  if (window.__chapter_cart_tracked) return;
+  if (!/^\/cart\/?$/.test(window.location.pathname)) return;
+  window.__chapter_cart_tracked = true;
+  function normToken(t) { return t ? (String(t).split("?")[0] || null) : null; }
+  var fired = false;
+  function fire(cart) {
+    if (fired) return; fired = true;
     (window.ChapterPixel = window.ChapterPixel || []).push(["track", "view_cart", {
-      page_url: window.location.href
+      cart_token: cart ? normToken(cart.token) : null,
+      total_price: cart ? cart.total_price / 100 : null,
+      currency: cart ? cart.currency : null,
+      item_count: cart ? cart.item_count : null,
+      page_url: window.location.href,
+      source: cart ? "cart_page" : "cart_page_minimal"
     }]);
   }
+  var t = setTimeout(function () { fire(null); }, 800);
+  fetch('/cart.js', { credentials: "same-origin" })
+    .then(function (r) { return r.json(); })
+    .then(function (cart) { clearTimeout(t); fire(cart); })
+    .catch(function () { clearTimeout(t); fire(null); });
+})();
 </script>
 ```
 
