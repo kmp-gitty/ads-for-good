@@ -38,6 +38,83 @@ export function postImage(post: Post): string {
 
 export const POSTS: Post[] = [
   {
+    slug: "identity-resolution-explained",
+    title: "Identity resolution: how one customer stops looking like five",
+    metaTitle: "Identity Resolution, Explained",
+    category: "Data & Tracking",
+    date: "Sep 3, 2026",
+    excerpt:
+      "One person on a phone at lunch, a laptop that night, an email on Thursday — and your analytics counts four strangers. Identity resolution is the work of recognizing they're one, and it's the floor every other metric stands on.",
+    image: "/images/EducationWallpaper.png",
+    body: `Here's a problem hiding inside almost every marketing report. One person browses your store on their phone during lunch, comes back that evening on their laptop, opens your email a few days later, and finally buys. To you, that's one customer on one journey. To your analytics, it's often four different "users" who have nothing to do with each other.
+
+The work of recognizing that those four are actually one person is called **identity resolution**. It's the least visible part of marketing measurement and arguably the most important, because everything downstream — attribution, journeys, lifetime value, even basic conversion counts — falls apart if you're counting one person as several. Let's unpack how it works and why it's so hard.
+
+## What identity resolution actually is
+
+Identity resolution is the process of connecting all the scattered records that belong to the same person into a single, unified profile. Every time someone interacts with you, they leave a trace: a browser cookie, a device ID, an email address, a customer account, a phone number. Identity resolution is the work of looking at all those traces and figuring out which ones belong together — that the anonymous phone session and the logged-in laptop purchase are the same human.
+
+Done well, it turns a pile of disconnected events into a person with a history. Done poorly — or not at all — you're left with what most analytics tools give you by default: a crowd of strangers who are secretly the same handful of customers, counted over and over.
+
+## The identity graph: the map of who's who
+
+The structure that makes this possible is called an **identity graph**. Think of it as a constantly-updating map that links every identifier back to the real person behind it. This email, that device, this cookie, that phone number — all connected to one node that represents an individual.
+
+The graph is what lets a new piece of information light up an old journey. Someone browses anonymously for three weeks, then finally enters their email at checkout. The moment they do, a good identity graph can connect that email back to those three weeks of anonymous browsing — and suddenly a customer who "appeared from nowhere" has a full backstory. Without the graph, that history is lost; the sale looks like it came from a stranger.
+
+## Deterministic vs. probabilistic: two ways to match
+
+There are two broad approaches to deciding whether two records are the same person.
+
+**Deterministic matching** uses definite, shared identifiers — the same email, the same customer ID, the same phone number appearing in two places. It's high-confidence: if two records share a hashed email, you can be genuinely sure it's one person. The tradeoff is that it only works when you have those shared identifiers to begin with.
+
+**Probabilistic matching** makes educated guesses from circumstantial signals — the same device type, location, and behavior patterns suggesting two sessions are probably the same person. It fills gaps deterministic matching can't, but it's exactly what it sounds like: a probability, not a certainty. The strongest identity resolution leans on deterministic matching wherever possible and treats probabilistic signals as a supplement, not a foundation — because building your measurement on guesses means building it on sand.
+
+## Cross-device: the problem that makes all of this necessary
+
+The reason identity resolution matters so much more now than a decade ago is that people stopped using one device. A single customer moves between a phone, a laptop, a tablet, sometimes a work computer — and each device looks like a different person to tracking that relies on cookies or device IDs.
+
+**Cross-device tracking** is the specific challenge of following one person across all their screens. It's genuinely hard, because the thing that used to stitch devices together — third-party cookies and cross-site tracking — is exactly what privacy changes have been dismantling. Which is why modern identity resolution leans on first-party, consent-based identifiers you collect directly, rather than the third-party trails that are disappearing.
+
+## Why users "disappear" in your analytics
+
+Put all this together and you can finally explain one of the most confusing things in analytics: users who vanish and reappear as new people. Someone clears their cookies — new user. Switches from phone to laptop — new user. Comes back a month later after the cookie expired — new user. Your returning-customer count looks low, your new-user count looks inflated, and your loyal buyers are scattered across a dozen "anonymous" records.
+
+They didn't disappear. Your tools just lost the thread connecting their visits. Every one of those "new users" is often someone you already know, wearing a disguise your analytics can't see through. This is why anonymous-vs-known user counts are so misleading by default: the line between anonymous and known isn't about the customer, it's about whether your system managed to hold onto their identity.
+
+## Why this is the foundation of everything else
+
+Notice that every other measurement problem depends on this one. You can't attribute a sale correctly if the touches leading to it are split across five "users." You can't calculate lifetime value if each purchase looks like a first-time buyer. You can't map a journey if the journey is shattered into device-sized fragments. Identity resolution isn't one feature among many — it's the floor the whole building stands on.
+
+That's precisely why we built [Chapter](https://chapter.ads4good.com/) around identity first. It resolves each customer to a single, durable identity across every device and touch — using deterministic, consent-based identifiers as the backbone — so that everything downstream (attribution, journeys, lifetime value) is finally counting people instead of fragments. Get the person right, and the rest of your measurement stops lying to you.`,
+    faqs: [
+      {
+        q: "What is identity resolution?",
+        a: "It's the process of connecting all the scattered records that belong to the same person — browser cookies, device IDs, email addresses, customer accounts, phone numbers — into one unified profile, so an anonymous phone session and a logged-in laptop purchase are recognized as the same human instead of counted as separate users.",
+      },
+      {
+        q: "What is an identity graph?",
+        a: "An identity graph is a constantly-updating map that links every identifier — email, device, cookie, phone number — back to the real person behind it. It's what lets a new signal, like an email entered at checkout, light up weeks of earlier anonymous browsing and give a customer a full history instead of appearing out of nowhere.",
+      },
+      {
+        q: "What's the difference between deterministic and probabilistic matching?",
+        a: "Deterministic matching uses definite shared identifiers — the same email or customer ID appearing in two places — and is high-confidence. Probabilistic matching infers a match from circumstantial signals like device type, location, and behavior — a good guess, not a certainty. Strong identity resolution leans on deterministic matches and treats probabilistic ones as a supplement, never the foundation.",
+      },
+      {
+        q: "Why do my returning customers show up as new users?",
+        a: "Because your tools lose the thread that connects their visits. Clearing cookies, switching from phone to laptop, or returning after a cookie expires each makes the same person look brand-new. Most of those new users are people you already know — the line between anonymous and known is about whether your system held onto their identity, not about the customer.",
+      },
+      {
+        q: "Why is cross-device tracking so much harder now?",
+        a: "A single customer moves between phone, laptop, and tablet, and each device looks like a different person. The third-party cookies and cross-site tracking that used to stitch devices together are exactly what privacy changes are dismantling — so modern identity resolution relies on first-party, consent-based identifiers you collect directly.",
+      },
+      {
+        q: "Why does identity resolution matter for attribution and lifetime value?",
+        a: "Every other measurement depends on it. If the touches before a sale are split across five users, attribution can't credit them correctly; if each purchase looks like a first-time buyer, lifetime value is wrong; if a journey is fragmented across devices, you can't map it. Get identity right and everything downstream finally counts people instead of fragments.",
+      },
+    ],
+  },
+  {
     slug: "why-your-marketing-reports-never-agree",
     title: "Why your marketing reports never agree with each other",
     metaTitle: "Why Your Marketing Reports Never Agree",
