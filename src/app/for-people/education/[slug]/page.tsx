@@ -97,6 +97,39 @@ export default async function BlogPostPage({
             </section>
           )}
 
+          {(() => {
+            // Cluster links — show ONLY posts that are live. A related slug whose
+            // publishAt is still in the future is silently skipped, so it can never
+            // render a 404; it appears on its own the hour that post goes live (ISR).
+            const related = (post.relatedSlugs ?? [])
+              .map((s) => getPost(s))
+              .filter((p): p is NonNullable<typeof p> => !!p && p.slug !== post.slug && isLive(p));
+            if (related.length === 0) return null;
+            return (
+              <section className="mt-12 border-t border-orange-100 pt-8">
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900">Related reading</h2>
+                <ul className="mt-5 space-y-3">
+                  {related.map((p) => (
+                    <li key={p.slug}>
+                      <Link
+                        href={`/for-people/education/${p.slug}`}
+                        className="group block rounded-2xl border border-orange-100 bg-white p-4 sm:p-5 shadow-sm hover:border-orange-300 transition"
+                      >
+                        <span className="text-[11px] uppercase tracking-wide text-orange-700 font-semibold">
+                          {p.category}
+                        </span>
+                        <span className="mt-1 block font-medium text-neutral-900 group-hover:underline">
+                          {p.title}
+                        </span>
+                        <span className="mt-1 block text-sm text-neutral-600">{p.excerpt}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })()}
+
           <div className="mt-12 border-t border-orange-100 pt-6">
             <Link href="/for-people/education" className="text-sm font-medium text-orange-500 hover:underline">
               ← Back to the blog

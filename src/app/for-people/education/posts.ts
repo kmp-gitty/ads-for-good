@@ -20,6 +20,7 @@ export type Post = {
   image?: string;     // optional tile image (e.g. "/images/DigitalAuditWallpaper.png"); falls back to a placeholder
   body: string;       // markdown
   faqs?: { q: string; a: string }[]; // optional — rendered on-page + emitted as FAQPage JSON-LD
+  relatedSlugs?: string[]; // optional cluster links; rendered as "Related reading" but ONLY for posts that are live (isLive), so a link to a future-dated spoke never 404s — it appears automatically the hour that spoke publishes.
   publishAt?: string; // ISO date (e.g. "2026-08-03"). Hidden in production until this date; absent = live now. Always visible in dev so drafts can be reviewed locally.
 };
 
@@ -113,6 +114,143 @@ That's precisely why we built [Chapter](https://chapter.ads4good.com/) around id
         a: "Every other measurement depends on it. If the touches before a sale are split across five users, attribution can't credit them correctly; if each purchase looks like a first-time buyer, lifetime value is wrong; if a journey is fragmented across devices, you can't map it. Get identity right and everything downstream finally counts people instead of fragments.",
       },
     ],
+    relatedSlugs: ["aggregated-vs-user-level-data", "engagement-metrics-that-mean-something"],
+  },
+  {
+    slug: "aggregated-vs-user-level-data",
+    title: "Aggregated vs. user-level data: why the summary hides what you need to know",
+    metaTitle: "Aggregated vs. User-Level Data",
+    category: "Data & Tracking",
+    date: "Sep 8, 2026",
+    excerpt:
+      "2,000 visitors, 3% conversion, $80 average order. Clean, readable — and quietly hiding what individual people actually did. Why aggregated data flatters you, and how to keep the raw truth reachable.",
+    image: "/images/AskUsAnythingWallpaper.png",
+    publishAt: "2026-09-08",
+    body: `Most marketing reports show you **aggregated data** — totals, averages, rates. 2,000 visitors, 3% conversion, $80 average order. It's clean, it's readable, and it's quietly hiding the single most useful thing in your data: what individual people actually did. Understanding the difference between aggregated and user-level data is the difference between a report that looks informative and one that can actually answer your questions.
+
+## What "aggregated data" means
+
+Aggregated data is information that's been rolled up — combined and summarized so you see the group, not the individuals in it. "500 people added to cart this week" is aggregated. It tells you a total without telling you anything about any one of those 500 people: who they were, what they did before, whether they'd bought from you three times already.
+
+Aggregation is useful and necessary — you can't read 500 individual stories every morning. But every time data gets aggregated, detail gets thrown away, and the detail that gets discarded is often exactly the detail you needed. An average order value of $80 could be a thousand $80 orders, or five hundred $20 orders and a hundred $700 ones. The summary looks the same. The businesses behind them are completely different.
+
+## User-level data: the individual stories underneath
+
+User-level data is the opposite: information kept at the level of the individual person, before it's been rolled up. Instead of "3% conversion," it's "this specific person visited four times over two weeks, opened two emails, and bought on the fifth visit." It's messier and larger, but it's where every real answer lives, because business questions are almost always about behavior — and behavior happens at the level of people, not totals.
+
+The catch: user-level data is only meaningful if you know who the user is. Which is exactly where this connects back to identity. If your "users" are actually fragments — the same person split across five devices — then your user-level data isn't user-level at all. It's fragment-level, and aggregating fragments just gives you a confident summary of a broken foundation.
+
+## How raw data becomes a report (and what gets lost on the way)
+
+Between the individual actions and the chart on your screen, data goes through a series of steps — collected, cleaned, combined, and summarized. You'll hear this described with words like data pipelines and data modeling; in plain terms, it's just the journey from "a thing happened" to "a number in a dashboard." (Those terms come from the world of data engineering, and the deep versions are a whole profession — but the marketing-relevant idea is simple: your report is the end of an assembly line, and choices were made at every station.)
+
+The important thing to understand is that each step makes decisions, and those decisions are usually invisible by the time you see the final number. Which events counted. How "a session" was defined. Which duplicates were removed, and which slipped through. How the same person across devices was — or wasn't — combined. By the time it's a clean 3% on a dashboard, all of that judgment has been baked in and hidden. The number looks objective. It's actually the output of a dozen quiet choices.
+
+## Reporting layers vs. raw data: two different kinds of truth
+
+This is why sophisticated setups keep a distinction between raw data and the reporting layer. Raw data is what actually happened, event by event, before anyone cleaned it up. The reporting layer is the polished, aggregated version built for decisions. You need both, and you need to know which one you're looking at.
+
+The danger is trusting a reporting layer without ever being able to check it against the raw data underneath. If the summary looks wrong, you need to be able to go back to the individual events and ask why. A measurement system you can't inspect — where the numbers arrive polished and unquestionable — is one you're taking on faith. The best ones let you drill from the clean summary all the way back down to the individual person and the individual event.
+
+## What this means for you
+
+- **Distrust a summary you can't break apart.** If you can't get from a number back to the people in it, you can't really verify it.
+- **Remember averages hide their own shape.** The same average can describe wildly different realities.
+- **Ask what got decided upstream.** Every clean number had judgment baked into it — about sessions, duplicates, and identity.
+- **Keep raw data reachable.** The polished report is for decisions; the raw events are for when the report looks wrong.
+
+Underneath all of it is the same foundation as everything else in measurement: the summaries are only as trustworthy as the identity resolution beneath them. Aggregate correctly-resolved people and you get real answers; aggregate fragments and you get a confident, wrong report. [Chapter](https://chapter.ads4good.com/) is built so the reporting layer always traces back to resolved people and inspectable raw events — you get the clean summary for decisions, and the ability to drill back down to the person when you need to check it. For why getting the person right comes first, see our guide to [identity resolution](/for-people/education/identity-resolution-explained).`,
+    faqs: [
+      {
+        q: "What's the difference between aggregated and user-level data?",
+        a: "Aggregated data is rolled up into totals, averages, and rates — you see the group, not the individuals. User-level data is kept at the level of the individual person before it's summarized: this person visited four times, opened two emails, bought on the fifth. Aggregates are readable, but user-level data is where the actual answers live, because business questions are about behavior and behavior happens at the level of people.",
+      },
+      {
+        q: "Why can two businesses have the same average order value but be completely different?",
+        a: "Because an average hides its own shape. An $80 average could be a thousand $80 orders, or five hundred $20 orders plus a hundred $700 ones. The summary looks identical while the businesses behind it are nothing alike — which is why you can't stop at the average.",
+      },
+      {
+        q: "What is the difference between raw data and a reporting layer?",
+        a: "Raw data is what actually happened, event by event, before anyone cleaned it up. The reporting layer is the polished, aggregated version built for making decisions. You need both — and you need to be able to check the reporting layer against the raw data underneath when a number looks wrong.",
+      },
+      {
+        q: "What gets decided when raw data becomes a dashboard number?",
+        a: "Every step makes invisible choices: which events counted, how a session was defined, which duplicates were removed, and whether the same person across devices was combined or not. By the time it's a clean 3% on a dashboard, all that judgment is baked in and hidden — the number looks objective but is the output of a dozen quiet decisions.",
+      },
+      {
+        q: "Why does aggregated data depend on identity resolution?",
+        a: "Because aggregating fragments gives you a confident but wrong report. If your users are actually the same person split across five devices, your user-level data isn't user-level — it's fragment-level. Summaries are only as trustworthy as the identity resolution beneath them.",
+      },
+    ],
+    relatedSlugs: ["identity-resolution-explained", "engagement-metrics-that-mean-something"],
+  },
+  {
+    slug: "engagement-metrics-that-mean-something",
+    title: "Engagement metrics that actually mean something (and the ones that fool you)",
+    metaTitle: "Engagement Metrics That Mean Something",
+    category: "Data & Tracking",
+    date: "Sep 14, 2026",
+    excerpt:
+      "Time on page, scroll depth, clicks — they fill dashboards and mostly measure activity, not interest. How to tell an engagement signal that predicts a sale from one that just looks busy.",
+    image: "/images/OwnaBusinessWallpaper.png",
+    publishAt: "2026-09-14",
+    body: `Most engagement metrics are vanity dressed as insight. Time on page, scroll depth, clicks, sessions — they fill dashboards and feel meaningful, but a lot of them measure activity, not interest. Learning to tell the difference between a signal that predicts a sale and one that just looks busy is one of the highest-leverage skills in marketing measurement. Let's separate the two.
+
+## What behavioral data actually is
+
+**Behavioral data** is the record of what people do, as opposed to who they are or what they say. Not their age or their survey answers — their actions. Which pages they viewed, how long they stayed, what they clicked, how far they scrolled, what they added to cart and abandoned. It's the most honest data you have, because it's what people did rather than what they claimed they'd do.
+
+But "most honest" doesn't mean "self-explaining." A behavior is just an action until you interpret it, and the interpretation is where most measurement goes wrong. The same action can mean opposite things depending on context, which is why raw engagement numbers so often mislead.
+
+## The metrics that fool you: time on page and scroll depth
+
+Take time on page. It sounds like interest — longer must mean more engaged, right? Not necessarily. Someone who spends four minutes on your page might be fascinated. Or they might be confused, hunting for a price you buried, or they left the tab open and walked away. High time on page can signal deep interest or deep frustration, and the number alone can't tell you which.
+
+Scroll depth has the same problem. Scrolling all the way down can mean someone read every word — or that they were desperately searching for something they couldn't find and never did. A high number looks like a win and might be a symptom. These metrics aren't useless, but taken alone, out of context, they measure motion, not meaning.
+
+## Engagement signals worth trusting
+
+So which signals actually matter? The ones tied to **intent** — actions that genuinely predict someone moving toward a purchase, rather than just moving. Adding to cart. Returning to the same product multiple times. Viewing pricing. Coming back within a few days. These are behaviors that, in context, correlate with buying, not just browsing.
+
+The key phrase is "in context." A single add-to-cart from a first-time visitor means something different from the third visit to a pricing page by someone who's opened four of your emails. The signal isn't the action in isolation — it's the action as part of a pattern, from a person you can actually recognize across visits. Which is, again, why this comes back to identity: an engagement signal is only readable if you can connect it to the same person's other behavior over time.
+
+## Intent vs. behavior: the distinction that matters most
+
+Here's the distinction that separates useful measurement from busy dashboards. Behavior is what someone did. Intent is what it means about where they're heading. Every behavior is a clue to intent, but no single behavior is intent itself — and confusing the two is how businesses misread their customers.
+
+A pile of engagement — lots of clicks, long sessions, deep scrolls — can look like strong intent and actually be someone who can't find what they need. Meanwhile, genuine high intent might look quiet: a quick, decisive visit straight to the pricing page and out. Volume of activity is not the same as strength of intent. Reading intent correctly means looking at the pattern of behavior over time, from a recognized person, not tallying up raw engagement and hoping it points the right way.
+
+## How to actually use engagement data
+
+- **Distrust any single metric as a measure of interest.** Time on page and scroll depth measure activity, and activity is ambiguous.
+- **Prioritize intent-linked signals.** Cart adds, repeat product views, pricing visits, quick returns — these predict buying better than raw engagement.
+- **Always read behavior in context.** The same action means different things from different people at different stages.
+- **Look at patterns, not moments.** Intent shows up in a sequence of behavior over time, not in one impressive number.
+
+Every one of those principles depends on a single prerequisite: being able to tie behaviors to the same person across visits and devices. A scroll or a cart-add is just noise until it's part of one person's story. That's the foundation [Chapter](https://chapter.ads4good.com/) is built on — it captures behavioral signals and ties them to a resolved identity, so engagement becomes a readable pattern of intent instead of a pile of ambiguous activity. For why recognizing the person comes first, see our guide to [identity resolution](/for-people/education/identity-resolution-explained).`,
+    faqs: [
+      {
+        q: "What is behavioral data?",
+        a: "Behavioral data is the record of what people actually do — pages viewed, time stayed, clicks, scroll depth, carts added and abandoned — as opposed to who they are or what they say in a survey. It's the most honest data you have, but a behavior is just an action until you interpret it in context.",
+      },
+      {
+        q: "Why are time on page and scroll depth misleading?",
+        a: "Because they measure activity, not interest. Four minutes on a page can mean fascination or frustration — someone hunting for a buried price, or a tab left open. Scrolling to the bottom can mean someone read every word or searched desperately and never found it. Alone, out of context, these metrics measure motion, not meaning.",
+      },
+      {
+        q: "Which engagement signals actually predict a purchase?",
+        a: "The ones tied to intent: adding to cart, returning to the same product multiple times, viewing pricing, coming back within a few days. In context, these correlate with buying rather than just browsing — but only when you can read them as part of one recognizable person's pattern over time.",
+      },
+      {
+        q: "What's the difference between behavior and intent?",
+        a: "Behavior is what someone did; intent is what it means about where they're heading. Every behavior is a clue to intent, but no single behavior is intent itself. A pile of clicks can look like strong intent and be someone who's lost; real high intent can look quiet — a fast, decisive trip to the pricing page and out.",
+      },
+      {
+        q: "Why do engagement signals depend on identity?",
+        a: "Because a signal is a pattern, not a single click. One add-to-cart from a first-time visitor means something different from the third pricing-page visit by someone who's opened four of your emails. You can only read that pattern if you can tie the behavior to the same person across visits and devices — no identity, no pattern, no signal.",
+      },
+    ],
+    relatedSlugs: ["identity-resolution-explained", "aggregated-vs-user-level-data"],
   },
   {
     slug: "why-your-marketing-reports-never-agree",
