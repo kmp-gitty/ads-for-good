@@ -57,6 +57,10 @@ function getCreds(slug: string) {
       user: process.env.CLIENT_NOT_SO_CAVALIER_USER,
       pass: process.env.CLIENT_NOT_SO_CAVALIER_PASS,
     },
+    "acj-today": {
+      user: process.env.CLIENT_ACJ_TODAY_USER,
+      pass: process.env.CLIENT_ACJ_TODAY_PASS,
+    },
   };
 
   return map[slug];
