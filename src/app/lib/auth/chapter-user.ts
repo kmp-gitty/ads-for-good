@@ -346,12 +346,44 @@ export async function findAllowedDomainForEmail(
 //
 // Returns the newly-created ChapterUser, or null if no domain rule matched
 // (caller should sign the user out + redirect with not_allowlisted).
+// True when this email has a REVOKED chapter_config.users row.
+//
+// Load-bearing for offboarding. `users_email_idx` is
+// UNIQUE (lower(email)) WHERE revoked_at IS NULL, so a revoked row does NOT
+// block a fresh insert, and findChapterUserByEmail filters revoked rows out.
+// Without this check a revoked user whose domain still has an
+// allowed_email_domains rule falls through to the domain path and gets
+// re-provisioned with a brand-new active row on their next magic link —
+// making revocation a silent no-op. Revocation must beat the domain rule.
+export async function isEmailRevoked(email: string): Promise<boolean> {
+  const supabase = createSupabaseServiceRoleClient();
+  const { data, error } = await supabase
+    .schema("chapter_config")
+    .from("users")
+    .select("id")
+    .ilike("email", email.trim())
+    .not("revoked_at", "is", null)
+    .limit(1);
+  if (error) {
+    // Fail CLOSED: if we cannot prove the address is clean, do not auto-provision.
+    console.warn("[chapter-user] isEmailRevoked failed:", error.message);
+    return true;
+  }
+  return (data?.length ?? 0) > 0;
+}
+
 export async function provisionFromDomainIfAllowed(
   email: string,
   authUserId: string,
 ): Promise<ChapterUser | null> {
   const rule = await findAllowedDomainForEmail(email);
   if (!rule) return null;
+
+  // Revocation beats the domain rule. See isEmailRevoked.
+  if (await isEmailRevoked(email)) {
+    console.warn("[chapter-user] provisionFromDomain blocked: address revoked");
+    return null;
+  }
 
   const supabase = createSupabaseServiceRoleClient();
   const { data, error } = await supabase

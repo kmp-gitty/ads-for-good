@@ -21,6 +21,13 @@ function LoginForm() {
   const next = params.get("next") || undefined;
   const errorCode = params.get("error");
 
+  // One login page serves both surfaces. When ?next points at a client portal,
+  // say "portal" — a client arriving here for their bulletin shouldn't be told
+  // they're signing in to a dashboard they'll never see.
+  const heading = next?.startsWith("/for-clients/")
+    ? "Sign in to your client portal"
+    : "Sign in to the dashboard";
+
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(errorMessageFor(errorCode));
@@ -87,7 +94,7 @@ function LoginForm() {
           </>
         ) : (
           <>
-            <h1 style={{ fontSize: 18, fontWeight: 600, color: "#1F2D43", margin: "0 0 6px" }}>Sign in to the dashboard</h1>
+            <h1 style={{ fontSize: 18, fontWeight: 600, color: "#1F2D43", margin: "0 0 6px" }}>{heading}</h1>
             <p style={{ fontSize: 12, color: "#5C6B82", margin: "0 0 18px", lineHeight: 1.5 }}>
               We&rsquo;ll email you a one-time sign-in link.
             </p>

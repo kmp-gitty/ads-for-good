@@ -43,6 +43,23 @@ function unauthorized(realm: string) {
   });
 }
 
+// Portals migrated off shared-password Basic auth onto magic-link SSO.
+// Key = URL slug under /for-clients/ (hyphenated); value = Chapter client_key
+// (underscored). A portal listed here does NOT fall back to Basic auth — access
+// is a Supabase session scoped to that client_key, or the agency-staff
+// CHAPTER_DASH_TOKEN cookie. Add a portal here only once its client has a
+// chapter_config.clients row (allowed_email_domains.client_key FKs to it).
+const MAGIC_LINK_PORTALS: Record<string, string> = {
+  "acj-today": "acj_today",
+};
+
+// Reverse lookup. Used to bounce a client_employee out of /chapter/* and into
+// their portal when their tenant has one — they have nothing to see on the
+// analytics surface until Chapter is provisioned for them.
+const CLIENT_KEY_TO_PORTAL_SLUG: Record<string, string> = Object.fromEntries(
+  Object.entries(MAGIC_LINK_PORTALS).map(([slug, key]) => [key, slug]),
+);
+
 function getCreds(slug: string) {
   const map: Record<string, { user?: string; pass?: string }> = {
     "EOS-Fabrics": {
@@ -57,20 +74,22 @@ function getCreds(slug: string) {
       user: process.env.CLIENT_NOT_SO_CAVALIER_USER,
       pass: process.env.CLIENT_NOT_SO_CAVALIER_PASS,
     },
-    "acj-today": {
-      user: process.env.CLIENT_ACJ_TODAY_USER,
-      pass: process.env.CLIENT_ACJ_TODAY_PASS,
-    },
   };
 
   return map[slug];
 }
 
-function gateForClients(req: NextRequest) {
+async function gateForClients(req: NextRequest) {
   const parts = req.nextUrl.pathname.split("/").filter(Boolean);
   const clientSlug = parts[1]; // /for-clients/<client>
 
   if (!clientSlug) return unauthorized("Client Portal");
+
+  // Magic-link portals bypass Basic entirely. Returning a 401 here would fire
+  // the browser's Basic prompt before our login page could ever render, so
+  // these slugs never reach the credential path below.
+  const magicLinkClientKey = MAGIC_LINK_PORTALS[clientSlug];
+  if (magicLinkClientKey) return gatePortalSession(req, magicLinkClientKey);
 
   const creds = getCreds(clientSlug);
   if (!creds?.user || !creds?.pass) {
@@ -90,6 +109,52 @@ function gateForClients(req: NextRequest) {
   }
 
   return NextResponse.next();
+}
+
+// ---------- magic-link client portal auth ----------
+// For portals in MAGIC_LINK_PORTALS. Mirrors gateInternal's shape. Accepts:
+//   1. A Supabase session whose Chapter user can access this client_key.
+//      chapter_staff passes for any client (canAccessClient); a client_employee
+//      only for their own.
+//   2. The legacy CHAPTER_DASH_TOKEN cookie. Load-bearing, not vestigial: the
+//      @ads4good.com magic-link bypass issues this cookie instead of a Supabase
+//      session, so agency staff reach client portals through this branch.
+// Anything else redirects to the shared login, preserving the target so the
+// magic link lands the visitor back on the page they asked for.
+async function gatePortalSession(req: NextRequest, clientKey: string) {
+  const { supabase, getResponse } = createSupabaseMiddlewareClient(req);
+  const { data: { user: supaUser } } = await supabase.auth.getUser();
+
+  if (supaUser) {
+    const chapterUser = await findChapterUserByAuthId(supaUser.id);
+    if (chapterUser && (await canAccessClient(chapterUser, clientKey))) {
+      return getResponse();
+    }
+    // Authenticated but not entitled to this portal (revoked, or scoped to a
+    // different client). Sign out + generic error — never reveal which portals
+    // exist or why access failed.
+    await supabase.auth.signOut();
+    const loginUrl = req.nextUrl.clone();
+    loginUrl.pathname = "/chapter/login";
+    loginUrl.search = "";
+    loginUrl.searchParams.set("error", "not_allowlisted");
+    return NextResponse.redirect(loginUrl);
+  }
+
+  const expectedToken = process.env.CHAPTER_DASH_TOKEN;
+  if (
+    expectedToken &&
+    req.cookies.get(CHAPTER_AUTH_COOKIE)?.value === expectedToken
+  ) {
+    return NextResponse.next();
+  }
+
+  const fullPath = req.nextUrl.pathname + req.nextUrl.search;
+  const loginUrl = req.nextUrl.clone();
+  loginUrl.pathname = "/chapter/login";
+  loginUrl.search = "";
+  loginUrl.searchParams.set("next", fullPath);
+  return NextResponse.redirect(loginUrl);
 }
 
 // ---------- /chapter/* auth ----------
@@ -184,6 +249,20 @@ async function gateChapter(req: NextRequest) {
       loginUrl.search = "";
       loginUrl.searchParams.set("error", "not_allowlisted");
       return NextResponse.redirect(loginUrl);
+    }
+
+    // A client_employee whose tenant has a magic-link portal has nothing to see
+    // under /chapter/* until Chapter is provisioned for them — the analytics
+    // shell would render empty. Send them to their portal instead. Scoped to
+    // client_employee on purpose: chapter_staff keep full /chapter/* access.
+    if (chapterUser.role === "client_employee" && chapterUser.client_key) {
+      const portalSlug = CLIENT_KEY_TO_PORTAL_SLUG[chapterUser.client_key];
+      if (portalSlug) {
+        const target = req.nextUrl.clone();
+        target.pathname = `/for-clients/${portalSlug}`;
+        target.search = "";
+        return NextResponse.redirect(target);
+      }
     }
 
     if (clientKey) {

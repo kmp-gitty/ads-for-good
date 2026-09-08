@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServiceRoleClient } from "@/app/lib/auth/supabase-server";
-import { findChapterUserByEmail, findAllowedDomainForEmail } from "@/app/lib/auth/chapter-user";
+import { findChapterUserByEmail, findAllowedDomainForEmail, isEmailRevoked } from "@/app/lib/auth/chapter-user";
 
 export async function POST(req: NextRequest) {
   let body: { email?: string; next?: string };
@@ -37,7 +37,15 @@ export async function POST(req: NextRequest) {
   // happens in the callback (after Supabase confirms the visitor controls
   // the inbox), but we let the magic link send here so first-time
   // auto-provision users can complete the round-trip.
-  const domainRule = chapterUser ? null : await findAllowedDomainForEmail(email);
+  // Revocation beats the domain rule: findChapterUserByEmail filters revoked
+  // rows, so without this a revoked address would fall through to the domain
+  // path and be re-provisioned by the callback. Don't send a link we intend to
+  // reject — and stay silent about why (the response shape is identical either
+  // way, so the allowlist isn't leaked).
+  const domainRule =
+    chapterUser || (await isEmailRevoked(email))
+      ? null
+      : await findAllowedDomainForEmail(email);
   const isAuthorized = chapterUser !== null || domainRule !== null;
 
   // Agency-staff bypass (June 15, 2026): @ads4good.com addresses on the
