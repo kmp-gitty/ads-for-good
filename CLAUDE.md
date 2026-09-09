@@ -193,7 +193,38 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 ## ✅ Completed Fixes (as of September 8, 2026)
 
 ### 1P durability re-measures — NSC pending (connector down), EOS rescheduled → Sep 19 (Sep 8, 2026)
-- **NSC re-measure (cross-session tie: gads-click → Book Now crossover → stitched-to-known; baseline 263 gads clickers → 1–2 crossovers → 1 stitched):** due/ready — NSC's redirect A-record (`chapter.notsocavalier.com`, flipped Aug 11) has ~4 weeks of post-flip data. **NOT run this session: the Supabase MCP connector disconnected** and this repo (`ads-for-good`) has no replica/direct Postgres connection string — only `SUPABASE_URL` + service-role REST, which targets the primary, can't run the ad-hoc multi-join, and the runbook forbids heavy analytical queries on the primary. Run when the connector is reconnected. Query shape: gads clickers (`redirect_click` where `props->>'redirect_slug'='google-ads'` OR carrying a gclid) from **Aug 11 → now**; of those, how many later had a `book-now` `redirect_click` (crossover); of those, how many resolved to a known canonical (email/customer). Rising crossover/stitch vs baseline = A-record durability working.
+- **NSC re-measure (cross-session tie: gads-click → Book Now crossover → stitched-to-known; baseline 263 gads clickers → 1–2 crossovers → 1 stitched):** due/ready — NSC's redirect A-record (`chapter.notsocavalier.com`, flipped Aug 11) has ~4 weeks of post-flip data. **Could NOT run in the Sep 8 session: the Supabase MCP connector disconnected mid-session and a reconnect doesn't re-register into a running session — RUN IN A FRESH SESSION** (which picks up the reconnected connector). This repo has no replica/direct Postgres string (only `SUPABASE_URL` + service-role REST → primary, can't run ad-hoc SQL, and the runbook forbids heavy queries on the primary), so the MCP `execute_sql` (or the `chapter_explore` replica connection) is the path. **Ready-to-run read-only SQL** (verify-on-run — the known-canonical prefixes in the last `filter` may need one tweak; compares a pre-flip vs post-flip 28-day window):
+```sql
+with gads as (
+  select case when e.ts < '2026-08-11' then '1_pre_flip' else '2_post_flip' end as period,
+    coalesce(ic.canonical_identity_key, e.identity_key) as canon, min(e.ts) as first_gads_ts
+  from chapter_ingest.pixel_events e
+  left join chapter_identity.identity_canon ic
+    on ic.client_key='not_so_cavalier' and ic.identity_key = e.identity_key
+  where e.client_key='not_so_cavalier' and e.event_name='redirect_click'
+    and (e.props->>'redirect_slug'='google-ads' or e.partner_ids ? 'gclid' or e.partner_ids ? 'gbraid' or e.partner_ids ? 'wbraid')
+    and e.props->>'suspected_scanner' is distinct from 'true'
+    and e.ts >= '2026-07-14' and e.ts < '2026-09-08' and e.identity_key is not null
+  group by 1,2
+),
+booknow as (
+  select coalesce(ic.canonical_identity_key, e.identity_key) as canon, min(e.ts) as first_book_ts
+  from chapter_ingest.pixel_events e
+  left join chapter_identity.identity_canon ic
+    on ic.client_key='not_so_cavalier' and ic.identity_key = e.identity_key
+  where e.client_key='not_so_cavalier' and e.event_name='redirect_click'
+    and e.props->>'redirect_slug'='book-now' and e.identity_key is not null
+  group by 1
+)
+select g.period,
+  count(distinct g.canon) as gads_clickers,
+  count(distinct g.canon) filter (where b.canon is not null and b.first_book_ts >= g.first_gads_ts) as crossovers,
+  count(distinct g.canon) filter (where b.canon is not null and b.first_book_ts >= g.first_gads_ts
+      and (g.canon like 'email_sha256:%' or g.canon like '%square_customer_id:%' or g.canon like 'phone_sha256:%')) as crossover_stitched_known
+from gads g left join booknow b on b.canon = g.canon
+group by g.period order by g.period;
+```
+Rising **crossovers** + **crossover_stitched_known** in `2_post_flip` vs the pre-flip window / the 263→1–2→1 baseline = A-record durability working.
 - **EOS re-measure rescheduled → Sep 19, 2026** (was ~Aug 28). Rationale: the **redirect-side durability (`go.eosfabrics.com` CNAME→A) only landed today (Sep 8)** — collect-side (`s.`) has been durable since the July 30–31 migration, but measuring now would miss the redirect clock entirely. 11 days lets post-flip data accumulate so the Q3 split reflects BOTH surfaces. Baseline to grow (hold the one-time backfill 72 constant): `durable_cookie_same_id` = 8, `spans_multiple_days` = 24.
 
 ### EOS redirect host `go.eosfabrics.com` — CNAME → A-record for ITP durability (Sep 8, 2026)
