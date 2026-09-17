@@ -126,6 +126,9 @@ export default function UrlBuilder({
   const [extraParams, setExtraParams] = useState("");
   const [identityMode, setIdentityMode] = useState<IdentityMode>("none");
   const [identityValue, setIdentityValue] = useState("");
+  // rh must travel as the DIGEST, never the address. Hashing is async, so the
+  // result is held in state and the URL builds from it — not from identityValue.
+  const [identityHash, setIdentityHash] = useState("");
   const [bulk, setBulk] = useState(false);
   const [bulkMode, setBulkMode] = useState<BulkMode>("recipient");
   const [bulkInput, setBulkInput] = useState("");
@@ -144,6 +147,16 @@ export default function UrlBuilder({
     setProspect(null);
     setDestination(clientKey === AGENCY_CLIENT_KEY ? QUICK_DESTINATIONS[0].value : "");
   }, [clientKey, defaultSlug]);
+
+  useEffect(() => {
+    if (identityMode !== "rh" || !identityValue.trim()) {
+      setIdentityHash("");
+      return;
+    }
+    let alive = true;
+    sha256Hex(identityValue).then(h => { if (alive) setIdentityHash(h); });
+    return () => { alive = false; };
+  }, [identityMode, identityValue]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -167,7 +180,11 @@ export default function UrlBuilder({
     if (!ruleSuppliesDestination && destination) params.set("to", destination);
 
     const idMode = over?.identity?.mode ?? identityMode;
-    const idVal = over?.identity?.value ?? (idMode === "rid" && prospect ? prospect.prospect_key : identityValue);
+    const idVal =
+      over?.identity?.value ??
+      (idMode === "rid" && prospect ? prospect.prospect_key
+        : idMode === "rh" ? identityHash
+        : identityValue);
     if (idMode !== "none" && idVal) params.set(idMode, idVal);
 
     const src = over?.source ?? utmSource;
@@ -196,7 +213,7 @@ export default function UrlBuilder({
     () => urlFrom(buildParams()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [slug, destination, prospect, utmSource, utmMedium, utmCampaign, utmContent, utmTerm, extraParams,
-     identityMode, identityValue, clientKey, effectiveOrigin, ruleSuppliesDestination],
+     identityMode, identityValue, identityHash, clientKey, effectiveOrigin, ruleSuppliesDestination],
   );
 
   async function buildBulk() {
@@ -382,8 +399,10 @@ export default function UrlBuilder({
                 placeholder="person@example.com"
               />
             </Field>
-            {identityMode === "rh" && identityValue && (
-              <HashPreview email={identityValue} onHash={h => setIdentityValue(prev => (prev === h ? prev : prev))} />
+            {identityMode === "rh" && identityHash && (
+              <p className="mt-1 break-all font-mono text-[11px] text-neutral-500">
+                rh = {identityHash}
+              </p>
             )}
           </div>
         )}
@@ -529,23 +548,6 @@ export default function UrlBuilder({
         </div>
       )}
     </div>
-  );
-}
-
-// Shows the hash that will actually go in the URL, so the operator can verify
-// it matches what they'd compute elsewhere (sha256 of lowercased, trimmed email).
-function HashPreview({ email }: { email: string; onHash?: (h: string) => void }) {
-  const [hash, setHash] = useState("");
-  useEffect(() => {
-    let alive = true;
-    sha256Hex(email).then(h => { if (alive) setHash(h); });
-    return () => { alive = false; };
-  }, [email]);
-  if (!hash) return null;
-  return (
-    <p className="mt-1 break-all font-mono text-[11px] text-neutral-500">
-      rh = {hash}
-    </p>
   );
 }
 
