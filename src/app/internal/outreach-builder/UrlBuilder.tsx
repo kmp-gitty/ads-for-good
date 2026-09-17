@@ -38,6 +38,8 @@ const UTM_SOURCES = [
   { value: "other", label: "Other" },
 ];
 
+const UTM_MEDIUMS = ["email", "cpc", "social", "display", "referral", "affiliate", "video", "qr", "print"];
+
 // Quick destinations are ads4good.com's own pages, so they only make sense for
 // the agency tenant. Other clients type their own storefront URL — showing them
 // ads4good links was a leftover from when this tool was adsforgood-only.
@@ -117,8 +119,10 @@ export default function UrlBuilder({
   const isAgency = clientKey === AGENCY_CLIENT_KEY;
   const [destination, setDestination] = useState(isAgency ? QUICK_DESTINATIONS[0].value : "");
   const [utmSource, setUtmSource] = useState("email");
+  const [utmMedium, setUtmMedium] = useState("email");
   const [utmCampaign, setUtmCampaign] = useState("");
   const [utmContent, setUtmContent] = useState("");
+  const [utmTerm, setUtmTerm] = useState("");
   const [extraParams, setExtraParams] = useState("");
   const [identityMode, setIdentityMode] = useState<IdentityMode>("none");
   const [identityValue, setIdentityValue] = useState("");
@@ -168,7 +172,9 @@ export default function UrlBuilder({
 
     const src = over?.source ?? utmSource;
     if (src) params.set("utm_source", src);
+    if (utmMedium.trim()) params.set("utm_medium", utmMedium.trim());
     if (utmCampaign.trim()) params.set("utm_campaign", utmCampaign.trim());
+    if (utmTerm.trim()) params.set("utm_term", utmTerm.trim());
     const content = over?.content ?? utmContent;
     if (content.trim()) params.set("utm_content", content.trim());
 
@@ -189,7 +195,7 @@ export default function UrlBuilder({
   const finalUrl = useMemo(
     () => urlFrom(buildParams()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [slug, destination, prospect, utmSource, utmCampaign, utmContent, extraParams,
+    [slug, destination, prospect, utmSource, utmMedium, utmCampaign, utmContent, utmTerm, extraParams,
      identityMode, identityValue, clientKey, effectiveOrigin, ruleSuppliesDestination],
   );
 
@@ -383,18 +389,29 @@ export default function UrlBuilder({
         )}
       </div>
 
-      <div className="grid gap-5 sm:grid-cols-3">
-        <Field label="UTM source" hint="Pick or type">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="UTM source" hint="Feeds Chapter's channel classification">
           <input className={inputCls} list="utm-sources" value={utmSource} onChange={e => setUtmSource(e.target.value)} />
           <datalist id="utm-sources">
             {UTM_SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
           </datalist>
         </Field>
+        <Field label="UTM medium" hint="e.g. email, cpc, social">
+          <input className={inputCls} list="utm-mediums" value={utmMedium} onChange={e => setUtmMedium(e.target.value)} placeholder="email" />
+          <datalist id="utm-mediums">
+            {UTM_MEDIUMS.map(m => <option key={m} value={m} />)}
+          </datalist>
+        </Field>
+      </div>
+      <div className="grid gap-5 sm:grid-cols-3">
         <Field label="UTM campaign" hint="Optional">
           <input className={inputCls} value={utmCampaign} onChange={e => setUtmCampaign(e.target.value)} placeholder="cart_recovery_sep" />
         </Field>
         <Field label="UTM content" hint="Optional">
           <input className={inputCls} value={utmContent} onChange={e => setUtmContent(e.target.value)} placeholder="variant_a" />
+        </Field>
+        <Field label="UTM term" hint="Optional">
+          <input className={inputCls} value={utmTerm} onChange={e => setUtmTerm(e.target.value)} placeholder="keyword" />
         </Field>
       </div>
 
