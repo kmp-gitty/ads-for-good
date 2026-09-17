@@ -29,7 +29,22 @@ export type CartContext = {
   cart_event_count: number;          // add_to_cart + view_cart events in window
 };
 
-const CART_LOOKBACK_HOURS = 24;
+// 14 days, matching Shopify's cart cookie lifetime (which rolls forward from
+// LAST ACTIVITY, not creation — measured on EOS: 377 of 6,309 carts spanned
+// >14d, max 114d). Beyond that the cart is genuinely gone, so this is a
+// principled ceiling rather than an arbitrary one.
+//
+// WAS 24h, which made the headline use case impossible: hours_since_cart is
+// derived only from events INSIDE this window, so it could never exceed 24 and
+// `cart_older_than_hours: 72` (3-day abandonment) was structurally unsatisfiable
+// — it silently evaluated false forever. Cost was real: of 800 EOS anonymous
+// identities that added to cart, 499 (62%) were still active on the SAME anon_id
+// 3+ days later (max span 70d). The durable 1P cookie was working; the window
+// was throwing the population away.
+//
+// NOTE: cart conditions do NOT require identity stitching — this queries the raw
+// identity_key, so an anonymous visitor's own cart is visible to them.
+const CART_LOOKBACK_HOURS = 24 * 14;
 
 export async function resolveCart(
   client_key: string,
@@ -59,6 +74,10 @@ export async function resolveCart(
   return {
     has_open_cart: true,
     hours_since_cart: hoursSince,
+    // Capped by the .limit(50) above — treat as "at least this many" rather than
+    // exact, especially now the window is 14 days. No condition reads it today;
+    // has_open_cart and hours_since_cart use only data[0] (the most recent), so
+    // the cap cannot affect either of them.
     cart_event_count: data.length,
   };
 }

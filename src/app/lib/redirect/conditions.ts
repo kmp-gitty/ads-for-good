@@ -4,7 +4,10 @@
 //
 // Examples:
 //   {} — always matches (catch-all default rule)
-//   { "is_returning_visitor": true } — fires on returning visitors only
+//   { "is_returning_visitor": true } — seen before this session (works for
+//     ANONYMOUS visitors; no identity stitching required)
+//   { "is_returning_visitor": { "within_days": 30 } } — seen in the last 30 days
+//   { "previous_purchase": true } — has bought before (needs a KNOWN identity)
 //   { "is_returning_visitor": true, "has_open_cart": true } — fires on
 //     returning visitors WITH an open cart (both must be true)
 //   { "country_in": ["US", "CA"], "device_type": "mobile" } — US/Canada mobile
@@ -39,8 +42,27 @@ type Evaluator = (param: unknown, ctx: EvalContext) => boolean;
 
 // ─── Individual evaluators ────────────────────────────────────────────────
 
+// VISIT-based pair — these work for ANONYMOUS visitors (no stitching needed),
+// and they are exact inverses of each other.
 const isNewVisitor: Evaluator = (p, ctx) => ctx.segments.is_new_visitor === Boolean(p);
-const isReturningVisitor: Evaluator = (p, ctx) => ctx.segments.is_returning_visitor === Boolean(p);
+
+// true            → seen at any point before this session
+// { within_days } → seen before this session AND within the last N days
+const isReturningVisitor: Evaluator = (p, ctx) => {
+  if (typeof p === "boolean") return ctx.segments.is_returning_visitor === p;
+  if (typeof p === "object" && p !== null) {
+    const n = Number((p as { within_days?: unknown }).within_days);
+    if (!Number.isFinite(n) || n <= 0) return false;
+    const d = ctx.segments.days_since_previous_visit;
+    return d !== null && d <= n;
+  }
+  return false;
+};
+
+// PURCHASE-based — needs a stitched, known canonical. Renamed from
+// is_returning_visitor (Sep 17 2026): it reads canonical_v1, which holds only
+// purchase chapters, so it has always meant "has bought before."
+const previousPurchase: Evaluator = (p, ctx) => ctx.segments.previous_purchase === Boolean(p);
 const hasConvertedEver: Evaluator = (p, ctx) => ctx.segments.has_converted_ever === Boolean(p);
 
 const hasConvertedInDays: Evaluator = (p, ctx) => {
@@ -142,6 +164,7 @@ const abBucket: Evaluator = (p, ctx) => {
 const REGISTRY: Record<string, Evaluator> = {
   is_new_visitor: isNewVisitor,
   is_returning_visitor: isReturningVisitor,
+  previous_purchase: previousPurchase,
   has_converted_ever: hasConvertedEver,
   has_converted_in_days: hasConvertedInDays,
   audience_tag: audienceTag,

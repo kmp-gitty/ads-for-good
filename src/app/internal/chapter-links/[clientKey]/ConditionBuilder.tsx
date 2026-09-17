@@ -23,6 +23,7 @@ type CondMeta = {
   label: string;
   kind:
     | "boolean"
+    | "returning_visitor"
     | "number"
     | "csv"
     | "device_type"
@@ -36,8 +37,11 @@ type CondMeta = {
 };
 
 const CONDITIONS: CondMeta[] = [
-  { type: "is_new_visitor", label: "Is new visitor", kind: "boolean", hint: "First-time visitor only" },
-  { type: "is_returning_visitor", label: "Is returning visitor", kind: "boolean" },
+  { type: "is_new_visitor", label: "Is new visitor", kind: "boolean", hint: "Never seen before this session — exact inverse of Is returning visitor." },
+  { type: "is_returning_visitor", label: "Is returning visitor", kind: "returning_visitor",
+    hint: "Seen before this session. Works for anonymous visitors — no login or purchase needed." },
+  { type: "previous_purchase", label: "Has purchased before", kind: "boolean",
+    hint: "Requires a known (stitched) identity — anonymous visitors always read false." },
   { type: "has_converted_ever", label: "Has converted ever", kind: "boolean" },
   { type: "has_converted_in_days", label: "Has converted in last N days", kind: "number" },
   { type: "audience_tag", label: "Audience tag", kind: "csv", hint: "Cohort tag(s). Comma-separated." },
@@ -305,6 +309,34 @@ function ConditionValueEditor({
   value: unknown;
   onChange: (v: unknown) => void;
 }) {
+  if (kind === "returning_visitor") {
+    // true = ever; { within_days: N } = recency. One picker row, one concept.
+    const isWindow = typeof value === "object" && value !== null;
+    const days = isWindow ? Number((value as { within_days?: number }).within_days ?? 30) : 30;
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <select
+          value={isWindow ? "within" : "ever"}
+          onChange={(e) => onChange(e.target.value === "within" ? { within_days: days } : true)}
+          style={smallInp}
+        >
+          <option value="ever">Seen at any point before</option>
+          <option value="within">Seen within…</option>
+        </select>
+        {isWindow && (
+          <>
+            <input
+              type="number" min={1} value={days}
+              onChange={(e) => onChange({ within_days: Number(e.target.value) || 1 })}
+              style={{ ...smallInp, width: 80 }}
+            />
+            <span style={{ fontSize: 12, color: MUTED }}>days</span>
+          </>
+        )}
+      </div>
+    );
+  }
+
   if (kind === "boolean") {
     return (
       <select
@@ -538,6 +570,7 @@ function defaultValueFor(meta: CondMeta): unknown {
     case "boolean": return true;
     case "number": return 7;
     case "csv": return [];
+    case "returning_visitor": return true;
     case "device_type": return "desktop";
     case "day_of_week": return [6];
     case "hour_of_day": return { from: 0, to: 24 };

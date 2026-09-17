@@ -5,7 +5,11 @@
 // budget this needs to be fast + cheap.
 //
 // Returns enough to support condition matchers like:
-//   { device_type: "mobile" }                 — phones + tablets
+//   { device_type: "mobile" }                 — phones ONLY (tablets are their
+//                                              own "tablet" value; the tablet
+//                                              branch runs first and else-ifs
+//                                              past mobile, so a "mobile" rule
+//                                              will NOT match an iPad)
 //   { os: "ios" }                             — iPhones + iPads
 //   { os_in: ["ios", "android"] }             — mobile OS only
 
