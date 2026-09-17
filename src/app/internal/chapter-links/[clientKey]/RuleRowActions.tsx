@@ -59,7 +59,7 @@ export default function RuleRowActions({
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
       <Link
-        href={`/internal/redirect-rules/${client_key}/${id}`}
+        href={`/internal/chapter-links/${client_key}/${id}`}
         style={btnStyle(false)}
       >
         Edit

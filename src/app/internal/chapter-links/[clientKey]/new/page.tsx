@@ -74,7 +74,7 @@ export default async function NewRulePage({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <Link
-        href={`/internal/redirect-rules/${clientKey}`}
+        href={`/internal/chapter-links/${clientKey}`}
         style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}
       >
         ← {clientKey} rules

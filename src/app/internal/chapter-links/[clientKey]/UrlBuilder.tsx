@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   searchProspectsForOutreach,
   type ProspectOption,
-} from "./_actions";
+} from "./_prospect-actions";
 
 export type ClientOption = {
   client_key: string;
@@ -96,12 +96,17 @@ export default function UrlBuilder({
   defaultClientKey,
   defaultSlug,
   redirectOrigin,
+  lockClient = false,
 }: {
   clients: ClientOption[];
-  slugsByClient: Record<string, { slug: string; description: string | null }[]>;
+  slugsByClient: Record<string, { slug: string; description: string | null; needs_to?: boolean }[]>;
   defaultClientKey: string;
   defaultSlug?: string;
   redirectOrigin: string;
+  // Set when the builder is embedded in a client-scoped page (the Chapter Links
+  // workbench). The client is already established by the route, so the picker
+  // renders as a static readout instead of a dropdown that can desync the URL.
+  lockClient?: boolean;
 }) {
   const [clientKey, setClientKey] = useState(defaultClientKey);
   const availableSlugs = slugsByClient[clientKey] ?? [];
@@ -140,7 +145,13 @@ export default function UrlBuilder({
   // A configured rule owns its destination server-side, so ?to= is both
   // redundant and a trap: if the rule is ever disabled, the redirect falls back
   // to whatever stale ?to= was baked into already-sent links.
-  const ruleSuppliesDestination = slug.trim().length > 0;
+  // A slug normally supplies its own destination server-side, so we omit ?to=.
+  // EXCEPTION: a pass-through rule whose template is {q:to} forwards whatever
+  // ?to= carries — suppressing it there produces a link that resolves to
+  // nothing. needs_to is computed from the rule's destination_template.
+  const currentSlugOption = availableSlugs.find(s => s.slug === slug);
+  const slugIsPassThrough = Boolean(currentSlugOption?.needs_to);
+  const ruleSuppliesDestination = slug.trim().length > 0 && !slugIsPassThrough;
 
   useEffect(() => {
     setSlug(defaultSlug ?? "");
@@ -263,13 +274,22 @@ export default function UrlBuilder({
     <div className="mt-6 grid gap-5">
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="Client" required hint="Which client's 1P redirect domain to use">
-          <select className={inputCls} value={clientKey} onChange={e => setClientKey(e.target.value)}>
-            {clients.map(c => (
-              <option key={c.client_key} value={c.client_key}>
-                {c.client_key}{c.storefront_domain ? ` — ${c.storefront_domain}` : ""}
-              </option>
-            ))}
-          </select>
+          {lockClient ? (
+            <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 font-mono text-sm text-neutral-800">
+              {currentClient?.client_key ?? clientKey}
+              {currentClient?.storefront_domain ? (
+                <span className="ml-2 font-sans text-xs text-neutral-500">{currentClient.storefront_domain}</span>
+              ) : null}
+            </div>
+          ) : (
+            <select className={inputCls} value={clientKey} onChange={e => setClientKey(e.target.value)}>
+              {clients.map(c => (
+                <option key={c.client_key} value={c.client_key}>
+                  {c.client_key}{c.storefront_domain ? ` — ${c.storefront_domain}` : ""}
+                </option>
+              ))}
+            </select>
+          )}
         </Field>
 
         <Field label="Link" hint="Pick a configured rule, or Generic for an ad-hoc ?to= link">
@@ -291,6 +311,14 @@ export default function UrlBuilder({
           <code className="rounded bg-white px-1">?to=</code> is added. Edit the destination on the rule itself.
         </div>
       ) : (
+        <>
+        {slugIsPassThrough && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+            <span className="font-semibold">This link is a pass-through.</span>{" "}
+            <code className="rounded bg-white px-1">{slug}</code> forwards to whatever{" "}
+            <code className="rounded bg-white px-1">?to=</code> carries, so a destination is still required below.
+          </div>
+        )}
         <Field label="Destination" required={destinationRequired} hint="Where the visitor lands after the redirect">
           <>
             {isAgency && (
@@ -322,6 +350,7 @@ export default function UrlBuilder({
             </p>
           </>
         </Field>
+        </>
       )}
 
       <div className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">

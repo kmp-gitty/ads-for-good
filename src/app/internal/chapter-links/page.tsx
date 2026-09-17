@@ -53,7 +53,7 @@ export default async function RedirectRulesIndex() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <p style={{ fontSize: 14, color: MUTED, margin: 0 }}>
-        Click a client to manage their redirect rules.
+        Pick a client to manage their links and generate trackable URLs.
       </p>
 
       {rows.length === 0 ? (
@@ -65,7 +65,7 @@ export default async function RedirectRulesIndex() {
           {rows.map((r, i) => (
             <Link
               key={r.client_key}
-              href={`/internal/redirect-rules/${r.client_key}`}
+              href={`/internal/chapter-links/${r.client_key}`}
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr 200px",

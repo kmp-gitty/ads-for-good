@@ -59,7 +59,7 @@ export async function createRule(input: RuleFormInput): Promise<{ ok: boolean; e
   if (error) return { ok: false, error: error.message };
 
   clearRulesCache(input.client_key, input.slug);
-  revalidatePath(`/internal/redirect-rules/${input.client_key}`);
+  revalidatePath(`/internal/chapter-links/${input.client_key}`);
   return { ok: true, id: data?.id };
 }
 
@@ -84,7 +84,7 @@ export async function updateRule(id: string, input: RuleFormInput): Promise<{ ok
   if (error) return { ok: false, error: error.message };
 
   clearRulesCache(input.client_key, input.slug);
-  revalidatePath(`/internal/redirect-rules/${input.client_key}`);
+  revalidatePath(`/internal/chapter-links/${input.client_key}`);
   return { ok: true };
 }
 
@@ -98,7 +98,7 @@ export async function deleteRule(id: string, client_key: string, slug: string): 
   if (error) return { ok: false, error: error.message };
 
   clearRulesCache(client_key, slug);
-  revalidatePath(`/internal/redirect-rules/${client_key}`);
+  revalidatePath(`/internal/chapter-links/${client_key}`);
   return { ok: true };
 }
 
@@ -112,6 +112,6 @@ export async function toggleRule(id: string, enabled: boolean, client_key: strin
   if (error) return { ok: false, error: error.message };
 
   clearRulesCache(client_key, slug);
-  revalidatePath(`/internal/redirect-rules/${client_key}`);
+  revalidatePath(`/internal/chapter-links/${client_key}`);
   return { ok: true };
 }

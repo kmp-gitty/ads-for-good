@@ -281,9 +281,9 @@ export default function RuleForm({
         return;
       }
       if (shouldOfferCatchAll) {
-        router.push(`/internal/redirect-rules/${client_key}/new?slug=${encodeURIComponent(savedSlug)}&catch_all=1`);
+        router.push(`/internal/chapter-links/${client_key}/new?slug=${encodeURIComponent(savedSlug)}&catch_all=1`);
       } else {
-        router.push(`/internal/redirect-rules/${client_key}`);
+        router.push(`/internal/chapter-links/${client_key}`);
       }
     });
   }
@@ -537,7 +537,7 @@ export default function RuleForm({
               {pending ? "Saving…" : initial ? "Save changes" : "Create rule"}
             </PrimaryButton>
             <Link
-              href={`/internal/redirect-rules/${client_key}`}
+              href={`/internal/chapter-links/${client_key}`}
               style={{
                 fontSize: 14,
                 fontWeight: 600,

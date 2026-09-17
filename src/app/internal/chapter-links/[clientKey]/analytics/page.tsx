@@ -48,7 +48,7 @@ export default async function LinkAnalyticsOverviewPage({
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
-          <Link href={`/internal/redirect-rules/${clientKey}`} style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}>
+          <Link href={`/internal/chapter-links/${clientKey}`} style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}>
             ← Rules
           </Link>
           <h2 style={{ margin: "8px 0 4px", fontSize: 20, fontWeight: 700, color: INK }}>Link Analytics</h2>
@@ -115,7 +115,7 @@ export default async function LinkAnalyticsOverviewPage({
                     <tr key={l.slug} style={{ borderBottom: `1px solid ${LINE}` }}>
                       <td style={{ ...td, textAlign: "left" }}>
                         <Link
-                          href={`/internal/redirect-rules/${clientKey}/analytics/${encodeURIComponent(l.slug)}?days=${key}`}
+                          href={`/internal/chapter-links/${clientKey}/analytics/${encodeURIComponent(l.slug)}?days=${key}`}
                           style={{ color: ORANGE, fontWeight: 600, textDecoration: "none", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
                         >
                           {l.slug}

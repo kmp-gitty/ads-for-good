@@ -33,7 +33,7 @@ export default async function LinkStatsPage({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
           <Link
-            href={`/internal/redirect-rules/${clientKey}/analytics?days=${key}`}
+            href={`/internal/chapter-links/${clientKey}/analytics?days=${key}`}
             style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}
           >
             ← All links

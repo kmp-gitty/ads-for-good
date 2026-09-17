@@ -1,7 +1,22 @@
+// Chapter Links workbench — the single per-client surface.
+//
+// Merges what used to be two separate tools:
+//   /internal/redirect-rules/[clientKey]  (build the rule)
+//   /internal/outreach-builder            (generate the URL)
+//
+// Both jobs now live here behind a URL-driven tab so generation always starts
+// FROM a configured link — the destination is never re-entered by hand, which
+// was the whole reason the two-tool split was confusing.
+//
+// Rule create/edit stay as sub-routes ([clientKey]/new and [clientKey]/[ruleId])
+// because RuleForm is a large form with its own URL tester; it is a detail view
+// of this page, not a separate tool.
+
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { listConditionTypes } from "@/app/lib/redirect/conditions";
 import RuleRowActions from "./RuleRowActions";
+import UrlBuilder, { type ClientOption } from "./UrlBuilder";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -33,6 +48,8 @@ type Rule = {
   last_hit_at: string | null;
 };
 
+type Tab = "links" | "generate";
+
 const subChip: React.CSSProperties = {
   fontSize: 11,
   color: MUTED,
@@ -42,20 +59,49 @@ const subChip: React.CSSProperties = {
   padding: "2px 8px",
 };
 
-export default async function ClientRedirectRulesPage({
+function tabStyle(active: boolean): React.CSSProperties {
+  return {
+    fontSize: 13.5,
+    fontWeight: 600,
+    color: active ? INK : MUTED,
+    background: active ? "white" : "transparent",
+    border: `1px solid ${active ? LINE : "transparent"}`,
+    borderBottom: active ? "1px solid white" : `1px solid ${LINE}`,
+    borderRadius: "10px 10px 0 0",
+    padding: "9px 18px",
+    textDecoration: "none",
+    marginBottom: -1,
+    whiteSpace: "nowrap",
+  };
+}
+
+export default async function ChapterLinksClientPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ clientKey: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { clientKey } = await params;
+  const sp = await searchParams;
+  const tab: Tab = sp.tab === "generate" ? "generate" : "links";
+  const preselectSlug = typeof sp.slug === "string" ? sp.slug : undefined;
 
-  const { data: rules, error } = await supabase
-    .schema("chapter_config")
-    .from("redirect_rules")
-    .select("*")
-    .eq("client_key", clientKey)
-    .order("slug", { ascending: true })
-    .order("rule_priority", { ascending: true });
+  const [{ data: rules, error }, { data: clientRow }] = await Promise.all([
+    supabase
+      .schema("chapter_config")
+      .from("redirect_rules")
+      .select("*")
+      .eq("client_key", clientKey)
+      .order("slug", { ascending: true })
+      .order("rule_priority", { ascending: true }),
+    supabase
+      .schema("chapter_config")
+      .from("clients")
+      .select("client_key, storefront_domain, redirect_host, links_host")
+      .eq("client_key", clientKey)
+      .maybeSingle(),
+  ]);
 
   if (error) {
     return (
@@ -65,58 +111,114 @@ export default async function ClientRedirectRulesPage({
     );
   }
 
+  const allRules = (rules ?? []) as Rule[];
+
   const bySlug = new Map<string, Rule[]>();
-  for (const r of (rules ?? []) as Rule[]) {
+  for (const r of allRules) {
     const list = bySlug.get(r.slug) ?? [];
     list.push(r);
     bySlug.set(r.slug, list);
   }
 
+  // The generate tab only offers ENABLED slugs — a disabled rule won't resolve
+  // at /r/, so offering it would build a link that 404s or falls through to ?to=.
+  // A pass-through rule forwards to whatever ?to= carries, so the builder must
+  // KEEP ?to= for that slug rather than suppressing it as "the rule supplies the
+  // destination". Detected off the template token itself.
+  const PASS_THROUGH_TOKEN = /\{q:\s*to\s*\}/;
+
+  const enabledSlugs: { slug: string; description: string | null; needs_to: boolean }[] = [];
+  for (const [slug, slugRules] of bySlug) {
+    const enabled = slugRules.filter(r => r.enabled);
+    if (enabled.length === 0) continue;
+    enabledSlugs.push({
+      slug,
+      description: enabled[0].description,
+      needs_to: enabled.some(r => PASS_THROUGH_TOKEN.test(r.destination_template)),
+    });
+  }
+
+  const client: ClientOption = {
+    client_key: clientKey,
+    storefront_domain: (clientRow as { storefront_domain: string | null } | null)?.storefront_domain ?? null,
+    redirect_host: (clientRow as { redirect_host: string | null } | null)?.redirect_host ?? null,
+    links_host: (clientRow as { links_host: string | null } | null)?.links_host ?? null,
+  };
+  const origin = process.env.NEXT_PUBLIC_APP_URL || "https://ads4good.com";
+  const effectiveHost = client.links_host || client.redirect_host || origin;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0 }}>
-          <Link
-            href="/internal/redirect-rules"
-            style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}
-          >
+          <Link href="/internal/chapter-links" style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}>
             ← All clients
           </Link>
           <h2 style={{ margin: "8px 0 4px", fontSize: 20, fontWeight: 700, color: INK, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
             {clientKey}
           </h2>
           <p style={{ margin: 0, fontSize: 13.5, color: MUTED, lineHeight: 1.5 }}>
-            {rules?.length ?? 0} rules across {bySlug.size} slug{bySlug.size === 1 ? "" : "s"}.
+            {allRules.length} rule{allRules.length === 1 ? "" : "s"} across {bySlug.size} link{bySlug.size === 1 ? "" : "s"}
+            {" · "}
+            <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12.5 }}>
+              {effectiveHost.replace(/^https?:\/\//, "")}
+            </span>
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Link
-            href={`/internal/redirect-rules/${clientKey}/analytics`}
+            href={`/internal/chapter-links/${clientKey}/analytics`}
             style={{ background: "white", color: INK, fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 18px", borderRadius: 10, whiteSpace: "nowrap", border: `1px solid ${LINE}` }}
           >
             📊 Analytics
           </Link>
           <Link
-            href={`/internal/redirect-rules/${clientKey}/new`}
+            href={`/internal/chapter-links/${clientKey}/new`}
             style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 18px", borderRadius: 10, whiteSpace: "nowrap" }}
           >
-            + New rule
+            + New link rule
           </Link>
         </div>
       </div>
 
-      {bySlug.size === 0 ? (
+      {/* Tabs */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, borderBottom: `1px solid ${LINE}` }}>
+        <Link href={`/internal/chapter-links/${clientKey}?tab=links`} style={tabStyle(tab === "links")}>
+          Links &amp; rules
+        </Link>
+        <Link href={`/internal/chapter-links/${clientKey}?tab=generate`} style={tabStyle(tab === "generate")}>
+          Generate URLs
+        </Link>
+      </div>
+
+      {tab === "generate" ? (
+        <div>
+          <p style={{ margin: "0 0 4px", fontSize: 13.5, color: MUTED, lineHeight: 1.5, maxWidth: 720 }}>
+            Build trackable URLs for this client. Pick a configured link and the destination comes from its rule —
+            you never re-enter it. Pick the generic ad-hoc option for a one-off wrapped URL with no rule.
+          </p>
+          <UrlBuilder
+            clients={[client]}
+            slugsByClient={{ [clientKey]: enabledSlugs }}
+            defaultClientKey={clientKey}
+            defaultSlug={preselectSlug}
+            redirectOrigin={origin}
+            lockClient
+          />
+        </div>
+      ) : bySlug.size === 0 ? (
         <div style={{ border: `1px dashed ${LINE}`, background: PANEL, borderRadius: 12, padding: "40px 24px", textAlign: "center" }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: INK, marginBottom: 6 }}>No rules yet</div>
-          <p style={{ fontSize: 13.5, color: MUTED, margin: "0 auto 18px", maxWidth: 380, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: INK, marginBottom: 6 }}>No links yet</div>
+          <p style={{ fontSize: 13.5, color: MUTED, margin: "0 auto 18px", maxWidth: 420, lineHeight: 1.5 }}>
             Add a rule to start routing clicks for this client. Rules match on identity, cart, geo, device, A/B, time, or query params — the first match wins.
+            You can still generate one-off wrapped URLs from the Generate tab without any rule.
           </p>
           <Link
-            href={`/internal/redirect-rules/${clientKey}/new`}
+            href={`/internal/chapter-links/${clientKey}/new`}
             style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 20px", borderRadius: 10, display: "inline-block" }}
           >
-            Create your first rule
+            Create your first link
           </Link>
         </div>
       ) : (
@@ -126,20 +228,20 @@ export default async function ClientRedirectRulesPage({
               {/* Slug header */}
               <div style={{ background: PANEL, borderBottom: `1px solid ${LINE}`, padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".12em" }}>slug</div>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".12em" }}>link</div>
                   <div style={{ marginTop: 2, fontSize: 14, fontWeight: 700, color: INK, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{slug}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 12, color: MUTED, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
                     /r/{clientKey}/{slug}
                   </span>
-                  {/* Generation starts FROM the link, so the destination is never
-                      re-entered and no redundant ?to= is emitted. */}
+                  {/* Same page, generate tab, slug preselected — generation starts
+                      FROM the link so the destination is never re-entered. */}
                   <Link
-                    href={`/internal/outreach-builder?client=${clientKey}&slug=${encodeURIComponent(slug)}`}
+                    href={`/internal/chapter-links/${clientKey}?tab=generate&slug=${encodeURIComponent(slug)}`}
                     style={{ fontSize: 12, fontWeight: 600, color: ORANGE, textDecoration: "none", whiteSpace: "nowrap" }}
                   >
-                    Generate links →
+                    Generate URLs →
                   </Link>
                 </div>
               </div>
@@ -211,16 +313,18 @@ export default async function ClientRedirectRulesPage({
         </div>
       )}
 
-      {/* Available condition types reference */}
-      <div style={{ border: `1px solid ${LINE}`, background: "white", borderRadius: 12, padding: 16 }}>
-        <div style={{ fontSize: 10.5, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".12em" }}>Available condition types</div>
-        <div style={{ marginTop: 8, fontSize: 12, color: INK, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", lineHeight: 1.6 }}>
-          {listConditionTypes().join(" · ")}
+      {/* Available condition types reference — only useful alongside the rules list */}
+      {tab === "links" && (
+        <div style={{ border: `1px solid ${LINE}`, background: "white", borderRadius: 12, padding: 16 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".12em" }}>Available condition types</div>
+          <div style={{ marginTop: 8, fontSize: 12, color: INK, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", lineHeight: 1.6 }}>
+            {listConditionTypes().join(" · ")}
+          </div>
+          <div style={{ marginTop: 8, fontSize: 11.5, color: FAINT, lineHeight: 1.4 }}>
+            Conditions in a rule are AND-ed. Empty object <code style={{ background: PANEL, padding: "1px 4px", borderRadius: 4 }}>{"{}"}</code> = catch-all default.
+          </div>
         </div>
-        <div style={{ marginTop: 8, fontSize: 11.5, color: FAINT, lineHeight: 1.4 }}>
-          Conditions in a rule are AND-ed. Empty object <code style={{ background: PANEL, padding: "1px 4px", borderRadius: 4 }}>{"{}"}</code> = catch-all default.
-        </div>
-      </div>
+      )}
     </div>
   );
 }
