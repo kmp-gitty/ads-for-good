@@ -129,8 +129,18 @@ export default async function ClientRedirectRulesPage({
                   <div style={{ fontSize: 10.5, fontWeight: 700, color: FAINT, textTransform: "uppercase", letterSpacing: ".12em" }}>slug</div>
                   <div style={{ marginTop: 2, fontSize: 14, fontWeight: 700, color: INK, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{slug}</div>
                 </div>
-                <div style={{ fontSize: 12, color: MUTED, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                  /r/{clientKey}/{slug}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: MUTED, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                    /r/{clientKey}/{slug}
+                  </span>
+                  {/* Generation starts FROM the link, so the destination is never
+                      re-entered and no redundant ?to= is emitted. */}
+                  <Link
+                    href={`/internal/outreach-builder?client=${clientKey}&slug=${encodeURIComponent(slug)}`}
+                    style={{ fontSize: 12, fontWeight: 600, color: ORANGE, textDecoration: "none", whiteSpace: "nowrap" }}
+                  >
+                    Generate links →
+                  </Link>
                 </div>
               </div>
 

@@ -47,7 +47,12 @@ async function fetchClients(): Promise<ClientOption[]> {
   return (data ?? []) as ClientOption[];
 }
 
-export default async function OutreachBuilderPage() {
+export default async function OutreachBuilderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ client?: string; slug?: string }>;
+}) {
+  const sp = await searchParams;
   const [clients, slugsByClient] = await Promise.all([fetchClients(), fetchAllSlugs()]);
   // Convert the slugs map to a plain object so it can serialize cleanly across
   // the server/client boundary.
@@ -56,14 +61,24 @@ export default async function OutreachBuilderPage() {
     slugsByClientObj[k] = v.map(r => ({ slug: r.slug, description: r.description }));
   }
   const origin = process.env.NEXT_PUBLIC_APP_URL || "https://ads4good.com";
-  const defaultClientKey = clients.some(c => c.client_key === "adsforgood_prod")
-    ? "adsforgood_prod"
-    : clients[0]?.client_key || "adsforgood_prod";
+  // ?client= / ?slug= let the rules list deep-link straight into a prefilled
+  // build for one link, so the destination is never re-entered.
+  const linked = sp.client && clients.some(c => c.client_key === sp.client) ? sp.client : null;
+  const defaultClientKey =
+    linked ??
+    (clients.some(c => c.client_key === "adsforgood_prod")
+      ? "adsforgood_prod"
+      : clients[0]?.client_key || "adsforgood_prod");
+  const defaultSlug =
+    linked && sp.slug && (slugsByClientObj[linked] ?? []).some(s => s.slug === sp.slug)
+      ? sp.slug
+      : undefined;
   return (
     <UrlBuilder
       clients={clients}
       slugsByClient={slugsByClientObj}
       defaultClientKey={defaultClientKey}
+      defaultSlug={defaultSlug}
       redirectOrigin={origin}
     />
   );

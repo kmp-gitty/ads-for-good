@@ -66,6 +66,8 @@ export type RuleFormProps = {
   // When set, "missing catch-all" is a soft warning ("falls back to X")
   // instead of a 404 warning. NULL = no client default → 404 on miss.
   clientDefaultDestination?: string | null;
+  /** Client's 1P links_host — the test panel must show the host real links use. */
+  linksHost?: string | null;
 };
 
 // Common destination-template patterns. Click a chip to populate the field.
@@ -136,6 +138,7 @@ export default function RuleForm({
   initialSlug,
   isCatchAllPreFill = false,
   clientDefaultDestination = null,
+  linksHost = null,
 }: RuleFormProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -580,7 +583,7 @@ export default function RuleForm({
                 type="text"
                 value={testUrl}
                 onChange={(e) => setTestUrl(e.target.value)}
-                placeholder={`https://ads4good.com/r/${client_key}/${slug || "slug"}?to=https://ads4good.com/about&utm_source=cold_email`}
+                placeholder={`${linksHost || "https://ads4good.com"}/r/${client_key}/${slug || "slug"}?utm_source=email`}
                 style={{ ...inpMono, fontSize: 11.5 }}
               />
               {previewUrl && (

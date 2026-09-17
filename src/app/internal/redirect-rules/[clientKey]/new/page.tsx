@@ -32,10 +32,22 @@ async function fetchClientDefaultDestination(clientKey: string): Promise<string 
   const { data } = await supabase
     .schema("chapter_config")
     .from("clients")
-    .select("default_redirect_destination")
+    .select("default_redirect_destination, links_host, redirect_host")
     .eq("client_key", clientKey)
     .maybeSingle();
   return (data as { default_redirect_destination: string | null } | null)?.default_redirect_destination ?? null;
+}
+
+
+async function fetchLinksHost(clientKey: string): Promise<string | null> {
+  const { data } = await supabase
+    .schema("chapter_config")
+    .from("clients")
+    .select("links_host, redirect_host")
+    .eq("client_key", clientKey)
+    .maybeSingle();
+  const row = data as { links_host: string | null; redirect_host: string | null } | null;
+  return row?.links_host ?? row?.redirect_host ?? null;
 }
 
 export default async function NewRulePage({
@@ -51,6 +63,7 @@ export default async function NewRulePage({
     fetchExistingRules(clientKey),
     fetchClientDefaultDestination(clientKey),
   ]);
+  const linksHost = await fetchLinksHost(clientKey);
 
   // Catch-all pre-fill mode: reached from a save-with-missing-catch-all
   // redirect. Pre-fills the slug + a sensible priority + a description hint
@@ -92,6 +105,7 @@ export default async function NewRulePage({
         initialSlug={preFillSlug}
         isCatchAllPreFill={isCatchAllMode}
         clientDefaultDestination={clientDefault}
+        linksHost={linksHost}
       />
     </div>
   );

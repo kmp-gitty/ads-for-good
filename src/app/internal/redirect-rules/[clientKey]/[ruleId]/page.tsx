@@ -14,6 +14,18 @@ const supabase = createClient(
 
 export const dynamic = "force-dynamic";
 
+
+async function fetchLinksHost(clientKey: string): Promise<string | null> {
+  const { data } = await supabase
+    .schema("chapter_config")
+    .from("clients")
+    .select("links_host, redirect_host")
+    .eq("client_key", clientKey)
+    .maybeSingle();
+  const row = data as { links_host: string | null; redirect_host: string | null } | null;
+  return row?.links_host ?? row?.redirect_host ?? null;
+}
+
 export default async function EditRulePage({
   params,
 }: {
@@ -39,10 +51,11 @@ export default async function EditRulePage({
     supabase
       .schema("chapter_config")
       .from("clients")
-      .select("default_redirect_destination")
+      .select("default_redirect_destination, links_host, redirect_host")
       .eq("client_key", clientKey)
       .maybeSingle(),
   ]);
+  const linksHost = await fetchLinksHost(clientKey);
   const existingRules = (allRules ?? []) as ExistingRuleSummary[];
   const clientDefault = (client as { default_redirect_destination: string | null } | null)?.default_redirect_destination ?? null;
 
@@ -82,6 +95,7 @@ export default async function EditRulePage({
         }}
         existingRules={existingRules}
         clientDefaultDestination={clientDefault}
+        linksHost={linksHost}
       />
     </div>
   );
