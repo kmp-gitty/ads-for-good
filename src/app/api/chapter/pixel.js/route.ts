@@ -2533,12 +2533,46 @@ setInterval(function () {
     }
   }
 
+  // Cart-token gating (targeting_jsonb.cart_token_in). Fires the prompt only
+  // for visitors whose CURRENT Shopify cart token is in the allowlist — i.e.
+  // "prompt these specific abandoned carts and nobody else". Works where
+  // identity targeting cannot: the cart cookie is Shopify's own and survives
+  // ~2 weeks independent of our anon durability, so a returning abandoner is
+  // recognised even if their Chapter identity has lapsed.
+  //
+  // The token is read from /cart.js, which is async, but trigger handlers are
+  // synchronous — so we PRIME the token at prompt-load time and gate against
+  // the cached value. Triggers that fire later (exit_intent, time_on_page,
+  // scroll_depth) will always have it; a click in the first ~800ms may not,
+  // which fails CLOSED for this gate (no token = no match = no fire). That is
+  // the safe direction: better to miss a fire than show a targeted discount
+  // to the wrong visitor.
+  var chapterKnownCartToken = null;
+  function chapterPrimeCartToken() {
+    try {
+      chapterFetchCartSnapshot().then(function (cart) {
+        chapterKnownCartToken = (cart && cart.token) || null;
+      });
+    } catch (e) { /* noop */ }
+  }
+
+  function chapterMatchesCartToken(prompt) {
+    var list = prompt && prompt.targeting_jsonb && prompt.targeting_jsonb.cart_token_in;
+    if (!list || !list.length) return true;           // not configured → pass
+    if (!chapterKnownCartToken) return false;         // unknown token → fail closed
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i]) === chapterKnownCartToken) return true;
+    }
+    return false;
+  }
+
   function chapterRegisterClickElementTrigger(prompt) {
     var selector = prompt.trigger_jsonb && prompt.trigger_jsonb.selector;
     if (!selector) return;
     document.addEventListener("click", function (e) {
       if (chapterIsPromptThrottled(prompt)) return;
       if (!chapterMatchesPagePattern(prompt)) return;
+      if (!chapterMatchesCartToken(prompt)) return;
       var hit = e.target.closest(selector);
       if (!hit) return;
       e.preventDefault();
@@ -2550,6 +2584,7 @@ setInterval(function () {
     document.addEventListener("mouseout", function (e) {
       if (chapterIsPromptThrottled(prompt)) return;
       if (!chapterMatchesPagePattern(prompt)) return;
+      if (!chapterMatchesCartToken(prompt)) return;
       if (e.relatedTarget) return; // mouse moved to another element, not out of viewport
       if (e.clientY > 0) return;   // exit was sideways/below, not top
       chapterRenderPrompt(prompt);
@@ -2561,6 +2596,7 @@ setInterval(function () {
     setTimeout(function () {
       if (chapterIsPromptThrottled(prompt)) return;
       if (!chapterMatchesPagePattern(prompt)) return;
+      if (!chapterMatchesCartToken(prompt)) return;
       chapterRenderPrompt(prompt);
     }, delay);
   }
@@ -2572,6 +2608,7 @@ setInterval(function () {
       if (fired) return;
       if (chapterIsPromptThrottled(prompt)) return;
       if (!chapterMatchesPagePattern(prompt)) return;
+      if (!chapterMatchesCartToken(prompt)) return;
       var pct = getScrollPercent();
       if (pct >= threshold) {
         fired = true;
@@ -2590,6 +2627,7 @@ setInterval(function () {
     if (current < threshold) return;               // not yet — wait for next load
     if (chapterIsPromptThrottled(prompt)) return;
     if (!chapterMatchesPagePattern(prompt)) return;
+      if (!chapterMatchesCartToken(prompt)) return;
     // Fire after a tiny delay so page render settles + other pixel work runs.
     setTimeout(function () { chapterRenderPrompt(prompt); }, 250);
   }
@@ -2628,6 +2666,13 @@ setInterval(function () {
       .then(function (data) {
         chapterPromptSessionToken = (data && data.session_token) || "";
         var prompts = (data && data.prompts) || [];
+        // Only hit /cart.js when a prompt actually needs the token — keeps the
+        // extra request off every client that doesn't use cart-token targeting.
+        var needsCartToken = prompts.some(function (p) {
+          var t = p && p.targeting_jsonb && p.targeting_jsonb.cart_token_in;
+          return !!(t && t.length);
+        });
+        if (needsCartToken) chapterPrimeCartToken();
         prompts.forEach(function (prompt) {
           var trig = prompt.trigger_jsonb || {};
           if (trig.type === "click_element") chapterRegisterClickElementTrigger(prompt);

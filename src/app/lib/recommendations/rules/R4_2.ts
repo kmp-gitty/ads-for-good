@@ -29,6 +29,11 @@ const supabase = createClient(
 const GROWTH_THRESHOLD = 0.30;
 const PERIOD_WEEKS = 2;
 const REQUIRED_PERIODS = 3;
+// Absolute floor. A >=30% relative rise is meaningless when the underlying
+// medians are minutes apart: NSC books same-visit, so its median time-to-close
+// is ~0.01 days and a "67% increase" is five minutes. Require the change to be
+// worth an operator's attention in absolute terms too, not just in ratio.
+const MIN_ABSOLUTE_CHANGE_DAYS = 0.25;
 
 export const R4_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | null> => {
   const oneWeekMs = 7 * 24 * 3600 * 1000;
@@ -50,6 +55,7 @@ export const R4_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
 
   const growth = (current - trailingMean) / trailingMean;
   if (growth < GROWTH_THRESHOLD) return null;
+  if (current - trailingMean < MIN_ABSOLUTE_CHANGE_DAYS) return null;
 
   let consistentRises = 0;
   for (let i = 0; i < medians.length - 1; i++) {
@@ -69,8 +75,13 @@ export const R4_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     fired: true,
     subject_key: null,
     data: {
-      current_days: current.toFixed(1),
-      prior_days: trailingMean.toFixed(1),
+      // Human-readable, unit-adaptive. The template renders these directly so a
+      // sub-day median never prints as "0.0 days".
+      current_duration: formatDuration(current),
+      prior_duration: formatDuration(trailingMean),
+      // Raw numeric values retained for dedup history + auditability.
+      current_days: Number(current.toFixed(3)),
+      prior_days: Number(trailingMean.toFixed(3)),
       pct_change: pctChange,
       N: consistentRises,
     },
@@ -79,7 +90,7 @@ export const R4_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     evidence: [
       {
         source: "Lifecycle Overview",
-        fact: `Median time-to-close: ${current.toFixed(1)} days (current 2w) vs ${trailingMean.toFixed(1)} days (prior 8w)`,
+        fact: `Median time-to-close: ${formatDuration(current)} (current 2w) vs ${formatDuration(trailingMean)} (prior 8w)`,
         deeplink: chapterUrl(ctx.client_key, "overview"),
       },
       {
@@ -93,6 +104,16 @@ export const R4_2: RuleEvaluator = async (ctx): Promise<RuleEvaluationResult | n
     action_type: "analytical",
   };
 };
+
+// Renders a day-denominated duration in whatever unit keeps it legible.
+// toFixed(1) alone collapses anything under ~90 minutes to "0.0".
+function formatDuration(days: number): string {
+  if (days >= 1) return `${days.toFixed(1)} days`;
+  const hours = days * 24;
+  if (hours >= 1) return `${hours.toFixed(1)} hours`;
+  const minutes = hours * 60;
+  return `${Math.max(1, Math.round(minutes))} minutes`;
+}
 
 function bucketR4_2(pctChange: number): { bucket: Record<string, unknown>; ordinal: number } {
   if (pctChange >= 100) return { bucket: { band: "time-100-plus" }, ordinal: 3 };
