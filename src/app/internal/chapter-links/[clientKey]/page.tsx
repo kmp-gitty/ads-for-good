@@ -17,6 +17,7 @@ import { createClient } from "@supabase/supabase-js";
 import { listConditionTypes } from "@/app/lib/redirect/conditions";
 import RuleRowActions from "./RuleRowActions";
 import UrlBuilder, { type ClientOption } from "./UrlBuilder";
+import MatrixBuilder, { RESERVED_PARAMS } from "./MatrixBuilder";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -24,10 +25,12 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
-// Partner values already seen in this client's click history, most-used first.
-// Seeds the builder's dropdown so naming doesn't fragment — `firstrust`,
-// `Firstrust` and `firstrust-bank` would otherwise report as three partners,
-// and the convention is only enforceable at generation time.
+// Vocabulary already present in this client's click history — partner VALUES
+// and the param NAMES they tag links with. Both seed datalists so naming
+// doesn't fragment: `firstrust` / `Firstrust` / `firstrust-bank` would
+// otherwise report as three partners, and the convention is only enforceable
+// at generation time. Param names do the same job for the matrix builder's
+// axes, which are operator-named rather than hardcoded.
 //
 // Safe to read live rather than pre-aggregate: redirect_click is inherently
 // rare next to page_view (largest tenant is ~3.5k rows all-time), and this is
@@ -36,7 +39,9 @@ const supabase = createClient(
 //
 // Lives at module scope, not in the component body: reading the clock during
 // render trips the react-compiler purity rule.
-async function fetchKnownPartners(clientKey: string): Promise<string[]> {
+async function fetchClickVocabulary(
+  clientKey: string,
+): Promise<{ partners: string[]; params: string[] }> {
   const since = new Date(Date.now() - 180 * 864e5).toISOString();
   const { data } = await supabase
     .schema("chapter_ingest")
@@ -47,14 +52,22 @@ async function fetchKnownPartners(clientKey: string): Promise<string[]> {
     .gte("ts", since)
     .limit(5000);
 
-  const counts = new Map<string, number>();
+  const partnerCounts = new Map<string, number>();
+  const paramCounts = new Map<string, number>();
   for (const row of (data ?? []) as Array<{ props: { full_query?: Record<string, string> } | null }>) {
-    const v = row.props?.full_query?.partner?.trim();
-    if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+    const q = row.props?.full_query;
+    if (!q) continue;
+    const v = q.partner?.trim();
+    if (v) partnerCounts.set(v, (partnerCounts.get(v) ?? 0) + 1);
+    for (const k of Object.keys(q)) {
+      // Reserved + already-dedicated params would be dead ends as an axis.
+      if (RESERVED_PARAMS.has(k)) continue;
+      paramCounts.set(k, (paramCounts.get(k) ?? 0) + 1);
+    }
   }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([v]) => v);
+  const byFreq = (m: Map<string, number>) =>
+    [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([v]) => v);
+  return { partners: byFreq(partnerCounts), params: byFreq(paramCounts) };
 }
 
 export const dynamic = "force-dynamic";
@@ -81,7 +94,7 @@ type Rule = {
   last_hit_at: string | null;
 };
 
-type Tab = "links" | "generate";
+type Tab = "links" | "generate" | "matrix";
 
 const subChip: React.CSSProperties = {
   fontSize: 11,
@@ -117,10 +130,11 @@ export default async function ChapterLinksClientPage({
 }) {
   const { clientKey } = await params;
   const sp = await searchParams;
-  const tab: Tab = sp.tab === "generate" ? "generate" : "links";
+  const tab: Tab =
+    sp.tab === "generate" ? "generate" : sp.tab === "matrix" ? "matrix" : "links";
   const preselectSlug = typeof sp.slug === "string" ? sp.slug : undefined;
 
-  const [{ data: rules, error }, { data: clientRow }, knownPartners] = await Promise.all([
+  const [{ data: rules, error }, { data: clientRow }, vocabulary] = await Promise.all([
     supabase
       .schema("chapter_config")
       .from("redirect_rules")
@@ -134,7 +148,7 @@ export default async function ChapterLinksClientPage({
       .select("client_key, storefront_domain, redirect_host, links_host, links_hosts")
       .eq("client_key", clientKey)
       .maybeSingle(),
-    fetchKnownPartners(clientKey),
+    fetchClickVocabulary(clientKey),
   ]);
 
   if (error) {
@@ -182,6 +196,18 @@ export default async function ChapterLinksClientPage({
   const origin = process.env.NEXT_PUBLIC_APP_URL || "https://ads4good.com";
   const effectiveHost = client.links_host || client.redirect_host || origin;
 
+  // Every 1P link host this tenant serves, flagship first. Mirrors the
+  // resolution order UrlBuilder uses so both surfaces agree on which host a
+  // link is built against — cookies land on the host's own eTLD+1, so a
+  // mismatch silently breaks identity continuity for that property's readers.
+  const hostOptions: string[] = [];
+  for (const h of [client.links_host, ...(client.links_hosts ?? []), client.redirect_host]) {
+    if (!h) continue;
+    const v = String(h).trim().replace(/\/+$/, "");
+    if (v && !hostOptions.includes(v)) hostOptions.push(v);
+  }
+  if (hostOptions.length === 0) hostOptions.push(origin);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
       {/* Header */}
@@ -225,9 +251,28 @@ export default async function ChapterLinksClientPage({
         <Link href={`/internal/chapter-links/${clientKey}?tab=generate`} style={tabStyle(tab === "generate")}>
           Generate URLs
         </Link>
+        <Link href={`/internal/chapter-links/${clientKey}?tab=matrix`} style={tabStyle(tab === "matrix")}>
+          Matrix
+        </Link>
       </div>
 
-      {tab === "generate" ? (
+      {tab === "matrix" ? (
+        <div>
+          <p style={{ margin: "0 0 14px", fontSize: 13.5, color: MUTED, lineHeight: 1.5, maxWidth: 720 }}>
+            Bulk-generate a campaign grid. Rows are the union across selected placements of
+            (properties × axis 1 × axis 2) — each placement varies along its own params, so a
+            display block can vary by slot while an article block varies by article. Destinations
+            are per row; use Set all, then Set selected for the ones that differ.
+          </p>
+          <MatrixBuilder
+            clientKey={clientKey}
+            hosts={hostOptions}
+            slugs={enabledSlugs}
+            knownPartners={vocabulary.partners}
+            knownParams={vocabulary.params}
+          />
+        </div>
+      ) : tab === "generate" ? (
         <div>
           <p style={{ margin: "0 0 4px", fontSize: 13.5, color: MUTED, lineHeight: 1.5, maxWidth: 720 }}>
             Build trackable URLs for this client. Pick a configured link and the destination comes from its rule —
@@ -239,7 +284,7 @@ export default async function ChapterLinksClientPage({
             defaultClientKey={clientKey}
             defaultSlug={preselectSlug}
             redirectOrigin={origin}
-            knownPartners={knownPartners}
+            knownPartners={vocabulary.partners}
             lockClient
           />
         </div>
