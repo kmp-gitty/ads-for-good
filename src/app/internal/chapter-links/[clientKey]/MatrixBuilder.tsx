@@ -93,10 +93,15 @@ export default function MatrixBuilder({
   knownPartners?: string[];
   knownParams?: string[];
 }) {
-  // Properties default to ALL — a network buy is the common case, and
-  // unchecking two is less work than checking three.
+  // Properties AND placements both default to ALL — an ACJ buy routinely spans
+  // every paper and every placement type, so unchecking is less work than
+  // checking. With no axis values yet this shows the baseline grid
+  // (properties x placements) immediately, which is also the clearest
+  // demonstration of what the tool does.
   const [selectedHosts, setSelectedHosts] = useState<Set<string>>(new Set(hosts));
-  const [blocks, setBlocks] = useState<Record<string, Block>>({});
+  const [blocks, setBlocks] = useState<Record<string, Block>>(() =>
+    Object.fromEntries(slugs.map(s => [s.slug, { ...EMPTY_BLOCK, on: true }])),
+  );
   const [partner, setPartner] = useState("");
   const [utmSource, setUtmSource] = useState("");
   const [utmMedium, setUtmMedium] = useState("");
@@ -111,6 +116,16 @@ export default function MatrixBuilder({
   const [copied, setCopied] = useState(false);
 
   const block = (slug: string): Block => blocks[slug] ?? EMPTY_BLOCK;
+
+  // A param name typed fresh becomes a NEW reporting dimension — `position`
+  // next to an existing `pos` fragments exactly the way `Firstrust` next to
+  // `firstrust` does, one level up. Warn, never block: a genuinely new axis is
+  // a legitimate thing to do, and this is only a signal that it IS new.
+  // Silent when the client has no param history to compare against.
+  function unknownParam(name: string): boolean {
+    const v = name.trim();
+    return v.length > 0 && knownParams.length > 0 && !knownParams.includes(v);
+  }
 
   function setBlock(slug: string, patch: Partial<Block>) {
     setBlocks(b => ({ ...b, [slug]: { ...block(slug), ...patch } }));
@@ -333,6 +348,13 @@ export default function MatrixBuilder({
                           value={n === 1 ? b.a1Param : b.a2Param}
                           onChange={e => setBlock(s.slug, n === 1 ? { a1Param: e.target.value } : { a2Param: e.target.value })}
                         />
+                        {unknownParam(n === 1 ? b.a1Param : b.a2Param) && (
+                          <p className="text-[11px] leading-snug text-amber-700">
+                            New param — this client&apos;s links have used{" "}
+                            <span className="font-mono">{knownParams.slice(0, 4).join(", ")}</span>. Fine if
+                            intentional; a typo here becomes a separate dimension in reporting.
+                          </p>
+                        )}
                         <textarea
                           className={`${inputCls} font-mono text-xs`}
                           rows={3}
