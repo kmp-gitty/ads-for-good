@@ -10,16 +10,18 @@
 // SHAPE (settled with the operator, Sep 19):
 //
 //   rows = UNION over selected placements of
-//            (selected properties × axis1 values × axis2 values)
+//            (selected properties × axis¹ × axis² × … × axisⁿ)
 //
 //   NOT one big cartesian — each placement varies along DIFFERENT params
 //   (display varies by slot, article by which article), so a single product
 //   would emit meaningless cells like pos= on an article row.
 //
-// AXES ARE OPERATOR-NAMED, not hardcoded. `partner`/`article`/`pos` is ACJ's
-// convention, not Chapter's — another tenant varies by `rid` or anything else.
-// The param-name field seeds from params already seen in this client's own
-// click history, so the convention is discoverable without being enforced.
+// AXES ARE UNBOUNDED AND OPERATOR-NAMED. The count was capped at 2 initially;
+// that was arbitrary and a display buy varying by slot AND article AND
+// creative hit it immediately. `partner`/`article`/`pos` is ACJ's convention,
+// not Chapter's — another tenant varies by `rid` or anything else — so the
+// param field seeds from params already seen in this client's own click
+// history rather than offering a fixed menu.
 //
 // DESTINATIONS ARE PER-ROW. A real buy splits 10/2/2/1 across landing pages
 // (usually by property — a bank's Bucks branch page vs its Montco one), so
@@ -31,25 +33,19 @@ import { normalizeDestination } from "./UrlBuilder";
 
 export type MatrixSlug = { slug: string; description: string | null; needs_to: boolean };
 
-type Block = {
-  on: boolean;
-  a1Param: string;
-  a1Values: string;
-  a2Param: string;
-  a2Values: string;
-};
+type Axis = { param: string; values: string };
+type Block = { on: boolean; axes: Axis[] };
 
-const EMPTY_BLOCK: Block = { on: false, a1Param: "", a1Values: "", a2Param: "", a2Values: "" };
+const EMPTY_AXIS: Axis = { param: "", values: "" };
+// Two empty slots is just a starting shape, not a limit — "+ Add axis" grows it.
+const EMPTY_BLOCK: Block = { on: false, axes: [{ ...EMPTY_AXIS }, { ...EMPTY_AXIS }] };
 
 type Row = {
   id: string;
   host: string;
   slug: string;
   needsTo: boolean;
-  a1Param: string;
-  a1Value: string;
-  a2Param: string;
-  a2Value: string;
+  cells: { param: string; value: string }[];
 };
 
 function splitValues(raw: string): string[] {
@@ -71,6 +67,15 @@ function csvCell(v: string): string {
   return `"${String(v).replace(/"/g, '""')}"`;
 }
 
+// Cartesian product over N lists. [] -> [[]] (one empty combo) so a block with
+// no axes still produces exactly one row per property rather than zero.
+function cartesian(lists: string[][]): string[][] {
+  return lists.reduce<string[][]>(
+    (acc, list) => acc.flatMap(prefix => list.map(v => [...prefix, v])),
+    [[]],
+  );
+}
+
 export default function MatrixBuilder({
   clientKey,
   hosts,
@@ -87,11 +92,13 @@ export default function MatrixBuilder({
   // Properties AND placements both default to ALL — an ACJ buy routinely spans
   // every paper and every placement type, so unchecking is less work than
   // checking. With no axis values yet this shows the baseline grid
-  // (properties x placements) immediately, which is also the clearest
+  // (properties × placements) immediately, which is also the clearest
   // demonstration of what the tool does.
   const [selectedHosts, setSelectedHosts] = useState<Set<string>>(new Set(hosts));
   const [blocks, setBlocks] = useState<Record<string, Block>>(() =>
-    Object.fromEntries(slugs.map(s => [s.slug, { ...EMPTY_BLOCK, on: true }])),
+    Object.fromEntries(
+      slugs.map(s => [s.slug, { on: true, axes: [{ ...EMPTY_AXIS }, { ...EMPTY_AXIS }] }]),
+    ),
   );
   const [partner, setPartner] = useState("");
   const [utmSource, setUtmSource] = useState("");
@@ -109,6 +116,16 @@ export default function MatrixBuilder({
 
   const block = (slug: string): Block => blocks[slug] ?? EMPTY_BLOCK;
 
+  function setBlock(slug: string, patch: Partial<Block>) {
+    setBlocks(b => ({ ...b, [slug]: { ...block(slug), ...patch } }));
+  }
+
+  function setAxis(slug: string, i: number, patch: Partial<Axis>) {
+    const b = block(slug);
+    const axes = b.axes.map((a, j) => (j === i ? { ...a, ...patch } : a));
+    setBlock(slug, { axes });
+  }
+
   // A param name typed fresh becomes a NEW reporting dimension — `position`
   // next to an existing `pos` fragments exactly the way `Firstrust` next to
   // `firstrust` does, one level up. Warn, never block: a genuinely new axis is
@@ -119,8 +136,21 @@ export default function MatrixBuilder({
     return v.length > 0 && knownParams.length > 0 && !knownParams.includes(v);
   }
 
-  function setBlock(slug: string, patch: Partial<Block>) {
-    setBlocks(b => ({ ...b, [slug]: { ...block(slug), ...patch } }));
+  // Two axes in one block sharing a param name is always a mistake, and a
+  // SILENT one: URLSearchParams.set() overwrites, so the second axis vanishes
+  // from the URL while still multiplying the row count. Caught live on the
+  // article block (Sep 19) where `placement` was entered twice.
+  function duplicateParam(slug: string, i: number): boolean {
+    const axes = block(slug).axes;
+    const name = axes[i].param.trim();
+    if (!name) return false;
+    return axes.some((a, j) => j !== i && a.param.trim() === name);
+  }
+
+  // `placement` is the SLUG, already in the path (/r/<client>/<slug>). Carrying
+  // it again as a query param gives two competing fields for one fact.
+  function redundantParam(name: string): boolean {
+    return ["placement", "slug", "property", "link_host", "host"].includes(name.trim().toLowerCase());
   }
 
   const rows: Row[] = useMemo(() => {
@@ -131,28 +161,24 @@ export default function MatrixBuilder({
       const b = blocks[s.slug] ?? EMPTY_BLOCK;
       if (!b.on) continue;
 
-      // A blank axis contributes exactly one empty combo rather than zero
-      // rows — "newsletter, all five papers, no sub-axis" must still produce
-      // five links.
-      const a1 = b.a1Param.trim() ? splitValues(b.a1Values) : [];
-      const a2 = b.a2Param.trim() ? splitValues(b.a2Values) : [];
-      const a1List = a1.length ? a1 : [""];
-      const a2List = a2.length ? a2 : [""];
+      // Only named axes participate. A named axis with no values contributes
+      // one empty value so the row still exists — "newsletter, all five
+      // papers, nothing filled in yet" must still show five links.
+      const named = b.axes.filter(a => a.param.trim());
+      const lists = named.map(a => {
+        const vs = splitValues(a.values);
+        return vs.length ? vs : [""];
+      });
 
       for (const host of orderedHosts) {
-        for (const v1 of a1List) {
-          for (const v2 of a2List) {
-            out.push({
-              id: [host, s.slug, v1, v2].join("|"),
-              host,
-              slug: s.slug,
-              needsTo: s.needs_to,
-              a1Param: b.a1Param.trim(),
-              a1Value: v1,
-              a2Param: b.a2Param.trim(),
-              a2Value: v2,
-            });
-          }
+        for (const combo of cartesian(lists)) {
+          out.push({
+            id: [host, s.slug, ...combo].join("|"),
+            host,
+            slug: s.slug,
+            needsTo: s.needs_to,
+            cells: named.map((a, i) => ({ param: a.param.trim(), value: combo[i] })),
+          });
         }
       }
     }
@@ -170,8 +196,7 @@ export default function MatrixBuilder({
     // would be ignored at best and confusing in the click log at worst.
     if (r.needsTo && dest.trim()) params.set("to", normalizeDestination(dest));
     if (partner.trim()) params.set("partner", partner.trim());
-    if (r.a1Param && r.a1Value) params.set(r.a1Param, r.a1Value);
-    if (r.a2Param && r.a2Value) params.set(r.a2Param, r.a2Value);
+    for (const c of r.cells) if (c.param && c.value) params.set(c.param, c.value);
     if (utmSource.trim()) params.set("utm_source", utmSource.trim());
     if (utmMedium.trim()) params.set("utm_medium", utmMedium.trim());
     if (utmCampaign.trim()) params.set("utm_campaign", utmCampaign.trim());
@@ -193,6 +218,55 @@ export default function MatrixBuilder({
       return true;
     }
   });
+
+  // One column per distinct param actually used, blank where it doesn't apply
+  // to that row. Generic axis_1/axis_2 columns holding "pos=top" would be
+  // unsortable and unpivotable in a spreadsheet, which is the whole point of
+  // handing someone a CSV.
+  function buildTable(): { header: string[]; body: string[][] } {
+    const paramCols: string[] = [];
+    for (const r of rows) {
+      for (const c of r.cells) {
+        if (c.param && c.value && !paramCols.includes(c.param)) paramCols.push(c.param);
+      }
+    }
+    const header = ["property", "placement", "partner", ...paramCols, "destination", "url"];
+    const body = rows.map(r => {
+      const cells = [hostLabel(r.host), r.slug, partner.trim()];
+      for (const col of paramCols) {
+        cells.push(r.cells.find(c => c.param === col)?.value ?? "");
+      }
+      cells.push(r.needsTo ? normalizeDestination(destinations[r.id] ?? "") : "(from rule)");
+      cells.push(urlFor(r));
+      return cells;
+    });
+    return { header, body };
+  }
+
+  // TSV pastes into Sheets/Excel as real columns. Tabs and newlines inside a
+  // value would silently shift every following cell, so they're stripped —
+  // none of these fields should contain either.
+  async function copyTsv() {
+    const { header, body } = buildTable();
+    const clean = (v: string) => v.replace(/[\t\r\n]+/g, " ");
+    const text = [header, ...body].map(r => r.map(clean).join("\t")).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied("tsv");
+      setTimeout(() => setCopied(null), 1800);
+    } catch { /* noop */ }
+  }
+
+  function downloadCsv() {
+    const { header, body } = buildTable();
+    const lines = [header.map(csvCell).join(","), ...body.map(r => r.map(csvCell).join(","))];
+    const blob = new Blob([`${lines.join("\n")}\n`], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `chapter-links-matrix-${clientKey}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   function applyFill(ids: string[]) {
     const v = fillValue.trim();
@@ -246,56 +320,6 @@ export default function MatrixBuilder({
     } catch { /* noop */ }
   }
 
-  // One column per distinct param actually used, blank where it doesn't apply
-  // to that row. Generic axis_1/axis_2 columns holding "pos=top" would be
-  // unsortable and unpivotable in a spreadsheet, which is the whole point of
-  // handing someone a CSV. A display row fills `pos`, an article row fills
-  // `article`, a newsletter row fills both `pos` and `send`.
-  function buildTable(): { header: string[]; body: string[][] } {
-    const paramCols: string[] = [];
-    for (const r of rows) {
-      for (const [name, value] of [[r.a1Param, r.a1Value], [r.a2Param, r.a2Value]]) {
-        if (name && value && !paramCols.includes(name)) paramCols.push(name);
-      }
-    }
-    const header = ["property", "placement", "partner", ...paramCols, "destination", "url"];
-    const body = rows.map(r => {
-      const cells = [hostLabel(r.host), r.slug, partner.trim()];
-      for (const col of paramCols) {
-        cells.push(r.a1Param === col ? r.a1Value : r.a2Param === col ? r.a2Value : "");
-      }
-      cells.push(r.needsTo ? normalizeDestination(destinations[r.id] ?? "") : "(from rule)");
-      cells.push(urlFor(r));
-      return cells;
-    });
-    return { header, body };
-  }
-
-  // TSV pastes into Sheets/Excel as real columns. Tabs and newlines inside a
-  // value would silently shift every following cell, so they're stripped —
-  // none of these fields should contain either.
-  async function copyTsv() {
-    const { header, body } = buildTable();
-    const clean = (v: string) => v.replace(/[\t\r\n]+/g, " ");
-    const text = [header, ...body].map(r => r.map(clean).join("\t")).join("\n");
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied("tsv");
-      setTimeout(() => setCopied(null), 1800);
-    } catch { /* noop */ }
-  }
-
-  function downloadCsv() {
-    const { header, body } = buildTable();
-    const lines = [header.map(csvCell).join(","), ...body.map(r => r.map(csvCell).join(","))];
-    const blob = new Blob([`${lines.join("\n")}\n`], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `chapter-links-matrix-${clientKey}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
   return (
     <div className="space-y-6">
       <datalist id="matrix-partners">
@@ -347,12 +371,22 @@ export default function MatrixBuilder({
         <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-600">
           Placements <span className="ml-1 font-normal normal-case tracking-normal text-neutral-400">each varies along its own params</span>
         </h3>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+          An axis is any query param you want to vary. The name is free text — the dropdown only
+          suggests params this client&apos;s links have used before. Values are one per line.
+        </p>
         <div className="mt-3 space-y-3">
           {slugs.map(s => {
             const b = block(s.slug);
+            const propCount = selectedHosts.size;
+            const comboCount = b.axes
+              .filter(a => a.param.trim())
+              .reduce((n, a) => n * Math.max(1, splitValues(a.values).length), 1);
+            const blockRows = b.on ? propCount * comboCount : 0;
+
             return (
               <div key={s.slug} className={`rounded-md border p-3 ${b.on ? "border-orange-200 bg-orange-50/40" : "border-neutral-200 bg-neutral-50"}`}>
-                <label className="flex cursor-pointer items-center gap-2">
+                <label className="flex cursor-pointer flex-wrap items-center gap-2">
                   <input type="checkbox" checked={b.on} onChange={() => setBlock(s.slug, { on: !b.on })} />
                   <span className="font-mono text-sm font-semibold text-neutral-900">{s.slug}</span>
                   {!s.needs_to && (
@@ -361,39 +395,77 @@ export default function MatrixBuilder({
                     </span>
                   )}
                   {s.description && <span className="truncate text-xs text-neutral-500">{s.description}</span>}
+                  {b.on && (
+                    <span className="ml-auto text-[11px] text-neutral-500">
+                      {propCount} × {comboCount} = <span className="font-semibold text-neutral-700">{blockRows}</span> rows
+                    </span>
+                  )}
                 </label>
 
                 {b.on && (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {([1, 2] as const).map(n => (
-                      <div key={n} className="space-y-1">
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-                          Vary by {n === 2 && <span className="font-normal normal-case text-neutral-400">(optional)</span>}
-                        </span>
-                        <input
-                          className={inputCls}
-                          list="matrix-params"
-                          placeholder={n === 1 ? "pos" : "send"}
-                          value={n === 1 ? b.a1Param : b.a2Param}
-                          onChange={e => setBlock(s.slug, n === 1 ? { a1Param: e.target.value } : { a2Param: e.target.value })}
-                        />
-                        {unknownParam(n === 1 ? b.a1Param : b.a2Param) && (
-                          <p className="text-[11px] leading-snug text-amber-700">
-                            New param — this client&apos;s links have used{" "}
-                            <span className="font-mono">{knownParams.slice(0, 4).join(", ")}</span>. Fine if
-                            intentional; a typo here becomes a separate dimension in reporting.
-                          </p>
-                        )}
-                        <textarea
-                          className={`${inputCls} font-mono text-xs`}
-                          rows={3}
-                          placeholder={n === 1 ? "top\nsidebar\nfooter" : "bucksco_weekly.email_12"}
-                          value={n === 1 ? b.a1Values : b.a2Values}
-                          onChange={e => setBlock(s.slug, n === 1 ? { a1Values: e.target.value } : { a2Values: e.target.value })}
-                        />
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      {b.axes.map((a, i) => (
+                        <div key={i} className="space-y-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                              Vary by {i > 0 && <span className="font-normal normal-case text-neutral-400">(optional)</span>}
+                            </span>
+                            {b.axes.length > 1 && (
+                              <button
+                                type="button"
+                                className="text-[11px] text-neutral-400 underline underline-offset-2"
+                                onClick={() => setBlock(s.slug, { axes: b.axes.filter((_, j) => j !== i) })}
+                              >
+                                remove
+                              </button>
+                            )}
+                          </div>
+                          <input
+                            className={inputCls}
+                            list="matrix-params"
+                            placeholder={i === 0 ? "pos" : "send"}
+                            value={a.param}
+                            onChange={e => setAxis(s.slug, i, { param: e.target.value })}
+                          />
+                          {duplicateParam(s.slug, i) && (
+                            <p className="text-[11px] leading-snug text-red-700">
+                              Already used as another axis in this placement. Both would write the same
+                              query param and the later one wins — one axis would multiply your row count
+                              while vanishing from the URL.
+                            </p>
+                          )}
+                          {redundantParam(a.param) && (
+                            <p className="text-[11px] leading-snug text-amber-700">
+                              Already in the URL path as the slug ({s.slug}). Carrying it again as a param
+                              gives two competing fields for one fact in reporting.
+                            </p>
+                          )}
+                          {unknownParam(a.param) && !duplicateParam(s.slug, i) && (
+                            <p className="text-[11px] leading-snug text-amber-700">
+                              New param — this client&apos;s links have used{" "}
+                              <span className="font-mono">{knownParams.slice(0, 4).join(", ")}</span>. Fine if
+                              intentional; a typo here becomes a separate dimension in reporting.
+                            </p>
+                          )}
+                          <textarea
+                            className={`${inputCls} font-mono text-xs`}
+                            rows={3}
+                            placeholder={i === 0 ? "top\nsidebar\nfooter" : "bucksco_weekly.email_12"}
+                            value={a.values}
+                            onChange={e => setAxis(s.slug, i, { values: e.target.value })}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="mt-2 text-xs font-semibold text-orange-700 underline underline-offset-2"
+                      onClick={() => setBlock(s.slug, { axes: [...b.axes, { ...EMPTY_AXIS }] })}
+                    >
+                      + Add axis
+                    </button>
+                  </>
                 )}
               </div>
             );
@@ -493,9 +565,7 @@ export default function MatrixBuilder({
                       <td className="whitespace-nowrap px-3 py-1.5 font-mono text-neutral-700">{hostLabel(r.host)}</td>
                       <td className="whitespace-nowrap px-3 py-1.5 font-mono text-neutral-700">{r.slug}</td>
                       <td className="whitespace-nowrap px-3 py-1.5 font-mono text-neutral-500">
-                        {[r.a1Param && r.a1Value ? `${r.a1Param}=${r.a1Value}` : "", r.a2Param && r.a2Value ? `${r.a2Param}=${r.a2Value}` : ""]
-                          .filter(Boolean)
-                          .join(" · ") || "—"}
+                        {r.cells.filter(c => c.param && c.value).map(c => `${c.param}=${c.value}`).join(" · ") || "—"}
                       </td>
                       <td className="px-3 py-1.5">
                         {r.needsTo ? (
