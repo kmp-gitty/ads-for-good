@@ -17,13 +17,28 @@ import { createClient } from "@supabase/supabase-js";
 import { listConditionTypes } from "@/app/lib/redirect/conditions";
 import RuleRowActions from "./RuleRowActions";
 import UrlBuilder, { type ClientOption } from "./UrlBuilder";
-import MatrixBuilder, { RESERVED_PARAMS } from "./MatrixBuilder";
+import MatrixBuilder from "./MatrixBuilder";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { persistSession: false } },
 );
+
+// Params the matrix builder must never offer as an axis: either reserved by
+// the redirect itself, or already owned by a dedicated field on the form.
+// `rh`/`rid`/`re` are identity hints stripped before the destination is built,
+// so a rule keyed on them can never fire — offering them would produce links
+// whose axis silently does nothing.
+//
+// Lives HERE and not in MatrixBuilder: that file is "use client", and a plain
+// value exported across the client boundary becomes a client-reference proxy
+// on the server. Reading it in server code throws at request time — which is
+// exactly what took this page down.
+const RESERVED_PARAMS = new Set([
+  "to", "partner", "rh", "rid", "re", "chid", "jid",
+  "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+]);
 
 // Vocabulary already present in this client's click history — partner VALUES
 // and the param NAMES they tag links with. Both seed datalists so naming

@@ -31,15 +31,6 @@ import { normalizeDestination } from "./UrlBuilder";
 
 export type MatrixSlug = { slug: string; description: string | null; needs_to: boolean };
 
-// Params the matrix must never offer as an axis: either reserved by the
-// redirect itself, or already owned by a dedicated field on this form.
-// `rh`/`rid`/`re` are identity hints stripped before the destination, and a
-// rule keyed on them can never fire — offering them would build dead links.
-export const RESERVED_PARAMS = new Set([
-  "to", "partner", "rh", "rid", "re", "chid", "jid",
-  "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
-]);
-
 type Block = {
   on: boolean;
   a1Param: string;
