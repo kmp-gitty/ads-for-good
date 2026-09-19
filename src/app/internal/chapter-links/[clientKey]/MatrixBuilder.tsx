@@ -113,7 +113,8 @@ export default function MatrixBuilder({
   const [destinations, setDestinations] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [fillValue, setFillValue] = useState("");
-  const [copied, setCopied] = useState(false);
+  // Which copy affordance last fired — "urls" | "tsv" | a row id.
+  const [copied, setCopied] = useState<string | null>(null);
 
   const block = (slug: string): Block => blocks[slug] ?? EMPTY_BLOCK;
 
@@ -239,27 +240,64 @@ export default function MatrixBuilder({
   async function copyAll() {
     try {
       await navigator.clipboard.writeText(rows.map(urlFor).join("\n"));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      setCopied("urls");
+      setTimeout(() => setCopied(null), 1800);
+    } catch { /* noop */ }
+  }
+
+  // Per-row copy is the workflow that actually happens: paste THIS url into
+  // THAT slot of THAT send. Copying all 240 and hunting for one is worse.
+  async function copyRow(r: Row) {
+    try {
+      await navigator.clipboard.writeText(urlFor(r));
+      setCopied(r.id);
+      setTimeout(() => setCopied(null), 1400);
+    } catch { /* noop */ }
+  }
+
+  // One column per distinct param actually used, blank where it doesn't apply
+  // to that row. Generic axis_1/axis_2 columns holding "pos=top" would be
+  // unsortable and unpivotable in a spreadsheet, which is the whole point of
+  // handing someone a CSV. A display row fills `pos`, an article row fills
+  // `article`, a newsletter row fills both `pos` and `send`.
+  function buildTable(): { header: string[]; body: string[][] } {
+    const paramCols: string[] = [];
+    for (const r of rows) {
+      for (const [name, value] of [[r.a1Param, r.a1Value], [r.a2Param, r.a2Value]]) {
+        if (name && value && !paramCols.includes(name)) paramCols.push(name);
+      }
+    }
+    const header = ["property", "placement", "partner", ...paramCols, "destination", "url"];
+    const body = rows.map(r => {
+      const cells = [hostLabel(r.host), r.slug, partner.trim()];
+      for (const col of paramCols) {
+        cells.push(r.a1Param === col ? r.a1Value : r.a2Param === col ? r.a2Value : "");
+      }
+      cells.push(r.needsTo ? normalizeDestination(destinations[r.id] ?? "") : "(from rule)");
+      cells.push(urlFor(r));
+      return cells;
+    });
+    return { header, body };
+  }
+
+  // TSV pastes into Sheets/Excel as real columns. Tabs and newlines inside a
+  // value would silently shift every following cell, so they're stripped —
+  // none of these fields should contain either.
+  async function copyTsv() {
+    const { header, body } = buildTable();
+    const clean = (v: string) => v.replace(/[\t\r\n]+/g, " ");
+    const text = [header, ...body].map(r => r.map(clean).join("\t")).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied("tsv");
+      setTimeout(() => setCopied(null), 1800);
     } catch { /* noop */ }
   }
 
   function downloadCsv() {
-    const header = "property,placement,partner,axis_1,axis_2,destination,url";
-    const body = rows
-      .map(r =>
-        [
-          csvCell(hostLabel(r.host)),
-          csvCell(r.slug),
-          csvCell(partner.trim()),
-          csvCell(r.a1Param ? `${r.a1Param}=${r.a1Value}` : ""),
-          csvCell(r.a2Param ? `${r.a2Param}=${r.a2Value}` : ""),
-          csvCell(r.needsTo ? normalizeDestination(destinations[r.id] ?? "") : "(from rule)"),
-          csvCell(urlFor(r)),
-        ].join(","),
-      )
-      .join("\n");
-    const blob = new Blob([`${header}\n${body}\n`], { type: "text/csv" });
+    const { header, body } = buildTable();
+    const lines = [header.map(csvCell).join(","), ...body.map(r => r.map(csvCell).join(","))];
+    const blob = new Blob([`${lines.join("\n")}\n`], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `chapter-links-matrix-${clientKey}.csv`;
@@ -448,6 +486,8 @@ export default function MatrixBuilder({
                   <th className="px-3 py-2">Placement</th>
                   <th className="px-3 py-2">Axes</th>
                   <th className="px-3 py-2">Destination</th>
+                  <th className="px-3 py-2">URL</th>
+                  <th className="w-10 px-3 py-2" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
@@ -484,6 +524,18 @@ export default function MatrixBuilder({
                           <span className="text-neutral-400">from rule</span>
                         )}
                       </td>
+                      <td className="whitespace-nowrap px-3 py-1.5 font-mono text-[11px] text-neutral-500">
+                        {urlFor(r)}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <button
+                          type="button"
+                          className="rounded border border-neutral-200 px-2 py-0.5 text-[11px] text-neutral-600"
+                          onClick={() => copyRow(r)}
+                        >
+                          {copied === r.id ? "✓" : "Copy"}
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -495,7 +547,10 @@ export default function MatrixBuilder({
         {rows.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-t border-neutral-200 px-4 py-3">
             <button type="button" className={btnPrimary} onClick={copyAll}>
-              {copied ? "Copied" : `Copy ${rows.length} URLs`}
+              {copied === "urls" ? "Copied" : `Copy ${rows.length} URLs`}
+            </button>
+            <button type="button" className={btn} onClick={copyTsv}>
+              {copied === "tsv" ? "Copied" : "Copy as table"}
             </button>
             <button type="button" className={btn} onClick={downloadCsv}>
               Download CSV
