@@ -25,6 +25,46 @@ export type ClientOption = {
   links_hosts: string[] | null;
 };
 
+// Destination normalisation + validation.
+//
+// A destination with no scheme (`ads4good.com?x=1`) is rejected by the
+// redirect's isValidDestination(), falls through the chain to the client
+// default, and the reader lands somewhere unrelated — while the click STILL
+// logs and STILL increments hit_count. Reporting looks perfectly healthy.
+// Caught live on ACJ (Sep 18); a partner campaign could run a full flight
+// that way and you'd only hear about it from the partner.
+//
+// Rules, in order — each avoids a specific wrong behaviour:
+//   protocol-relative "//x.com"  -> https:
+//   ANY existing scheme          -> LEAVE ALONE. Never upgrade http:->https:;
+//                                   that silently rewrites the partner's URL.
+//   otherwise                    -> prepend https://
+// Scheme detection is general (not startsWith("https://")) so "HTTPS://X.COM"
+// isn't mangled into "https://HTTPS://X.COM".
+export function normalizeDestination(raw: string): string {
+  const v = raw.trim();
+  if (!v) return "";
+  if (/^\/\//.test(v)) return `https:${v}`;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return v;
+  return `https://${v}`;
+}
+
+type DestState = "empty" | "ok" | "invalid";
+
+// A non-http(s) scheme (ftp:, mailto:, javascript:) is INVALID, not a prefix
+// candidate — prefixing would produce "https://javascript:..." and hide the
+// problem behind a plausible-looking URL.
+function destinationState(raw: string): DestState {
+  const v = normalizeDestination(raw);
+  if (!v) return "empty";
+  try {
+    const u = new URL(v);
+    return u.protocol === "http:" || u.protocol === "https:" ? "ok" : "invalid";
+  } catch {
+    return "invalid";
+  }
+}
+
 const UTM_SOURCES = [
   { value: "email", label: "Email" },
   { value: "cold_email", label: "Cold email" },
@@ -103,6 +143,7 @@ export default function UrlBuilder({
   defaultSlug,
   redirectOrigin,
   lockClient = false,
+  knownPartners = [],
 }: {
   clients: ClientOption[];
   slugsByClient: Record<string, { slug: string; description: string | null; needs_to?: boolean }[]>;
@@ -113,6 +154,10 @@ export default function UrlBuilder({
   // workbench). The client is already established by the route, so the picker
   // renders as a static readout instead of a dropdown that can desync the URL.
   lockClient?: boolean;
+  // Partner values already seen in this client's click history. Free entry
+  // still allowed — this exists so `firstrust` / `Firstrust` / `firstrust-bank`
+  // don't fragment into three partners in reporting.
+  knownPartners?: string[];
 }) {
   const [clientKey, setClientKey] = useState(defaultClientKey);
   const availableSlugs = slugsByClient[clientKey] ?? [];
@@ -142,6 +187,7 @@ export default function UrlBuilder({
     (hostOverride && hostOptions.includes(hostOverride) ? hostOverride : hostOptions[0]);
 
   const [slug, setSlug] = useState<string>(defaultSlug ?? "");
+  const [partner, setPartner] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ProspectOption[]>([]);
   const [searching, setSearching] = useState(false);
@@ -213,7 +259,9 @@ export default function UrlBuilder({
 
   function buildParams(over?: { identity?: { mode: IdentityMode; value: string }; source?: string; content?: string }) {
     const params = new URLSearchParams();
-    if (!ruleSuppliesDestination && destination) params.set("to", destination);
+    if (!ruleSuppliesDestination && destination) params.set("to", normalizeDestination(destination));
+    // Partner first so a deliberate extraParams override still wins below.
+    if (partner.trim()) params.set("partner", partner.trim());
 
     const idMode = over?.identity?.mode ?? identityMode;
     const idVal =
@@ -293,7 +341,11 @@ export default function UrlBuilder({
   }
 
   const destinationRequired = !ruleSuppliesDestination;
-  const canBuild = ruleSuppliesDestination || destination.trim().length > 0;
+  const destState = destinationState(destination);
+  // What the reader actually lands on. Only knowable client-side for a
+  // pass-through link; a rule-supplied destination resolves server-side.
+  const resolvedDestination = ruleSuppliesDestination ? null : normalizeDestination(destination);
+  const canBuild = ruleSuppliesDestination || destState === "ok";
 
   return (
     <div className="mt-6 grid gap-5">
@@ -382,11 +434,20 @@ export default function UrlBuilder({
               className={inputCls}
               value={destination}
               onChange={e => setDestination(e.target.value)}
+              onBlur={() => setDestination(d => normalizeDestination(d))}
               placeholder={currentClient?.storefront_domain ? `https://${currentClient.storefront_domain}/...` : "https://..."}
             />
-            <p className="mt-1 text-xs text-neutral-500">
-              Paste the full URL including its own query string — it gets encoded automatically.
-            </p>
+            {destState === "invalid" ? (
+              <p className="mt-1 text-xs font-medium text-red-600">
+                Not a usable web address. A link built on this would still redirect and still be
+                counted — but the reader lands on the fallback, not the advertiser.
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-neutral-500">
+                Paste the full URL including its own query string — it gets encoded automatically.{" "}
+                <span className="text-neutral-400">https:// is added if you leave it off.</span>
+              </p>
+            )}
           </>
         </Field>
         </>
@@ -475,6 +536,29 @@ export default function UrlBuilder({
           </div>
         )}
       </div>
+
+      <Field label="Partner" hint="Who the placement is for — reporting groups on this exact text">
+        <>
+          <input
+            className={inputCls}
+            list="known-partners"
+            value={partner}
+            onChange={e => setPartner(e.target.value)}
+            placeholder="firstrust"
+          />
+          <datalist id="known-partners">
+            {knownPartners.map(p => <option key={p} value={p} />)}
+          </datalist>
+          <p className="mt-1 text-xs text-neutral-500">
+            {knownPartners.length > 0
+              ? `Pick from ${knownPartners.length} already in use, or type a new one. `
+              : "No partners recorded yet — the first one you use seeds the list. "}
+            <span className="text-neutral-400">
+              firstrust and Firstrust report as two different partners.
+            </span>
+          </p>
+        </>
+      </Field>
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="UTM source" hint="Feeds Chapter's channel classification">
@@ -608,6 +692,18 @@ export default function UrlBuilder({
           <div className="mt-3 break-all rounded border border-neutral-200 bg-white px-3 py-2 font-mono text-xs text-neutral-800">
             {finalUrl}
           </div>
+          {resolvedDestination && (
+            <p className="mt-2 text-xs text-orange-900">
+              <span className="font-semibold">Reader lands on:</span>{" "}
+              <span className="break-all font-mono">{resolvedDestination}</span>
+            </p>
+          )}
+          {ruleSuppliesDestination && (
+            <p className="mt-2 text-xs text-orange-900">
+              <span className="font-semibold">Reader lands on:</span> the destination configured on the{" "}
+              <code className="rounded bg-white px-1">{slug}</code> rule.
+            </p>
+          )}
           <p className="mt-2 text-xs text-orange-700">
             {identityMode === "none"
               ? "Anonymous 1P wrapped link — click logs + cookies set, no identity stitch (resolves later if they identify on-site)."

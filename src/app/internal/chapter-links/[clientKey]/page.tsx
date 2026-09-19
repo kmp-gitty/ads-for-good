@@ -24,6 +24,39 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
+// Partner values already seen in this client's click history, most-used first.
+// Seeds the builder's dropdown so naming doesn't fragment — `firstrust`,
+// `Firstrust` and `firstrust-bank` would otherwise report as three partners,
+// and the convention is only enforceable at generation time.
+//
+// Safe to read live rather than pre-aggregate: redirect_click is inherently
+// rare next to page_view (largest tenant is ~3.5k rows all-time), and this is
+// bounded by client_key + a 180-day window + a row cap. Revisit if a tenant
+// ever wraps links at page_view volume.
+//
+// Lives at module scope, not in the component body: reading the clock during
+// render trips the react-compiler purity rule.
+async function fetchKnownPartners(clientKey: string): Promise<string[]> {
+  const since = new Date(Date.now() - 180 * 864e5).toISOString();
+  const { data } = await supabase
+    .schema("chapter_ingest")
+    .from("pixel_events")
+    .select("props")
+    .eq("client_key", clientKey)
+    .eq("event_name", "redirect_click")
+    .gte("ts", since)
+    .limit(5000);
+
+  const counts = new Map<string, number>();
+  for (const row of (data ?? []) as Array<{ props: { full_query?: Record<string, string> } | null }>) {
+    const v = row.props?.full_query?.partner?.trim();
+    if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([v]) => v);
+}
+
 export const dynamic = "force-dynamic";
 
 const INK = "#1F2D43";
@@ -87,7 +120,7 @@ export default async function ChapterLinksClientPage({
   const tab: Tab = sp.tab === "generate" ? "generate" : "links";
   const preselectSlug = typeof sp.slug === "string" ? sp.slug : undefined;
 
-  const [{ data: rules, error }, { data: clientRow }] = await Promise.all([
+  const [{ data: rules, error }, { data: clientRow }, knownPartners] = await Promise.all([
     supabase
       .schema("chapter_config")
       .from("redirect_rules")
@@ -101,6 +134,7 @@ export default async function ChapterLinksClientPage({
       .select("client_key, storefront_domain, redirect_host, links_host, links_hosts")
       .eq("client_key", clientKey)
       .maybeSingle(),
+    fetchKnownPartners(clientKey),
   ]);
 
   if (error) {
@@ -205,6 +239,7 @@ export default async function ChapterLinksClientPage({
             defaultClientKey={clientKey}
             defaultSlug={preselectSlug}
             redirectOrigin={origin}
+            knownPartners={knownPartners}
             lockClient
           />
         </div>

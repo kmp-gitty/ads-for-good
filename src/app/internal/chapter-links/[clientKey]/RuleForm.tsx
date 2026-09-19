@@ -73,8 +73,23 @@ export type RuleFormProps = {
 // Common destination-template patterns. Click a chip to populate the field.
 const DESTINATION_PRESETS: { label: string; description: string; template: string }[] = [
   {
-    label: "Pass-through with UTM",
-    description: "Land at the URL passed in `?to=`, preserving UTM params. Used by outreach + Google Ads tracking template.",
+    label: "Pass-through (recommended)",
+    description:
+      "Forward to ?to= EXACTLY as supplied. The partner's own UTMs / affiliate params survive untouched, and Chapter still captures your utm_* server-side from the inbound query string — they do not need re-appending. This is the right default for wrapped partner links.",
+    template: "{q:to}",
+  },
+  {
+    // The old default. Appends "?" unconditionally, so it CORRUPTS any
+    // destination that already has a query string — the common case for
+    // display + affiliate partners. Proven live on ACJ (Sep 18):
+    //   example.com/lp?utm_source=acj&utm_medium=display
+    //     -> ...?utm_source=acj%3Futm_source%3D&utm_medium=display&utm_campaign=...
+    // It also appends five EMPTY utm params when the link carries none, which
+    // can override a partner's own attribution with a blank source.
+    // Kept for destinations that genuinely have no query string of their own.
+    label: "Pass-through + append UTM (no-query destinations only)",
+    description:
+      "⚠️ Appends ?utm_* to the destination. Only safe when the destination has NO query string of its own — otherwise it corrupts the partner's URL and strips their tracking. Prefer Pass-through (recommended).",
     template:
       "{q:to}?utm_source={q:utm_source}&utm_medium={q:utm_medium}&utm_campaign={q:utm_campaign}&utm_content={q:utm_content}&utm_term={q:utm_term}",
   },
