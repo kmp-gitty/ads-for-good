@@ -17,6 +17,12 @@ export type ClientOption = {
   // against the new hostname first.
   redirect_host: string | null;
   links_host: string | null;
+  // Multi-property tenants (e.g. acj_today across five .today papers) serve the
+  // SAME client_key from several 1P link hosts. links_host holds the flagship;
+  // this holds the full set so the operator can pick which property's host a
+  // link is built on. Cookies land on the host's own eTLD+1, so picking the
+  // wrong one silently breaks identity continuity for that paper's readers.
+  links_hosts: string[] | null;
 };
 
 const UTM_SOURCES = [
@@ -113,8 +119,27 @@ export default function UrlBuilder({
   const currentClient = clients.find(c => c.client_key === clientKey);
   // Use the per-client host when set (e.g. NSC's chapter.notsocavalier.com or
   // EOS's go.eosfabrics.com — required for cookies to land on the right eTLD+1).
+  const hostOptions = useMemo(() => {
+    const out: string[] = [];
+    const add = (h: string | null | undefined) => {
+      if (!h) return;
+      const v = String(h).trim().replace(/\/+$/, "");
+      if (v && !out.includes(v)) out.push(v);
+    };
+    add(currentClient?.links_host);
+    for (const h of currentClient?.links_hosts ?? []) add(h);
+    add(currentClient?.redirect_host);
+    if (out.length === 0) out.push(redirectOrigin);
+    return out;
+  }, [currentClient, redirectOrigin]);
+
+  const [hostOverride, setHostOverride] = useState<string>("");
+  // Reset the override whenever the client changes, otherwise switching clients
+  // leaves the previous tenant's host selected and builds a cross-tenant URL.
+  useEffect(() => { setHostOverride(""); }, [clientKey]);
+
   const effectiveOrigin =
-    currentClient?.links_host || currentClient?.redirect_host || redirectOrigin;
+    (hostOverride && hostOptions.includes(hostOverride) ? hostOverride : hostOptions[0]);
 
   const [slug, setSlug] = useState<string>(defaultSlug ?? "");
   const [query, setQuery] = useState("");
@@ -291,6 +316,20 @@ export default function UrlBuilder({
             </select>
           )}
         </Field>
+
+        {hostOptions.length > 1 ? (
+          <Field
+            label="Property / link host"
+            required
+            hint="Cookies land on this host's domain — pick the paper the reader is coming from"
+          >
+            <select className={inputCls} value={effectiveOrigin} onChange={e => setHostOverride(e.target.value)}>
+              {hostOptions.map(h => (
+                <option key={h} value={h}>{h.replace(/^https?:\/\//, "")}</option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
 
         <Field label="Link" hint="Pick a configured rule, or Generic for an ad-hoc ?to= link">
           <select className={inputCls} value={slug} onChange={e => setSlug(e.target.value)}>

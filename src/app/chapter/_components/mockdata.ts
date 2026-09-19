@@ -208,6 +208,11 @@ export const CLIENTS: Client[] = [
   { id: "projectagram_reels", name: "Projectagram",       tier: "Mid",     color: "#5868D6" },
   { id: "adsforgood_prod",    name: "Ads for Good",       tier: "Top",     color: "#2E7D5B" },
   { id: "not_so_cavalier",    name: "Not So Cavalier",    tier: "Starter", color: "#8E5DA8" },
+  // One tenant, five papers (philadelphia / bucksco / montco / vista / delco
+  // .today). The switcher is per-CLIENT, not per-property — cross-paper reach
+  // is the whole point of the single-tenant decision, so splitting it here
+  // would misrepresent the data model.
+  { id: "acj_today",          name: "American Community Journals", tier: "Mid", color: "#1F7A8C" },
 ];
 
 export const KPI: Kpi[] = [

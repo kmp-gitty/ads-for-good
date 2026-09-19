@@ -81,6 +81,12 @@ export function clearRulesCache(client_key?: string, slug?: string): void {
 // window. Same pattern as fetchRules.
 export type ClientRedirectConfig = {
   default_redirect_destination: string | null;
+  // False = do NOT append ?chid/?jid to the destination. For tenants whose
+  // links point off-site (advertisers, affiliates) the params do nothing —
+  // there is no Chapter pixel there to consume them — so they just ride along
+  // into a third party's URL. Same-eTLD+1 links don't need them either: the
+  // identity cookie already spans that hop.
+  identity_handoff_enabled: boolean;
 };
 
 type ClientConfigEntry = { config: ClientRedirectConfig; fetchedAt: number };
@@ -98,18 +104,24 @@ export async function fetchClientRedirectConfig(
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("clients")
-    .select("default_redirect_destination")
+    .select("default_redirect_destination, identity_handoff_enabled")
     .eq("client_key", client_key)
     .maybeSingle();
 
   if (error) {
     console.error("[redirect-client-config] lookup failed:", error);
-    return { default_redirect_destination: null };
+    // Fail to the historical behavior (handoff on) rather than silently
+    // changing routing semantics because a config read blipped.
+    return { default_redirect_destination: null, identity_handoff_enabled: true };
   }
 
+  const row = data as {
+    default_redirect_destination: string | null;
+    identity_handoff_enabled: boolean | null;
+  } | null;
   const config: ClientRedirectConfig = {
-    default_redirect_destination: (data as { default_redirect_destination: string | null } | null)
-      ?.default_redirect_destination ?? null,
+    default_redirect_destination: row?.default_redirect_destination ?? null,
+    identity_handoff_enabled: row?.identity_handoff_enabled ?? true,
   };
   clientConfigCache.set(client_key, { config, fetchedAt: now });
   return config;

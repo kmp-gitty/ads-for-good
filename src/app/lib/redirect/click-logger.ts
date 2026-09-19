@@ -28,6 +28,13 @@ export type RedirectClickRow = {
   slug: string;
   destination: string;
   matched_rule_id: string | null;
+  // Hostname the click was SERVED on (e.g. go.bucksco.today). Load-bearing for
+  // multi-property tenants: one client_key can serve several 1P link hosts, and
+  // page_url below records the DESTINATION, not the origin. Without this, a
+  // cross-promotion link (bucksco newsletter -> philadelphia article) is
+  // indistinguishable from a native philadelphia click, so "which paper sent
+  // this reader" is unrecoverable after the fact.
+  link_host: string | null;
   query: Record<string, string>;
   referrer: string | null;
   geo: GeoContext;
@@ -58,6 +65,7 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
     redirect_slug: row.slug,
     destination: row.destination,
     matched_rule_id: row.matched_rule_id,
+    link_host: row.link_host,
     geo: row.geo,
     device: row.device,
     full_query: row.query,

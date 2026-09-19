@@ -76,6 +76,12 @@ const CLIENT_ROLE_MAP: Record<string, string> = {
   // can iterate on MI v2 prompts without touching real client storefronts. Isolated
   // from adsforgood_prod so practice prompts cannot fire on the public site pixel.
   chapter_practice: "client_chapter_practice",
+  // American Community Journals — ONE tenant across five separately-branded
+  // papers (philadelphia / bucksco / montco / vista / delco .today). Single
+  // client_key is deliberate: chapter_identity.identity_canon + identity_aliases
+  // are RLS-scoped BY client_key, so per-paper tenants could never join a reader
+  // across papers — permanently, with no migration path back.
+  acj_today: "client_acj_today",
 };
 
 export function isKnownClient(clientKey: string): boolean {

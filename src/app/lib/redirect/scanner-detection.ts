@@ -61,6 +61,42 @@ const KNOWN_SCANNER_UAS: RegExp[] = [
   /url[\s-_]?preview/i,
 ];
 
+// Social + messaging link-preview crawlers. These fetch a URL to build the
+// preview card the moment a link is posted — before, and independently of,
+// any human clicking it. On a wrapped social post that means one crawler
+// hit per platform per post, arriving with no relationship to real traffic.
+//
+// Treated as scanner-class for the same reason as email scanners: they must
+// not mint a durable identity, must not consume an email hint, and must not
+// receive an identity handoff on the destination URL. The click is still
+// logged (tagged) so we can see the crawler volume.
+//
+// Deliberately NOT included: search-engine crawlers (Googlebot, bingbot,
+// DuckDuckBot, YandexBot, Baiduspider). Same argument applies to them and
+// adding them is a one-line change — held back only because nobody has asked
+// for it yet and each addition is a chance to over-match a real UA.
+const SOCIAL_CRAWLER_UAS: RegExp[] = [
+  /facebookexternalhit/i,
+  /facebookcatalog/i,
+  /\bfacebot\b/i,
+  /linkedinbot/i,
+  /twitterbot/i,
+  /slackbot/i,                 // covers Slackbot-LinkExpanding
+  /discordbot/i,
+  /telegrambot/i,
+  /\bwhatsapp\//i,            // UA is literally "WhatsApp/2.x"
+  /pinterest(bot)?\//i,        // "Pinterest/0.2", "Pinterestbot/1.0"
+  /redditbot/i,
+  /applebot/i,                 // iMessage previews + Apple search
+  /skypeuripreview/i,
+  /vkshare/i,
+  /mastodon\//i,
+  /bluesky/i,
+  /\bcardyb\b/i,              // Bluesky's card builder
+  /embedly/i,
+  /iframely/i,
+];
+
 // Rate-limit configuration. Any hashed IP hitting more than
 // RATE_LIMIT_MAX_CLICKS clicks within RATE_LIMIT_WINDOW_MS is flagged
 // suspicious for the remainder of the window.
@@ -136,6 +172,11 @@ export function classifyForScannerRisk(req: NextRequest): ScannerRiskAssessment 
       reasons.push("scanner_ua");
     }
 
+    // 1b. Social / messaging link-preview crawler
+    if (SOCIAL_CRAWLER_UAS.some((r) => r.test(ua))) {
+      reasons.push("social_crawler_ua");
+    }
+
     // 2. Rapid same-IP clicks
     const ip = getClientIp(req);
     if (ip) {
@@ -161,4 +202,5 @@ export const SCANNER_DETECTION_CONFIG = {
   RATE_LIMIT_WINDOW_MS,
   RATE_LIMIT_MAX_CLICKS,
   KNOWN_SCANNER_UA_PATTERNS: KNOWN_SCANNER_UAS.map((r) => r.source),
+  SOCIAL_CRAWLER_UA_PATTERNS: SOCIAL_CRAWLER_UAS.map((r) => r.source),
 } as const;

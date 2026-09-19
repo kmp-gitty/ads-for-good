@@ -22,6 +22,23 @@ export const CHAPTER_ALLOWED_ORIGINS = new Set<string>([
   "https://www.projectagram.com",
   "https://notsocavalier.com",
   "https://www.notsocavalier.com",
+  // American Community Journals — ONE tenant (acj_today) spanning five
+  // separately-branded papers on five distinct eTLD+1s. Seeded rather than
+  // left to the DB layer below because that layer is lazy: the first request
+  // from a non-seed origin on a cold Lambda misses the cache and is answered
+  // with FALLBACK_ORIGIN, which the browser then blocks. At publisher pageview
+  // volume that dropped-first-request window is real data loss.
+  // acj.today (the corporate/parent site) is deliberately NOT tracked.
+  "https://philadelphia.today",
+  "https://www.philadelphia.today",
+  "https://bucksco.today",
+  "https://www.bucksco.today",
+  "https://montco.today",
+  "https://www.montco.today",
+  "https://vista.today",
+  "https://www.vista.today",
+  "https://delco.today",
+  "https://www.delco.today",
 ]);
 
 const FALLBACK_ORIGIN = "https://eosfabrics.com";
@@ -56,7 +73,9 @@ async function refreshDynamicOrigins(): Promise<void> {
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("clients")
-    .select("storefront_domain, redirect_host, links_host, legacy_host");
+    .select(
+      "storefront_domain, storefront_domains, redirect_host, links_host, links_hosts, legacy_host",
+    );
   // On error, leave the existing cache in place — the seed still covers everyone.
   if (error || !data) return;
 
@@ -70,16 +89,27 @@ async function refreshDynamicOrigins(): Promise<void> {
   const next = new Set<string>();
   for (const row of data as Array<{
     storefront_domain: string | null;
+    storefront_domains: string[] | null;
     redirect_host: string | null;
     links_host: string | null;
+    links_hosts: string[] | null;
     legacy_host: string | null;
   }>) {
+    // Multi-property tenants (one client_key, several eTLD+1s) carry the full
+    // set in storefront_domains / links_hosts. The singular columns stay
+    // populated with the flagship property, so read BOTH and union — never
+    // treat the array as a replacement, or a tenant mid-migration loses an
+    // origin the moment the array is written.
     if (row.storefront_domain) {
       for (const o of domainToOrigins(row.storefront_domain)) next.add(o);
+    }
+    for (const d of row.storefront_domains ?? []) {
+      for (const o of domainToOrigins(d)) next.add(o);
     }
     // links_host is the new canonical column; redirect_host + legacy_host both
     // stay in the allowlist so mid-migration + backward-compat URLs still pass.
     addHost(next, row.links_host);
+    for (const h of row.links_hosts ?? []) addHost(next, h);
     addHost(next, row.redirect_host);
     addHost(next, row.legacy_host);
   }

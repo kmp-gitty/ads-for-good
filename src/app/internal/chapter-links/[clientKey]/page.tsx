@@ -98,7 +98,7 @@ export default async function ChapterLinksClientPage({
     supabase
       .schema("chapter_config")
       .from("clients")
-      .select("client_key, storefront_domain, redirect_host, links_host")
+      .select("client_key, storefront_domain, redirect_host, links_host, links_hosts")
       .eq("client_key", clientKey)
       .maybeSingle(),
   ]);
@@ -143,6 +143,7 @@ export default async function ChapterLinksClientPage({
     storefront_domain: (clientRow as { storefront_domain: string | null } | null)?.storefront_domain ?? null,
     redirect_host: (clientRow as { redirect_host: string | null } | null)?.redirect_host ?? null,
     links_host: (clientRow as { links_host: string | null } | null)?.links_host ?? null,
+    links_hosts: (clientRow as { links_hosts: string[] | null } | null)?.links_hosts ?? null,
   };
   const origin = process.env.NEXT_PUBLIC_APP_URL || "https://ads4good.com";
   const effectiveHost = client.links_host || client.redirect_host || origin;

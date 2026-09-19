@@ -144,12 +144,16 @@ export async function GET(
   // that misses every rule + has no ?to= param falls back to it. Per-slug
   // catch-alls still override when the slug's specific fallback should differ
   // from the client-wide default.
+  // Hoisted: the handoff decision below needs this too, and it is a 5-min
+  // in-process cache, so one lookup serves both rather than two call sites
+  // racing the same row.
+  const clientConfig = await fetchClientRedirectConfig(client_key);
+
   if (!destination || !isValidDestination(destination)) {
     const fallback = query.to;
     if (fallback && isValidDestination(fallback)) {
       destination = fallback;
     } else {
-      const clientConfig = await fetchClientRedirectConfig(client_key);
       if (
         clientConfig.default_redirect_destination &&
         isValidDestination(clientConfig.default_redirect_destination)
@@ -225,11 +229,15 @@ export async function GET(
   // back to the redirect's identity at landing. Skipped under opt-out AND
   // when the click is flagged suspected-scanner (so we don't leak a synthetic
   // identity into the destination URL that the scanner then follows).
+  // Also gated per client: tenants whose links point off-site to third parties
+  // (advertisers, affiliates) get no value from the handoff — there is no
+  // Chapter pixel at the destination to consume it — so we don't ride into
+  // someone else's URL with it.
   destination = appendIdentityHandoff(
     destination,
     identity.identityKey,
     identity.journeyId,
-    consent.allowCollection && !scannerSuspected,
+    consent.allowCollection && !scannerSuspected && clientConfig.identity_handoff_enabled,
   );
 
   // Solution 2: stitch the redirect's identity to a known email_sha256 at
@@ -291,6 +299,9 @@ export async function GET(
         slug,
         destination,
         matched_rule_id: matchedRuleId,
+        // Which 1P host served this click. `hostname` is declared further down
+        // (it is needed for cookie apex), so read it off the request directly.
+        link_host: req.nextUrl.hostname,
         query,
         referrer,
         geo,
