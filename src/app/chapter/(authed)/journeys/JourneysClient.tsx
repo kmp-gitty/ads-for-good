@@ -245,11 +245,28 @@ export default function JourneysClient({
     startSearch(async () => {
       const res = await resolveIdentitySearch(clientKey, term);
       setSearchResult(res);
-      // Set ?searched=1 alongside ?identity so the left list FILTERS to this
-      // customer (a plain list click sets only ?identity → browsing stays).
-      if (res.status === "found" || res.status === "no_journeys") updateParams({ identity: res.canonical, searched: "1" });
+      // NOTE: navigation deliberately does NOT happen here. See the effect
+      // below — router.replace()+refresh() inside this transition leaves it
+      // pending forever and the navigation never commits.
     });
   }
+
+  // Navigate on a hit OUTSIDE the search transition. Doing this inside
+  // startSearch() (after the await) kept isSearching pinned true and the
+  // ?identity/?searched params never reached the server, so the detail panel
+  // silently kept rendering listRows[0] — the wrong customer. Row clicks and
+  // sort changes were unaffected because they call updateParam() straight from
+  // an event handler, which is why only search showed the bug.
+  // Sets ?searched=1 alongside ?identity so the left list FILTERS to this
+  // customer (a plain list click sets only ?identity → browsing stays).
+  useEffect(() => {
+    if (!searchResult) return;
+    if (searchResult.status !== "found" && searchResult.status !== "no_journeys") return;
+    if (!searchResult.canonical) return;
+    if (searchResult.canonical === selectedIdentity && sp.get("searched") === "1") return;
+    updateParams({ identity: searchResult.canonical, searched: "1" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchResult]);
   // Clear the search → back to the top-customers browse list.
   function clearSearch() {
     setSearchTerm("");
