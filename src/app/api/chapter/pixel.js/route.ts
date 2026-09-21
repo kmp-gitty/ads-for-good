@@ -312,6 +312,11 @@ function getOrCreateIdWithCookieFallback(storageKey, cookieName) {
     }
 
     function send(eventName, props) {
+    // W0c: stamp the event time HERE, at occurrence, not at transmission.
+    // This value survives into the localStorage buffer, so a circuit-breaker
+    // replay after an outage carries the ORIGINAL time rather than replay time
+    // (the latent inaccuracy W0 exists to fix). The server clamps it.
+    var eventTs = new Date().toISOString();
     if (!clientKey) return;
     // Opted out (explicit opt_out cookie OR GPC without explicit opt_in): fire
     // nothing AND mint no identifiers. Server also enforces this, but stopping
@@ -339,6 +344,7 @@ if (!anonId) {
           : String(Date.now()) + "_" + String(Math.random()).slice(2),
         client_key: clientKey,
         event_name: eventName,
+        event_ts: eventTs,
         internal_ignore: shouldIgnoreChapterTracking(),
         journey_id: journeyId,
         anonymous_id: anonId,

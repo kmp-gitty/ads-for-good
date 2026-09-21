@@ -242,6 +242,36 @@ export async function POST(req: NextRequest) {
 
   const nowIso = new Date().toISOString();
 
+  // ---------------------------------------------------------------------------
+  // W0c: honour the pixel's per-event client timestamp, with a sanity clamp.
+  //
+  //   ts          = when the event HAPPENED   (client-controlled from here on)
+  //   ingested_at = when Chapter RECEIVED it  (DB DEFAULT now(), untouched)
+  //
+  // This is only safe because W0b already moved the attribution chain's
+  // new-work DETECTION onto ingested_at. Do not repoint detection back at ts.
+  //
+  // Client clocks are skewed, mis-zoned, or tampered with, so a value outside a
+  // plausible window FALLS BACK to receipt time rather than fabricating a
+  // clamped one — a clamped value would silently inject a wrong timestamp into
+  // a real attribution window, which is worse than being honestly late.
+  // The past bound is generous because the pixel's localStorage buffer can
+  // legitimately replay an event from a much earlier visit.
+  // ---------------------------------------------------------------------------
+  const CLIENT_TS_MAX_FUTURE_MS = 5 * 60 * 1000; // 5 min of clock skew ahead
+  const CLIENT_TS_MAX_PAST_MS = 7 * 24 * 60 * 60 * 1000; // 7 d of buffered replay
+  const event_ts = (() => {
+    const raw = payload?.event_ts;
+    if (!raw) return nowIso; // pre-W0c pixel, or a non-pixel caller
+    const parsed = Date.parse(String(raw));
+    if (!Number.isFinite(parsed)) return nowIso;
+    const skew = parsed - Date.now();
+    if (skew > CLIENT_TS_MAX_FUTURE_MS || skew < -CLIENT_TS_MAX_PAST_MS) {
+      return nowIso;
+    }
+    return new Date(parsed).toISOString();
+  })();
+
   try {
     await withClient(client_key, async (tx) => {
       // Journey upsert. ON CONFLICT DO UPDATE preserves first_seen/first_touch via
@@ -314,7 +344,7 @@ export async function POST(req: NextRequest) {
           utm, partner_ids, props,
           consent_status, consent_mode, consent_ts
         ) VALUES (
-          ${nowIso}, ${client_key}, ${journey_id}, ${identity_key || null}, ${event_name},
+          ${event_ts}, ${client_key}, ${journey_id}, ${identity_key || null}, ${event_name},
           ${page_url}, ${page_path}, ${referrer},
           ${utmParam}::jsonb, ${partnerParam}::jsonb, ${propsParam}::jsonb,
           ${effective_consent}, ${effective_mode}, ${effective_consent_ts}
