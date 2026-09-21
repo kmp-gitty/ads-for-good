@@ -390,6 +390,12 @@ if (!anonId) {
 
       for (var i = 0; i < events.length; i++) {
         (function (bufferedBody) {
+          // W0c: mark this as a REPLAY so the server can tell a legitimately
+          // old buffered event apart from a device with a badly wrong clock.
+          // Only replays get the generous past window; fresh events get a tight
+          // one. Set here (not at buffer time) because an event only becomes a
+          // replay by being re-sent.
+          bufferedBody._replay = true;
           fetch(collectUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },

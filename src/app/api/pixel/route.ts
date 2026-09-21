@@ -258,15 +258,27 @@ export async function POST(req: NextRequest) {
   // The past bound is generous because the pixel's localStorage buffer can
   // legitimately replay an event from a much earlier visit.
   // ---------------------------------------------------------------------------
-  const CLIENT_TS_MAX_FUTURE_MS = 5 * 60 * 1000; // 5 min of clock skew ahead
-  const CLIENT_TS_MAX_PAST_MS = 7 * 24 * 60 * 60 * 1000; // 7 d of buffered replay
+  // A fresh event is transmitted immediately, so it can only be seconds old —
+  // anything older is a wrong clock, not a real delay. A REPLAY from the
+  // localStorage buffer can legitimately be days old. The two are
+  // indistinguishable server-side, so the PIXEL tells us which it is
+  // (`_replay`), and only replays get the generous past window. This keeps a
+  // badly-skewed device clock from silently backdating live events into an
+  // earlier attribution window.
+  const CLIENT_TS_MAX_FUTURE_MS = 5 * 60 * 1000; // clock skew ahead, both cases
+  const CLIENT_TS_MAX_PAST_FRESH_MS = 5 * 60 * 1000; // live event: tight
+  const CLIENT_TS_MAX_PAST_REPLAY_MS = 7 * 24 * 60 * 60 * 1000; // buffered: generous
+  const is_replay = payload?._replay === true;
   const event_ts = (() => {
     const raw = payload?.event_ts;
     if (!raw) return nowIso; // pre-W0c pixel, or a non-pixel caller
     const parsed = Date.parse(String(raw));
     if (!Number.isFinite(parsed)) return nowIso;
     const skew = parsed - Date.now();
-    if (skew > CLIENT_TS_MAX_FUTURE_MS || skew < -CLIENT_TS_MAX_PAST_MS) {
+    const maxPast = is_replay
+      ? CLIENT_TS_MAX_PAST_REPLAY_MS
+      : CLIENT_TS_MAX_PAST_FRESH_MS;
+    if (skew > CLIENT_TS_MAX_FUTURE_MS || skew < -maxPast) {
       return nowIso;
     }
     return new Date(parsed).toISOString();
