@@ -53,14 +53,30 @@ function rateLimited(key: string): boolean {
 }
 
 const KNOWN_PREFIXES = /^(email_sha256:|phone_sha256:|shopify_customer_id:|square_customer_id:|anonymous_id:)/;
+const BARE_SHA256 = /^[0-9a-f]{64}$/i;
 
 // Auto-detect the search kind and form the candidate identity_key (hashed here,
 // via the shared util). Ambiguous plain tokens are tried as an order id first,
 // then as a raw identity key.
-function detect(term: string): { identity_key?: string; order_id?: string; kind: string } {
+function detect(term: string): {
+  identity_key?: string;
+  alt_identity_key?: string;
+  order_id?: string;
+  kind: string;
+} {
   const t = term.trim();
   if (t.includes("@")) return { identity_key: "email_sha256:" + hashEmail(t), kind: "email" };
   if (KNOWN_PREFIXES.test(t)) return { identity_key: t, kind: "identity_key" };
+  // A bare 64-hex token is an ALREADY-hashed identifier (operators copy these
+  // straight off the truncated hashes shown elsewhere in the dashboard). Do NOT
+  // re-hash it — prefix it. Email is the common case; phone is the fallback.
+  if (BARE_SHA256.test(t)) {
+    return {
+      identity_key: "email_sha256:" + t.toLowerCase(),
+      alt_identity_key: "phone_sha256:" + t.toLowerCase(),
+      kind: "sha256",
+    };
+  }
   if (/^[+\d][\d\s\-().]{6,}$/.test(t)) {
     const ph = hashPhone(t);
     if (ph) return { identity_key: "phone_sha256:" + ph, kind: "phone" };
@@ -112,6 +128,7 @@ export async function resolveIdentitySearch(
 
   let row = d.kind === "order_id_or_key" ? await call({ p_order_id: d.order_id }) : null;
   if (!row) row = await call({ p_identity_key: d.identity_key });
+  if (!row && d.alt_identity_key) row = await call({ p_identity_key: d.alt_identity_key });
 
   // Audit the attempt — who / which client / when, never the plaintext term.
   await logPiiView({
