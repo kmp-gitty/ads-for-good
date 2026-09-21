@@ -43,6 +43,10 @@ const PER_CLIENT_SNAPSHOTS = [
 // Each entry pre-aggregates the RPC's default-arg result into a jsonb blob.
 // Page wrappers do snapshot-first lookup; non-default-arg calls fall back
 // to the live RPC.
+// Windows the Customer Journeys range picker offers. Keep in sync with
+// JOURNEYS_SNAPSHOT_WINDOWS in dashboard-rpc.ts.
+const JOURNEYS_SNAPSHOT_WINDOWS = [7, 14, 30, 90] as const;
+
 const DASHBOARD_RPC_SNAPSHOTS = [
   {
     snapshot: "incrementality_snapshot_v1 (90d subscriber)",
@@ -125,46 +129,54 @@ const DASHBOARD_RPC_SNAPSHOTS = [
         built_at = now()
     `,
   },
-  {
-    snapshot: "journeys_overview_list_snapshot_v1 (30d, default filters)",
-    sqlTemplate: `
-      INSERT INTO chapter_reporting.journeys_overview_list_snapshot_v1
-        (client_key, window_days, rows, snapshot_ts_hi)
-      SELECT $1::text, 30,
-             COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb), now()
-      FROM chapter_reporting.journeys_overview_list(
-        $1::text,
-        (now() - interval '30 days')::timestamptz,
-        now(),
-        NULL,
-        NULL,
-        50
-      ) t
-      ON CONFLICT (client_key, window_days) DO UPDATE SET
-        rows = EXCLUDED.rows,
-        snapshot_ts_hi = EXCLUDED.snapshot_ts_hi,
-        built_at = now()
-    `,
-  },
-  {
-    snapshot: "journeys_overview_stats_snapshot_v1 (30d, default filters)",
-    sqlTemplate: `
-      INSERT INTO chapter_reporting.journeys_overview_stats_snapshot_v1
-        (client_key, window_days, stats, snapshot_ts_hi)
-      SELECT $1::text, 30, to_jsonb(t), now()
-      FROM chapter_reporting.journeys_overview_stats(
-        $1::text,
-        (now() - interval '30 days')::timestamptz,
-        now(),
-        NULL,
-        NULL
-      ) t
-      ON CONFLICT (client_key, window_days) DO UPDATE SET
-        stats = EXCLUDED.stats,
-        snapshot_ts_hi = EXCLUDED.snapshot_ts_hi,
-        built_at = now()
-    `,
-  },
+  // Customer Journeys: build EVERY window the dashboard's range picker offers,
+  // not just 30d. Previously only 30d was snapshotted, so switching to 7/14/90d
+  // fell through to the live RPC, which blew PostgREST's 8s timeout and rendered
+  // the page blank. Affordable now that the live RPCs are ~30s instead of 281s
+  // (the JOIN human_ids -> EXISTS rewrite; the JOIN's cardinality misestimate
+  // was driving a 25M-row merge join).
+  ...JOURNEYS_SNAPSHOT_WINDOWS.flatMap((days) => [
+    {
+      snapshot: `journeys_overview_list_snapshot_v1 (${days}d, default filters)`,
+      sqlTemplate: `
+        INSERT INTO chapter_reporting.journeys_overview_list_snapshot_v1
+          (client_key, window_days, rows, snapshot_ts_hi)
+        SELECT $1::text, ${days},
+               COALESCE(jsonb_agg(row_to_json(t)), '[]'::jsonb), now()
+        FROM chapter_reporting.journeys_overview_list(
+          $1::text,
+          (now() - interval '${days} days')::timestamptz,
+          now(),
+          NULL,
+          NULL,
+          50
+        ) t
+        ON CONFLICT (client_key, window_days) DO UPDATE SET
+          rows = EXCLUDED.rows,
+          snapshot_ts_hi = EXCLUDED.snapshot_ts_hi,
+          built_at = now()
+      `,
+    },
+    {
+      snapshot: `journeys_overview_stats_snapshot_v1 (${days}d, default filters)`,
+      sqlTemplate: `
+        INSERT INTO chapter_reporting.journeys_overview_stats_snapshot_v1
+          (client_key, window_days, stats, snapshot_ts_hi)
+        SELECT $1::text, ${days}, to_jsonb(t), now()
+        FROM chapter_reporting.journeys_overview_stats(
+          $1::text,
+          (now() - interval '${days} days')::timestamptz,
+          now(),
+          NULL,
+          NULL
+        ) t
+        ON CONFLICT (client_key, window_days) DO UPDATE SET
+          stats = EXCLUDED.stats,
+          snapshot_ts_hi = EXCLUDED.snapshot_ts_hi,
+          built_at = now()
+      `,
+    },
+  ]),
 ];
 
 // Global (non per-client) snapshot loaders.

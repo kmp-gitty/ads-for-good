@@ -409,16 +409,30 @@ export type JourneysListRow = {
 // Snapshot-first (Sprint-9 pattern): journeys_overview_stats can run ~35s cold
 // → blows the 8s PostgREST timeout on the replica → the summary card went "—".
 // Serve the default-window snapshot; non-default windows fall back to live.
+// Windows the Customer Journeys snapshot is built for. Keep in sync with
+// JOURNEYS_SNAPSHOT_WINDOWS in the refresh-derived-snapshots cron.
+const JOURNEYS_SNAPSHOT_WINDOWS = [7, 14, 30, 90] as const;
+
+// Resolve the args to a snapshotted window, or null if none matches (custom
+// range / stale end_ts) -> caller falls back to the live RPC.
+function matchedJourneysWindow(args: { p_start_ts: string; p_end_ts: string }): number | null {
+  for (const d of JOURNEYS_SNAPSHOT_WINDOWS) {
+    if (matchesDefaultWindow(args, d)) return d;
+  }
+  return null;
+}
+
 async function journeysStatsSnapshotLookup(args: JourneysFilterArgs): Promise<JourneysStatsRow[] | null> {
   if (args.p_action != null) return null;
   if (args.p_outcome != null) return null;
-  if (!matchesDefaultWindow(args, 30)) return null;
+  const win = matchedJourneysWindow(args);
+  if (win === null) return null;
   const r = await supabasePrimary
     .schema("chapter_reporting")
     .from("journeys_overview_stats_snapshot_v1")
     .select("stats")
     .eq("client_key", args.p_client_key)
-    .eq("window_days", 30)
+    .eq("window_days", win)
     .maybeSingle();
   if (r.error || !r.data) return null;
   return [r.data.stats as JourneysStatsRow];
@@ -451,14 +465,15 @@ async function journeysListSnapshotLookup(args: JourneysFilterArgs): Promise<Jou
   if (args.p_outcome != null) return null;
   if (args.p_limit !== undefined && args.p_limit !== 50) return null;
   if (args.p_sort != null && args.p_sort !== "lifetime_value") return null;  // snapshot is default-sort only
-  if (!matchesDefaultWindow(args, 30)) return null;
+  const win = matchedJourneysWindow(args);
+  if (win === null) return null;
 
   const r = await supabasePrimary
     .schema("chapter_reporting")
     .from("journeys_overview_list_snapshot_v1")
     .select("rows")
     .eq("client_key", args.p_client_key)
-    .eq("window_days", 30)
+    .eq("window_days", win)
     .maybeSingle();
   if (r.error || !r.data) return null;
   return (r.data.rows as JourneysListRow[]) ?? [];
