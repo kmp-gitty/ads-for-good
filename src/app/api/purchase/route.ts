@@ -397,6 +397,73 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Phase 3.6 (Sep 21 2026) — link the platform customer_id to the strongest
+  // deterministic key.
+  //
+  // THE BUG THIS FIXES: Phase 3's key precedence is email -> phone ->
+  // customer_id, but chapter_model.refresh_lifecycle_chapters_incremental
+  // resolves identity as email -> customer_id and NEVER considers phone. So a
+  // Square booking whose customer has a phone but NO email wrote canon under
+  // phone_sha256: while lifecycle looked up customer_id -> miss -> the booking
+  // never became a chapter and fell out of attribution entirely.
+  //
+  // It looked "intermittent" because it tracks whether Square's Customers API
+  // happened to return a phone. Measured on NSC: 13 of 17 live-webhook orphans
+  // had a phone key written at the moment of the booking. (The other 72
+  // historical orphans came from the July backfill script, which wrote
+  // purchase_events directly and never ran Phase 3 at all.)
+  //
+  // Aliasing rather than writing a second self-canonical row is deliberate: it
+  // both creates the canon entry lifecycle needs AND merges the customer_id
+  // into the same canonical as the email/phone, instead of stranding it as its
+  // own identity.
+  if (payload.customer_id) {
+    const customerKey = String(payload.customer_id).trim();
+    const strongestKey = emailHash
+      ? `email_sha256:${emailHash}`
+      : phoneHash
+        ? `phone_sha256:${phoneHash}`
+        : null;
+    // When neither email nor phone exists, Phase 3 already wrote customer_id
+    // as self-canonical, so there is nothing to link.
+    if (customerKey && strongestKey && customerKey !== strongestKey) {
+      const aliasTs = new Date().toISOString();
+      try {
+        await withClient(clientKey, async (tx) => {
+          await tx`
+            INSERT INTO chapter_identity.identity_aliases
+              (client_key, ts, from_identity_key, to_identity_key, confidence, is_deterministic, reason)
+            VALUES
+              (${clientKey}, ${aliasTs}, ${customerKey}, ${strongestKey}, 100, true, 'purchase_customer_id_link')
+            -- See identity_aliases fix note above (Phase 1) — 2-col conflict, last-wins.
+            ON CONFLICT (client_key, from_identity_key)
+            DO UPDATE SET
+              to_identity_key = EXCLUDED.to_identity_key,
+              ts = EXCLUDED.ts,
+              confidence = EXCLUDED.confidence,
+              is_deterministic = EXCLUDED.is_deterministic,
+              reason = EXCLUDED.reason
+          `;
+          // Defense in depth: trg_sync_canon_from_alias also fires.
+          try {
+            await tx`
+              INSERT INTO chapter_identity.identity_canon (client_key, identity_key, canonical_identity_key, updated_at)
+              VALUES (${clientKey}, ${customerKey}, ${strongestKey}, ${aliasTs})
+              ON CONFLICT (client_key, identity_key)
+              DO UPDATE SET
+                canonical_identity_key = EXCLUDED.canonical_identity_key,
+                updated_at = EXCLUDED.updated_at
+            `;
+          } catch (canonErr) {
+            console.error("identity_canon customer_id→deterministic upsert failed; trigger will still sync:", canonErr);
+          }
+        });
+      } catch (aliasErr) {
+        console.error("identity_aliases customer_id link failed:", aliasErr);
+      }
+    }
+  }
+
   // Phase 4 + 5: canon resolution lookup + purchase_events INSERT in one
   // transaction. These must succeed together — if the purchase insert fails,
   // we don't need the canon lookup result anymore.
