@@ -1,5 +1,24 @@
 import type { NextConfig } from "next";
 
+// 1P hosts attached to this Vercel project, each mapping to the site it fronts.
+// Single source of truth for the redirect rules in redirects() below — see the
+// comment there for why every one of these needs BOTH a root and a catch-all rule.
+//
+// American Community Journals is one tenant across five separately-branded
+// papers, so each host resolves to its OWN paper, never the flagship.
+// Not So Cavalier keeps the legacy "chapter." label because its Book Now links
+// on Lovable are immutable; every client onboarded since uses go./s.
+const CLIENT_1P_HOSTS = [
+  { host: 'go.philadelphia.today', home: 'https://philadelphia.today' },
+  { host: 'go.bucksco.today', home: 'https://bucksco.today' },
+  { host: 'go.montco.today', home: 'https://montco.today' },
+  { host: 'go.vista.today', home: 'https://vista.today' },
+  { host: 'go.delco.today', home: 'https://delco.today' },
+  { host: 'go.eosfabrics.com', home: 'https://eosfabrics.com' },
+  { host: 's.eosfabrics.com', home: 'https://eosfabrics.com' },
+  { host: 'chapter.notsocavalier.com', home: 'https://notsocavalier.com' },
+] as const;
+
 const nextConfig: NextConfig = {
   reactCompiler: true,
 
@@ -27,45 +46,52 @@ const nextConfig: NextConfig = {
       },
 
       // ---------------------------------------------------------------
-      // Bare 1P link/collect hosts → the client's own site.
+      // 1P link/collect hosts → the client's own site.
       //
-      // These subdomains are Vercel custom domains on THIS app, so any path
-      // that isn't handled elsewhere falls through to the normal app routes —
-      // and "/" matched the ads for Good marketing homepage. That served our
-      // agency site, HTTP 200, on the client's own domain, and disclosed the
-      // vendor relationship on their property rather than leaving that
-      // disclosure to them.
+      // These subdomains are Vercel custom domains on THIS app. Vercel serves
+      // EVERY route on EVERY attached domain, so without these rules the whole
+      // agency site answers on a client's branded host: "/" served the ads for
+      // Good homepage, "/for-businesses" served our marketing pages, and
+      // "/chapter/login" served the dashboard — HTTP 200, on their domain,
+      // disclosing the vendor relationship on their property rather than
+      // leaving that disclosure to them.
       //
-      // Scoped to source "/" ON PURPOSE — an exact path match, not a prefix:
-      //   - "/r/<client>/<slug>" must keep working (every wrapped link)
-      //   - "/api/*" is live pixel traffic on the collect hosts
-      // A wildcard here would break both.
+      // Both a root rule and a catch-all are generated per host from CLIENT_1P_HOSTS
+      // below, so adding a host can't update one list and miss the other.
       //
-      // permanent: false (307) — a 301 is cached by browsers ~forever, and
-      // these hosts may serve something else later. The entries above are
-      // permanent because they're genuine page moves; these are not.
+      // THE EXCLUSIONS ARE LOAD-BEARING. The catch-all must never swallow:
+      //   /r/*            every wrapped Chapter Link — the entire point of a go. host
+      //   /api/*          live pixel + collect traffic. NSC serves BOTH its redirects
+      //                   and its pixel from chapter.notsocavalier.com, so a blanket
+      //                   redirect here would silently kill that client's ingest.
+      //   /_next/*        app assets
+      //   /_vercel/*      Vercel analytics/insights endpoints
+      //   /.well-known/*  ACME + domain-verification challenges. Redirecting these
+      //                   risks breaking certificate renewal on a client's domain —
+      //                   an outage with no obvious cause. Cheap to exclude.
       //
-      // Note this only catches the bare root. "go.bucksco.today/typo" still
-      // returns the unbranded Next 404 — smaller exposure (needs a mistyped
-      // path, not just a stripped one) and not worth the /r/ + /api/ risk.
+      // permanent: false (307) — a 301 is cached by browsers ~forever, and these
+      // hosts may serve something else later. The page-move redirects above are
+      // permanent because they're genuine moves; these are not.
+      //
+      // NOTE — this covers paths that are not Chapter Links. It does NOT cover a
+      // Chapter Link with an unknown slug: "/r/acj_today/<typo>" still falls through
+      // the route's own chain (rule match → ?to= → client default → 404), and
+      // default_redirect_destination is per-CLIENT, so an ACJ miss lands on
+      // acj.today rather than the paper the reader was on. Making that per-HOST is
+      // an app-logic change in the redirect route, tracked separately.
       // ---------------------------------------------------------------
-
-      // American Community Journals — one tenant, five papers, each host
-      // resolving to its OWN paper (not the flagship).
-      { source: '/', has: [{ type: 'host', value: 'go.philadelphia.today' }], destination: 'https://philadelphia.today', permanent: false },
-      { source: '/', has: [{ type: 'host', value: 'go.bucksco.today' }],      destination: 'https://bucksco.today',      permanent: false },
-      { source: '/', has: [{ type: 'host', value: 'go.montco.today' }],       destination: 'https://montco.today',       permanent: false },
-      { source: '/', has: [{ type: 'host', value: 'go.vista.today' }],        destination: 'https://vista.today',        permanent: false },
-      { source: '/', has: [{ type: 'host', value: 'go.delco.today' }],        destination: 'https://delco.today',        permanent: false },
-
-      // EOS Fabrics — links host + collect host both leak the same way.
-      { source: '/', has: [{ type: 'host', value: 'go.eosfabrics.com' }], destination: 'https://eosfabrics.com', permanent: false },
-      { source: '/', has: [{ type: 'host', value: 's.eosfabrics.com' }],  destination: 'https://eosfabrics.com', permanent: false },
-
-      // Not So Cavalier — keeps the legacy "chapter." label (its Book Now
-      // links on Lovable are immutable), so the host name differs from the
-      // go./s. convention used for every client onboarded since.
-      { source: '/', has: [{ type: 'host', value: 'chapter.notsocavalier.com' }], destination: 'https://notsocavalier.com', permanent: false },
+      ...CLIENT_1P_HOSTS.flatMap(({ host, home }) => [
+        // Exact root.
+        { source: '/', has: [{ type: 'host' as const, value: host }], destination: home, permanent: false },
+        // Everything else except the load-bearing prefixes above.
+        {
+          source: '/:path((?!r/|api/|_next/|_vercel/|\\.well-known/).*)',
+          has: [{ type: 'host' as const, value: host }],
+          destination: home,
+          permanent: false,
+        },
+      ]),
     ];
   },
 };
