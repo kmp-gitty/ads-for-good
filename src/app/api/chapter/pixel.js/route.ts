@@ -382,6 +382,25 @@ if (!anonId) {
     function replayBufferedEvents() {
     try {
       if (!clientKey) return;
+      // Consent is re-checked HERE, not just at capture. A buffered event was
+      // captured while collection was allowed, but the visitor may have opted
+      // out since. An opt-out means stop — so DISCARD the pending events
+      // rather than shipping them on the next page load.
+      //
+      // This check must come BEFORE the circuit-breaker return below: if the
+      // circuit is open we bail early, and an opted-out visitor's buffer would
+      // otherwise sit in localStorage until the circuit closed.
+      //
+      // The server is a backstop but not a complete one. /api/pixel treats an
+      // opt_out on the journey row as sticky, so a replay is dropped once the
+      // opt-out reached the DB — but a consent banner that only writes the
+      // chapter_consent cookie without POSTing /api/consent (NSC's bootstrap
+      // does exactly this, deliberately, to avoid phantom journeys) never
+      // informs the server. The client is the only layer that sees that case.
+      if (chapterCollectionBlocked()) {
+        writeBuffer(clientKey, []);
+        return;
+      }
       // Don't replay while backing off — one shared cooldown across pages.
       if (chapterCircuitOpen()) return;
 
