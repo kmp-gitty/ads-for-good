@@ -115,6 +115,9 @@ export type PromptFormInput = {
   // Stored inside targeting_jsonb.page_match. v2 will support multiple rules.
   page_match_mode?: "starts_with" | "contains" | "ends_with" | "exact" | "not_contains";
   page_match_value?: string;
+  // The row's CURRENT targeting_jsonb, passed straight through on edit so keys
+  // this form knows nothing about survive a save. See buildTargetingJsonb.
+  existing_targeting_jsonb?: Record<string, unknown> | null;
   // Appearance: optional hex color for the primary CTA button. NULL = default orange.
   theme_button_bg_color?: string | null;
   // Scheduling: optional shut-off timestamp. Server filters at fetch time.
@@ -177,15 +180,25 @@ function validate(input: PromptFormInput): string | null {
 
 function buildTargetingJsonb(input: PromptFormInput): Record<string, unknown> | null {
   // Page-URL gating applies to ALL preset types (unlike composable-only columns).
-  // Empty value → no gating; return null so we don't write a stray row.
+  //
+  // MERGE, never reconstruct. This form only knows about `page_match`, but the
+  // column also carries keys written elsewhere — `cart_token_in` today, and the
+  // planned `audience`. Rebuilding the object from the two form inputs silently
+  // destroyed those on ANY save, even a no-op one: the prompt kept working but
+  // quietly lost its targeting and degraded to "fire for everyone matching
+  // page_match", which is the exact outcome that gating exists to prevent.
+  const merged: Record<string, unknown> = { ...(input.existing_targeting_jsonb ?? {}) };
+
   const value = (input.page_match_value ?? "").trim();
-  if (!value || !input.page_match_mode) return null;
-  return {
-    page_match: {
-      mode: input.page_match_mode,
-      value,
-    },
-  };
+  if (!value || !input.page_match_mode) {
+    // Page gating cleared — drop only that key, keep everything else.
+    delete merged.page_match;
+  } else {
+    merged.page_match = { mode: input.page_match_mode, value };
+  }
+
+  // Nothing left → null, so we don't persist a stray empty object.
+  return Object.keys(merged).length > 0 ? merged : null;
 }
 
 function shapePayload(input: PromptFormInput) {

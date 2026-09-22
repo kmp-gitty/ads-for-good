@@ -102,12 +102,15 @@ export type ExistingPrompt = {
     default_checked: boolean;
     required: boolean;
   } | null;
-  targeting_jsonb: {
+  // Index signature is deliberate: this column also carries keys this form does
+  // not model (cart_token_in today, audience next). They must round-trip, not be
+  // typed away — see buildTargetingJsonb in _actions.ts.
+  targeting_jsonb: ({
     page_match?: {
       mode: "starts_with" | "contains" | "ends_with" | "exact" | "not_contains";
       value: string;
     };
-  } | null;
+  } & Record<string, unknown>) | null;
   theme_button_bg_color: string | null;
   expires_at: string | null;
 };
@@ -394,6 +397,9 @@ export default function PromptForm({
       trigger_pages: triggerPages,
       page_match_mode: pageMatchMode,
       page_match_value: pageMatchValue,
+      // Pass the row's current targeting through untouched so keys this form
+      // doesn't render (cart_token_in, future audience) survive the save.
+      existing_targeting_jsonb: prompt?.targeting_jsonb ?? null,
       theme_button_bg_color: themeButtonColor || null,
       // Convert local datetime-local input value → UTC ISO for DB storage.
       // Empty input → null (no expiration).
