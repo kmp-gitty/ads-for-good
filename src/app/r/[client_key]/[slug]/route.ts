@@ -21,9 +21,9 @@
 //      slug declares it needs them — see requiredContext() in conditions.ts.
 //      Measured Sep 2026: they were ~2-3 serial cross-region round trips on
 //      every click, for conditions that did not exist on any enabled rule.
-//   2. Run compute next to the data. preferredRegion below pins this route to
-//      Oregon alongside Supabase (us-west-2). The project default is iad1
-//      (Virginia), which put ~150-300ms of round-trip on every DB call.
+//   2. This route deliberately does NOT run next to the database, and that is
+//      the opposite of the rest of the project — see the region note below
+//      rule 4. It only holds while rule 1 holds.
 //   3. Fetch independent things together, not in sequence. PHASE 1 below is one
 //      Promise.all; anything added to this route that doesn't depend on the
 //      rule list belongs in it, NOT as a fresh `await`.
@@ -66,22 +66,28 @@ import { logAuthAttempt } from "@/app/lib/audit/auth";
 
 export const dynamic = "force-dynamic";
 
-// Pin to Portland — the closest Vercel region to Supabase's us-west-2 (Oregon).
+// REGION — this route is pinned to iad1 (Virginia) in vercel.json, while every
+// other function in the project runs in pdx1 (Oregon) next to Supabase.
+// That inversion is deliberate and it is conditional:
 //
-// The project default is iad1 (Virginia), which meant every DB call on this
-// blocking path crossed the continent. Measured Sep 22 2026 on the live route:
-// server time (TTFB minus TLS) was ~0.43s warm / ~2.1s cold, against a ~0.11s
-// pure-compute floor — the gap was almost entirely cross-region round trips.
+//   Supabase is us-west-2, so almost everything here benefits from running in
+//   Oregon — one cross-country round trip measured ~150-300ms (/api/health,
+//   which is a bare `select 1`, took 200-410ms from iad1).
 //
-// Trade-off, and it is a real one: an east-coast reader now pays ~50ms MORE to
-// reach the function, and saves ~150-300ms per DB round trip once there. That
-// is a clear win while any blocking DB call remains, and roughly neutral on the
-// fully-cached path. If Chapter's readership ever skews hard east AND this
-// route is provably doing zero blocking DB work, re-measure before assuming
-// this still helps.
+//   This route is the exception because of rule 1 above: on a warm lambda with
+//   catch-all rules it makes ZERO blocking DB calls, so it has no round trips
+//   to shorten — while its readers are overwhelmingly east-coast (measured
+//   Sep 2026: acj_today 100% east, not_so_cavalier ~98% east; both are
+//   Philadelphia-area). Moving it west would cost every click ~50-70ms of
+//   user->function latency and save nothing.
 //
-// Reverting is one line — no data or schema depends on it.
-export const preferredRegion = "pdx1";
+// IF YOU ADD A BLOCKING DB CALL BACK TO THE PRE-302 PATH, THIS PIN BECOMES
+// WRONG and nothing will tell you. Re-measure, and consider dropping the
+// vercel.json override so the route inherits pdx1 like everything else.
+//
+// (An earlier attempt used a `preferredRegion` route-segment export here. It is
+// inert on the Node runtime — verified by 10 minutes of polling after deploy,
+// region never left iad1. Region for Node functions comes from vercel.json.)
 
 export async function GET(
   req: NextRequest,
