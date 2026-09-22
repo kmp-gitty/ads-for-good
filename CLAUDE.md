@@ -502,7 +502,7 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 #### Volume, now derived rather than guessed
 - The old "~170 links/advertiser" instinct has a real derivation: **newsletter is the entire driver.** 5 properties × 4 banner positions × 12 sends/month = **240**. Display (5 × 3 slots = 15) and article (5 × 2 = 10) are rounding errors beside it.
 - **Without enumerating sends it's 20** (5 × 4), reused across every send. **That gap IS the Echobox decision** — if a merge tag can carry the issue identifier in the href, ACJ types `bucksco_weekly` once and stays at 20 with the same reporting granularity and a twelfth of the placement labour. The builder is agnostic: paste 1 value or 12, same code.
-- **Echobox test scheduled Tuesday Sep 22**, and it is TWO tests, not one: (a) can a merge tag carry the issue id, (b) **does Echobox rewrite links it finds** — if it appends its own params to an href already carrying an encoded `?to=`, that is the same failure class as the `{q:to}` bug and it hits newsletter links specifically. (b) is a launch blocker; (a) is a convenience.
+- **Echobox test was scheduled Tuesday Sep 22 — RESULT STILL OUTSTANDING as of Sep 22 late evening; chase it** (see the ASK THE CLIENT block in Priority 1). It is TWO tests, not one: (a) can a merge tag carry the issue id, (b) **does Echobox rewrite links it finds** — if it appends its own params to an href already carrying an encoded `?to=`, that is the same failure class as the `{q:to}` bug and it hits newsletter links specifically. (b) is a launch blocker; (a) is a convenience.
 
 #### 🐞 RSC BOUNDARY BUG — took the whole page down, and the lesson generalises
 - `/internal/chapter-links/[clientKey]` threw a server-side exception on **every tab**, not just the new one.
@@ -3401,6 +3401,18 @@ Remaining billing/usage build order (from [docs/chapter-billing-usage-handoff.md
 7. Trailing 2–3 month billing window rule.
 8. Codify fair-use clause + "real customer journey = human_likely" in contract templates.
 9. Consolidate Vercel/Supabase billing onto one business entity.
+
+### ☎️ ASK THE CLIENT — ACJ Echobox link-rewriting (OPEN, launch blocker, test was due Sep 22)
+
+**Operator action, not a build.** The test was scheduled for **Tuesday Sep 22** — chase ACJ for the result.
+
+**It is TWO questions, and only one of them is a blocker:**
+- **(b) Does Echobox rewrite links it finds?** ⛔ **LAUNCH BLOCKER.** If it appends its own query/fragment params to an href that already carries an encoded `?to=`, that is the **same failure class as the `{q:to}` corruption bug** — and it hits newsletter links specifically, which is ACJ's highest-volume placement (12 sends/month × 5 papers × 4 positions = 240 of the ~265 links). Echobox's own docs say it "can automatically add query and fragment parameters to links," so this is a real risk, not a hypothetical.
+- **(a) Can a merge tag carry the issue id inside the href?** Convenience, not a blocker. It is the difference between ACJ maintaining **20 links** (type `bucksco_weekly` once) and **240** (one per send) for the same reporting granularity — a twelfth of the placement labour. The matrix builder is agnostic either way: paste 1 value or 12, same code.
+
+**How they test it:** draft a newsletter containing one wrapped Chapter Link → send a test to themselves → open in Gmail → **"Show original"** → read the raw href and compare it to what was pasted. A step-by-step client-facing procedure was already written for them (Sep 18 session).
+
+**What it gates:** ACJ launch, and therefore the ACJ test-row purge (all 61 rows — see the purge scope note below). Do not purge until the Echobox answer is in, because a rewrite finding means more live link testing.
 
 ### 🔴 Priority 1 — Active build plan (sequenced June 9, 2026)
 
