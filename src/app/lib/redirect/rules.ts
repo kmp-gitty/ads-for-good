@@ -81,6 +81,17 @@ export function clearRulesCache(client_key?: string, slug?: string): void {
 // window. Same pattern as fetchRules.
 export type ClientRedirectConfig = {
   default_redirect_destination: string | null;
+  // Per-HOST override of the above, keyed by BARE hostname (no scheme), e.g.
+  // { "go.bucksco.today": "https://bucksco.today" }. Only multi-property
+  // tenants need it: ACJ is ONE client across five separately-branded papers,
+  // so a malformed link on go.bucksco.today should land on bucksco.today, not
+  // the corporate parent the per-client default points at. Null for every
+  // single-property client, which keeps their chain byte-identical.
+  //
+  // Sibling: CLIENT_1P_HOSTS in next.config.ts holds the same host→site pairs
+  // for ACJ, but governs NON-Chapter-Link paths at build time. See the comment
+  // there for why the two are kept separate rather than merged.
+  default_redirect_destinations: Record<string, string> | null;
   // False = do NOT append ?chid/?jid to the destination. For tenants whose
   // links point off-site (advertisers, affiliates) the params do nothing —
   // there is no Chapter pixel there to consume them — so they just ride along
@@ -91,6 +102,56 @@ export type ClientRedirectConfig = {
 
 type ClientConfigEntry = { config: ClientRedirectConfig; fetchedAt: number };
 const clientConfigCache = new Map<string, ClientConfigEntry>();
+
+/**
+ * Strip scheme / port / trailing slash / case from a host key so the lookup is
+ * forgiving of how an operator typed it.
+ *
+ * This is NOT cosmetic. `chapter_config.clients.links_hosts` stores hosts WITH
+ * the scheme ("https://go.bucksco.today"), so the obvious thing for an operator
+ * to do is copy one of those in as a key here — where it would then never match
+ * `req.nextUrl.hostname`, which is bare. Normalizing on read means both forms
+ * resolve, and the failure mode of a typo is the per-client default (the
+ * previous behavior), never a 404.
+ */
+function normalizeHostKey(host: string): string {
+  return host
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, "") // scheme
+    .replace(/\/.*$/, "")                    // path
+    .replace(/:\d+$/, "");                   // port
+}
+
+function normalizeHostDefaults(
+  raw: Record<string, string> | null,
+): Record<string, string> | null {
+  if (!raw || typeof raw !== "object") return null;
+  const out: Record<string, string> = {};
+  for (const [host, dest] of Object.entries(raw)) {
+    if (typeof dest !== "string" || !dest.trim()) continue;
+    const key = normalizeHostKey(host);
+    if (key) out[key] = dest.trim();
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+/**
+ * The per-host fallback destination for the host this request arrived on, or
+ * null when the client has no per-host map (the single-property case) or the
+ * host is not in it.
+ *
+ * Reads the ALREADY-FETCHED client config — it does not touch the database, so
+ * adding this tier to the fallback chain costs zero extra round trips on the
+ * warm redirect path.
+ */
+export function resolveHostDefaultDestination(
+  config: ClientRedirectConfig,
+  hostname: string | null | undefined,
+): string | null {
+  if (!config.default_redirect_destinations || !hostname) return null;
+  return config.default_redirect_destinations[normalizeHostKey(hostname)] ?? null;
+}
 
 export async function fetchClientRedirectConfig(
   client_key: string,
@@ -104,7 +165,7 @@ export async function fetchClientRedirectConfig(
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("clients")
-    .select("default_redirect_destination, identity_handoff_enabled")
+    .select("default_redirect_destination, default_redirect_destinations, identity_handoff_enabled")
     .eq("client_key", client_key)
     .maybeSingle();
 
@@ -112,15 +173,23 @@ export async function fetchClientRedirectConfig(
     console.error("[redirect-client-config] lookup failed:", error);
     // Fail to the historical behavior (handoff on) rather than silently
     // changing routing semantics because a config read blipped.
-    return { default_redirect_destination: null, identity_handoff_enabled: true };
+    return {
+      default_redirect_destination: null,
+      default_redirect_destinations: null,
+      identity_handoff_enabled: true,
+    };
   }
 
   const row = data as {
     default_redirect_destination: string | null;
+    default_redirect_destinations: Record<string, string> | null;
     identity_handoff_enabled: boolean | null;
   } | null;
   const config: ClientRedirectConfig = {
     default_redirect_destination: row?.default_redirect_destination ?? null,
+    default_redirect_destinations: normalizeHostDefaults(
+      row?.default_redirect_destinations ?? null,
+    ),
     identity_handoff_enabled: row?.identity_handoff_enabled ?? true,
   };
   clientConfigCache.set(client_key, { config, fetchedAt: now });

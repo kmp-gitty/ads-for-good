@@ -42,7 +42,7 @@
 //   - Rate limiting: handled at the Vercel edge level
 
 import { NextRequest, NextResponse, after } from "next/server";
-import { fetchRules, fetchAbExperiments, fetchClientRedirectConfig, incrementRuleHitCount } from "@/app/lib/redirect/rules";
+import { fetchRules, fetchAbExperiments, fetchClientRedirectConfig, resolveHostDefaultDestination, incrementRuleHitCount } from "@/app/lib/redirect/rules";
 import { resolveIdentity, applyIdentityCookies } from "@/app/lib/redirect/identity";
 import { applyEntryRelayCookie, hasInboundAttribution, pickClickId } from "@/app/lib/redirect/entry-relay";
 import { readEntryClick, fetchGadsConfig, recordGadsConversion } from "@/app/lib/redirect/gads-conversion";
@@ -214,7 +214,7 @@ export async function GET(
     }
   }
 
-  // Fallback chain: ?to= query param → client-level default → 404.
+  // Fallback chain: ?to= query param → per-HOST default → per-CLIENT default → 404.
   //
   // Client-level default (default_redirect_destination on chapter_config.clients)
   // is the safety net that prevents 404s on unmatched-rule paths. Set once per
@@ -222,22 +222,33 @@ export async function GET(
   // that misses every rule + has no ?to= param falls back to it. Per-slug
   // catch-alls still override when the slug's specific fallback should differ
   // from the client-wide default.
-  // clientConfig is resolved in PHASE 1 above (it feeds both this fallback
-  // chain and the ?chid= handoff gate further down).
+  //
+  // The per-HOST tier sits ABOVE it for multi-property tenants. ACJ is ONE
+  // client across five separately-branded papers, so a per-client default can
+  // only ever name one of them — in practice acj.today, the deliberately
+  // untracked corporate parent. A reader who mistypes a link on
+  // go.bucksco.today was reading bucksco.today; sending them to the parent is
+  // the wrong answer to the right question. default_redirect_destinations maps
+  // each serving host to its own paper.
+  //
+  // Both tiers read clientConfig, which is resolved in PHASE 1 above (it also
+  // feeds the ?chid= handoff gate further down) — so this tier adds ZERO extra
+  // DB round trips to the warm path.
   if (!destination || !isValidDestination(destination)) {
     const fallback = query.to;
+    const hostDefault = resolveHostDefaultDestination(clientConfig, req.nextUrl.hostname);
     if (fallback && isValidDestination(fallback)) {
       destination = fallback;
+    } else if (hostDefault && isValidDestination(hostDefault)) {
+      destination = hostDefault;
+    } else if (
+      clientConfig.default_redirect_destination &&
+      isValidDestination(clientConfig.default_redirect_destination)
+    ) {
+      destination = clientConfig.default_redirect_destination;
     } else {
-      if (
-        clientConfig.default_redirect_destination &&
-        isValidDestination(clientConfig.default_redirect_destination)
-      ) {
-        destination = clientConfig.default_redirect_destination;
-      } else {
-        console.warn(`[redirect] no destination for ${client_key}/${slug}; rules=${rules.length}`);
-        return new NextResponse("not_found", { status: 404 });
-      }
+      console.warn(`[redirect] no destination for ${client_key}/${slug}; rules=${rules.length}`);
+      return new NextResponse("not_found", { status: 404 });
     }
   }
 

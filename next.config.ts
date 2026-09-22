@@ -8,6 +8,16 @@ import type { NextConfig } from "next";
 // papers, so each host resolves to its OWN paper, never the flagship.
 // Not So Cavalier keeps the legacy "chapter." label because its Book Now links
 // on Lovable are immutable; every client onboarded since uses go./s.
+//
+// ⚠ SIBLING, DELIBERATELY NOT MERGED: chapter_config.clients.default_redirect_destinations
+// carries a host→paper map too, and for ACJ the values are identical. They are
+// kept separate because they answer different questions at different layers:
+// this list is BUILD-TIME and governs NON-Chapter-Link paths (it stops the
+// agency site answering on a client's domain); that column is RUNTIME,
+// operator-editable without a deploy, and governs a Chapter Link whose slug
+// matched no rule. Merging them would couple a redeploy to a routing tweak.
+// Adding a sixth paper means updating BOTH — the daily digest's "per-host
+// redirect fallback coverage" section detects it if the DB half is forgotten.
 const CLIENT_1P_HOSTS = [
   { host: 'go.philadelphia.today', home: 'https://philadelphia.today' },
   { host: 'go.bucksco.today', home: 'https://bucksco.today' },

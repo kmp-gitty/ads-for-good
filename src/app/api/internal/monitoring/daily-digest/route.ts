@@ -240,6 +240,12 @@ function shortStage(stage: string): string {
 // Read max(snapshot_ts) from each global snapshot table directly. These
 // aren't tracked per-client in _snapshot_runs (they're global) but they ARE
 // refreshed by the 04:00 UTC cron (Sprint 3 follow-on, June 11).
+type RedirectHostCoverage = {
+  client_key: string;
+  host_count: number;
+  missing: string[];
+};
+
 async function checkGlobalSnapshotStaleness(): Promise<GlobalSnapshotStaleness[]> {
   return Promise.all(
     GLOBAL_SNAPSHOTS.map(async (snap): Promise<GlobalSnapshotStaleness> => {
@@ -261,6 +267,52 @@ async function checkGlobalSnapshotStaleness(): Promise<GlobalSnapshotStaleness[]
       return { snapshot: snap.table, ok: true, max_ts: maxTs, gap_hours: gapHours };
     }),
   );
+}
+
+/**
+ * Per-HOST redirect fallback coverage for multi-property tenants.
+ *
+ * A tenant like ACJ serves ONE client_key from several 1P hosts, one per paper.
+ * `default_redirect_destination` is per-CLIENT, so it can only name one of them
+ * — a malformed link on any other paper sends the reader to that one. The
+ * `default_redirect_destinations` map fixes this per host, but nothing forces
+ * an operator adding a SIXTH paper to `links_hosts` to also add its fallback.
+ *
+ * That omission is SILENT: the reader still gets a 302 to a real page, the
+ * click still logs, every reporting surface looks healthy — they just land on
+ * the wrong property. This is the detector for exactly that drift.
+ *
+ * Single-host clients are skipped: the per-client default is the correct and
+ * sufficient answer for them, so flagging them would be pure noise.
+ */
+async function checkRedirectHostFallbackCoverage(): Promise<RedirectHostCoverage[]> {
+  const { data, error } = await supabase
+    .schema("chapter_config")
+    .from("clients")
+    .select("client_key, links_host, links_hosts, default_redirect_destinations");
+  if (error || !data) return [];
+
+  // Mirrors normalizeHostKey() in src/app/lib/redirect/rules.ts — links_hosts
+  // stores hosts WITH the scheme, the map is keyed bare.
+  const bare = (h: string) =>
+    h.trim().toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, "").replace(/\/.*$/, "").replace(/:\d+$/, "");
+
+  const out: RedirectHostCoverage[] = [];
+  for (const row of data as Array<{
+    client_key: string;
+    links_host: string | null;
+    links_hosts: string[] | null;
+    default_redirect_destinations: Record<string, string> | null;
+  }>) {
+    const hosts = Array.from(
+      new Set([...(row.links_hosts ?? []), ...(row.links_host ? [row.links_host] : [])].map(bare).filter(Boolean)),
+    );
+    if (hosts.length < 2) continue; // single-property — per-client default is correct
+    const covered = new Set(Object.keys(row.default_redirect_destinations ?? {}).map(bare));
+    const missing = hosts.filter((h) => !covered.has(h));
+    out.push({ client_key: row.client_key, host_count: hosts.length, missing });
+  }
+  return out;
 }
 
 async function checkSquareTokenHealth(): Promise<SquareAuthHealth[]> {
@@ -526,6 +578,26 @@ export async function GET(req: NextRequest) {
         const code = r.status === null ? "network" : `HTTP ${r.status}`;
         lines.push(`  ❌ \`${r.client_key}\` (merchant ${r.merchant_id}) — ${code}: ${r.error.slice(0, 120)}`);
       }
+    }
+  }
+
+  const hostCoverage = await checkRedirectHostFallbackCoverage();
+  if (hostCoverage.length > 0) {
+    lines.push("", "*Per-host redirect fallback coverage (multi-property tenants):*");
+    const gaps = hostCoverage.filter((r) => r.missing.length > 0);
+    if (gaps.length === 0) {
+      lines.push(
+        `  ✅ all ${hostCoverage.length} multi-property tenant(s) have a fallback for every 1P host`,
+      );
+    } else {
+      for (const r of gaps) {
+        lines.push(
+          `  ⚠ \`${r.client_key}\` — ${r.missing.length} of ${r.host_count} host(s) have no per-host fallback: ${r.missing.slice(0, 5).join(", ")}`,
+        );
+      }
+      lines.push(
+        "    Readers who mistype a link on those hosts land on the per-client default (the wrong property).",
+      );
     }
   }
 
