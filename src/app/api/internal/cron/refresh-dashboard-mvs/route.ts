@@ -35,7 +35,6 @@ const MVS = [
   "chapter_reporting.journey_entry_channel_v1",
   // Sprint 1.5 — picker MVs for Cross-Source Influence (pageOptions / campaignOptions).
   // Pre-aggregated 90d summaries so the dropdowns are bounded index scans.
-  "chapter_reporting.connections_top_pages_v1",
   "chapter_reporting.connections_top_pages_90d_v1",
   "chapter_reporting.connections_top_campaigns_90d_v1",
   // 9.3 — per-page distinct-identity base rates (page lift in connections_panel).
