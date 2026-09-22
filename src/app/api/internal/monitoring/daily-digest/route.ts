@@ -24,6 +24,18 @@ const DASHBOARD_MVS = [
   { name: "journey_entry_channel_v1", ts_column: "entry_ts" },
 ] as const;
 
+// Every MV refreshed by the 03:00 UTC refresh-dashboard-mvs cron. The ts_column
+// check above can only cover the 2 that carry a timestamp; this list is the
+// REFRESH-EXECUTION check and covers all of them via last_analyze (the cron
+// ANALYZEs each MV after refreshing it).
+//
+// Why both signals: the ts_column gap answers "is the DATA current relative to
+// source"; last_analyze answers "did the refresh JOB actually run". An overrun
+// of the cron's 800s budget shows up in the second, not the first — and it
+// fails on the LAST MVs first, which is precisely the set the ts_column check
+// cannot see (connections_page_base_v1 is the slowest at ~295s mean).
+const MV_REFRESH_STALENESS_THRESHOLD_HOURS = 26;
+
 // Attribution chain stages refreshed by the 03:30 UTC cron (Sprint 1.1).
 // Each (active client × stage) tuple should have a fresh _snapshot_runs row
 // within CHAIN_STALENESS_THRESHOLD_HOURS, otherwise the cron silently failed
@@ -128,6 +140,27 @@ async function checkMvStaleness(): Promise<{
   );
 
   return { source_max: sourceMax, results };
+}
+
+type MvRefresh = {
+  mv_name: string;
+  last_refresh: string | null;
+  hours_since_refresh: number | null;
+};
+
+// Reads last_analyze for every MV in chapter_reporting via a SECURITY DEFINER
+// RPC (pg_stat_all_tables is not reachable through PostgREST for API roles).
+async function checkMvRefreshFreshness(): Promise<{
+  ok: boolean;
+  error?: string;
+  rows: MvRefresh[];
+}> {
+  const { data, error } = await supabase
+    .schema("chapter_reporting")
+    .rpc("dashboard_mv_refresh_freshness");
+
+  if (error) return { ok: false, error: error.message, rows: [] };
+  return { ok: true, rows: (data ?? []) as MvRefresh[] };
 }
 
 // Cross-products active clients × attribution chain stages and reports the
@@ -396,6 +429,35 @@ export async function GET(req: NextRequest) {
     }
     for (const r of erroredMvs) {
       lines.push(`  ❌ \`${r.mv}\` — ${r.error.slice(0, 120)}`);
+    }
+  }
+
+  // Refresh-execution check — covers ALL MVs, including the 4 with no timestamp
+  // column that the check above is structurally blind to.
+  const mvRefresh = await checkMvRefreshFreshness();
+  if (!mvRefresh.ok) {
+    lines.push(`  ⚠ could not read MV refresh times — ${(mvRefresh.error ?? "").slice(0, 120)}`);
+  } else if (mvRefresh.rows.length === 0) {
+    lines.push("  ⚠ no materialized views found in `chapter_reporting`");
+  } else {
+    const neverRefreshed = mvRefresh.rows.filter((r) => r.hours_since_refresh === null);
+    const staleRefresh = mvRefresh.rows.filter(
+      (r) =>
+        r.hours_since_refresh !== null &&
+        r.hours_since_refresh > MV_REFRESH_STALENESS_THRESHOLD_HOURS
+    );
+    if (neverRefreshed.length === 0 && staleRefresh.length === 0) {
+      const maxAge = Math.max(...mvRefresh.rows.map((r) => r.hours_since_refresh ?? 0));
+      lines.push(
+        `  ✅ all ${mvRefresh.rows.length} MVs refreshed within ${MV_REFRESH_STALENESS_THRESHOLD_HOURS}h (oldest ${maxAge.toFixed(1)}h ago)`
+      );
+    } else {
+      for (const r of staleRefresh) {
+        lines.push(`  ⚠ \`${r.mv_name}\` — last refreshed ${(r.hours_since_refresh ?? 0).toFixed(1)}h ago`);
+      }
+      for (const r of neverRefreshed) {
+        lines.push(`  ❌ \`${r.mv_name}\` — no recorded refresh (ANALYZE never ran)`);
+      }
     }
   }
 
