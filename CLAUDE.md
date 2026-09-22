@@ -192,6 +192,45 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of September 21, 2026)
 
+### W0c + phone-canonical backfill + 4-bug sweep (Sep 21, 2026, late)
+
+#### W0c SHIPPED — client event timestamps, with a freshness-split clamp (`7f359c7`, `efd1391`)
+- Pixel captures `eventTs` at the TOP of `send()` — at occurrence, not transmission — and carries it on the payload. Server resolves it into `ts`; `ingested_at` stays server-controlled (absent from the INSERT column list, so its `DEFAULT now()` fires). **Only safe because W0b already moved chain DETECTION onto `ingested_at` — do not repoint detection back at `ts`.**
+- **Free fix:** because the value is captured before `pushToBuffer`, and `replayBufferedEvents` re-sends the body verbatim (verified), a circuit-breaker replay now carries the ORIGINAL event time instead of replay time. That is the latent inaccuracy W0 existed to fix, closed as a side effect.
+- **The clamp is split by freshness, and that split is load-bearing.** A first pass used one 7-day past window for everything, which introduced a new failure mode: a device with a badly wrong clock could backdate LIVE events by up to 7 days into an earlier attribution window. A fresh event is transmitted immediately so it can only be seconds old; a buffered replay can legitimately be days old. Server-side they are indistinguishable — **so the pixel says which it is** (`_replay`, set at replay time, not buffer time). Past bound: **5 min fresh / 7 d replay**. Future bound 5 min for both, covered 12× by the chain's 1h detection safety margin.
+- **Out-of-window values FALL BACK to receipt time, they are not clamped to the boundary.** A clamped value silently injects a wrong timestamp into a real attribution window; being honestly late is better.
+- Verified 16/16 boundary cases across both paths. **`tsc` cannot see syntax errors inside pixel.js** (it is a TS template literal) — extract the body and `node --check` it, and **derive the line range from the backticks rather than hardcoding it**, because the range moves whenever the file grows.
+
+#### Phone-precedence backfill — 74 identity merges, 0 remaining
+- Root cause of the "intermittent canon-upsert failure" CLAUDE.md still lists as live: `/api/purchase` Phase 3 picks ONE key by precedence `email → phone → customer_id`, but `refresh_lifecycle_chapters_incremental` resolves `email → customer_id` and **never considers phone**. A booking with a phone but no email wrote canon under `phone_sha256:` while lifecycle looked up `customer_id`. Deterministic, not intermittent — it tracks whether Square returned an email.
+- **The "4 of 17 unexplained tail" is CLOSED — it was a measurement artifact.** A ±5 min probe window missed them; at ±2h all 17 have a matching phone row, and for 3 of the 4 it is the only phone row in a 4-hour span. One cause, not two.
+- Backfill ran in two rounds, both keyed off `purchase_events.resolved_identity_key` (the correct target was already stored — **no time-window guessing**): **52** rows that had been backfilled as self-canonical earlier that evening, then **22** more that Phase 3 had canon-rowed correctly but nobody ever aliased. That second class is the quieter symptom — chapters formed, but under a split identity.
+- Result: 0 still self-canonical, 48 → phone, 4 → email (three-deep merge via the canon trigger), and 52 customer_ids collapsed to **51 distinct people** (one customer had two Square records).
+- **Final sweep, all clients: 0 unmerged, 0 purchase rows lifecycle would drop (of 6,514 in-window), 0 phone keys absent from canon.** A broader first-pass check flagged 443 EOS "orphans" — those were `customer_id`s legitimately covered by the email path. **Test lifecycle's actual resolution (`email_hash → customer_id`, then join canon), not raw key presence.**
+
+#### 🔴 CORRECTED — the chain is not a regression, and alerting was never fully dead
+- **CLAUDE.md's "chain wall-clock 500s → ~86s" (Fix 2) never held in production.** On Jul 4 — four days after Fix 2 shipped — EOS v1+v2 were already 568s combined. The Fix 2 regression test measured a scratch run over 225 affected canonicals; production's affected set is far larger.
+- **The growth curve has an exact mechanism.** `retention_days` is **NULL for every client**, so `retention_floor()` returns the fixed `2026-04-01 17:00` — now **173 days deep and deepening by one day per day**. Every night, every touched canonical's ENTIRE history is rewritten. Nightly cost ≈ (canonicals touched) × (history depth), and both grow. Measured: v1 261s (Jul 4) → 784s (Sep 21), while floor depth went 94 → 173 days. `lifecycle_rows` tracks it tightly (~300k → ~1M/night) while OUTPUT rows stay flat at 200–400 chapters — it is scanning more, not producing more. **This is exactly what W3 exists to fix, and `retention_days` is the lever that already exists (Fix 1A/1B).**
+- **I overstated the alerting risk and am correcting it for the second time.** Failure DETECTION was never lost: `stuck-runs` catches a row left `status='running'` within ~1h, and `daily-digest` flags any of the three chain stages >24h stale per client. What was lost is the IMMEDIATE signal, because the rollup GChat alert sits after the worker pool resolves and the Lambda is killed first. Fixed in `f8ab2fe` by alerting inside the worker's catch. **Do not "fix" the runtime by raising `maxDuration` — 600 is already the plan maximum.**
+
+#### 🐞 FIXED — PromptForm destroyed unknown `targeting_jsonb` keys (`ab3145b`)
+- `buildTargetingJsonb` built a fresh object from the form's two `page_match` inputs, so **any save — including a no-op one — deleted every other key.** The prompt kept working and silently degraded to "fire for everyone matching page_match", the exact outcome the gating exists to prevent.
+- Now spreads the row's current `targeting_jsonb` and touches only `page_match` (clearing page gating deletes that key alone; an empty result still returns null so no stray `{}` is persisted). `ExistingPrompt.targeting_jsonb` gained an index signature so unmodelled keys round-trip instead of being typed away.
+- **Verified the only other write path:** the self-serve prompt editor never touches this column, so the operator form was the single door.
+- **The standing "do NOT open `paid_cart_recovery_sep26` in the admin UI" warning is LIFTED.** Confirmed intact: `cart_token_in` with 9 tokens (grown from the original 3), `page_match` present, prompt enabled. Nothing was lost during the warning period. 7/7 merge cases verified.
+
+#### ⏹ RETIRE the EOS 1P durability re-measure — same structural dead end as NSC
+- Ran it (2 days past its Sep 19 date) using the NSC-corrected instrument: **active-day span off raw `pixel_events`**, matched 6-day cohorts either side of the Sep 8 flip, each identity given a full 7-day observation, scanners and known-prefix canonicals excluded.
+- Result looked significant **in the wrong direction** — pre-flip 5.41% / 1.79% vs post-flip 3.68% / 0.90% (z ≈ −6.1 and −5.7). That is a traffic-mix artifact (the post-flip cohort is 23% larger, diluting the returning share), not a durability effect.
+- **The decisive check: the Sep 8 flip was on `go.eosfabrics.com` (REDIRECT host). `s.eosfabrics.com` (collect) was ALREADY an A-record.** So the only population it could touch is visitors whose FIRST touch is a Chapter Link click. Measured: **0 pre-flip, 3 post-flip.** The instrument is structurally incapable of detecting the effect.
+- **Do not reschedule.** A future EOS durability read requires Chapter Links to be a real acquisition path first; today it is ~0.02% of new anon identities.
+
+#### ⚠️ Connection-pool "pressure" — NOT measurable yet, earlier number was an artifact
+- An in-session claim of "6.9s average connection acquisition" was wrong twice over. **`ingested_at − ts` is exactly 0.000 for every row before ~21:00 UTC Sep 21, because W0a's backfill SET `ingested_at = ts`.** Only rows written after the DEFAULT took effect carry an independent value, and the average was dragged by a fat tail anyway — **p50 is 24 ms.**
+- The only genuine window is ~3 hours during which this session was itself running heavy ad-hoc queries against the primary (8 GB scans, ANALYZE on 10.6M rows, a 678 MB index build) — the exact "suspected trigger" from the Aug 28 post-mortem, self-inflicted.
+- A `min` of **−1.129s** confirms ~1s clock skew between the Vercel Lambda and Postgres hosts, so small deltas are not meaningful at all. **Re-measure after a clean 24h before drawing any conclusion.**
+
+
 ### Customer Journeys — 2 search bugs, 55 orphaned identities, and the live-RPC slowdown (Sep 21, 2026, evening)
 - **Started from one operator report** ("I searched a hashed email and got no match") and ended in four separate defects. Worth reading as a chain: each fix exposed the next.
 
