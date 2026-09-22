@@ -29,6 +29,17 @@ export type CartContext = {
   cart_event_count: number;          // add_to_cart + view_cart events in window
 };
 
+/**
+ * Passed when the redirect route DELIBERATELY SKIPPED the cart lookup because
+ * no enabled rule on the slug reads a cart condition. See SKIPPED_SEGMENTS in
+ * segments.ts for the full reasoning — same contract.
+ */
+export const SKIPPED_CART: CartContext = {
+  has_open_cart: false,
+  hours_since_cart: null,
+  cart_event_count: 0,
+};
+
 // 14 days, matching Shopify's cart cookie lifetime (which rolls forward from
 // LAST ACTIVITY, not creation — measured on EOS: 377 of 6,309 carts spanned
 // >14d, max 114d). Beyond that the cart is genuinely gone, so this is a

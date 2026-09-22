@@ -42,6 +42,26 @@ const NULL_PURCHASE_CTX = {
   audience_tags: [] as string[],
 };
 
+/**
+ * What the redirect route passes when it DELIBERATELY SKIPPED the lookup
+ * because no enabled rule on the slug reads a segment condition.
+ *
+ * NOT the same as "we looked and found nothing" — it is never evaluated
+ * against, because requiredContext() in conditions.ts guarantees no segment
+ * evaluator runs when this is used. Kept explicit (rather than a cast) so a
+ * future condition added without a `needs` declaration fails the build instead
+ * of silently reading these defaults.
+ */
+export const SKIPPED_SEGMENTS: SegmentContext = {
+  is_new_visitor: false,
+  is_returning_visitor: false,
+  days_since_previous_visit: null,
+  previous_purchase: false,
+  has_converted_ever: false,
+  days_since_last_conversion: null,
+  audience_tags: [],
+};
+
 // Chapter treats a >1h gap as a new session everywhere else (canonical_v1's
 // sessionizer), so "seen before" means seen more than an hour ago. Without this
 // a visitor who lands on the site and immediately clicks a Chapter Link in the

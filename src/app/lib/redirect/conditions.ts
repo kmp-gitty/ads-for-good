@@ -161,26 +161,73 @@ const abBucket: Evaluator = (p, ctx) => {
 };
 
 // ─── Registry ─────────────────────────────────────────────────────────────
-const REGISTRY: Record<string, Evaluator> = {
-  is_new_visitor: isNewVisitor,
-  is_returning_visitor: isReturningVisitor,
-  previous_purchase: previousPurchase,
-  has_converted_ever: hasConvertedEver,
-  has_converted_in_days: hasConvertedInDays,
-  audience_tag: audienceTag,
-  has_open_cart: hasOpenCart,
-  cart_older_than_hours: cartOlderThanHours,
-  day_of_week: dayOfWeek,
-  hour_of_day: hourOfDay,
-  date_range: dateRange,
-  query_param: queryParam,
-  referrer_matches: referrerMatches,
-  country_in: countryIn,
-  region_in: regionIn,
-  device_type: deviceType,
-  os: osIs,
-  ab_bucket: abBucket,
+//
+// Each entry declares BOTH the evaluator and which slice of EvalContext it
+// reads. `needs` is load-bearing: the redirect route uses requiredContext()
+// below to decide whether to pay for the segment / cart DB lookups at all.
+//
+// WHY THE DECLARATION LIVES HERE AND NOT IN A PARALLEL LIST: a gate that
+// doesn't know about a newly-added condition would hand the evaluator an
+// EMPTY context, and the evaluator would then compare against defaults and
+// silently answer the wrong question (e.g. `previous_purchase: false` would
+// MATCH a real buyer). Co-locating `needs` with `fn` means adding a condition
+// forces you to declare its requirement on the same line, and TypeScript
+// fails the build if you don't.
+type ContextNeed = "segments" | "cart" | null;
+type RegistryEntry = { fn: Evaluator; needs: ContextNeed };
+
+const REGISTRY: Record<string, RegistryEntry> = {
+  // Visit + purchase + cohort history → resolveSegments()
+  is_new_visitor: { fn: isNewVisitor, needs: "segments" },
+  is_returning_visitor: { fn: isReturningVisitor, needs: "segments" },
+  previous_purchase: { fn: previousPurchase, needs: "segments" },
+  has_converted_ever: { fn: hasConvertedEver, needs: "segments" },
+  has_converted_in_days: { fn: hasConvertedInDays, needs: "segments" },
+  audience_tag: { fn: audienceTag, needs: "segments" },
+
+  // Live cart state → resolveCart()
+  has_open_cart: { fn: hasOpenCart, needs: "cart" },
+  cart_older_than_hours: { fn: cartOlderThanHours, needs: "cart" },
+
+  // Everything below is answerable from the request itself (headers, query,
+  // clock) or is pure computation — no database round trip.
+  day_of_week: { fn: dayOfWeek, needs: null },
+  hour_of_day: { fn: hourOfDay, needs: null },
+  date_range: { fn: dateRange, needs: null },
+  query_param: { fn: queryParam, needs: null },
+  referrer_matches: { fn: referrerMatches, needs: null },
+  country_in: { fn: countryIn, needs: null },
+  region_in: { fn: regionIn, needs: null },
+  device_type: { fn: deviceType, needs: null },
+  os: { fn: osIs, needs: null },
+  ab_bucket: { fn: abBucket, needs: null },
 };
+
+export type RequiredContext = { segments: boolean; cart: boolean };
+
+/**
+ * Which context slices must be resolved before this set of rules can be
+ * evaluated. Call with every enabled rule's condition_jsonb for the slug.
+ *
+ * A catch-all rule ({}) needs nothing — evaluateConditions returns true
+ * without reading ctx at all. An UNKNOWN condition key also needs nothing,
+ * because evaluateConditions fails closed on it (the rule can never match),
+ * so fetching context for it would be pure waste.
+ */
+export function requiredContext(
+  conditionObjects: Array<Record<string, unknown>>
+): RequiredContext {
+  const out: RequiredContext = { segments: false, cart: false };
+  for (const conditions of conditionObjects) {
+    for (const k of Object.keys(conditions ?? {})) {
+      const need = REGISTRY[k]?.needs;
+      if (need === "segments") out.segments = true;
+      else if (need === "cart") out.cart = true;
+    }
+    if (out.segments && out.cart) break; // nothing left to learn
+  }
+  return out;
+}
 
 /**
  * Evaluate a rule's condition_jsonb against the eval context.
@@ -196,7 +243,7 @@ export function evaluateConditions(
   if (keys.length === 0) return true;
 
   for (const k of keys) {
-    const evaluator = REGISTRY[k];
+    const evaluator = REGISTRY[k]?.fn;
     if (!evaluator) {
       console.warn(`[redirect-conditions] unknown condition type: ${k}`);
       return false;

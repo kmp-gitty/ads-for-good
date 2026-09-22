@@ -12,11 +12,28 @@
 //   6. Fire-and-forget click insert into pixel_events
 //   7. 302 with identity/journey cookies set
 //
-// Latency budget: 50ms total. Achieved by:
-//   - 5-min in-process caches on rule list, AB experiments, identity segments
-//   - Vercel geo headers (no external geo lookup)
-//   - All DB lookups run in PARALLEL via Promise.all
-//   - Click insert is fire-and-forget (not awaited)
+// LATENCY. This is a navigation-BLOCKING path — the reader stares at a blank
+// tab until the 302 ships — so the budget is 50ms and it is enforced by four
+// rules, in order of how much they matter:
+//
+//   1. Don't fetch what no rule reads. The visitor-history lookups
+//      (resolveSegments / resolveCart) run ONLY when some enabled rule on the
+//      slug declares it needs them — see requiredContext() in conditions.ts.
+//      Measured Sep 2026: they were ~2-3 serial cross-region round trips on
+//      every click, for conditions that did not exist on any enabled rule.
+//   2. Run compute next to the data. preferredRegion below pins this route to
+//      Oregon alongside Supabase (us-west-2). The project default is iad1
+//      (Virginia), which put ~150-300ms of round-trip on every DB call.
+//   3. Fetch independent things together, not in sequence. PHASE 1 below is one
+//      Promise.all; anything added to this route that doesn't depend on the
+//      rule list belongs in it, NOT as a fresh `await`.
+//   4. Never block on a write. Click log, hit_count, identity stitch and the
+//      Google Ads conversion all run in after(), post-302.
+//
+// Everything else is already free: geo comes from Vercel headers, device from
+// a UA regex, identity from cookies. Per-client config (rules, AB experiments,
+// consent policy, ignore lists) is 5-min in-process cached, so a warm lambda
+// serving a catch-all rule does ZERO blocking DB work.
 //
 // What this endpoint does NOT do:
 //   - Authentication: the endpoint is intentionally public (it serves end users)
@@ -31,9 +48,9 @@ import { applyEntryRelayCookie, hasInboundAttribution, pickClickId } from "@/app
 import { readEntryClick, fetchGadsConfig, recordGadsConversion } from "@/app/lib/redirect/gads-conversion";
 import { resolveGeo } from "@/app/lib/redirect/geo";
 import { classifyUA } from "@/app/lib/redirect/device";
-import { resolveSegments } from "@/app/lib/redirect/segments";
-import { resolveCart } from "@/app/lib/redirect/cart";
-import { evaluateConditions, EvalContext } from "@/app/lib/redirect/conditions";
+import { resolveSegments, SKIPPED_SEGMENTS } from "@/app/lib/redirect/segments";
+import { resolveCart, SKIPPED_CART } from "@/app/lib/redirect/cart";
+import { evaluateConditions, requiredContext, EvalContext } from "@/app/lib/redirect/conditions";
 import { interpolateTemplate, isValidDestination, appendIdentityHandoff } from "@/app/lib/redirect/template";
 import { logRedirectClick } from "@/app/lib/redirect/click-logger";
 import { isEmailIgnored, isUaIgnored } from "@/app/lib/auth/tracking-ignore";
@@ -48,6 +65,23 @@ import { classifyForScannerRisk } from "@/app/lib/redirect/scanner-detection";
 import { logAuthAttempt } from "@/app/lib/audit/auth";
 
 export const dynamic = "force-dynamic";
+
+// Pin to Portland — the closest Vercel region to Supabase's us-west-2 (Oregon).
+//
+// The project default is iad1 (Virginia), which meant every DB call on this
+// blocking path crossed the continent. Measured Sep 22 2026 on the live route:
+// server time (TTFB minus TLS) was ~0.43s warm / ~2.1s cold, against a ~0.11s
+// pure-compute floor — the gap was almost entirely cross-region round trips.
+//
+// Trade-off, and it is a real one: an east-coast reader now pays ~50ms MORE to
+// reach the function, and saves ~150-300ms per DB round trip once there. That
+// is a clear win while any blocking DB call remains, and roughly neutral on the
+// fully-cached path. If Chapter's readership ever skews hard east AND this
+// route is provably doing zero blocking DB work, re-measure before assuming
+// this still helps.
+//
+// Reverting is one line — no data or schema depends on it.
+export const preferredRegion = "pdx1";
 
 export async function GET(
   req: NextRequest,
@@ -79,7 +113,7 @@ export async function GET(
   // apex (+ GPC). Visitor still gets routed to the right destination; we just
   // skip every write (click log + cookie issuance) when collection is denied.
   // Raw state now; policy default (us vs eu) is applied after the per-client
-  // config resolves in the Promise.all below.
+  // config resolves in PHASE 1 below.
   const consentState = readConsentState(req);
 
   // Bot fast-path: never log bot clicks, redirect to default destination with
@@ -92,16 +126,54 @@ export async function GET(
     return new NextResponse("not_found", { status: 404 });
   }
 
-  // Parallel: rules + ab experiments + segments + cart + collection kill switch
-  // + per-client consent policy config.
-  const [rules, abExperiments, segments, cart, collectionEnabled, policyCfg] = await Promise.all([
-    fetchRules(client_key, slug),
-    fetchAbExperiments(client_key),
-    resolveSegments(client_key, identity.identityKey),
-    resolveCart(client_key, identity.identityKey),
-    isCollectionEnabled(client_key),
-    getConsentPolicyConfig(client_key),
+  // ── PHASE 1: everything that does NOT depend on which rules exist ────────
+  //
+  // All seven are per-CLIENT (not per-visitor) and 5-min in-process cached, so on
+  // a warm lambda this whole batch costs zero network. clientConfig and the two
+  // ignore-list checks used to sit AFTER the batch as separate awaits, which
+  // made them serial round trips on a cold lambda for no reason — nothing here
+  // depends on anything else here.
+  const userAgent = req.headers.get("user-agent");
+  const [rules, abExperiments, collectionEnabled, policyCfg, clientConfig, uaIgnored, hintEmailIgnored] =
+    await Promise.all([
+      fetchRules(client_key, slug),
+      fetchAbExperiments(client_key),
+      isCollectionEnabled(client_key),
+      getConsentPolicyConfig(client_key),
+      // Hoisted: drives BOTH the destination fallback chain and the ?chid=
+      // handoff gate below, and it is a 5-min cache, so one lookup serves both.
+      fetchClientRedirectConfig(client_key),
+      isUaIgnored(client_key, userAgent),
+      // Token-flavored hints can't be checked here (they need a DB resolve);
+      // those are re-checked at resolution time inside the after() block.
+      emailHint && emailHint.source !== "token"
+        ? isEmailIgnored(client_key, emailHint.email_sha256)
+        : Promise.resolve(false),
+    ]);
+
+  // ── PHASE 2: visitor-history lookups, ONLY if a rule actually reads them ──
+  //
+  // resolveSegments and resolveCart are the two genuinely expensive calls on
+  // this path — per-VISITOR, so the segment cache misses for every new reader,
+  // and resolveCart has no cache at all. Between them that was ~2-3 sequential
+  // cross-region round trips on EVERY click.
+  //
+  // requiredContext() (conditions.ts) reads the SAME registry the evaluators
+  // are dispatched from, so the two can't drift: a rule that asks about carts
+  // gets cart data, and a rule that doesn't costs nothing. Today every enabled
+  // rule across every client is a catch-all ({}), so in practice this skips
+  // both — but the moment someone writes `has_open_cart`, that slug starts
+  // paying for it again automatically, with no code change.
+  const needs = requiredContext(rules.map((r) => r.condition_jsonb));
+  const [segments, cart] = await Promise.all([
+    needs.segments
+      ? resolveSegments(client_key, identity.identityKey)
+      : Promise.resolve(SKIPPED_SEGMENTS),
+    needs.cart
+      ? resolveCart(client_key, identity.identityKey)
+      : Promise.resolve(SKIPPED_CART),
   ]);
+
   // Apply the per-client jurisdiction default (us = collect-when-unknown,
   // eu = strict opt-in-only). Explicit opt_in/opt_out always wins over this.
   let consent = applyConsentPolicy(
@@ -144,11 +216,8 @@ export async function GET(
   // that misses every rule + has no ?to= param falls back to it. Per-slug
   // catch-alls still override when the slug's specific fallback should differ
   // from the client-wide default.
-  // Hoisted: the handoff decision below needs this too, and it is a 5-min
-  // in-process cache, so one lookup serves both rather than two call sites
-  // racing the same row.
-  const clientConfig = await fetchClientRedirectConfig(client_key);
-
+  // clientConfig is resolved in PHASE 1 above (it feeds both this fallback
+  // chain and the ?chid= handoff gate further down).
   if (!destination || !isValidDestination(destination)) {
     const fallback = query.to;
     if (fallback && isValidDestination(fallback)) {
@@ -173,12 +242,7 @@ export async function GET(
   //   2. Email-hint match — handled inside the after() block at the resolution
   //      point (token-flavored hints aren't resolved synchronously here).
   // Visitor still gets routed to their destination; we just don't persist them.
-  const userAgent = req.headers.get("user-agent");
-  const uaIgnored = await isUaIgnored(client_key, userAgent);
-  const hintEmailIgnored =
-    emailHint && emailHint.source !== "token"
-      ? await isEmailIgnored(client_key, emailHint.email_sha256)
-      : false;
+  // uaIgnored + hintEmailIgnored are resolved in PHASE 1 above.
   const suppressed = uaIgnored || hintEmailIgnored;
 
   // Scanner-risk classification (email security scanners like Proofpoint /
@@ -316,9 +380,32 @@ export async function GET(
     );
   }
 
-  // Increment hit_count on the matched rule via after() too. Skipped on
-  // no-rule paths (default-destination via ?to= isn't tied to a stored rule).
-  if (matchedRuleId) {
+  // Increment hit_count on the matched rule via after() too.
+  //
+  // GATED IDENTICALLY TO THE CLICK LOG ABOVE — this is load-bearing. hit_count
+  // is the operator-facing "is this rule firing?" number in the admin UI, and
+  // it is routinely reconciled against the logged clicks in pixel_events. Until
+  // Sep 2026 it had NO gate, so a click that was correctly withheld from the
+  // click log still bumped the counter, in two cases:
+  //   - `suppressed`: the visitor's UA is on tracking_ignore_list, or a
+  //     ?rh=/?re= hint resolved to an ignored email (e.g. an operator testing
+  //     their own wrapped link)
+  //   - consent denied: opt_out cookie, GPC, or the collection_enabled switch
+  // Measured drift at the time of the fix: eos_fabrics/email_register read 7
+  // against 1 real logged click (6 of 7 phantom — operator self-tests), and
+  // not_so_cavalier/google-ads read 310 against 308. ACJ was clean at 0, which
+  // is why an ACJ-only check had previously recorded the two as "matching".
+  //
+  // The ignore list exists to declare "this is not real traffic", so it should
+  // mute the rule counter too, not just analytics — otherwise muting a bot UA
+  // leaves its clicks inflating the rule's apparent performance, and the
+  // admin-UI number is the flattering one. Keep these two conditions in sync;
+  // if a routing-diagnostic counter that ignores consent is ever wanted, it
+  // belongs in a separate column with a name that says so.
+  //
+  // Also skipped on no-rule paths (a ?to= / client-default destination isn't
+  // tied to a stored rule).
+  if (matchedRuleId && (consent.allowCollection || allowConsentedMeasurement) && !suppressed) {
     after(() => incrementRuleHitCount(matchedRuleId));
   }
 
