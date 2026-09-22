@@ -47,16 +47,25 @@ export async function GET(req: NextRequest) {
   const h = data as Health;
   const util = Math.round((h.client_conns / h.max_conns) * 100);
   const alerts: string[] = [];
+  // Track WHICH signal fired so the headline can say so. Previously the
+  // headline was unconditional ("approaching the N-slot limit") even when the
+  // only trigger was a long query at low utilization — on 2026-09-21 it claimed
+  // slot pressure at 18.9%. A headline that misstates the problem trains the
+  // operator to distrust the alert, which is worse than no alert.
+  const reasons: string[] = [];
 
   if (util >= UTIL_WARN_PCT) {
+    reasons.push("slot pressure");
     alerts.push(`• Connection utilization *${util}%* (${h.client_conns}/${h.max_conns} slots)`);
   }
   if (h.idle_in_txn > 0 && h.oldest_idle_txn_s >= IDLE_TXN_WARN_S) {
+    reasons.push("idle-in-transaction leak");
     alerts.push(
       `• *${h.idle_in_txn}* idle-in-transaction, oldest *${h.oldest_idle_txn_s}s* — the leak signature (should self-reap at 30s on app roles)`
     );
   }
   if (h.longest_active_s >= LONG_QUERY_WARN_S) {
+    reasons.push("long-running query");
     alerts.push(
       `• Longest active query *${h.longest_active_s}s* — possible runaway on the primary (ad-hoc query? use the replica — see db-connection-runbook.md)`
     );
@@ -67,7 +76,7 @@ export async function GET(req: NextRequest) {
   }
 
   const text = [
-    `🚨 *DB connection health — primary approaching the ${h.max_conns}-slot limit*`,
+    `🚨 *DB connection health — ${reasons.join(" + ")}* (utilization ${util}%, ${h.client_conns}/${h.max_conns} slots)`,
     "",
     ...alerts,
     "",
