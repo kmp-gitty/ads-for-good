@@ -73,10 +73,21 @@ export async function GET(req: NextRequest) {
           `;
           summary.push(row);
         } catch (err) {
-          errors.push({
-            client_key,
-            error: err instanceof Error ? err.message : String(err),
-          });
+          const message = err instanceof Error ? err.message : String(err);
+          errors.push({ client_key, error: message });
+          // Alert IMMEDIATELY, per client, rather than only in the rollup below.
+          // EOS's chain currently runs ~25-37 min against this route's 600s
+          // maxDuration (the retention floor is fixed at 2026-04-01, so every
+          // touched canonical's full history is rewritten nightly and the depth
+          // grows by a day every day). Postgres keeps executing after Vercel
+          // kills the Lambda, so the data is fine — but any code AFTER the
+          // worker pool resolves, including the rollup alert, never runs.
+          // Failure detection itself is still covered by stuck-runs (<=1h) and
+          // daily-digest staleness (<=24h); this restores the immediate signal.
+          await postToGChat({
+            text:
+              `*Attribution chain failed* — \`${client_key}\`\n${message}`,
+          }).catch(() => {});
         }
       }
     }
@@ -89,6 +100,8 @@ export async function GET(req: NextRequest) {
 
   const elapsedSec = Math.round((Date.now() - startedAt.getTime()) / 1000);
 
+  // Rollup. Best-effort: on a long run (EOS) the Lambda is killed before this
+  // is reached, which is why the per-client alert above exists.
   if (errors.length > 0) {
     await postToGChat({
       text:
