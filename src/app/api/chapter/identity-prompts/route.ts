@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { withCors, corsPreflightHeaders } from "@/app/lib/auth/cors";
 import { signPromptSession } from "@/app/lib/auth/prompt-session";
+import { isPixelBatchingEnabled } from "@/app/lib/pixel/batching-config";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -46,6 +47,8 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     console.warn("[identity-prompts] fetch failed:", error.message);
+    // batching_enabled omitted here => pixel treats it as false. A prompts-read
+    // failure must not be able to switch batching ON.
     return withCors(req, NextResponse.json({ prompts: [] }, { status: 200 }));
   }
 
@@ -61,7 +64,23 @@ export async function GET(req: NextRequest) {
   // — endpoint is hit once per visitor per ~5 min window via browser's HTTP
   // cache.)
   const session_token = signPromptSession(clientKey);
-  const res = NextResponse.json({ prompts: data ?? [], session_token }, { status: 200 });
+
+  // W1: the per-client pixel batching rollout flag rides along on this response
+  // rather than getting its own fetch. This endpoint is already hit once per
+  // page load, is already per-request + no-store, and is already the thing the
+  // pixel awaits before registering triggers — so the flag costs no extra round
+  // trip. Cached 5 min server-side; fails safe to false.
+  //
+  // Timing note: this response is ASYNC, so events fired before it lands are
+  // sent unbatched. That is the correct failure direction (unbatched == today's
+  // behaviour), and it means a slow/failed fetch degrades to the status quo
+  // rather than dropping events.
+  const batching_enabled = await isPixelBatchingEnabled(clientKey);
+
+  const res = NextResponse.json(
+    { prompts: data ?? [], session_token, batching_enabled },
+    { status: 200 },
+  );
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   return withCors(req, res);
 }

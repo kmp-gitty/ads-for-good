@@ -8,6 +8,19 @@ function safeClientKey(v: unknown): string | null {
   return s.length ? s : null;
 }
 
+// W1: the pixel may POST either today's single-event body or a batch
+// ({ client_key, ..., events: [...] }). Every per-event heuristic below has to
+// look at an EVENT, not the envelope — a batch envelope carries no event_name
+// and no page_url, so reading the envelope directly would classify 100% of
+// batches as bots and silently discard them with a 200 { ok: true }. Returning
+// the first event keeps the existing single-event behaviour byte-identical.
+function representativeEvent(payload: any): any {
+  if (payload && Array.isArray(payload.events) && payload.events.length) {
+    return payload.events[0];
+  }
+  return payload;
+}
+
 function isBot(payload: any, req: NextRequest): boolean {
   const ua = req.headers.get("user-agent") || "";
 
@@ -20,11 +33,13 @@ function isBot(payload: any, req: NextRequest): boolean {
 
   if (!hasUA || !hasLang) return true;
 
+  const ev = representativeEvent(payload);
+
   // 3. Suspicious event patterns
-  if (!payload?.event_name) return true;
+  if (!ev?.event_name) return true;
 
   // 4. No page context (bots often skip this)
-  if (!payload?.page_url && !payload?.page_path) return true;
+  if (!ev?.page_url && !ev?.page_path) return true;
 
   return false;
 }
@@ -78,10 +93,18 @@ function getIp(req: NextRequest): string {
       return withCors(req,NextResponse.json({ ok: true, ignored: "bot" }));
     }
 
+    // Scan EVERY event in a batch — `utm` / `props` are per-event, so reading
+    // only the envelope would let internal traffic through in batched mode.
+    const internalCandidates: any[] =
+      body && Array.isArray(body.events) && body.events.length ? body.events : [body];
     const isInternal =
-    body?.email?.includes("@ads4good.com") ||
-    body?.utm?.utm_source === "internal" ||
-    body?.props?.is_internal === true;
+      body?.email?.includes("@ads4good.com") ||
+      internalCandidates.some(
+        (e: any) =>
+          e?.email?.includes("@ads4good.com") ||
+          e?.utm?.utm_source === "internal" ||
+          e?.props?.is_internal === true,
+      );
 
   if (isInternal) {
     return withCors(req,NextResponse.json({ ok: true, ignored: "internal" }));
@@ -100,7 +123,11 @@ function getIp(req: NextRequest): string {
   
     const ip = getIp(req);
   
-    if (!body?.event_name || typeof body.event_name !== "string") {
+    // Batch-aware: a batch envelope has no top-level event_name. Require a
+    // usable event_name on the representative event instead, so the
+    // single-event contract is unchanged and a batch is not 400'd outright.
+    const gateEvent = representativeEvent(body);
+    if (!gateEvent?.event_name || typeof gateEvent.event_name !== "string") {
       return withCors(req,
         NextResponse.json({ error: "missing_event_name" }, { status: 400 })
       );

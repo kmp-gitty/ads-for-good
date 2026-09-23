@@ -205,6 +205,22 @@ function getOrCreateIdWithCookieFallback(storageKey, cookieName) {
     } catch (e) {}
   }
 
+  // Batch sibling of removeFromBuffer: one read-filter-write instead of N, so
+  // clearing a 20-event flush doesn't do 20 localStorage round trips.
+  function removeManyFromBuffer(clientKey, matchIds) {
+    try {
+      if (!matchIds || !matchIds.length) return;
+      var drop = {};
+      for (var k = 0; k < matchIds.length; k++) drop[matchIds[k]] = true;
+      var events = readBuffer(clientKey);
+      var next = [];
+      for (var i = 0; i < events.length; i++) {
+        if (!events[i] || !drop[events[i]._buffer_id]) next.push(events[i]);
+      }
+      writeBuffer(clientKey, next);
+    } catch (e) {}
+  }
+
   var clientKey = getClientKey();
   var collectUrl = getCollectUrl();
   var identifyUrl = getIdentifyUrl();
@@ -311,6 +327,126 @@ function getOrCreateIdWithCookieFallback(storageKey, cookieName) {
       }
     }
 
+    // --- W1: event batching (per-client, default OFF) ---------------------
+    // EOS fires ~8 events per pageview and every one of them upserts the SAME
+    // chapter_journey.journeys row. Unbatched, those 8 land in 8 separate
+    // transactions that serialise on that row's lock — the single statement
+    // measured at 74.5% of all database execution time. Batching collapses them
+    // into one journey upsert + one multi-row INSERT.
+    //
+    // OFF until chapter_config.clients.pixel_batching_enabled flips true for the
+    // tenant. The flag arrives on the /api/chapter/identity-prompts response;
+    // until it does (or if that fetch fails) every event sends the way it does
+    // today, so the failure direction is "behave exactly like yesterday".
+    // Seeded from localStorage, not just from the async prompts response.
+    //
+    // The pixel fires its own page_view during init, BEFORE that fetch can
+    // resolve — so without a cached value the first event of every page load
+    // escapes batching, and an 8-event pageview costs 2 journey upserts (one
+    // lone page_view + one batch) instead of 1. Remembering the last known flag
+    // makes every page load after the very first one batch from the first
+    // event. Rollback latency is unchanged: the flag is re-read from the server
+    // on each page load either way, so flipping the column off takes effect on
+    // the next load in both designs.
+    var CHAPTER_BATCH_FLAG_KEY = "__chapter_batch_" + clientKey;
+    var chapterBatchingEnabled = (function () {
+      try { return localStorage.getItem(CHAPTER_BATCH_FLAG_KEY) === "1"; }
+      catch (e) { return false; }   // fail safe: OFF
+    })();
+    var chapterPendingBatch = [];
+    var chapterBatchTimer = null;
+    var CHAPTER_BATCH_MAX = 20;   // flush early once this many are queued
+    var CHAPTER_BATCH_MS = 3000;  // ...or this long after the first queued event
+
+    function chapterQueueEvent(body) {
+      chapterPendingBatch.push(body);
+      if (chapterPendingBatch.length >= CHAPTER_BATCH_MAX) {
+        chapterFlushBatch(false);
+        return;
+      }
+      if (chapterBatchTimer === null) {
+        chapterBatchTimer = setTimeout(function () { chapterFlushBatch(false); }, CHAPTER_BATCH_MS);
+      }
+    }
+
+    // Mirror of chapterHandleCollectResult for a whole flush. Same
+    // classification: only 5xx / 429 / network error are outage signals; a 4xx
+    // is permanent, so drop rather than retry forever.
+    function chapterHandleBatchResult(res, ids) {
+      if (res && (res.ok || res.status === 204)) {
+        removeManyFromBuffer(clientKey, ids);
+        chapterCbOnSuccess();
+        return;
+      }
+      var status = res ? res.status : 0;
+      if (status === 429 || status >= 500 || status === 0) {
+        chapterCbOnFailure();           // keep buffered; replay will retry
+      } else if (status >= 400) {
+        removeManyFromBuffer(clientKey, ids);
+      } else {
+        chapterCbOnFailure();
+      }
+    }
+
+    function chapterFlushBatch(onUnload) {
+      try {
+        if (chapterBatchTimer !== null) { clearTimeout(chapterBatchTimer); chapterBatchTimer = null; }
+        var batch = chapterPendingBatch;
+        chapterPendingBatch = [];
+        if (!batch.length) return;
+        // Circuit open: events are already durable in the localStorage buffer,
+        // so drop them from the in-memory queue and let replay ship them once
+        // the cooldown ends. Same contract as send()'s circuit check.
+        if (chapterCircuitOpen()) return;
+
+        var ids = [];
+        for (var i = 0; i < batch.length; i++) ids.push(batch[i]._buffer_id);
+
+        var envelope = {
+          client_key: clientKey,
+          journey_id: batch[0].journey_id,
+          anonymous_id: batch[0].anonymous_id,
+          internal_ignore: batch[0].internal_ignore,
+          events: batch
+        };
+        var payload = JSON.stringify(envelope);
+
+        if (onUnload && navigator && typeof navigator.sendBeacon === "function") {
+          // A normal fetch racing page-unload gets cancelled; sendBeacon is the
+          // standard built for exactly this and is delivered as the page dies.
+          //
+          // type is text/plain ON PURPOSE: application/json would make this a
+          // non-simple cross-origin request and trigger a CORS preflight, and a
+          // preflight is not guaranteed to complete during unload. The server
+          // parses the body with req.json(), which does not inspect
+          // Content-Type, so the payload is read identically either way.
+          var ok = false;
+          try {
+            ok = navigator.sendBeacon(collectUrl, new Blob([payload], { type: "text/plain" }));
+          } catch (e) { ok = false; }
+          // sendBeacon's return value is "the UA queued it", not "the server got
+          // it" — but it is the only signal available, and it is precise about
+          // the failure we can actually act on (payload too large / queue full).
+          // Queued => drop from the durable buffer. Refused => leave them there
+          // so the next page load replays them. NOT removing on success would
+          // mean every single page navigation re-sent its final flush, turning
+          // an occasional unload race into systematic double-counting.
+          if (ok) removeManyFromBuffer(clientKey, ids);
+          return;
+        }
+
+        fetch(collectUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          keepalive: true,
+          body: payload
+        })
+          .then(function (res) { chapterHandleBatchResult(res, ids); })
+          .catch(function () { chapterHandleBatchResult(null, ids); });
+      } catch (e) {}
+    }
+
     function send(eventName, props) {
     // W0c: stamp the event time HERE, at occurrence, not at transmission.
     // This value survives into the localStorage buffer, so a circuit-breaker
@@ -366,6 +502,11 @@ if (!anonId) {
       // Circuit open (backend recently failing): keep the event buffered but do
       // not send. It replays once the circuit closes and a probe succeeds.
       if (chapterCircuitOpen()) return;
+
+      // W1: when batching is on for this tenant, queue instead of sending.
+      // pushToBuffer above already made the event durable, so a queued event is
+      // no more at risk than a sent-but-unacked one is today.
+      if (chapterBatchingEnabled) { chapterQueueEvent(body); return; }
 
       fetch(collectUrl, {
         method: "POST",
@@ -722,6 +863,21 @@ if (!anonId) {
   } catch (e) {}
 
   replayBufferedEvents();
+
+  // Flush any queued batch as the page goes away. Both events are registered:
+  // pagehide is the reliable desktop unload signal, and visibilitychange ->
+  // hidden is the last guaranteed callback on mobile Safari (a backgrounded tab
+  // may be killed without ever firing pagehide).
+  //
+  // Registered HERE, after the pixel's own visibilitychange handler is attached
+  // further down, listeners fire in registration order — so the visibility_change
+  // event is queued by that handler before this flush collects the queue.
+  try {
+    window.addEventListener("pagehide", function () { chapterFlushBatch(true); });
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") chapterFlushBatch(true);
+    });
+  } catch (e) {}
 
   for (var i = 0; i < queue.length; i++) {
     api.push(queue[i]);
@@ -2696,6 +2852,14 @@ setInterval(function () {
       .then(function (res) { return res.ok ? res.json() : { prompts: [], session_token: "" }; })
       .then(function (data) {
         chapterPromptSessionToken = (data && data.session_token) || "";
+        // W1 rollout flag. Strict === true so a missing/garbled field leaves
+        // batching OFF (today's behaviour) rather than switching it on.
+        chapterBatchingEnabled = !!(data && data.batching_enabled === true);
+        // Persist so the NEXT page load can batch from its very first event.
+        try {
+          if (chapterBatchingEnabled) localStorage.setItem(CHAPTER_BATCH_FLAG_KEY, "1");
+          else localStorage.removeItem(CHAPTER_BATCH_FLAG_KEY);
+        } catch (e) {}
         var prompts = (data && data.prompts) || [];
         // Only hit /cart.js when a prompt actually needs the token — keeps the
         // extra request off every client that doesn't use cart-token targeting.

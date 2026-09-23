@@ -192,6 +192,36 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of September 22, 2026)
 
+### W1 step 2 — pixel buffers + flushes, behind a per-client flag that defaults OFF (Sep 23, 2026)
+
+#### 🚧 THE BLOCKER, FOUND BEFORE A LINE OF PIXEL CODE WAS WRITTEN
+- `/api/chapter/collect` sits in front of `/api/pixel` and has **its own two gates, both of which read the TOP LEVEL of the payload**: `isBot()` returns true when there is no `event_name` or no `page_url`/`page_path`, and a second hard gate 400s on `missing_event_name`. **A batch envelope has neither field** — it is `{ client_key, journey_id, events: [...] }`.
+- So **every batch would have been silently discarded with `200 { ok: true, ignored: "bot" }` and zero rows written**, before ever reaching the route step 1 shipped. Step 1's harness could not have caught this: it POSTs at `/api/pixel` directly.
+- Fixed with one helper, `representativeEvent(payload)` (first event of a batch, else the payload itself), used by both gates. The internal-traffic check now scans **every** event in the envelope rather than only the top level, so one `is_internal` event in a batch still suppresses the batch.
+- **Verified the fix did not open the gates** — this is the real risk of a `representativeEvent()`-shaped change. Live, through `/api/chapter/c`: batch + browser UA → **204, row written**; batch + `Googlebot` UA → **`ignored: bot`**; batch with no `accept-language` → **`ignored: bot`**; empty `events: []` and an event with no `event_name` → both still discarded. Bot filtering is intact; only the batch-shaped false positive is gone.
+
+#### The flag, and the deliberate fail-SAFE asymmetry
+- Migration `w1_pixel_batching_enabled_flag` adds `chapter_config.clients.pixel_batching_enabled boolean NOT NULL DEFAULT false`. New `src/app/lib/pixel/batching-config.ts` reads it (5-min cache) and is served to the pixel as `batching_enabled` on the `/api/chapter/identity-prompts` response.
+- **`isPixelBatchingEnabled` fails SAFE to `false`; `isCollectionEnabled` fails OPEN to `true`.** That is intentional and the comment says so: a config read error must never halt a client's collection, and must never switch an untested write path on for everyone. Same shape, opposite defaults, for opposite reasons.
+- **`pixel.js` is served `no-store` and clients hold only a loader tag, so any pixel change goes live for EVERY tenant on their next page load, simultaneously.** There is no gradual pixel rollout without a server-side flag — which is why the flag exists before the code that uses it.
+
+#### The pixel machinery
+- `chapterQueueEvent` / `chapterFlushBatch` / `chapterHandleBatchResult` + `removeManyFromBuffer` (one read-filter-write instead of N). Cap 20 events, timer 3 s, plus a flush on `pagehide` and on `visibilitychange → hidden`.
+- **Unload uses `navigator.sendBeacon` with a `text/plain` Blob.** A normal `fetch` racing page-unload is cancelled. The `text/plain` type is deliberate: `application/json` would make it a non-simple cross-origin request and trigger a CORS preflight that may not complete during unload — and `req.json()` does not inspect Content-Type. sendBeacon's boolean is "the UA queued it", not "the server got it", but it is the only signal available and it is precise about the actionable failure (payload too large / queue full); on `false` the events stay in the durable buffer and replay next page load.
+- `send()` still `pushToBuffer`s **before** anything is transmitted, so the write-ahead log is unchanged and the circuit breaker is checked before queueing.
+- **🐞 A REAL DESIGN GAP, found by a harness expectation that was wrong.** "flag OFF → 3 requests" measured 4. The extra one was the pixel's **own init `page_view`**, which fires before the prompts fetch resolves — so it always escaped batching and 8 events became 2 requests, not 1. Closed by persisting the flag in `localStorage['__chapter_batch_<clientKey>']` and seeding `chapterBatchingEnabled` from it at load. **The harness was wrong and the pixel was right, and chasing that is what surfaced the gap** — check the event names before "fixing" a count.
+
+#### Verification
+- **`~/chapter-scripts/pixel-batching-harness/verify-pixel-batching.cjs` — 15/15.** Runs the REAL extracted pixel body in a `vm` sandbox with a mocked DOM (modelled on the existing consent harness), re-extracting from `route.ts` on every run via a **backtick-derived** range, never hardcoded lines. Falsified: forcing the OFF case ON takes it to 14/15.
+- **`~/chapter-scripts/w1-batch-harness.mjs` now runs end-to-end through `/api/chapter/c`, not just `/api/pixel`** (`HARNESS_PATH` env var + browser-shaped headers + a guard that FAILS on a `200 { ignored: ... }` rather than treating it as success). **7/7 through the collect route**, so the two gate fixes above are covered by the same byte-identical assertions step 1 used.
+- `node --check` on the extracted pixel body: clean. `tsc --noEmit` from the repo root, in its own invocation: **exit 0**.
+- **⚠️ The `cd` trap bit again and is worth restating.** An `npx tsc` run in a bash invocation that had earlier `cd`'d elsewhere resolved a different binary and printed *"This is not the tsc command you are looking for"* — and an unconditional `echo "TSC OK"` papered over it. A typecheck after a `cd` in the same invocation may have checked nothing.
+- **Zero pollution:** `chapter_practice` back to 0 events / 0 journeys after every run.
+
+#### Still to do before this is worth anything
+- **Nothing is batched yet** — the flag is `false` for every client, so the new path is dormant. Turning it on for one low-risk tenant is what produces the measurement.
+- **Watch `page_exit` per pageview when this deploys.** It is the metric most sensitive to unload-delivery failure, and unlike step 1, step 2 *can* affect it.
+
 ### W1 step 1 — `/api/pixel` accepts batches, verified byte-identical (Sep 23, 2026)
 
 #### The route
