@@ -80,6 +80,25 @@ type SquareAuthHealth =
   | { client_key: string; merchant_id: string; ok: true }
   | { client_key: string; merchant_id: string; ok: false; status: number | null; error: string };
 
+// Pixel ingest liveness. THE GAP THIS CLOSES: every check in this digest
+// watched a DOWNSTREAM stage (MV freshness, chain freshness, refresh
+// execution, global snapshots) and none watched the SOURCE. projectagram's
+// pixel died 2026-06-10 and nothing alerted for 3.5 months, because the crons
+// kept running fine -- they just had nothing to process, so every freshness
+// check stayed green. We monitored the pipeline, not the faucet.
+type PixelIngestHealth = {
+  client_key: string;
+  pixel_expected: boolean;
+  collection_enabled: boolean;
+  newest_ingest: string | null;
+  last_seen_fallback: string | null;
+  hours_since_newest: number | null;
+  events_24h: number;
+  median_events_prior_7d: number;
+  pct_of_median: number | null;
+  status: "ok" | "stale" | "never" | "degraded" | "not_expected" | "collection_disabled";
+};
+
 type MvStaleness =
   | { mv: string; ok: true; max_ts: string; gap_hours: number }
   | { mv: string; ok: false; error: string };
@@ -373,6 +392,18 @@ async function checkSquareTokenHealth(): Promise<SquareAuthHealth[]> {
 // benign typos, shown for completeness.
 type SignupAbuse = { total: number; byReason: { reason: string; count: number }[] };
 
+async function checkPixelIngestHealth(): Promise<PixelIngestHealth[]> {
+  const { data, error } = await chapterSchemas
+    .reporting(supabase)
+    .rpc("pixel_ingest_health");
+
+  if (error || !data) {
+    console.error("[daily-digest] pixel_ingest_health failed:", error);
+    return [];
+  }
+  return data as PixelIngestHealth[];
+}
+
 async function checkSignupAbuse(sinceIso: string): Promise<SignupAbuse> {
   const { data, error } = await supabase
     .schema("chapter_audit")
@@ -516,6 +547,41 @@ export async function GET(req: NextRequest) {
   const chainStaleness = await checkAttributionChainStaleness();
   const chainProblems = chainStaleness.filter((r) => !r.ok);
 
+  const ingestHealth = await checkPixelIngestHealth();
+  // 'not_expected' / 'collection_disabled' are deliberately silenced (links-only
+  // tenants, practice tenants, kill-switched clients) but still counted so a
+  // silenced tenant never becomes invisible.
+  const ingestProblems = ingestHealth.filter(
+    (r) => r.status === "stale" || r.status === "never" || r.status === "degraded",
+  );
+  const ingestSilenced = ingestHealth.filter(
+    (r) => r.status === "not_expected" || r.status === "collection_disabled",
+  );
+
+  lines.push("", "*Pixel ingest liveness:*");
+  if (ingestHealth.length === 0) {
+    lines.push("  ⚠ could not read `pixel_ingest_health`");
+  } else if (ingestProblems.length === 0) {
+    const healthy = ingestHealth.length - ingestSilenced.length;
+    lines.push(
+      `  ✅ ${healthy} client(s) sending${ingestSilenced.length > 0 ? ` · ${ingestSilenced.length} silenced by config` : ""}`,
+    );
+  } else {
+    for (const r of ingestProblems) {
+      if (r.status === "never") {
+        lines.push(`  ❌ \`${r.client_key}\` — no pixel events ever received`);
+      } else if (r.status === "stale") {
+        const days = r.hours_since_newest ? (r.hours_since_newest / 24).toFixed(1) : "?";
+        const last = (r.newest_ingest ?? r.last_seen_fallback ?? "").slice(0, 10);
+        lines.push(`  ❌ \`${r.client_key}\` — nothing received for ${days}d (last: ${last})`);
+      } else {
+        lines.push(
+          `  ⚠ \`${r.client_key}\` — ${r.events_24h} events/24h, ${r.pct_of_median}% of its 7d median (${r.median_events_prior_7d}/day)`,
+        );
+      }
+    }
+  }
+
   lines.push("", "*Per-client snapshot freshness (03:30 + 04:00 UTC crons):*");
   if (chainStaleness.length === 0) {
     lines.push("  ⚠ could not read client list or `_snapshot_runs`");
@@ -636,6 +702,8 @@ export async function GET(req: NextRequest) {
     chain_problem_count: chainProblems.length,
     global_staleness: globalStaleness,
     global_stale_count: staleGlobals.length + erroredGlobals.length,
+    ingest_health: ingestHealth,
+    ingest_problem_count: ingestProblems.length,
     square_health: squareHealth,
     square_failure_count: squareFailures.length,
   });

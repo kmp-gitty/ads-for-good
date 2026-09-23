@@ -192,6 +192,38 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of September 22, 2026)
 
+### Ingest-liveness monitor + W1 step 2 rollout state (Sep 23, 2026)
+
+#### 🔴 FOUND BY ACCIDENT: projectagram's pixel has been dead since June 10 — 3.5 months
+- Surfaced while sizing tenants for the batching rollout. `chapter_ingest.pixel_events` newest row for `projectagram_reels` is **2026-06-10**; `journeys` newest **2026-06-09**; **0 rows in 30 days**. Meanwhile the **Shopify purchase webhook is still flowing** (22 purchases in 30 d, newest Sep 22).
+- **Consequence: every projectagram purchase for 3.5 months attributed to `(direct)` fallback**, because canonical_v1 had no session data to classify. Likely a Shopify theme republish wiping the custom `theme.liquid` block — **not confirmed**; check the theme before assuming. Operator owns the client conversation (not a paying client).
+- **The real finding is that NOTHING ALERTED.** The daily digest watched seven things — MV freshness, refresh-execution, per-client snapshot freshness, global snapshots, Square token health, per-host redirect coverage, signup abuse — and `grep pixel_events src/app/api/internal/monitoring/` returned **zero hits**. **We monitored the pipeline but not the faucet, and the pipeline reports healthy when the faucet is off:** the crons ran fine, they just had nothing to process.
+
+#### The monitor
+- New `chapter_reporting.pixel_ingest_health()` (SECURITY DEFINER; the `dashboard_mv_refresh_freshness` precedent — PostgREST can't do the aggregate) + new column `chapter_config.clients.pixel_expected`. Wired into the existing 14:00 UTC daily digest as a **"Pixel ingest liveness"** section, placed BEFORE the pipeline sections so reading order is source → pipeline.
+- **Two signals, because recency alone misses partial failure.** `stale` = nothing received in >48 h. `degraded` = 24 h count <30% of the trailing **7-FULL-day** median (current in-progress day excluded, or it drags the median down and manufactures a false positive). `never` = nothing by either clock.
+- **⚠️ Reads `ingested_at`, NEVER `ts`.** Post-W0c `ts` is CLIENT-controlled and a buffered replay can legitimately backdate it by days — so a dead pixel could read "fresh". `ingested_at` is server-stamped and monotonic, which is what liveness means, and it hits `pixel_events_client_ingested_idx (client_key, ingested_at)`.
+- **The volume check is gated to baselines ≥50 events/day.** Below that the daily swing exceeds the signal, so applying it would generate noise rather than detection.
+- **`pixel_expected=false` SILENCES an alert; it does not stop collection** (that is `collection_enabled`). Set false for `acj_today` (links-only by design), `chapter_practice` (scratch), `k_man` (July-21 self-serve trial, expired, pixel never installed). **Silenced tenants are still counted and returned** so one never becomes invisible. The `never` branch stays LOUD for everyone else — a newly-onboarded client that never installed the pixel is worth knowing about daily.
+
+#### ⚠️ Two self-inflicted traps hit while building it, both worth remembering
+- **I added a `max(ts)` fallback without re-checking index support and it timed out.** There is **no `(client_key, ts)` index** on `pixel_events` — only `(ts)` and `(client_key)` separately — so it scanned every row per client. **And the client-side timeout did NOT cancel the backend** (the documented rule, biting again): `pg_stat_activity` showed it still running 79 s after my client gave up; `pg_cancel_backend` resolved it. Rewritten to read `chapter_journey.journeys.last_seen` (~1.5 M rows, indexed on client_key, measured **196 ms cold**) and **gated to clients with no `ingested_at` at all**, so a live tenant never pays for it. Also switched the daily-median CTE to a LATERAL per client so each range-seeks the index instead of full-scanning the partial index. **2.3 s cold for all 7 clients.**
+- **`CREATE OR REPLACE FUNCTION` cannot change a return shape** — needs `DROP FUNCTION` first (already documented; hit it anyway). Safe here only because nothing consumed the function yet.
+
+#### Falsified, not just observed
+- **`stale` and `never` are proven by REAL data** — projectagram (`stale`, dated 2026-06-10, 105.7 d) and, before silencing, k_man (`never`). A genuinely broken client the monitor actually caught.
+- **`degraded` proven reachable by re-running its own comparison at a 70% threshold:** EOS sits at 57.8% of its median → `ok` at the real 30%, `degraded` at 70%; NSC at 95.1% → `ok` at both. **The threshold validates itself** — EOS's 57.8% IS the documented ~36% week-over-week decline from Shopify's bot-blocking, i.e. a real traffic change. At 30% it correctly stays quiet; at 70% it would be crying wolf today.
+- Verified end-to-end through **PostgREST as service_role (HTTP 200)**, not just `tsc` — `chapterSchemas.reporting(db)` takes `db: any`, so a wrong method name would type-check fine. Grants + exposed-schema are the real risk and only a live call exercises them.
+
+#### W1 step 2 rollout state (as of Sep 23)
+- **ON:** `adsforgood_prod` (flipped ~17:00 UTC), `not_so_cavalier` (flipped **17:15:08 UTC**). **OFF:** `eos_fabrics`, `projectagram_reels`, `acj_today`, `chapter_practice`.
+- **adsforgood verified live, incognito:** 41 events in **13 requests** (3.2/req; unbatched = 41). **6 events in ONE request carrying 6 DISTINCT client timestamps over 1.3 s** — the W0c interaction holding, which was the real risk. **`page_exit` landed via the unload path** (`visibility_change, page_exit` in one request). Both entries captured (direct + `google.com` referrer).
+- **One journey, not two, and that is CORRECT** — same incognito profile = one `anonymous_id`/`journey_id` (30-day cookie). Journey = browser-identity container; session = entry-channel unit inside it. The referrer change on a navigation event is what the 5.1 sessionizer splits on. Confirm via `session_channel_entries_v1` after the 04:45 UTC cron; canonical_v1 never forms for adsforgood (no purchases).
+- **⚠️ ads4good and NSC are both SPAs** (Next.js / Lovable+React Router) — soft navigation never unloads, so they barely exercise `sendBeacon`. adsforgood produced exactly **one** unload flush. **Their `page_exit`/pv is structurally incomparable to EOS's** (0.33 vs 0.66) because EOS is Shopify with full page loads. Do not read one against the other.
+- **NSC 14-day baseline before flipping — `page_exit`/pv ranges 0.221–0.583** (median 0.303; the two high days are low-volume days with small denominators). **Pre-registered decision rule:** 🟢 proceed to EOS if inside 0.22–0.37 on normal-volume days with `events_per_pv` 6–10 **and** batch structure confirms multi-event requests with distinct ts; 🔴 roll back if <0.20 across BOTH days or `events_per_pv` <5 or `page_exit` vanishes; 🟡 otherwise conclude nothing and go to EOS. **A single day at 0.21 is NOT red** — that is inside the historical band.
+- **⏸ W1 step 4 (the measurement that justifies the whole project) is BLOCKED ON EOS.** The journey upsert is 74.5% of all DB time; ads4good (307 events/7 d) and NSC (3,847) move the global number by <1%. Re-read `pg_stat_statements` for `queryid -147026270879632010` against the Sep 21 baseline (3,416,360 calls / 1,122,322,876 ms; post-index-drop mean 163.3 ms) only after EOS is batched.
+- **Rollback is one `UPDATE`**, effective within 5 min (server cache); browsers drop the cached flag on their next prompts fetch.
+
 ### W1 step 2 — pixel buffers + flushes, behind a per-client flag that defaults OFF (Sep 23, 2026)
 
 #### 🚧 THE BLOCKER, FOUND BEFORE A LINE OF PIXEL CODE WAS WRITTEN
