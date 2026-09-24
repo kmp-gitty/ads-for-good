@@ -657,6 +657,7 @@ if (!anonId) {
     __chapterLoaded: true,
     track: function (eventName, props) {
       send(eventName, props);
+      chapterNotifyTracked(eventName, props);
     },
     setConsent: function (state) {
       // Public API for storefront cookie banners. Pass "opt_in" or "opt_out".
@@ -1082,8 +1083,25 @@ setInterval(function () {
     try { localStorage.setItem(chapterFrequencyKey(slug), String(Date.now())); } catch (e) {}
   }
 
+  // Lifetime show cap. frequency controls shows WITHIN a window (once a session,
+  // once per N days); this caps total shows across the visitor's whole life, so
+  // "every subsequent visit" can't mean "forever". Survives in localStorage.
+  function chapterLifetimeKey(slug) { return "chapter_prompt_shows_" + slug; }
+  function chapterPromptLifetimeShows(slug) {
+    try { return parseInt(localStorage.getItem(chapterLifetimeKey(slug)) || "0", 10) || 0; }
+    catch (e) { return 0; }
+  }
+  function chapterBumpPromptLifetimeShows(slug) {
+    try {
+      localStorage.setItem(chapterLifetimeKey(slug),
+        String(chapterPromptLifetimeShows(slug) + 1));
+    } catch (e) {}
+  }
+
   function chapterIsPromptThrottled(prompt) {
     if (!prompt || !prompt.slug) return false;
+    var maxShows = prompt.targeting_jsonb && prompt.targeting_jsonb.max_shows_lifetime;
+    if (maxShows && chapterPromptLifetimeShows(prompt.slug) >= Number(maxShows)) return true;
     var freq = prompt.frequency || "session";
     if (freq === "session") return chapterPromptShownThisSession(prompt.slug);
     if (freq === "visitor") return chapterPromptShownForVisitor(prompt.slug, prompt.frequency_days);
@@ -1091,6 +1109,7 @@ setInterval(function () {
   }
   function chapterRecordPromptShown(prompt) {
     if (!prompt || !prompt.slug) return;
+    chapterBumpPromptLifetimeShows(prompt.slug);
     var freq = prompt.frequency || "session";
     if (freq === "session") chapterMarkPromptShownSession(prompt.slug);
     else if (freq === "visitor") chapterMarkPromptShownVisitor(prompt.slug);
@@ -2739,6 +2758,7 @@ setInterval(function () {
     try {
       chapterFetchCartSnapshot().then(function (cart) {
         chapterKnownCartToken = (cart && cart.token) || null;
+        chapterKnownCartItems = (cart && cart.items) ? cart.items.length : 0;
       });
     } catch (e) { /* noop */ }
   }
@@ -2751,6 +2771,105 @@ setInterval(function () {
       if (String(list[i]) === chapterKnownCartToken) return true;
     }
     return false;
+  }
+
+  // ---- Paid-entry gate -----------------------------------------------------
+  // Reads the DURABLE server-set chapter_paid_entry_<client> cookie (see
+  // /api/pixel). Deliberately not the older JS-set chapter_entry cookie, which
+  // Safari ITP caps at ~7 days — measured coverage there was 39% of paid
+  // journeys, so most paid clickers were unrecognisable on a later visit.
+  // Fails CLOSED: no marker means we do not claim paid entry.
+  function chapterHasPaidEntry(prompt) {
+    var want = prompt && prompt.targeting_jsonb && prompt.targeting_jsonb.paid_entry;
+    if (!want) return true;                    // not configured -> pass
+    var raw = readCookieValue("chapter_paid_entry_" + clientKey);
+    if (!raw) return false;
+    var parsed = null;
+    try { parsed = JSON.parse(raw); } catch (e) { return false; }
+    if (!parsed || !parsed.p) return false;
+    var list = want && want.platform_in;
+    if (list && list.length) {
+      for (var i = 0; i < list.length; i++) {
+        if (String(list[i]) === parsed.p) return true;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  // ---- Cart minimum-items gate --------------------------------------------
+  // Fails CLOSED while the cart is unknown, so we never offer a cart-recovery
+  // discount to someone we cannot confirm is holding a cart.
+  var chapterKnownCartItems = null;
+  function chapterMatchesCartMinItems(prompt) {
+    var min = prompt && prompt.targeting_jsonb && prompt.targeting_jsonb.cart_min_items;
+    if (!min) return true;
+    if (chapterKnownCartItems === null) return false;
+    return chapterKnownCartItems >= Number(min);
+  }
+
+  // ---- Tracked-event subscribers ------------------------------------------
+  // var is hoisted, so a track() firing before this line still no-ops safely.
+  var chapterTrackSubs = null;
+  function chapterOnTrackedEvent(name, fn) {
+    if (!chapterTrackSubs) chapterTrackSubs = [];
+    chapterTrackSubs.push({ n: name, f: fn });
+  }
+  function chapterNotifyTracked(name, props) {
+    if (!chapterTrackSubs) return;
+    for (var i = 0; i < chapterTrackSubs.length; i++) {
+      if (chapterTrackSubs[i].n === name) {
+        try { chapterTrackSubs[i].f(props); } catch (e) {}
+      }
+    }
+  }
+
+  // ---- cart_hold trigger ---------------------------------------------------
+  // Two firing paths in one prompt:
+  //   * visitor ARRIVES holding a cart  -> fire delay_on_return_ms after load
+  //   * visitor ADDS to cart this visit -> fire delay_after_add_ms after the add
+  // No existing trigger expresses the second: time_on_page is relative to page
+  // LOAD, this is relative to an EVENT. Combined with frequency=session and
+  // max_shows_lifetime this yields "10s after the first add, then once per
+  // visit for the next N visits".
+  function chapterRegisterCartHoldTrigger(prompt) {
+    var t = prompt.trigger_jsonb || {};
+    var onReturn = Number(t.delay_on_return_ms) || 3000;
+    var afterAdd = Number(t.delay_after_add_ms) || 10000;
+    var fired = false;
+
+    function attempt() {
+      if (fired) return;
+      if (chapterIsPromptThrottled(prompt)) return;
+      if (!chapterMatchesPagePattern(prompt)) return;
+      if (!chapterHasPaidEntry(prompt)) return;
+      if (!chapterMatchesCartMinItems(prompt)) return;
+      if (!chapterMatchesCartToken(prompt)) return;
+      fired = true;
+      chapterRenderPrompt(prompt);
+    }
+
+    // Path 1 - already holding a cart on arrival.
+    try {
+      chapterFetchCartSnapshot().then(function (cart) {
+        chapterKnownCartItems = (cart && cart.items) ? cart.items.length : 0;
+        if (chapterKnownCartItems > 0) setTimeout(attempt, onReturn);
+      });
+    } catch (e) { /* noop */ }
+
+    // Path 2 - add_to_cart during this visit. Bust the 5s snapshot cache first
+    // so we re-read the cart AFTER the add rather than serving the pre-add copy.
+    chapterOnTrackedEvent("add_to_cart", function () {
+      try {
+        chapterCartSnapshotAt = 0;
+        chapterCartSnapshotPromise = null;
+        chapterFetchCartSnapshot().then(function (cart) {
+          chapterKnownCartItems = (cart && cart.items) ? cart.items.length : 0;
+          chapterKnownCartToken = (cart && cart.token) || chapterKnownCartToken;
+        });
+      } catch (e) { /* noop */ }
+      setTimeout(attempt, afterAdd);
+    });
   }
 
   function chapterRegisterClickElementTrigger(prompt) {
@@ -2864,8 +2983,10 @@ setInterval(function () {
         // Only hit /cart.js when a prompt actually needs the token — keeps the
         // extra request off every client that doesn't use cart-token targeting.
         var needsCartToken = prompts.some(function (p) {
-          var t = p && p.targeting_jsonb && p.targeting_jsonb.cart_token_in;
-          return !!(t && t.length);
+          var tg = (p && p.targeting_jsonb) || {};
+          var trg = (p && p.trigger_jsonb) || {};
+          return !!((tg.cart_token_in && tg.cart_token_in.length)
+            || tg.cart_min_items || trg.type === "cart_hold");
         });
         if (needsCartToken) chapterPrimeCartToken();
         prompts.forEach(function (prompt) {
@@ -2875,6 +2996,7 @@ setInterval(function () {
           else if (trig.type === "time_on_page") chapterRegisterTimeOnPageTrigger(prompt);
           else if (trig.type === "scroll_depth") chapterRegisterScrollDepthTrigger(prompt);
           else if (trig.type === "page_depth") chapterRegisterPageDepthTrigger(prompt);
+          else if (trig.type === "cart_hold") chapterRegisterCartHoldTrigger(prompt);
         });
       })
       .catch(function () {});

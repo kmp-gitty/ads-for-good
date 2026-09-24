@@ -584,6 +584,50 @@ export async function POST(req: NextRequest) {
     secure: !isLocalReq, sameSite: isLocalReq ? "lax" : "none",
     path: "/", maxAge: 60 * 60 * 24 * 365,
   });
+  // ---- Durable paid-entry marker -------------------------------------------
+  // The client-side click-id capture writes chapter_entry via document.cookie,
+  // which Safari ITP caps at ~7 days REGARDLESS of how good the host is.
+  // Measured coverage on eos_fabrics: only 276 of 700 paid journeys (39%) ever
+  // carried an entry stamp, so ~6 in 10 paid clickers were unrecognisable on a
+  // later visit.
+  //
+  // Setting it SERVER-side here rides the same path as up_anon above —
+  // Set-Cookie, apex-scoped, on an A-record host — the exact config Test 1
+  // proved survives past the ITP cap. Coverage becomes complete by
+  // construction: if a click id reached ingest, the marker is written.
+  //
+  // Deliberately NOT refreshed on click-less requests: the 90-day window runs
+  // from the click, matching Google's click-through window. Refreshing on every
+  // pageview would silently extend "came from an ad" forever.
+  const paidEntry = (() => {
+    const KINDS: Array<[string, string]> = [
+      ["gclid", "google"], ["gbraid", "google"], ["wbraid", "google"],
+      ["msclkid", "microsoft"], ["fbclid", "meta"],
+      ["ttclid", "tiktok"], ["rdt_cid", "reddit"],
+    ];
+    for (const ev of prepared) {
+      const pids = (ev.partner_ids || {}) as Record<string, unknown>;
+      for (const [key, platform] of KINDS) {
+        const v = pids[key];
+        if (v !== undefined && v !== null && String(v).trim() !== "") {
+          return { kind: key, platform };
+        }
+      }
+    }
+    return null;
+  })();
+  if (paidEntry) {
+    res.cookies.set(
+      `chapter_paid_entry_${client_key}`,
+      JSON.stringify({ k: paidEntry.kind, p: paidEntry.platform, t: Date.now() }),
+      {
+        domain: cookieDomain, httpOnly: false,
+        secure: !isLocalReq, sameSite: isLocalReq ? "lax" : "none",
+        path: "/", maxAge: 60 * 60 * 24 * 90,
+      },
+    );
+  }
+
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
   return res;
 }
