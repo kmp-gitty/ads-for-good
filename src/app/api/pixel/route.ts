@@ -502,6 +502,27 @@ export async function POST(req: NextRequest) {
     try {
       await withClient(client_key, async (tx) => {
         for (const idKey of seedIdentities) {
+          // The seed table carries TWO key conventions in the wild, and this lookup
+          // must match both:
+          //   - PREFIXED (`email_sha256:<hash>`) — written by /api/offline and the
+          //     Sprint 6 CSV uploader.
+          //   - BARE sha256 (no prefix; type carried in identity_type/is_hashed) —
+          //     written by the n8n CRM bridge, which writes DIRECT to Postgres and so
+          //     never passes through this route's convention.
+          // idKey is ALWAYS prefixed (isDeterministicIdentityKey gates on a prefix), so
+          // before this, a bare-key seed could never match: the CRM seeding leg had
+          // minted exactly zero milestones since it was built. Verified Sep 24, 2026 —
+          // adsforgood_prod had 136 bare seeds and 0 seed-matched milestones.
+          // The bare branch is additionally guarded on identity_type so an email hash
+          // can never match a phone seed; for any other prefix bareType is null and
+          // `identity_type = NULL` yields NULL (not true), so the branch is skipped.
+          const sep = idKey.indexOf(":");
+          const bareKey = sep > 0 ? idKey.slice(sep + 1) : null;
+          const bareType = idKey.startsWith("email_sha256:")
+            ? "email"
+            : idKey.startsWith("phone_sha256:")
+              ? "phone"
+              : null;
           const seeds = await tx<{
             source_type: string | null;
             source_id: string | null;
@@ -512,7 +533,11 @@ export async function POST(req: NextRequest) {
           }[]>`
             SELECT source_type, source_id, seed_ts, metadata, identity_type, is_hashed
             FROM chapter_ingest.offline_identity_seeds
-            WHERE client_key = ${client_key} AND identity_key = ${idKey}
+            WHERE client_key = ${client_key}
+              AND (
+                identity_key = ${idKey}
+                OR (identity_key = ${bareKey} AND is_hashed AND identity_type = ${bareType})
+              )
             LIMIT 25
           `;
           if (seeds.length === 0) continue;
