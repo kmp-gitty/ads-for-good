@@ -192,6 +192,76 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of September 22, 2026)
 
+### EOS paid-ads triage + cart-recovery prompt rebuild + a disabled prompt that kept rendering (Sep 21–24, 2026)
+
+**Three threads in one session: Google Ads reallocation, a real correctness bug in the prompt system, and a rebuild of the cart-recovery prompt from a static token list to dynamic targeting. Commit `1e6cedf` + migration `identity_prompts_config_audit` are landed; the paid-entry cookie + `cart_hold` trigger are BUILT BUT UNCOMMITTED at time of writing.**
+
+> **✅ INDEPENDENTLY VERIFIED Sep 24** by the parallel session that committed this entry (two Claude Code windows were live on this repo simultaneously). Checked against production, not taken on trust: `chapter_config.identity_prompts_audit` exists with 1 trigger on `identity_prompts` · Google Ads `24203393937` Shopping = **PAUSED**, AG2 `197879655765` = **PAUSED**, AG3 Denim = **PAUSED**, AG1 Wool & Coating = **ENABLED** · `paid_cart_recovery_sep26` carries **9** `cart_token_in` entries with `page_match` still present and trigger still `time_on_page` (i.e. the post-deploy config below is genuinely not yet applied). **One claim did NOT survive verification — see the `updated_at` correction below.**
+
+#### Google Ads — concentrated onto the one working unit
+- **Reconciled Chapter against Google Ads exactly: 3 conversions each** (Sep 9–24). Search 1 / $76.75 (Google) ↔ order #104516 / $84.84 (Chapter); Shopping 2 / $21.00 ↔ #104416 $29.60 + #104431 $7.75. Value differs because Google records the tag's conversion value and Chapter records Shopify `total_price` incl. tax/shipping — not a discrepancy.
+- **Spend $345.30 → revenue $122.19 = 0.35 ROAS.** Search $103.87 (126 clicks, 14.05% CTR, $0.824 CPC); Shopping $241.43 (704 clicks, 1.37% CTR, $0.343 CPC).
+- **Only one unit is above water: Search AG1 Wool & Coating** — $69.06 → $76.75 (1.11 revenue-ROAS, ~0.44 on margin). Everything else is 0–0.31. Worst: Shopping Viscose/Rayon/Crepe, $59.04 across 193 clicks, **zero** conversions.
+- **Search is 90.01% budget-lost with only 3.3% rank-lost** — bids/quality are fine, it is purely starved. That is what justified moving budget rather than bidding.
+- **Actions applied via MCP:** Shopping - Core Feed `ENABLED → PAUSED` (campaign `24203393937`); Search AG2 Designer Deadstock `ENABLED → PAUSED` (`197879655765`). AG3 Denim was **already** paused. Operator raised Search daily budget $5.92 → ~$14 by hand — **the MCP refuses budget INCREASES on an enabled campaign by design** ("increases raise real spend"), so that step is always manual.
+- **⚠️ FOOTGUN found during verification: the Shopping campaign is paused, but all FIVE of its ad groups are still `ENABLED`.** Campaign-level pause stops delivery, so spend is genuinely stopped today — but re-enabling the campaign resumes **everything at once**, including Viscose/Rayon/Crepe, the unit that burned $59.04 for zero conversions. If Shopping is ever switched back on, pause the losing ad groups FIRST.
+- **⏳ KILL LINE (agreed, record it):** review AG1 at **~10 conversions or ~$200 further spend**, whichever first. If margin-ROAS is still <1.0, stop paid and put the effort into free listings + checkout. Context: free Shopping listings drove ~55 buyers / **$5,889** in September at zero media cost vs paid's 3 / $122 on $345.
+- **`sag_organic` is NOT free traffic.** Shopify tags BOTH Shopping surfaces with `utm_campaign=sag_organic&utm_medium=product_sync`; the click id separates them and the split is mutually exclusive: **gclid, no srsltid = PAID** (3,578 events / 566 visitors); **srsltid, no gclid = FREE** (482 / 53). An earlier read that called these free was wrong — do not judge paid-vs-free by campaign name.
+
+#### 🐞 A disabled + expired prompt kept rendering for ~7 weeks — CAUSE STILL UNKNOWN
+- `eos_fabrics / 15_percent_off` (a deliberate 3-day sale, created Jul 29, `expires_at` Aug 1, `enabled=false`) has **3,288 showings all-time, last Sep 22**. Weekly decay: **3,172 → 89 → 10 → 6 → 3 → 4 → 1 → 2 → 1**.
+- **The expiry mechanism WORKED** — 97% cutoff at the exact boundary. What remained was a draining tail of already-active clients rendering a copy the server had stopped serving. Self-healing, effectively finished.
+- **Not systemic:** across all clients only this one prompt ever showed while disabled (adsforgood's `exit_intent_recovery`, 68 showings, is correctly enabled). Targeting/gating/frequency logic is not implicated.
+- **Ruled out, each with a check:** server filtering (`.eq("enabled",true)` + `expires_at` guard, added `fd08e44` **Jul 29**, predates every showing; both origins return only the one live prompt) · HTTP/CDN caching (`no-store, no-cache, must-revalidate` confirmed on the wire, in place since `905d1d5` Jun 19; `x-vercel-cache: MISS`) · client-side prompt caching (pixel fetches `cache:"no-store"`, persists only the batching flag) · duplicate/stale pixel embed (one script tag, `s.eosfabrics.com`, current build) · service worker (none registered; `/sw.js`, `/service-worker.js`, `/serviceworker.js` all 404) · buffered replay (timestamps naturally spread and interleaved with live browsing) · a UI re-toggle.
+- **⚠️ CORRECTION — the re-toggle check can no longer be reproduced from the live column, and this entry originally stated it wrongly.** The entry as drafted said *"`togglePrompt` stamps `updated_at`; it reads Aug 10."* **It no longer does.** `identity_prompts.updated_at` for this prompt now reads **2026-09-24 17:43:02**, because the very first thing the new audit trigger captured was a **smoke-test of the trigger itself**: `op=UPDATE`, `changed_by=postgres`, `changed_fields=['updated_at']`, `enabled` false → false. The real Aug 10 value (`2026-08-10T14:29:53`) survives **only** inside `identity_prompts_audit.old_row`.
+  - **The conclusion still holds** (no re-toggle — `enabled` never moved), but the *evidence* moved house. **From now on `identity_prompts_audit` is the authoritative history for this column, NOT the column itself.**
+  - Two lessons, both general: **a smoke-test that writes to the row you are diagnosing can destroy the datum you were relying on** — test the trigger on a throwaway row. And `changed_by` recording `postgres` here is the documented limitation demonstrating itself on the audit table's very first row.
+- **Financially inert** — SAVE15 was already expired in Shopify; zero SAVE15 and zero SHOPEOS across 64 discounted orders since Sep 1.
+- **Closing it needs a browser**, not the server: load the storefront in a profile carrying old EOS storage and watch whether a bubble renders and what the prompts response returns. Leading unproven hypothesis is bfcache / some client-side restore.
+- **⚠️ `updated_at` on `chapter_config.identity_prompts` was NOT trustworthy** — the table had **no triggers at all**, so it only moved when app code set it. That is why "was this prompt enabled on Sep 5?" was unanswerable.
+
+#### Instrumentation so the next occurrence self-explains
+- **Commit `1e6cedf`** — `prompt_updated_at` stamped onto **all 6** `identity_prompt_shown` call sites, with `updated_at` added to the prompts endpoint SELECT. Any future showing now identifies which config version rendered it.
+- **Migration `identity_prompts_config_audit`** (DB-only) — `chapter_config.identity_prompts_audit` + `trg_identity_prompts_audit`, capturing every INSERT/UPDATE/DELETE with old/new row snapshots and a `changed_fields` array, plus a partial index on `'enabled' = any(changed_fields)` for the exact question that started this. No-op saves are skipped. **Limits:** `changed_by` records the DB role (`service_role`/`postgres`), not the human; and it starts from now — August is unreconstructable.
+
+#### Cart-recovery prompt: static token list → dynamic targeting
+- Interim: `paid_cart_recovery_sep26`'s `cart_token_in` went 3 → 14 → **9 tokens ($980.50 of live cart value)**, excluding 2 that had converted, 1 null token and 5 empty ($0) carts. Verified every token maps to exactly **1 visitor** first — CLAUDE.md records a shared "default" cart token that spanned 91 anons, and one of those in the list would have shown the discount to every `/cart` visitor.
+- **The static list is the wrong mechanism** — 10 new paid carts (~$464) appeared within 3 days of setting it.
+- **Design decisions locked with the operator:**
+  - **Paid-only, deliberately.** It is a paid-ROAS exercise; blanket discounting defeats the purpose. (All-traffic would have been 26× the reach — 265 journeys / $54,932 of cart value vs 10 / ~$1,445 — but was declined on margin grounds.)
+  - **`page_match` DROPPED.** `/cart` is only **35 of 2,087** paid pageviews (**1.8%**) — the gate throttled reach ~60×, and **6 of 22** paid cart-holders never visit `/cart` at all. Mid-browse risk is low because the preset is a **bubble** (corner, dismissible) not a modal, and the pixel never runs on checkout (zero `/checkout` pageviews — Shopify hosts it separately).
+  - **No page-depth cap** — it would have broken the same-session branch and `page_match` already addressed the stated worry.
+  - Trigger is **"has added to cart"**, no cart view required.
+- **⚠️ Entry-cookie coverage was only 39%** — of **700** paid journeys, just **276** ever carried an `entry_click_id` stamp. Cause: the client-side capture writes `chapter_entry` via `document.cookie`, which **Safari ITP caps at ~7 days regardless of how good the host is**. No tracking template is set on either campaign, and **one should NOT be added** — per the NSC lesson, Safari's bounce-tracking mitigation purges a cookie set during the ad-click bounce, which is exactly why the client-side capture exists.
+- **Attribution is NOT affected by that 39%** — it reads `partner_ids` off the ingested event, never `chapter_entry`. Re-derived the 3 paid orders by a fully independent path (Shopify `cart_token` on the order vs paid-clicker carts, no identity stitching) and got **the same 3 orders / same $122.19**. Note **698 of 701 paid journeys are anonymous-only**, which is normal (non-buyers never identify) — all 3 who bought resolved cleanly. Residual risk is narrow: a cross-device purchaser is invisible to both methods.
+
+#### BUILT, UNCOMMITTED — durable paid-entry cookie + `cart_hold` trigger
+- **⚠️ DEPLOY STATE AS OF THIS COMMIT:** `1e6cedf` (prompt config-version stamping) **IS** pushed and live. The two files below are **committed by nobody and NOT deployed** — they sit uncommitted in the working tree. Anything in this sub-section describes code that is **not running in production yet**.
+- **`src/app/api/pixel/route.ts`** — sets `chapter_paid_entry_<client>` whenever an ingested event carries a click id (gclid/gbraid/wbraid + msclkid/fbclid/ttclid/rdt_cid), storing `{k, p, t}`. Same `Set-Cookie` + apex-scoped + A-record path as `up_anon` (the Test-1-proven config), **maxAge 90 days** to match Google's click window. **Deliberately not refreshed on click-less requests** so the window runs from the click rather than silently extending "came from an ad" forever. Coverage becomes complete by construction: if a click id reached ingest, the marker is written.
+- **`src/app/api/chapter/pixel.js/route.ts`** — `chapterHasPaidEntry()` (reads the new durable cookie, optional `platform_in`, **fails closed**) · `chapterMatchesCartMinItems()` (**fails closed** while the cart is unknown) · `chapterRegisterCartHoldTrigger()` (new trigger: arrives-holding-cart → `delay_on_return_ms`; adds-to-cart-this-visit → `delay_after_add_ms`, busting the 5s cart cache so it reads post-add) · `max_shows_lifetime` (localStorage counter in the throttle, bumped on render) · cart priming broadened to `cart_min_items` / `cart_hold`.
+- **Why a new trigger type:** none of the five existing ones are event-relative — `time_on_page` fires relative to page LOAD, this fires relative to an EVENT. The pixel can see `add_to_cart` because EOS's theme fires it through the `/cart/add` network intercept into the pixel queue, so hooking `api.track` is the clean insertion point.
+- **⚠️ DEPLOY ORDER:** ship the code BEFORE switching the prompt's DB config. If config flips first, the live pixel won't recognise `cart_hold`, no trigger registers, and the prompt silently stops firing. Also: **the cookie only accumulates from deploy** — clicks before then have no marker, nothing to backfill.
+- **Config to apply AFTER deploy** (dropping `page_match` and `cart_token_in`) — **verified NOT yet applied as of this commit**:
+  `trigger_jsonb: {"type":"cart_hold","delay_after_add_ms":10000,"delay_on_return_ms":3000}` ·
+  `targeting_jsonb: {"paid_entry":true,"cart_min_items":1,"max_shows_lifetime":5}` · `frequency:"session"`.
+  `max_shows_lifetime: 5` counts **every** render — the first (10s-after-add) show plus 4 subsequent visits. Operator confirmed that is intended.
+
+#### Lessons (all cost real time this session)
+- **`node --check` on an empty file passes.** The pixel body extraction silently produced 0 lines (wrong delimiter — it is `` `.trim(); ``, not `` `; ``) and the syntax check "passed". **Always assert the extracted body is non-empty before trusting it.** Correct extraction is lines 5..N where N is the `` `.trim(); `` line; body is ~3,025 lines / ~130KB with **0** `${}` interpolations. (The `1e6cedf` commit message cites 2,903 lines — that was before the uncommitted work above added ~120 more. Both are right for their moment.)
+- **`tsc` cannot see inside the pixel template literal** — it is one big string. Type-checking proves nothing about the JS; extract and `node --check`.
+- **Receipt vs occurrence timestamps blocked the prompt diagnosis twice.** `/api/pixel` stamps `ts` at RECEIPT and the pixel sends no client time, so delivery order and event order are indistinguishable. This is the **W0** item already queued in the publisher-scale build — worth pulling forward on its own merits.
+- **Before blaming data, check whether the column is maintained.** `updated_at` looked authoritative and wasn't (no triggers).
+- **Do not smoke-test a new audit trigger on the row you are actively diagnosing** — see the `updated_at` correction above. Use a throwaway row.
+- **Verify eslint noise is pre-existing** — `git stash` the touched files, re-run, compare. Here 15 problems were identical at HEAD; the diff added zero `any`.
+- **Mailchimp is retired** (operator confirmed). Do not schedule `sync-mailchimp-engagement.js`; the `?rid=` identity-hint flavour resolves via `email_engagement_events.recipient_token` which only Mailchimp populated, so prefer `?rh=` / `?re=`. Replacement ESP unknown — ask, don't guess.
+
+#### Open / next
+- **Deploy the two uncommitted files, then flip the prompt config** (above) — in that order.
+- Root-cause the disabled-prompt rendering in a browser session.
+- `chapter_entry` vs the new `chapter_paid_entry` overlap — the old JS-set cookie can be retired once the durable one is proven.
+- A **non-cart** paid prompt "of a different shape" is queued as the next build.
+- If Shopping is ever re-enabled, pause the losing ad groups first (see footgun above).
+
 ### Lifecycle detection bug — backdated boundary events silently dropped; fixed + falsified, recovery blocked by a floor ratchet (Sep 24, 2026)
 
 #### How it was found — a design question, not a bug report
