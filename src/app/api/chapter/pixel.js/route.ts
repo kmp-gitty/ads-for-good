@@ -1264,7 +1264,7 @@ setInterval(function () {
 
     document.body.appendChild(bubble);
     chapterRecordPromptShown(prompt);
-    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type, container: "bubble" });
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, prompt_updated_at: prompt.updated_at, preset_type: prompt.preset_type, container: "bubble" });
   }
 
   // MI v2 Phase 4 — Phone Call preset.
@@ -1342,7 +1342,7 @@ setInterval(function () {
     backdrop.appendChild(card);
     document.body.appendChild(backdrop);
     chapterRecordPromptShown(prompt);
-    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type, container: "modal" });
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, prompt_updated_at: prompt.updated_at, preset_type: prompt.preset_type, container: "modal" });
   }
 
   // Phase 2A/2B — composable renderer for Custom Form preset.
@@ -1496,7 +1496,7 @@ setInterval(function () {
     document.body.appendChild(backdrop);
 
     chapterRecordPromptShown(prompt);
-    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type });
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, prompt_updated_at: prompt.updated_at, preset_type: prompt.preset_type });
 
     // MI v2 Phase 2C — recovery flow state
     var recoveryConfig = prompt.recovery_jsonb && prompt.recovery_jsonb.enabled
@@ -2182,7 +2182,7 @@ setInterval(function () {
 
     backdrop.appendChild(card);
     document.body.appendChild(backdrop);
-    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type, container: "modal" });
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, prompt_updated_at: prompt.updated_at, preset_type: prompt.preset_type, container: "modal" });
   }
 
   function chapterPostOfferSubmit(payload) {
@@ -2391,7 +2391,7 @@ setInterval(function () {
 
     backdrop.appendChild(card);
     document.body.appendChild(backdrop);
-    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, preset_type: prompt.preset_type, container: "modal" });
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, prompt_updated_at: prompt.updated_at, preset_type: prompt.preset_type, container: "modal" });
   }
 
   function chapterPostSubscriptionCreate(payload) {
@@ -2530,7 +2530,7 @@ setInterval(function () {
     document.body.appendChild(backdrop);
 
     chapterRecordPromptShown(prompt);
-    api.track("identity_prompt_shown", { prompt_slug: prompt.slug });
+    api.track("identity_prompt_shown", { prompt_slug: prompt.slug, prompt_updated_at: prompt.updated_at });
 
     function dismiss(method) {
       if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
