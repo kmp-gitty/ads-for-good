@@ -12,13 +12,15 @@
 //   2. appointment_paid    — downstream event, value = actual payment amount.
 //                            Same order_id as the booking so dashboards can
 //                            JOIN to compute booking → paid fulfillment rate.
-//   3. (future) refunds via payment.updated with REFUNDED status will INSERT
-//      into chapter_ingest.refund_events; Sprint 3 refund netting already
+//   3. refunds are NOT handled here — /api/square/webhooks/refunds owns them
+//      and writes chapter_ingest.refund_events; Sprint 3 refund netting already
 //      handles the dashboard math.
 //
 // Event types we handle:
 //   payment.created   → emit appointment_paid (if status COMPLETED)
-//   payment.updated   → REFUND handling DEFERRED (writes to refund_events)
+//   payment.updated   → emit appointment_paid (if status COMPLETED). REQUIRED,
+//                       not optional: for card-present POS this is the ONLY
+//                       event that ever carries COMPLETED. See gate comment below.
 //
 // Webhook subscription URL: /api/square/webhooks/payments (separate from the
 // bookings subscription so subscriptions can rotate signing keys independently).
@@ -152,9 +154,24 @@ export async function POST(req: NextRequest) {
       ip_hash: ipHash, user_agent_snippet: ua,
     });
 
-    // For v1: only payment.created with status COMPLETED becomes a chapter
-    // event. payment.updated handling (refunds, partial captures) is deferred.
-    if (eventType !== "payment.created") {
+    // Accept BOTH payment.created and payment.updated.
+    //
+    // WHY BOTH — this route wrote ZERO rows for ~12 weeks (fixed Sep 24, 2026).
+    // A card-present POS payment is created APPROVED and only reaches COMPLETED
+    // at settlement, which Square delivers as payment.updated. Admitting only
+    // payment.created made this gate and the COMPLETED gate below MUTUALLY
+    // EXCLUSIVE: the one event that carries COMPLETED was discarded here, so
+    // nothing could ever pass. Do not narrow this back to payment.created.
+    //
+    // Double-delivery is safe BY CONSTRUCTION, not by luck: the event_id built
+    // below is keyed on the PAYMENT id (not Square's event id), so created and
+    // updated for the same payment collapse onto one row via /api/purchase's
+    // upsert on (client_key, source_platform,
+    // COALESCE(event_id, order_id, payment_id)).
+    //
+    // Refunds do NOT arrive here in practice: payment.updated carrying REFUNDED
+    // fails the COMPLETED check below. /api/square/webhooks/refunds owns them.
+    if (eventType !== "payment.created" && eventType !== "payment.updated") {
       return NextResponse.json({ ok: true, skipped: eventType }, { status: 200 });
     }
 
@@ -173,8 +190,17 @@ export async function POST(req: NextRequest) {
 
         const status = typeof payment.status === "string" ? payment.status : null;
         if (status !== "COMPLETED") {
-          // Ack-and-skip in-flight / failed payments. payment.updated fires
-          // when status transitions to COMPLETED.
+          // Ack-and-skip in-flight / failed / refunded payments. The COMPLETED
+          // transition arrives as its own payment.updated and IS admitted above.
+          //
+          // LOG — never return silently here. The silent version of this line is
+          // precisely why the mutually-exclusive-gates bug survived ~12 weeks:
+          // chapter_audit.api_auth_attempts recorded success=true (HMAC passed)
+          // while after() wrote nothing, so every operator surface looked healthy.
+          const pid = typeof payment.id === "string" ? payment.id : "unknown";
+          console.log(
+            `[payments] skip_non_completed merchant=${merchantId} topic=${eventType} status=${status ?? "unknown"} payment=${pid}`
+          );
           return;
         }
 
@@ -215,6 +241,10 @@ export async function POST(req: NextRequest) {
         const purchasePayload = {
           client_key:      clientKey,
           source_platform: "square_payments",
+          // LOAD-BEARING: keyed on the PAYMENT id, and the literal string stays
+          // `square_payment_created_` even when the topic is payment.updated.
+          // This is what collapses created+updated for one payment onto a single
+          // row. Renaming it per-topic would emit TWO rows per payment.
           event_id:        paymentId ? `square_payment_created_${paymentId}` : null,
           event_name:      "appointment_paid",
           order_id:        orderId,
