@@ -865,19 +865,60 @@ if (!anonId) {
           "| click=", landClick.kind + "/" + landClick.platform,
           "| at t+", Math.round(performance.now()), "ms"
         );
+        var __paidPayload = JSON.stringify({
+          k: landClick.kind,
+          p: landClick.platform,
+          t: Date.now()
+        });
+
+        // PRIMARY store: localStorage. Measured on eos_fabrics, the cookie
+        // write below EXECUTES at ~t+688ms and the value is NOT readable on the
+        // very next synchronous statement, while an identical write from the
+        // console at t+3min succeeds and the document.cookie setter is native
+        // (nothing is patching it). Whatever the browser is doing to that write
+        // mid-load, it does not apply here: the pixel already relies on
+        // localStorage for up_anon at this same point in init.
+        //
+        // The server's Set-Cookie on the collect response remains the DURABLE
+        // record (90d, survives ITP because it is server-set on the A-record
+        // host). This is the fast path that closes the race, not a replacement:
+        // Safari caps script-writable storage at ~7 days, so localStorage alone
+        // would silently lapse on exactly the returning visitor we care about.
+        try {
+          localStorage.setItem("__chapter_paid_entry_" + clientKey, __paidPayload);
+        } catch (e) {}
+
         if (!__paidExisting) {
           document.cookie =
-            __paidName + "=" +
-            encodeURIComponent(JSON.stringify({
-              k: landClick.kind,
-              p: landClick.platform,
-              t: Date.now()
-            })) +
+            __paidName + "=" + encodeURIComponent(__paidPayload) +
             "; Path=/; Max-Age=" + (60 * 60 * 24 * 90) +
             (chapterApex ? "; Domain=" + chapterApex : "") +
             "; SameSite=Lax" +
             (location.protocol === "https:" ? "; Secure" : "");
           __paidLog("wrote -> readback=", readCookieValue(__paidName));
+
+          // TEMPORARY DIAGNOSTIC — only runs when the write did NOT stick.
+          // Isolates which attribute the browser rejects at this instant.
+          // Probes carry Max-Age=120 so they self-clean.
+          if (!readCookieValue(__paidName)) {
+            document.cookie = __paidName + "_hostonly=" + encodeURIComponent(__paidPayload) +
+              "; Path=/; Max-Age=120; SameSite=Lax" +
+              (location.protocol === "https:" ? "; Secure" : "");
+            document.cookie = __paidName + "_nosecure=" + encodeURIComponent(__paidPayload) +
+              "; Path=/; Max-Age=120" +
+              (chapterApex ? "; Domain=" + chapterApex : "") + "; SameSite=Lax";
+            document.cookie = __paidName + "_minimal=" + encodeURIComponent(__paidPayload) +
+              "; Path=/; Max-Age=120";
+            __paidLog(
+              "RETRY host-only=", !!readCookieValue(__paidName + "_hostonly"),
+              "| no-Secure=", !!readCookieValue(__paidName + "_nosecure"),
+              "| minimal=", !!readCookieValue(__paidName + "_minimal"),
+              "| topFrame=", window.top === window,
+              "| cookieEnabled=", navigator.cookieEnabled,
+              "| jarBytes=", document.cookie.length,
+              "| href=", location.href
+            );
+          }
         }
       }
     }
@@ -2866,10 +2907,21 @@ setInterval(function () {
     var want = prompt && prompt.targeting_jsonb && prompt.targeting_jsonb.paid_entry;
     if (!want) return true;                    // not configured -> pass
     var raw = readCookieValue("chapter_paid_entry_" + clientKey);
+    var src = raw ? "cookie" : null;
+    // Fall back to the localStorage marker written at init. The cookie is the
+    // durable record (server-set, survives ITP); this covers the window before
+    // the collect response lands, and the case where the browser drops the
+    // client-side cookie write mid-load (measured on eos_fabrics).
+    if (!raw) {
+      try {
+        raw = localStorage.getItem("__chapter_paid_entry_" + clientKey);
+        if (raw) src = "localStorage";
+      } catch (e) {}
+    }
     // TEMPORARY DIAGNOSTIC — pairs with paid_entry@init above.
     chapterDebug(
       "chapterHasPaidEntry: name=", "chapter_paid_entry_" + clientKey,
-      "| raw=", raw,
+      "| raw=", raw, "| via=", src,
       "| at t+", Math.round(performance.now()), "ms"
     );
     if (!raw) return false;
