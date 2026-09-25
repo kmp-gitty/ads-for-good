@@ -818,6 +818,42 @@ if (!anonId) {
           (chapterApex ? "; Domain=" + chapterApex : "") +
           "; SameSite=Lax" +
           (location.protocol === "https:" ? "; Secure" : "");
+
+        // Paid-entry marker — the SAME click id, written for the prompt gate.
+        //
+        // /api/pixel sets chapter_paid_entry_<client> durably (Set-Cookie on the
+        // A-record collect host) whenever an ingested event carries a click id.
+        // But that write only lands once the collect request COMPLETES, and with
+        // pixel_batching_enabled the landing page_view sits in the buffer for up
+        // to CHAPTER_BATCH_MS (3s) or until pagehide. A cart_hold prompt with
+        // delay_on_return_ms: 3000 evaluates its gates at the same instant that
+        // flush is still in flight, so chapterHasPaidEntry() fails CLOSED on a
+        // visitor who genuinely arrived from an ad. Measured on eos_fabrics:
+        // gates read { paid: false } while the cookie appeared moments later.
+        //
+        // Writing it here removes the round-trip from the critical path — the
+        // gate reads a marker that exists before any trigger can fire.
+        //
+        // ONLY when absent, and that guard is load-bearing: a document.cookie
+        // write is ITP-capped at ~7 days on Safari regardless of Max-Age, so
+        // overwriting a durable server-set marker would silently downgrade a
+        // 90-day cookie to a 7-day one. The server's Set-Cookie on the next
+        // collect response replaces ours (same name/domain/path) with the
+        // durable form, so this is a bridge to close the race, not a
+        // replacement for the server write.
+        if (!readCookieValue("chapter_paid_entry_" + clientKey)) {
+          document.cookie =
+            "chapter_paid_entry_" + clientKey + "=" +
+            encodeURIComponent(JSON.stringify({
+              k: landClick.kind,
+              p: landClick.platform,
+              t: Date.now()
+            })) +
+            "; Path=/; Max-Age=" + (60 * 60 * 24 * 90) +
+            (chapterApex ? "; Domain=" + chapterApex : "") +
+            "; SameSite=Lax" +
+            (location.protocol === "https:" ? "; Secure" : "");
+        }
       }
     }
   } catch (e) {}
