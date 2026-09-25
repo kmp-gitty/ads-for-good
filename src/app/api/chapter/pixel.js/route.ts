@@ -841,49 +841,43 @@ if (!anonId) {
         // collect response replaces ours (same name/domain/path) with the
         // durable form, so this is a bridge to close the race, not a
         // replacement for the server write.
-        // TEMPORARY DIAGNOSTIC (chapter_debug=1 only). The gate reads this
-        // cookie as ABSENT seconds after this write reports success, on a load
-        // where the sibling chapter_entry write demonstrably lands. Logging
-        // both sides with performance.now() so the next retest says which half
-        // is lying instead of costing another round of hypotheses.
-        // chapterDebug() is unusable here: chapterDebugOn is initialised far
-        // below this line, so at init it is still undefined and the call no-ops.
         var __paidName = "chapter_paid_entry_" + clientKey;
         var __paidExisting = readCookieValue(__paidName);
-        var __paidLog = function () {
-          try {
-            if (localStorage.getItem("chapter_debug") === "1") {
-              console.log.apply(console, ["[chapter] paid_entry@init:"].concat(
-                Array.prototype.slice.call(arguments)));
-            }
-          } catch (e) {}
-        };
-        __paidLog(
-          "name=", __paidName,
-          "| existing=", __paidExisting,
-          "| apex=", chapterApex,
-          "| click=", landClick.kind + "/" + landClick.platform,
-          "| at t+", Math.round(performance.now()), "ms"
-        );
         var __paidPayload = JSON.stringify({
           k: landClick.kind,
           p: landClick.platform,
           t: Date.now()
         });
 
-        // PRIMARY store: localStorage. Measured on eos_fabrics, the cookie
-        // write below EXECUTES at ~t+688ms and the value is NOT readable on the
-        // very next synchronous statement, while an identical write from the
-        // console at t+3min succeeds and the document.cookie setter is native
-        // (nothing is patching it). Whatever the browser is doing to that write
-        // mid-load, it does not apply here: the pixel already relies on
+        // PRIMARY store: localStorage.
+        //
+        // MEASURED on eos_fabrics (2026-09-25): the cookie write below EXECUTES
+        // at ~t+700ms and the value is NOT readable on the very next
+        // synchronous statement. Every variant fails at that instant -- with
+        // Domain, host-only, without Secure, and a minimal "name=value; Path=/"
+        // alike -- in the top frame, with navigator.cookieEnabled true and a
+        // 2.6KB jar. An identical create from the console minutes later
+        // succeeds, and document.cookie's setter is native (nothing patches
+        // it). So this is neither an attribute problem nor a blocker script:
+        // client-side cookie CREATES are unavailable this early in the load on
+        // this storefront.
+        //
+        // Leading explanation, UNCONFIRMED: the page is prefetched/prerendered.
+        // Chrome logs "Clear-Site-Data header on .../cart/add: Cleared data
+        // types: prefetchCache, prerenderCache" on this theme, and script
+        // cookie writes in a prerendered document are restricted until
+        // activation. That also explains the performance.now() readings, which
+        // run from prerender start rather than from the visitor's page load.
+        //
+        // localStorage is not subject to this, and the pixel already relies on
         // localStorage for up_anon at this same point in init.
         //
         // The server's Set-Cookie on the collect response remains the DURABLE
-        // record (90d, survives ITP because it is server-set on the A-record
-        // host). This is the fast path that closes the race, not a replacement:
-        // Safari caps script-writable storage at ~7 days, so localStorage alone
-        // would silently lapse on exactly the returning visitor we care about.
+        // record (90d, server-set on the A-record host so it survives ITP).
+        // This is the fast path that closes the gap, not a replacement: Safari
+        // caps script-writable storage at ~7 days, so localStorage alone would
+        // silently lapse on exactly the returning paid visitor this gate exists
+        // to catch. Keep BOTH writes.
         try {
           localStorage.setItem("__chapter_paid_entry_" + clientKey, __paidPayload);
         } catch (e) {}
@@ -895,30 +889,6 @@ if (!anonId) {
             (chapterApex ? "; Domain=" + chapterApex : "") +
             "; SameSite=Lax" +
             (location.protocol === "https:" ? "; Secure" : "");
-          __paidLog("wrote -> readback=", readCookieValue(__paidName));
-
-          // TEMPORARY DIAGNOSTIC — only runs when the write did NOT stick.
-          // Isolates which attribute the browser rejects at this instant.
-          // Probes carry Max-Age=120 so they self-clean.
-          if (!readCookieValue(__paidName)) {
-            document.cookie = __paidName + "_hostonly=" + encodeURIComponent(__paidPayload) +
-              "; Path=/; Max-Age=120; SameSite=Lax" +
-              (location.protocol === "https:" ? "; Secure" : "");
-            document.cookie = __paidName + "_nosecure=" + encodeURIComponent(__paidPayload) +
-              "; Path=/; Max-Age=120" +
-              (chapterApex ? "; Domain=" + chapterApex : "") + "; SameSite=Lax";
-            document.cookie = __paidName + "_minimal=" + encodeURIComponent(__paidPayload) +
-              "; Path=/; Max-Age=120";
-            __paidLog(
-              "RETRY host-only=", !!readCookieValue(__paidName + "_hostonly"),
-              "| no-Secure=", !!readCookieValue(__paidName + "_nosecure"),
-              "| minimal=", !!readCookieValue(__paidName + "_minimal"),
-              "| topFrame=", window.top === window,
-              "| cookieEnabled=", navigator.cookieEnabled,
-              "| jarBytes=", document.cookie.length,
-              "| href=", location.href
-            );
-          }
         }
       }
     }
@@ -2918,7 +2888,6 @@ setInterval(function () {
         if (raw) src = "localStorage";
       } catch (e) {}
     }
-    // TEMPORARY DIAGNOSTIC — pairs with paid_entry@init above.
     chapterDebug(
       "chapterHasPaidEntry: name=", "chapter_paid_entry_" + clientKey,
       "| raw=", raw, "| via=", src,
