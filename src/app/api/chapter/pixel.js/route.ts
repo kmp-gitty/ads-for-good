@@ -2773,6 +2773,28 @@ setInterval(function () {
     return false;
   }
 
+  // ---- Diagnostic logging --------------------------------------------------
+  // Off by default. Turn on per-browser with either:
+  //   localStorage.setItem('chapter_debug','1')    (persists)
+  //   load any page with  #__chapter_debug         (one-off)
+  // A prompt can fail to fire for many individually-silent reasons (a gate
+  // returning false, an empty cart snapshot, a throw inside the promise
+  // chain). This makes every step state what it decided.
+  var chapterDebugOn = (function () {
+    try {
+      if (/__chapter_debug/.test(location.hash)) return true;
+      return localStorage.getItem("chapter_debug") === "1";
+    } catch (e) { return false; }
+  })();
+  function chapterDebug() {
+    if (!chapterDebugOn) return;
+    try {
+      var a = Array.prototype.slice.call(arguments);
+      a.unshift("[chapter]");
+      console.log.apply(console, a);
+    } catch (e) {}
+  }
+
   // ---- Paid-entry gate -----------------------------------------------------
   // Reads the DURABLE server-set chapter_paid_entry_<client> cookie (see
   // /api/pixel). Deliberately not the older JS-set chapter_entry cookie, which
@@ -2837,15 +2859,25 @@ setInterval(function () {
     var onReturn = Number(t.delay_on_return_ms) || 3000;
     var afterAdd = Number(t.delay_after_add_ms) || 10000;
     var fired = false;
+    chapterDebug("cart_hold registered:", prompt.slug, "| onReturn", onReturn, "| afterAdd", afterAdd);
 
-    function attempt() {
-      if (fired) return;
-      if (chapterIsPromptThrottled(prompt)) return;
-      if (!chapterMatchesPagePattern(prompt)) return;
-      if (!chapterHasPaidEntry(prompt)) return;
-      if (!chapterMatchesCartMinItems(prompt)) return;
-      if (!chapterMatchesCartToken(prompt)) return;
+    function attempt(via) {
+      if (fired) { chapterDebug("attempt(" + via + ") skipped - already fired"); return; }
+      var gates = {
+        throttled: chapterIsPromptThrottled(prompt),
+        page: chapterMatchesPagePattern(prompt),
+        paid: chapterHasPaidEntry(prompt),
+        cartMin: chapterMatchesCartMinItems(prompt),
+        cartToken: chapterMatchesCartToken(prompt),
+      };
+      chapterDebug("attempt(" + via + ") gates:", gates, "| knownCartItems:", chapterKnownCartItems);
+      if (gates.throttled) return;
+      if (!gates.page) return;
+      if (!gates.paid) return;
+      if (!gates.cartMin) return;
+      if (!gates.cartToken) return;
       fired = true;
+      chapterDebug("RENDERING", prompt.slug);
       chapterRenderPrompt(prompt);
     }
 
@@ -2853,9 +2885,11 @@ setInterval(function () {
     try {
       chapterFetchCartSnapshot().then(function (cart) {
         chapterKnownCartItems = (cart && cart.items) ? cart.items.length : 0;
-        if (chapterKnownCartItems > 0) setTimeout(attempt, onReturn);
+        chapterDebug("path1 snapshot resolved:", { items: chapterKnownCartItems, token: cart && cart.token });
+        if (chapterKnownCartItems > 0) setTimeout(function () { attempt("path1"); }, onReturn);
+        else chapterDebug("path1 NOT scheduled - cart empty or unknown");
       });
-    } catch (e) { /* noop */ }
+    } catch (e) { chapterDebug("path1 threw:", e); }
 
     // Path 2 - add_to_cart during this visit. Bust the 5s snapshot cache first
     // so we re-read the cart AFTER the add rather than serving the pre-add copy.
@@ -2868,7 +2902,8 @@ setInterval(function () {
           chapterKnownCartToken = (cart && cart.token) || chapterKnownCartToken;
         });
       } catch (e) { /* noop */ }
-      setTimeout(attempt, afterAdd);
+      chapterDebug("path2 add_to_cart seen; attempt in", afterAdd, "ms");
+      setTimeout(function () { attempt("path2"); }, afterAdd);
     });
   }
 
@@ -2988,6 +3023,9 @@ setInterval(function () {
           return !!((tg.cart_token_in && tg.cart_token_in.length)
             || tg.cart_min_items || trg.type === "cart_hold");
         });
+        chapterDebug("prompts loaded:", prompts.length, prompts.map(function (p) {
+          return p.slug + " [" + ((p.trigger_jsonb || {}).type || "?") + "]";
+        }), "| needsCartToken:", needsCartToken);
         if (needsCartToken) chapterPrimeCartToken();
         prompts.forEach(function (prompt) {
           var trig = prompt.trigger_jsonb || {};
@@ -2999,7 +3037,9 @@ setInterval(function () {
           else if (trig.type === "cart_hold") chapterRegisterCartHoldTrigger(prompt);
         });
       })
-      .catch(function () {});
+      .catch(function (e) {
+        try { console.error("[chapter] identity-prompts chain failed:", e); } catch (_) {}
+      });
   }
 
   // Chapter element picker — when the dashboard opens the client's site with
