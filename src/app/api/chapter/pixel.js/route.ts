@@ -1155,6 +1155,24 @@ setInterval(function () {
     try { localStorage.setItem(chapterFrequencyKey(slug), String(Date.now())); } catch (e) {}
   }
 
+  // persist_until_dismissed. The prompt follows the visitor across page loads
+  // until they explicitly close it. Dismissal is scoped to the SESSION on
+  // purpose: "X" means "not now", not "never" -- on a later visit the normal
+  // frequency + max_shows_lifetime rules take over. Swap sessionStorage for
+  // localStorage here if a client ever wants a permanent dismissal.
+  function chapterPromptPersists(prompt) {
+    return !!(prompt && prompt.targeting_jsonb &&
+      prompt.targeting_jsonb.persist_until_dismissed);
+  }
+  function chapterDismissKey(slug) { return "chapter_prompt_dismissed_" + slug; }
+  function chapterPromptDismissedThisSession(slug) {
+    try { return sessionStorage.getItem(chapterDismissKey(slug)) === "1"; }
+    catch (e) { return false; }
+  }
+  function chapterMarkPromptDismissed(slug) {
+    try { sessionStorage.setItem(chapterDismissKey(slug), "1"); } catch (e) {}
+  }
+
   // Lifetime show cap. frequency controls shows WITHIN a window (once a session,
   // once per N days); this caps total shows across the visitor's whole life, so
   // "every subsequent visit" can't mean "forever". Survives in localStorage.
@@ -1174,6 +1192,12 @@ setInterval(function () {
     if (!prompt || !prompt.slug) return false;
     var maxShows = prompt.targeting_jsonb && prompt.targeting_jsonb.max_shows_lifetime;
     if (maxShows && chapterPromptLifetimeShows(prompt.slug) >= Number(maxShows)) return true;
+    // A persistent prompt re-shows on every page until the visitor closes it,
+    // so within a session the ONLY thing that silences it is that explicit
+    // dismissal -- the per-session / per-visitor gate below is bypassed. The
+    // lifetime cap above still applies and is counted once per session in
+    // chapterRecordPromptShown, so N still means N visits, not N pages.
+    if (chapterPromptPersists(prompt)) return chapterPromptDismissedThisSession(prompt.slug);
     var freq = prompt.frequency || "session";
     if (freq === "session") return chapterPromptShownThisSession(prompt.slug);
     if (freq === "visitor") return chapterPromptShownForVisitor(prompt.slug, prompt.frequency_days);
@@ -1181,6 +1205,16 @@ setInterval(function () {
   }
   function chapterRecordPromptShown(prompt) {
     if (!prompt || !prompt.slug) return;
+    if (chapterPromptPersists(prompt)) {
+      // Count ONE show per session, not per render. Bumping per render would
+      // let a visitor browsing six pages burn max_shows_lifetime:5 in a single
+      // visit -- the opposite of "first show plus N subsequent visits".
+      if (!chapterPromptShownThisSession(prompt.slug)) {
+        chapterBumpPromptLifetimeShows(prompt.slug);
+        chapterMarkPromptShownSession(prompt.slug);
+      }
+      return;
+    }
     chapterBumpPromptLifetimeShows(prompt.slug);
     var freq = prompt.frequency || "session";
     if (freq === "session") chapterMarkPromptShownSession(prompt.slug);
@@ -1298,6 +1332,7 @@ setInterval(function () {
 
     function dismiss(method, choice) {
       if (bubble.parentNode) bubble.parentNode.removeChild(bubble);
+      if (chapterPromptPersists(prompt)) chapterMarkPromptDismissed(prompt.slug);
       var props = { prompt_slug: prompt.slug, preset_type: prompt.preset_type, dismiss_method: method };
       if (choice) props.choice = choice;
       api.track("identity_prompt_dismissed", props);
@@ -1344,6 +1379,9 @@ setInterval(function () {
       btn.href = String(actions.cta_url || "#");
       btn.textContent = actions.cta_label || "Open";
       btn.addEventListener("click", function (e) {
+        // Taking the offer is terminal too -- following a visitor who already
+        // acted across the rest of their session is pure annoyance.
+        if (chapterPromptPersists(prompt)) chapterMarkPromptDismissed(prompt.slug);
         api.track("identity_prompt_submitted", { prompt_slug: prompt.slug, preset_type: prompt.preset_type });
         if (!actions.cta_url && actions.ack_message) { if (e && e.preventDefault) e.preventDefault(); showAck(); }
       });
