@@ -242,6 +242,36 @@ RETRY host-only= false | no-Secure= false | minimal= false
 - **Inert for every other prompt and client:** absent the flag, both the throttle and the show-counter take their original paths byte for byte.
 - Live config: `{"paid_entry":true,"cart_min_items":1,"max_shows_lifetime":5,"persist_until_dismissed":true}`. Verified working end to end.
 
+#### Second paid prompt — `paid_nudge_sep26` (SHIPPED + LIVE, `f5858ba`)
+- **Shape:** engaged paid visitor who has NOT started a cart gets a direct Shopify discount link. Once they add to cart, `paid_cart_recovery_sep26` takes over. Mutually exclusive by construction — one requires an empty cart, the other `cart_min_items: 1`.
+- **Config:** trigger `{"type":"session_engaged","min_seconds":22,"min_pages":5}` · targeting `{paid_entry, require_empty_cart, persist_until_dismissed, max_shows_lifetime:5, suppresses:["paid_cart_recovery_sep26"]}` · CTA → `https://eosfabrics.com/discount/SHOPEOS` · bubble, bottom-right.
+- **The discount-link mechanism was already proven** — `paid_cart_recovery_sep26` had been using `…/discount/SHOPEOS?redirect=/checkout` all along. The new one omits `redirect` deliberately: there is no cart yet, so sending them to checkout would be wrong.
+
+**Three pixel additions, all inert without their config keys:**
+- **`session_engaged` trigger** — fires on whichever comes FIRST, cumulative seconds on site or cumulative page count, both session-scoped. **Deliberately NOT `time_on_page`**, which restarts every navigation and would never reach a 22s threshold for someone reading three short pages. Degrades to per-page timing if sessionStorage is blocked — fires later, never earlier.
+- **`require_empty_cart`** — inverse of `cart_min_items`. Fails CLOSED like its sibling but **mind the direction**: unknown cart ⇒ do NOT show, because offering "10% for later" mid-checkout is the wrong moment. The trigger resolves the cart snapshot BEFORE attempting; attempting first against a fail-closed gate would silently never fire.
+- **`targeting_jsonb.suppresses: ["slug"]`** — taking THIS prompt's offer silences the named prompts for the session, checked at the top of the throttle. Config-driven so slugs never get hardcoded in the pixel. **Only the CTA triggers it, not the X** — dismissing without taking the offer must leave the other prompt eligible.
+
+**Verified live, full matrix:** fires at 22s with all gates true · persists across pages until X · X then add-to-cart ⇒ cart prompt DOES still fire (no false suppression) · CTA click then add-to-cart ⇒ cart prompt correctly throttled · add-to-cart before 22s ⇒ nudge never shows and cart prompt takes over.
+
+**⚠️ `min_pages` and `min_seconds` are independent, first-wins.** Raising `min_pages` does nothing if the visitor takes longer than `min_seconds` to get there — the time path fires regardless. The console names which path fired (`attempt(pages)` vs `attempt(time)`); read it before tuning the wrong number.
+
+**Sizing measured before building (EOS paid, 14d) — the numbers are not flattering:**
+
+| | |
+|---|---|
+| Paid journeys | 764 |
+| **Never added to cart** | **733 (96%)** |
+| Median non-adder | **1 pageview, 29 seconds** |
+| Reach at 60s / 90s-or-3pv | 243 (33%) / 215 (29%) |
+| Device mix | **81% mobile** |
+
+- **81% mobile is why the trigger is timed, not `exit_intent`** — exit intent is mouse-leaves-viewport, desktop only, and would have reached ~17% of paid traffic.
+- **22s sits just UNDER the 29s median**, so this reaches roughly half of non-adders rather than the third measured at 60s. Deliberate (catch them just before the typical bounce) but it means the discount now lands on close to every engaged paid visitor.
+- **⚠️ The prompt is a salvage play, not a fix.** 96% of paid visitors bounce in 29 seconds on one page — no prompt reaches them. The binding constraint on the 0.35 paid ROAS is landing-page relevance and keyword intent, not the absence of an offer.
+- **⚠️ `SHOPEOS` is a bare shareable URL.** One screenshot on a deals forum and it is public — unlike a per-recipient emailed code. Set a usage cap or one-per-customer in Shopify.
+- **REJECTED en route: the email-exchange version of this prompt.** `chapter_config.clients` has `email_sender_domain` and `email_reply_to` NULL for eos_fabrics, so a code emailed via the `direct` (Resend) mechanism would arrive as *"ads for Good"* from `ads4good.com` — phishing-shaped to an EOS shopper, and spam complaints there would damage the **shared sending domain every other Chapter client uses**. **Verify a client's sender domain before enabling any `post_submit_action: 'email'` prompt.** There are also zero `email_templates` rows for eos_fabrics.
+
 #### `chapter_debug` is LOGGING ONLY — do not confuse it with `chapter_ignore`
 - `chapterDebugOn` appears exactly twice in the pixel (its definition and the one early-return inside `chapterDebug()`), and `chapterDebug()` does nothing but `console.log`. **No gate, trigger or storage path reads it**, so a real visitor who never sets it gets identical behaviour. Set via `localStorage.setItem('chapter_debug','1')` (persists across navigations — the right choice for multi-page tests) or `#__chapter_debug` in the URL (one-off, lost on navigation).
 - **`chapter_ignore` is a different flag and DOES change behaviour** — it installs no-op `track`/`identify`/`push` stubs and silently drops every event. It is the internal-ignore bookmarklet set on the operator's normal browser. It has already cost multiple test cycles on EOS by making events look like they were firing while nothing landed. **This is why every Chapter pixel test runs in incognito.**
