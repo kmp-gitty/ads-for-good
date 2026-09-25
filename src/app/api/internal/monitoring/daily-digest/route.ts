@@ -29,6 +29,12 @@ const DASHBOARD_MVS = [
 // REFRESH-EXECUTION check and covers all of them via last_analyze (the cron
 // ANALYZEs each MV after refreshing it).
 //
+// NOTE (Sep 25): this RPC enumerates MATERIALIZED VIEWS. The three journey_*
+// rollups are no longer matviews, so they are correctly absent here and are
+// instead covered per-client via the 'journey_rollups' entry in
+// ATTRIBUTION_CHAIN_STAGES. The two DASHBOARD_MVS ts_column entries still
+// resolve -- they now read the facade views over the snapshot tables.
+//
 // Why both signals: the ts_column gap answers "is the DATA current relative to
 // source"; last_analyze answers "did the refresh JOB actually run". An overrun
 // of the cron's 800s budget shows up in the second, not the first — and it
@@ -49,6 +55,14 @@ const ATTRIBUTION_CHAIN_STAGES = [
   // Jul 30 — materialization of chapter_purchase_summary; feeds Channels/Paths/
   // Attribution + 5 other RPCs. Refreshed by refresh-derived-snapshots (04:25).
   "chapter_purchase_summary_snapshot",
+  // Sep 25 — the three journey_* rollups became incremental snapshot tables
+  // (one _snapshot_runs row per client per run, target_table 'journey_rollups').
+  // This entry is LOAD-BEARING: leaving the MV list moved them out of the
+  // MV-refresh-execution check below, which enumerates matviews only, so
+  // without this they would silently drop out of monitoring entirely --
+  // the same "watched the pipeline, not the faucet" gap that let
+  // projectagram's pixel sit dead for 3.5 months.
+  "journey_rollups",
 ] as const;
 
 // Global (non-per-client) snapshot tables. We check max(snapshot_ts) on the
@@ -97,6 +111,34 @@ type PixelIngestHealth = {
   median_events_prior_7d: number;
   pct_of_median: number | null;
   status: "ok" | "stale" | "never" | "degraded" | "not_expected" | "collection_disabled";
+};
+
+// Boundary/downstream ingest liveness, per (client_key, event_name).
+// THE GAP THIS CLOSES: the pixel check above watches `pixel_events` only, so a
+// dead PURCHASE/PAYMENT webhook is invisible to it. NSC's payments webhook was
+// dead for 12 weeks (Jul 2 -> Sep 24) while `appointment_booked` kept flowing --
+// the client looked healthy on every surface we had.
+//
+// Keyed per EVENT NAME, not per client, and deliberately NOT on the configured
+// boundary event: NSC's boundary is `appointment_booked`, which was healthy the
+// entire time. A boundary-keyed monitor would have been structurally blind to
+// exactly this outage. Every stream a client actually sends is watched.
+//
+// Threshold is GREATEST(48h, 2 x p95 gap over 90d). p95 not max, because when a
+// dead stream recovers the outage becomes one enormous gap in its own history --
+// a max-based threshold absorbs it and goes permanently blind (the longer the
+// outage, the blinder the monitor). p95 discards it as the outlier it is.
+type BoundaryIngestHealth = {
+  client_key: string;
+  event_name: string;
+  watched: boolean;
+  rows_90d: number;
+  rows_all_time: number;
+  newest_received: string | null;
+  hours_since: number | null;
+  p95_gap_hours: number | null;
+  threshold_hours: number | null;
+  status: "ok" | "stale" | "silenced";
 };
 
 type MvStaleness =
@@ -404,6 +446,18 @@ async function checkPixelIngestHealth(): Promise<PixelIngestHealth[]> {
   return data as PixelIngestHealth[];
 }
 
+async function checkBoundaryIngestHealth(): Promise<BoundaryIngestHealth[]> {
+  const { data, error } = await chapterSchemas
+    .reporting(supabase)
+    .rpc("boundary_ingest_health");
+
+  if (error || !data) {
+    console.error("[daily-digest] boundary_ingest_health failed:", error);
+    return [];
+  }
+  return data as BoundaryIngestHealth[];
+}
+
 async function checkSignupAbuse(sinceIso: string): Promise<SignupAbuse> {
   const { data, error } = await supabase
     .schema("chapter_audit")
@@ -579,6 +633,29 @@ export async function GET(req: NextRequest) {
           `  ⚠ \`${r.client_key}\` — ${r.events_24h} events/24h, ${r.pct_of_median}% of its 7d median (${r.median_events_prior_7d}/day)`,
         );
       }
+    }
+  }
+
+  const boundaryHealth = await checkBoundaryIngestHealth();
+  const boundaryProblems = boundaryHealth.filter((r) => r.status === "stale");
+  const boundarySilenced = boundaryHealth.filter((r) => r.status === "silenced");
+
+  lines.push("", "*Purchase/boundary ingest liveness:*");
+  if (boundaryHealth.length === 0) {
+    lines.push("  ⚠ could not read `boundary_ingest_health`");
+  } else if (boundaryProblems.length === 0) {
+    const watched = boundaryHealth.length - boundarySilenced.length;
+    lines.push(
+      `  ✅ ${watched} stream(s) flowing${boundarySilenced.length > 0 ? ` · ${boundarySilenced.length} silenced by config` : ""}`,
+    );
+  } else {
+    for (const r of boundaryProblems) {
+      const hrs = r.hours_since ?? 0;
+      const age = hrs >= 48 ? `${(hrs / 24).toFixed(1)}d` : `${hrs.toFixed(1)}h`;
+      const last = (r.newest_received ?? "").slice(0, 10);
+      lines.push(
+        `  ❌ \`${r.client_key}\` · \`${r.event_name}\` — nothing received for ${age} (last: ${last}, threshold ${r.threshold_hours}h)`,
+      );
     }
   }
 

@@ -29,21 +29,28 @@ import { unauthorizedIfNotCron } from "@/app/lib/monitoring/auth";
 // MV refresh + chain finish.
 export const maxDuration = 800;
 
+// The three journey_* rollups were REMOVED from this list on 2026-09-25 and
+// converted to incremental snapshot tables -- see JOURNEY_ROLLUPS below.
+// REFRESH ... CONCURRENTLY rescanned all 10.76M pixel_events and rebuilt all
+// 1,152,290 rows nightly to produce ~3,661 genuinely-changed rows (0.32%).
 const MVS = [
-  "chapter_reporting.journey_bot_classification_v1",
-  "chapter_reporting.journey_funnel_steps_v1",
-  "chapter_reporting.journey_entry_channel_v1",
   // Sprint 1.5 — picker MVs for Cross-Source Influence (pageOptions / campaignOptions).
   // Pre-aggregated 90d summaries so the dropdowns are bounded index scans.
   "chapter_reporting.connections_top_pages_90d_v1",
   "chapter_reporting.connections_top_campaigns_90d_v1",
   // 9.3 — per-page distinct-identity base rates (page lift in connections_panel).
+  // Reads journey_bot_classification_v1, so it MUST refresh AFTER the journey
+  // rollups below -- that ordering is why the rollup step runs first.
   "chapter_reporting.connections_page_base_v1",
 ];
 
 type MvResult =
   | { mv: string; ok: true; refresh_ms: number; analyze_ms: number }
   | { mv: string; ok: false; phase: "refresh" | "analyze"; error: string };
+
+type RollupResult =
+  | { client_key: string; ok: true; mode: string; affected: number; ms: number }
+  | { client_key: string; ok: false; error: string };
 
 export async function GET(req: NextRequest) {
   const unauthorized = unauthorizedIfNotCron(req);
@@ -67,11 +74,67 @@ export async function GET(req: NextRequest) {
   });
 
   const results: MvResult[] = [];
+  const rollups: RollupResult[] = [];
 
   try {
     await sql`SET statement_timeout = '30min'`;
 
+    // ---- Journey rollups (incremental snapshot tables) --------------------
+    // Runs BEFORE the MV loop: connections_page_base_v1 reads
+    // journey_bot_classification_v1, which is now a facade over
+    // journey_bot_classification_snapshot, so the snapshot has to be current
+    // first or the page-base MV materialises yesterday's classifications.
+    //
+    // Per-client so one client's failure cannot starve the others (the
+    // attribution chain learned this the hard way when EOS's hang starved
+    // NSC + projectagram for a month).
+    const rollupClients = await sql<{ client_key: string }[]>`
+      SELECT client_key FROM chapter_config.client_secrets WHERE revoked_at IS NULL
+      UNION
+      SELECT DISTINCT client_key FROM chapter_reporting.journey_bot_classification_snapshot
+      ORDER BY 1`;
+
+    for (const { client_key } of rollupClients) {
+      const t0 = Date.now();
+      try {
+        const [row] = await sql<{ mode: string; affected_journeys: string }[]>`
+          SELECT mode, affected_journeys
+          FROM chapter_reporting.refresh_journey_rollups(${client_key}::text)`;
+        rollups.push({
+          client_key,
+          ok: true,
+          mode: row?.mode ?? "unknown",
+          affected: Number(row?.affected_journeys ?? 0),
+          ms: Date.now() - t0,
+        });
+      } catch (err) {
+        rollups.push({
+          client_key,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // ---- Remaining true MVs ----------------------------------------------
+    // Guarded on relkind so this cron is correct in EITHER deploy order
+    // relative to the DB-side facade swap: an object that is no longer a
+    // materialized view is skipped rather than erroring on REFRESH. Removes
+    // the code-before-DB / DB-before-code ordering dependency entirely.
+    const stillMatview = new Set(
+      (
+        await sql<{ full_name: string }[]>`
+          SELECT n.nspname || '.' || c.relname AS full_name
+          FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE c.relkind = 'm' AND n.nspname = 'chapter_reporting'`
+      ).map((r) => r.full_name),
+    );
+
     for (const mv of MVS) {
+      if (!stillMatview.has(mv)) {
+        console.warn(`[refresh-dashboard-mvs] skipping ${mv} — not a materialized view`);
+        continue;
+      }
       const refreshStart = Date.now();
       try {
         await sql.unsafe(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${mv}`);
@@ -107,6 +170,27 @@ export async function GET(req: NextRequest) {
   }
 
   const mvFailures = results.filter((r): r is Extract<MvResult, { ok: false }> => !r.ok);
+  const rollupFailures = rollups.filter(
+    (r): r is Extract<RollupResult, { ok: false }> => !r.ok,
+  );
+
+  if (rollupFailures.length > 0) {
+    try {
+      await postToGChat({
+        text: [
+          `🚨 *Journey rollup refresh failed* (${rollupFailures.length}/${rollups.length} clients)`,
+          "",
+          ...rollupFailures.map(
+            (f) => `• \`${f.client_key}\` — ${f.error.slice(0, 200)}`,
+          ),
+          "",
+          "_journey_bot_classification / entry_channel / funnel_steps are serving stale rows for these clients._",
+        ].join("\n"),
+      });
+    } catch (err) {
+      console.error("[refresh-dashboard-mvs] GChat post failed:", err);
+    }
+  }
 
   if (mvFailures.length > 0) {
     const lines: string[] = [];
@@ -129,8 +213,9 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({
-    ok: mvFailures.length === 0,
+    ok: mvFailures.length === 0 && rollupFailures.length === 0,
+    rollups,
     results,
-    failed_count: mvFailures.length,
+    failed_count: mvFailures.length + rollupFailures.length,
   });
 }
