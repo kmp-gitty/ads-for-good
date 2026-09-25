@@ -1164,6 +1164,22 @@ setInterval(function () {
     return !!(prompt && prompt.targeting_jsonb &&
       prompt.targeting_jsonb.persist_until_dismissed);
   }
+  // Cross-prompt suppression. A prompt declares targeting_jsonb.suppresses:
+  // ["other_slug"]; taking ITS offer silences those for the rest of the session.
+  // Config-driven so slugs never get hardcoded into the pixel.
+  function chapterSuppressKey(slug) { return "chapter_prompt_suppressed_" + slug; }
+  function chapterPromptSuppressed(slug) {
+    try { return sessionStorage.getItem(chapterSuppressKey(slug)) === "1"; }
+    catch (e) { return false; }
+  }
+  function chapterApplyPromptSuppressions(prompt) {
+    var list = prompt && prompt.targeting_jsonb && prompt.targeting_jsonb.suppresses;
+    if (!list || !list.length) return;
+    for (var i = 0; i < list.length; i++) {
+      try { sessionStorage.setItem(chapterSuppressKey(String(list[i])), "1"); } catch (e) {}
+    }
+  }
+
   function chapterDismissKey(slug) { return "chapter_prompt_dismissed_" + slug; }
   function chapterPromptDismissedThisSession(slug) {
     try { return sessionStorage.getItem(chapterDismissKey(slug)) === "1"; }
@@ -1190,6 +1206,8 @@ setInterval(function () {
 
   function chapterIsPromptThrottled(prompt) {
     if (!prompt || !prompt.slug) return false;
+    // Another prompt's offer was taken this session and named this one.
+    if (chapterPromptSuppressed(prompt.slug)) return true;
     var maxShows = prompt.targeting_jsonb && prompt.targeting_jsonb.max_shows_lifetime;
     if (maxShows && chapterPromptLifetimeShows(prompt.slug) >= Number(maxShows)) return true;
     // A persistent prompt re-shows on every page until the visitor closes it,
@@ -1382,6 +1400,7 @@ setInterval(function () {
         // Taking the offer is terminal too -- following a visitor who already
         // acted across the rest of their session is pure annoyance.
         if (chapterPromptPersists(prompt)) chapterMarkPromptDismissed(prompt.slug);
+        chapterApplyPromptSuppressions(prompt);
         api.track("identity_prompt_submitted", { prompt_slug: prompt.slug, preset_type: prompt.preset_type });
         if (!actions.cta_url && actions.ack_message) { if (e && e.preventDefault) e.preventDefault(); showAck(); }
       });
@@ -2949,6 +2968,16 @@ setInterval(function () {
   // Fails CLOSED while the cart is unknown, so we never offer a cart-recovery
   // discount to someone we cannot confirm is holding a cart.
   var chapterKnownCartItems = null;
+  // Inverse of cart_min_items: show ONLY to someone who has not started a cart.
+  // Fails CLOSED like its sibling, but mind the direction -- an unknown cart
+  // means we do NOT show, because offering "10% for later" to someone who is
+  // mid-checkout is the wrong moment, and the cart_hold prompt owns that case.
+  function chapterMatchesEmptyCart(prompt) {
+    var want = prompt && prompt.targeting_jsonb && prompt.targeting_jsonb.require_empty_cart;
+    if (!want) return true;
+    if (chapterKnownCartItems === null) return false;
+    return chapterKnownCartItems === 0;
+  }
   function chapterMatchesCartMinItems(prompt) {
     var min = prompt && prompt.targeting_jsonb && prompt.targeting_jsonb.cart_min_items;
     if (!min) return true;
@@ -2980,6 +3009,76 @@ setInterval(function () {
   // LOAD, this is relative to an EVENT. Combined with frequency=session and
   // max_shows_lifetime this yields "10s after the first add, then once per
   // visit for the next N visits".
+  // session_engaged -- "engaged, but has not started a cart". Fires on whichever
+  // comes FIRST: cumulative seconds on site, or cumulative page count. Both
+  // counters are session-scoped, so a visitor who spent 15s on the previous
+  // page needs only 7 more here at min_seconds=22.
+  function chapterRegisterSessionEngagedTrigger(prompt) {
+    var t = prompt.trigger_jsonb || {};
+    var minSeconds = Number(t.min_seconds) || 0;
+    var minPages = Number(t.min_pages) || 0;
+    var fired = false;
+    chapterDebug("session_engaged registered:", prompt.slug,
+      "| min_seconds", minSeconds, "| min_pages", minPages,
+      "| elapsed", Math.round(chapterSessionElapsedMs() / 1000) + "s",
+      "| depth", chapterGetPageDepth());
+
+    function attempt(via) {
+      if (fired) { chapterDebug("attempt(" + via + ") skipped - already fired"); return; }
+      var gates = {
+        throttled: chapterIsPromptThrottled(prompt),
+        page: chapterMatchesPagePattern(prompt),
+        paid: chapterHasPaidEntry(prompt),
+        cartEmpty: chapterMatchesEmptyCart(prompt),
+        cartToken: chapterMatchesCartToken(prompt),
+      };
+      chapterDebug("attempt(" + via + ") gates:", gates, "| knownCartItems:", chapterKnownCartItems);
+      if (gates.throttled) return;
+      if (!gates.page) return;
+      if (!gates.paid) return;
+      if (!gates.cartEmpty) return;
+      if (!gates.cartToken) return;
+      fired = true;
+      chapterDebug("RENDERING", prompt.slug);
+      chapterRenderPrompt(prompt);
+    }
+
+    // Resolve the cart BEFORE attempting. chapterMatchesEmptyCart fails closed
+    // while the cart is unknown, so attempting first would silently never show.
+    function withCart(via) {
+      try {
+        chapterFetchCartSnapshot().then(function (cart) {
+          chapterKnownCartItems = (cart && cart.items) ? cart.items.length : 0;
+          chapterKnownCartToken = (cart && cart.token) || chapterKnownCartToken;
+          attempt(via);
+        });
+      } catch (e) { chapterDebug("session_engaged " + via + " threw:", e); }
+    }
+
+    // Page-count path: may already be satisfied the moment this page loaded.
+    if (minPages && chapterGetPageDepth() >= minPages) withCart("pages");
+
+    // Time path, measured from session start rather than this page's load.
+    if (minSeconds) {
+      var remaining = (minSeconds * 1000) - chapterSessionElapsedMs();
+      if (remaining <= 0) withCart("time");
+      else setTimeout(function () { withCart("time"); }, remaining);
+    }
+
+    // An add-to-cart ends this prompt's eligibility -- the cart_hold prompt
+    // takes over. Refresh the cached cart so any pending timer sees it.
+    chapterOnTrackedEvent("add_to_cart", function () {
+      try {
+        chapterCartSnapshotAt = 0;
+        chapterCartSnapshotPromise = null;
+        chapterFetchCartSnapshot().then(function (cart) {
+          chapterKnownCartItems = (cart && cart.items) ? cart.items.length : 0;
+        });
+      } catch (e) {}
+      chapterDebug("session_engaged: add_to_cart seen - cart_hold takes over");
+    });
+  }
+
   function chapterRegisterCartHoldTrigger(prompt) {
     var t = prompt.trigger_jsonb || {};
     var onReturn = Number(t.delay_on_return_ms) || 3000;
@@ -3099,6 +3198,25 @@ setInterval(function () {
     setTimeout(function () { chapterRenderPrompt(prompt); }, 250);
   }
 
+  // Cumulative time on SITE for this session. NOT the same as time_on_page,
+  // which restarts on every navigation -- a visitor reading three short pages
+  // would never reach a 22s threshold with that. Persisted so it survives
+  // navigation. If sessionStorage is blocked this degrades to per-page timing,
+  // which is the safe direction (fires later, never earlier).
+  var chapterSessionStartKey = "chapter_session_start";
+  function chapterSessionStartMs() {
+    try {
+      var raw = sessionStorage.getItem(chapterSessionStartKey);
+      var n = raw ? parseInt(raw, 10) : 0;
+      if (n) return n;
+      var now = Date.now();
+      sessionStorage.setItem(chapterSessionStartKey, String(now));
+      return now;
+    } catch (e) { return Date.now(); }
+  }
+  function chapterSessionElapsedMs() { return Date.now() - chapterSessionStartMs(); }
+  chapterSessionStartMs();
+
   // Session page counter. Increments on pixel init (once per real page load).
   var chapterPageDepthKey = "chapter_page_depth";
   function chapterBumpPageDepth() {
@@ -3147,7 +3265,8 @@ setInterval(function () {
           var tg = (p && p.targeting_jsonb) || {};
           var trg = (p && p.trigger_jsonb) || {};
           return !!((tg.cart_token_in && tg.cart_token_in.length)
-            || tg.cart_min_items || trg.type === "cart_hold");
+            || tg.cart_min_items || tg.require_empty_cart
+            || trg.type === "cart_hold" || trg.type === "session_engaged");
         });
         chapterDebug("prompts loaded:", prompts.length, prompts.map(function (p) {
           return p.slug + " [" + ((p.trigger_jsonb || {}).type || "?") + "]";
@@ -3161,6 +3280,7 @@ setInterval(function () {
           else if (trig.type === "scroll_depth") chapterRegisterScrollDepthTrigger(prompt);
           else if (trig.type === "page_depth") chapterRegisterPageDepthTrigger(prompt);
           else if (trig.type === "cart_hold") chapterRegisterCartHoldTrigger(prompt);
+          else if (trig.type === "session_engaged") chapterRegisterSessionEngagedTrigger(prompt);
         });
       })
       .catch(function (e) {
