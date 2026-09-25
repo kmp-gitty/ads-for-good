@@ -192,6 +192,54 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of September 22, 2026)
 
+### `paid_cart_recovery_sep26` is LIVE — root cause was that client-side cookie CREATES don't stick early in page load (Sep 25, 2026)
+
+**The prompt now renders on both `cart_hold` paths.** Getting there took six falsified hypotheses, and the value of this entry is the falsification trail, not the fix — the fix is four lines.
+
+#### What was wrong
+- Gates read `{throttled:false, page:true, paid:false, cartMin:true, cartToken:true}` on every attempt. Config, writer and reader were all correct; the cookie the gate wanted simply was not there when it looked.
+- **The client-side `document.cookie` write EXECUTES and the value is not readable on the very next synchronous statement.** Proven by instrumenting both sides: `wrote -> readback= null`.
+- **It was never a timing race.** The write ran at **t+688 ms**, the gate at **t+4120 ms** — 3.4 s of margin. `d05abf3` shipped a timing fix aimed at the wrong mechanism; it is harmless but was not the cause.
+
+#### Falsified along the way (each by measurement against the live page, not by reading code)
+| Hypothesis | Killed by |
+|---|---|
+| Encoding — `JSON.parse` choking on the percent-encoded value | `readCookieValue` decodes; operator's replicated reader parsed it fine |
+| W1 batching breaks `partner_ids` | server derives them per-event from each event's own `page_url` |
+| Cookie absent in that session | operator found it present |
+| Reader rejects the cookie | replicated reader returned `GATE RETURNS: true` |
+| Timing race (what was shipped) | gate still false with the cookie present |
+| `clientKey` mismatch / duplicate cookies / jar ceiling | `"eos_fabrics"` exactly, 1 copy, writes succeed, 18 cookies / 2.4 KB |
+
+- **⚠️ `chapter_entry_eos_fabrics` being present was the thing that misled the diagnosis twice.** It sits in the SAME `if (landClick && …)` block, so its presence looked like proof the JS write path worked. It is not: **the redirect also sets that name server-side**, so it can be there without any client-side write ever succeeding. **Never treat a cookie as evidence of a JS write when a server path writes the same name.**
+
+#### The measurement that settled it
+An attribute A/B, run only when the write failed, at the instant it failed:
+```
+RETRY host-only= false | no-Secure= false | minimal= false
+     | topFrame= true | cookieEnabled= true | jarBytes= 2684
+```
+**Every** create fails — with `Domain`, host-only, without `Secure`, and a bare `name=value; Path=/` alike — in the top frame, cookies enabled, tiny jar, and `document.cookie`'s setter **native** (nothing patching it). Identical creates from the console minutes later succeed. So it is neither an attribute problem nor a blocker script: **client-side cookie creates are unavailable this early in the load on this storefront.**
+
+- **Leading explanation, UNCONFIRMED — do not record as fact.** The theme is prefetched/prerendered: Chrome logs `Clear-Site-Data header on .../cart/add: Cleared data types: "prefetchCache", "prerenderCache"`. Script cookie writes in a prerendered document are restricted until activation, which would also explain why `performance.now()` read ~700 ms (it runs from prerender start, not from the visitor's page load). Worth confirming before relying on any client-side cookie write in a Shopify theme.
+
+#### The fix (`983ff15`, cleaned in `3a0d792`)
+- Write the paid-entry marker to **`localStorage`** at init — the same place and moment the pixel already stores `up_anon` — and have `chapterHasPaidEntry` read **cookie first, then localStorage**.
+- **Keep BOTH writes.** The server's `Set-Cookie` stays the DURABLE record (90 d, server-set on the A-record host, survives ITP); localStorage closes the gap before it lands. **Safari caps script-writable storage at ~7 days**, so localStorage alone would silently lapse on exactly the returning paid visitor this gate exists to catch.
+- Cookie write retained behind its `!existing` guard — harmless, may work on other tenants/timings, and the guard prevents downgrading the durable server cookie to a 7-day JS-set one.
+
+#### Verified live, both paths
+- **path1** (arrive holding cart, +3 s): all five gates true, `paid` via `localStorage`, `RENDERING`.
+- **path2** (add to cart this visit, +10 s): `path1 NOT scheduled — cart empty or unknown` (fail-closed cart gate behaving correctly), then `path2 add_to_cart seen; attempt in 10000 ms`, gates all true at t+19.4 s, `RENDERING`. **path2 is the one that matters** — the marker is written at landing while the cart is still empty and read 19 s later after browse-and-add, which is the real paid-recovery flow.
+- Config confirmed in the DB: `cart_hold` 10000/3000 · `paid_entry` + `cart_min_items:1` + `max_shows_lifetime:5` · `page_match` and `cart_token_in` both genuinely dropped · `frequency: session` · `preset_type: custom_notification`.
+
+#### Lessons
+- **A browser panel is a hypothesis source, not evidence, until reproduced with the panel open from the start.** Two readings here were taken from console scrollback that turned out to span more than one page load.
+- **When two code paths disagree about the same value, instrument both sides with a timestamp rather than theorising a seventh mechanism.** One deploy of `performance.now()` on each side ended a hunt that six rounds of reasoning had not.
+- **`chapterDebug()` is unusable during init** — `chapterDebugOn` is initialised ~2,000 lines below the entry-capture block, so `var` hoisting leaves it `undefined` and the call silently no-ops. Read the localStorage flag directly up there.
+- **`document.cookie = …` never throws on failure.** A write can execute, be rejected, and leave no trace anywhere. Always read back if the value is load-bearing.
+
+
 ### Journey MVs → incremental snapshots · NSC payment recovery · a 3× chain-runtime measurement artifact · orphan double-count (Sep 25, 2026)
 
 **Six ships in one session, and the highest-value output is a CORRECTION: the flagship "the nightly chain runs 25–37 min, 3.4× past the 600s ceiling" finding was a MEASUREMENT ARTIFACT. It is ~790s.** Everything below was verified against production, not asserted.
@@ -296,13 +344,13 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - **⚠️ Entry-cookie coverage was only 39%** — of **700** paid journeys, just **276** ever carried an `entry_click_id` stamp. Cause: the client-side capture writes `chapter_entry` via `document.cookie`, which **Safari ITP caps at ~7 days regardless of how good the host is**. No tracking template is set on either campaign, and **one should NOT be added** — per the NSC lesson, Safari's bounce-tracking mitigation purges a cookie set during the ad-click bounce, which is exactly why the client-side capture exists.
 - **Attribution is NOT affected by that 39%** — it reads `partner_ids` off the ingested event, never `chapter_entry`. Re-derived the 3 paid orders by a fully independent path (Shopify `cart_token` on the order vs paid-clicker carts, no identity stitching) and got **the same 3 orders / same $122.19**. Note **698 of 701 paid journeys are anonymous-only**, which is normal (non-buyers never identify) — all 3 who bought resolved cleanly. Residual risk is narrow: a cross-device purchaser is invisible to both methods.
 
-#### BUILT, UNCOMMITTED — durable paid-entry cookie + `cart_hold` trigger
-- **⚠️ DEPLOY STATE AS OF THIS COMMIT:** `1e6cedf` (prompt config-version stamping) **IS** pushed and live. The two files below are **committed by nobody and NOT deployed** — they sit uncommitted in the working tree. Anything in this sub-section describes code that is **not running in production yet**.
+#### ~~BUILT, UNCOMMITTED~~ **SHIPPED + LIVE (Sep 25)** — durable paid-entry cookie + `cart_hold` trigger
+- **⚠️ THIS HEADING WAS STALE AND MISLED A LATER SESSION.** As written it said the two files below were uncommitted and "not running in production yet". Both shipped; the config below is applied; the prompt renders. See the **Sep 25** entry at the top of Completed Fixes for the deploy state, the root cause of the `paid: false` failure, and the fix. Left in place rather than rewritten so the original reasoning stays readable — but **do not trust this sub-section's deploy claims.**
 - **`src/app/api/pixel/route.ts`** — sets `chapter_paid_entry_<client>` whenever an ingested event carries a click id (gclid/gbraid/wbraid + msclkid/fbclid/ttclid/rdt_cid), storing `{k, p, t}`. Same `Set-Cookie` + apex-scoped + A-record path as `up_anon` (the Test-1-proven config), **maxAge 90 days** to match Google's click window. **Deliberately not refreshed on click-less requests** so the window runs from the click rather than silently extending "came from an ad" forever. Coverage becomes complete by construction: if a click id reached ingest, the marker is written.
 - **`src/app/api/chapter/pixel.js/route.ts`** — `chapterHasPaidEntry()` (reads the new durable cookie, optional `platform_in`, **fails closed**) · `chapterMatchesCartMinItems()` (**fails closed** while the cart is unknown) · `chapterRegisterCartHoldTrigger()` (new trigger: arrives-holding-cart → `delay_on_return_ms`; adds-to-cart-this-visit → `delay_after_add_ms`, busting the 5s cart cache so it reads post-add) · `max_shows_lifetime` (localStorage counter in the throttle, bumped on render) · cart priming broadened to `cart_min_items` / `cart_hold`.
 - **Why a new trigger type:** none of the five existing ones are event-relative — `time_on_page` fires relative to page LOAD, this fires relative to an EVENT. The pixel can see `add_to_cart` because EOS's theme fires it through the `/cart/add` network intercept into the pixel queue, so hooking `api.track` is the clean insertion point.
 - **⚠️ DEPLOY ORDER:** ship the code BEFORE switching the prompt's DB config. If config flips first, the live pixel won't recognise `cart_hold`, no trigger registers, and the prompt silently stops firing. Also: **the cookie only accumulates from deploy** — clicks before then have no marker, nothing to backfill.
-- **Config to apply AFTER deploy** (dropping `page_match` and `cart_token_in`) — **verified NOT yet applied as of this commit**:
+- **Config to apply AFTER deploy** (dropping `page_match` and `cart_token_in`) — **APPLIED; verified live in the DB Sep 25** (`enabled=true`, `has_page_match=false`, `has_cart_token_in=false`, `updated_at` 2026-09-24 21:57 UTC). The "NOT yet applied" note that used to sit here is stale:
   `trigger_jsonb: {"type":"cart_hold","delay_after_add_ms":10000,"delay_on_return_ms":3000}` ·
   `targeting_jsonb: {"paid_entry":true,"cart_min_items":1,"max_shows_lifetime":5}` · `frequency:"session"`.
   `max_shows_lifetime: 5` counts **every** render — the first (10s-after-add) show plus 4 subsequent visits. Operator confirmed that is intended.
@@ -317,7 +365,7 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - **Mailchimp is retired** (operator confirmed). Do not schedule `sync-mailchimp-engagement.js`; the `?rid=` identity-hint flavour resolves via `email_engagement_events.recipient_token` which only Mailchimp populated, so prefer `?rh=` / `?re=`. Replacement ESP unknown — ask, don't guess.
 
 #### Open / next
-- **Deploy the two uncommitted files, then flip the prompt config** (above) — in that order.
+- ~~**Deploy the two uncommitted files, then flip the prompt config**~~ — **DONE.** Code shipped (`d047a8c` → `3a0d792`), config flipped, both `cart_hold` paths verified rendering Sep 25.
 - Root-cause the disabled-prompt rendering in a browser session.
 - `chapter_entry` vs the new `chapter_paid_entry` overlap — the old JS-set cookie can be retired once the durable one is proven.
 - A **non-cart** paid prompt "of a different shape" is queued as the next build.
