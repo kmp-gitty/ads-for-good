@@ -841,9 +841,33 @@ if (!anonId) {
         // collect response replaces ours (same name/domain/path) with the
         // durable form, so this is a bridge to close the race, not a
         // replacement for the server write.
-        if (!readCookieValue("chapter_paid_entry_" + clientKey)) {
+        // TEMPORARY DIAGNOSTIC (chapter_debug=1 only). The gate reads this
+        // cookie as ABSENT seconds after this write reports success, on a load
+        // where the sibling chapter_entry write demonstrably lands. Logging
+        // both sides with performance.now() so the next retest says which half
+        // is lying instead of costing another round of hypotheses.
+        // chapterDebug() is unusable here: chapterDebugOn is initialised far
+        // below this line, so at init it is still undefined and the call no-ops.
+        var __paidName = "chapter_paid_entry_" + clientKey;
+        var __paidExisting = readCookieValue(__paidName);
+        var __paidLog = function () {
+          try {
+            if (localStorage.getItem("chapter_debug") === "1") {
+              console.log.apply(console, ["[chapter] paid_entry@init:"].concat(
+                Array.prototype.slice.call(arguments)));
+            }
+          } catch (e) {}
+        };
+        __paidLog(
+          "name=", __paidName,
+          "| existing=", __paidExisting,
+          "| apex=", chapterApex,
+          "| click=", landClick.kind + "/" + landClick.platform,
+          "| at t+", Math.round(performance.now()), "ms"
+        );
+        if (!__paidExisting) {
           document.cookie =
-            "chapter_paid_entry_" + clientKey + "=" +
+            __paidName + "=" +
             encodeURIComponent(JSON.stringify({
               k: landClick.kind,
               p: landClick.platform,
@@ -853,6 +877,7 @@ if (!anonId) {
             (chapterApex ? "; Domain=" + chapterApex : "") +
             "; SameSite=Lax" +
             (location.protocol === "https:" ? "; Secure" : "");
+          __paidLog("wrote -> readback=", readCookieValue(__paidName));
         }
       }
     }
@@ -2841,6 +2866,12 @@ setInterval(function () {
     var want = prompt && prompt.targeting_jsonb && prompt.targeting_jsonb.paid_entry;
     if (!want) return true;                    // not configured -> pass
     var raw = readCookieValue("chapter_paid_entry_" + clientKey);
+    // TEMPORARY DIAGNOSTIC — pairs with paid_entry@init above.
+    chapterDebug(
+      "chapterHasPaidEntry: name=", "chapter_paid_entry_" + clientKey,
+      "| raw=", raw,
+      "| at t+", Math.round(performance.now()), "ms"
+    );
     if (!raw) return false;
     var parsed = null;
     try { parsed = JSON.parse(raw); } catch (e) { return false; }
