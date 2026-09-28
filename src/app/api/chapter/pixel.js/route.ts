@@ -937,20 +937,14 @@ if (!anonId) {
 
   replayBufferedEvents();
 
-  // Flush any queued batch as the page goes away. Both events are registered:
-  // pagehide is the reliable desktop unload signal, and visibilitychange ->
-  // hidden is the last guaranteed callback on mobile Safari (a backgrounded tab
-  // may be killed without ever firing pagehide).
-  //
-  // Registered HERE, after the pixel's own visibilitychange handler is attached
-  // further down, listeners fire in registration order — so the visibility_change
-  // event is queued by that handler before this flush collects the queue.
-  try {
-    window.addEventListener("pagehide", function () { chapterFlushBatch(true); });
-    document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "hidden") chapterFlushBatch(true);
-    });
-  } catch (e) {}
+  // NOTE: the unload flush used to be registered HERE, and its comment claimed
+  // it ran after the pixel's own visibilitychange handler. That was FACTUALLY
+  // BACKWARDS — this point in the file executes BEFORE those handlers are
+  // attached, so listeners fired flush-first and it collected an EMPTY queue.
+  // Measured cost: visibility_change averaged 749.8s to delivery (vs page_exit's
+  // 0.3s median) because it waited for the 3s timer or the next page load.
+  // The registration now lives at the END of this file, after every handler
+  // that queues an event. Do not move it back up.
 
   for (var i = 0; i < queue.length; i++) {
     api.push(queue[i]);
@@ -1086,9 +1080,52 @@ setInterval(function () {
     });
   });
 
-  window.addEventListener("beforeunload", function () {
-    api.track("page_exit", {});
-  });
+  // page_exit used to fire ONLY on beforeunload. Chrome fires that reliably;
+  // Safari, Android and iOS do not. Measured on EOS (multi-event journeys,
+  // 2026-09-26/27) against the pre-batching baseline:
+  //     desktop Chrome/Edge  1.043 -> 1.081   unaffected
+  //     desktop Safari       0.944 -> 0.619   -34%
+  //     Android              1.832 -> 1.175   -36%
+  //     iOS Safari           0.000 -> 0.000   NEVER fired, pre-dating batching
+  // iOS is ~25% of EOS traffic and has never produced a single page_exit.
+  //
+  // Unbatched this was survivable: when beforeunload DID fire the event went
+  // straight out on a keepalive fetch. Batched it is only QUEUED, so it depends
+  // on a later flush those browsers may never deliver — which is what turned a
+  // partial gap into a 25-42% loss and forced the rollback of 2026-09-25.
+  //
+  // Now fired on the FIRST of beforeunload / pagehide / visibilitychange→hidden.
+  // pagehide is the reliable desktop+Android signal; visibilitychange→hidden is
+  // the last guaranteed callback on mobile Safari (a backgrounded tab can be
+  // killed without ever firing pagehide).
+  //
+  // chapterPageExitSent makes it fire-once-per-page-lifetime. That guard is
+  // LOAD-BEARING, not tidiness: three triggers without it would multiply an
+  // already >1 rate (Chrome measured 1.043 page_exit/pageview, Android 1.832),
+  // turning an undercount into an overcount.
+  var chapterPageExitSent = false;
+  function chapterFirePageExit() {
+    if (chapterPageExitSent) return;
+    chapterPageExitSent = true;
+    try { api.track("page_exit", {}); } catch (e) {}
+  }
+  try {
+    window.addEventListener("beforeunload", chapterFirePageExit);
+    window.addEventListener("pagehide", chapterFirePageExit);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") chapterFirePageExit();
+    });
+  } catch (e) {}
+
+  // Unload flush — registered LAST, after every handler above that queues an
+  // event, because listeners fire in registration order. Anything registered
+  // after this point will miss the flush.
+  try {
+    window.addEventListener("pagehide", function () { chapterFlushBatch(true); });
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") chapterFlushBatch(true);
+    });
+  } catch (e) {}
 
   // ============ Option D — Identity prompts ============
   // Operator-configured popups that fire on trigger conditions, capture email,
