@@ -20,6 +20,7 @@ type Row = {
   slug: string;
   link_host: string | null;
   destination: string | null;
+  url: string | null;
   dimensions: Record<string, string> | null;
   disabled_at: string | null;
   valid_to: string | null;
@@ -130,6 +131,7 @@ export default async function LinkRegistryPage({
                     <th style={th}>Property</th>
                     <th style={th}>Dimensions</th>
                     <th style={th}>Destination</th>
+                    <th style={th}>Wrapped URL</th>
                     <th style={{ ...th, textAlign: "right" }}>Clicks</th>
                     <th style={th}>Last click</th>
                     <th style={th}>Status</th>
@@ -158,8 +160,15 @@ export default async function LinkRegistryPage({
                             </span>
                           ) : <span style={{ color: FAINT }}>—</span>}
                         </td>
-                        <td style={{ ...td, maxWidth: 260, color: MUTED, fontSize: 12, wordBreak: "break-all" }}>
+                        <td style={{ ...td, maxWidth: 240, color: MUTED, fontSize: 12, wordBreak: "break-all" }}>
                           {r.destination ?? <span style={{ color: FAINT }}>(from rule)</span>}
+                        </td>
+                        <td style={{ ...td, maxWidth: 300, fontSize: 11.5, fontFamily: "ui-monospace, monospace", color: MUTED, wordBreak: "break-all" }}>
+                          {r.url
+                            ? <span title={r.url}>{r.url}</span>
+                            : <span style={{ color: FAINT, fontFamily: "inherit" }}>
+                                — re-export to capture
+                              </span>}
                         </td>
                         <td style={{ ...td, textAlign: "right", fontWeight: 600, color: dead ? ORANGE : INK }}>
                           {r.clicks}

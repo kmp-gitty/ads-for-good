@@ -359,6 +359,7 @@ export default function UrlBuilder({
         ? null
         : normalizeDestination(destination) || null,
       dimensions,
+      url: finalUrl,
     }]).then(res => {
       setRegistered(res.error ? `registry error: ${res.error}` : "link registered");
       setTimeout(() => setRegistered(null), 4000);

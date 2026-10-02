@@ -399,6 +399,7 @@ export default function MatrixBuilder({
           ? normalizeDestination(destinations[r.id] ?? "") || null
           : null,
         dimensions,
+        url: urlFor(r),
       });
     }
 

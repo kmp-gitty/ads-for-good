@@ -33,6 +33,10 @@ export type RegistryRowInput = {
   // Non-identity dimensions only. `link` is excluded because link_id IS the
   // identity; the mismatch checker compares on that basis.
   dimensions: Record<string, string>;
+  // The assembled URL as generated. Components could reconstruct it, but
+  // reconstruction drifts if URL assembly ever changes — and it cannot be
+  // backfilled, so a link registered without it loses the string permanently.
+  url?: string | null;
 };
 
 export type RegisterResult = {
@@ -94,6 +98,7 @@ export async function registerGeneratedLinks(
             slug: row.slug,
             destination: row.destination,
             dimensions: row.dimensions,
+            url: row.url ?? null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", (existing as { id: string }).id);
@@ -113,6 +118,7 @@ export async function registerGeneratedLinks(
             slug: row.slug,
             destination: row.destination,
             dimensions: row.dimensions,
+            url: row.url ?? null,
             created_by: "matrix_builder",
           });
         if (error) {
