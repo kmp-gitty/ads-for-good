@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { registerGeneratedLinks } from "./_registry-actions";
 import {
   searchProspectsForOutreach,
   type ProspectOption,
@@ -188,6 +189,17 @@ export default function UrlBuilder({
 
   const [slug, setSlug] = useState<string>(defaultSlug ?? "");
   const [partner, setPartner] = useState("");
+  // Reporting dimensions. These are lifted out of the query string into their
+  // own column (pixel_events.dimensions) per the client's reportable_params,
+  // so they filter and group directly instead of being parsed out of the blob.
+  const [promo, setPromo] = useState("");
+  const [loc, setLoc] = useState("");
+  const [size, setSize] = useState("");
+  const [creative, setCreative] = useState("");
+  // Operator-assigned inventory id. Registers the link so it reports even with
+  // ZERO clicks — click history can only ever record demand, never supply.
+  const [linkId, setLinkId] = useState("");
+  const [registered, setRegistered] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ProspectOption[]>([]);
   const [searching, setSearching] = useState(false);
@@ -262,6 +274,11 @@ export default function UrlBuilder({
     if (!ruleSuppliesDestination && destination) params.set("to", normalizeDestination(destination));
     // Partner first so a deliberate extraParams override still wins below.
     if (partner.trim()) params.set("partner", partner.trim());
+    if (promo.trim()) params.set("promo", promo.trim());
+    if (loc.trim()) params.set("loc", loc.trim());
+    if (size.trim()) params.set("size", size.trim());
+    if (creative.trim()) params.set("creative", creative.trim());
+    if (linkId.trim()) params.set("link", linkId.trim().toLowerCase());
 
     const idMode = over?.identity?.mode ?? identityMode;
     const idVal =
@@ -297,6 +314,7 @@ export default function UrlBuilder({
     () => urlFrom(buildParams()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [slug, destination, prospect, utmSource, utmMedium, utmCampaign, utmContent, utmTerm, extraParams,
+     partner, promo, loc, size, creative, linkId,
      identityMode, identityValue, identityHash, clientKey, effectiveOrigin, ruleSuppliesDestination],
   );
 
@@ -319,6 +337,32 @@ export default function UrlBuilder({
     }
     setBulkRows(rows);
     setBuilding(false);
+  }
+
+  // Register the link on copy. Fire-and-forget: the copy is never blocked on it.
+  // Skipped when no inventory id is set — the builder is legitimately used for
+  // one-off links nobody wants registered.
+  function registerThisLink() {
+    const id = linkId.trim().toLowerCase();
+    if (!id) return;
+    const dimensions: Record<string, string> = {};
+    if (partner.trim()) dimensions.partner = partner.trim();
+    if (promo.trim()) dimensions.promo = promo.trim();
+    if (loc.trim()) dimensions.loc = loc.trim();
+    if (size.trim()) dimensions.size = size.trim();
+    if (creative.trim()) dimensions.creative = creative.trim();
+    void registerGeneratedLinks(clientKey, [{
+      link_id: id,
+      link_host: effectiveOrigin.replace(/^https?:\/\//, "").replace(/\/+$/, ""),
+      slug: slug.trim() || GENERIC_SLUG,
+      destination: ruleSuppliesDestination
+        ? null
+        : normalizeDestination(destination) || null,
+      dimensions,
+    }]).then(res => {
+      setRegistered(res.error ? `registry error: ${res.error}` : "link registered");
+      setTimeout(() => setRegistered(null), 4000);
+    });
   }
 
   async function copyText(text: string) {
@@ -560,6 +604,47 @@ export default function UrlBuilder({
         </>
       </Field>
 
+      <Field
+        label="Reporting dimensions"
+        hint="Reported as their own columns alongside partner — filter and group on them directly"
+      >
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <input className={inputCls} value={promo} onChange={e => setPromo(e.target.value)} placeholder="promo — spotlite" />
+            <input className={inputCls} value={loc} onChange={e => setLoc(e.target.value)} placeholder="loc — above-fold" />
+            <input className={inputCls} value={size} onChange={e => setSize(e.target.value)} placeholder="size — 970x250" />
+            <input className={inputCls} value={creative} onChange={e => setCreative(e.target.value)} placeholder="creative — heloc-spring" />
+          </div>
+          <p className="mt-1 text-xs text-neutral-500">
+            promo is what the link promotes — spotlite, lead_gen, a partner campaign.{" "}
+            <span className="text-neutral-400">
+              Anything not listed here is still recorded, but only inside the full query string.
+            </span>
+          </p>
+        </>
+      </Field>
+
+      <Field
+        label="Link ID"
+        hint="Your inventory id — registers the link so it reports even with zero clicks"
+      >
+        <>
+          <input
+            className={inputCls}
+            value={linkId}
+            onChange={e => setLinkId(e.target.value)}
+            placeholder="vista-ba-spotlite"
+          />
+          <p className="mt-1 text-xs text-neutral-500">
+            {linkId.trim()
+              ? "Registered when you copy — this placement appears in reporting whether or not anyone clicks it."
+              : "Optional, but without it only CLICKED links ever appear in reporting, so a placement that draws zero clicks looks like it was never shipped."}{" "}
+            <span className="text-neutral-400">Lowercase letters, numbers and dashes.</span>
+            {registered && <span className="ml-2 font-semibold text-neutral-600">{registered}</span>}
+          </p>
+        </>
+      </Field>
+
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="UTM source" hint="Feeds Chapter's channel classification">
           <input className={inputCls} list="utm-sources" value={utmSource} onChange={e => setUtmSource(e.target.value)} />
@@ -641,7 +726,7 @@ export default function UrlBuilder({
               </button>
               {bulkRows.length > 0 && (
                 <>
-                  <button type="button" onClick={() => copyText(bulkRows.map(r => r.url).join("\n"))}
+                  <button type="button" onClick={() => { registerThisLink(); copyText(bulkRows.map(r => r.url).join("\n")); }}
                     className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 hover:border-neutral-400">
                     {copied ? "Copied!" : "Copy all"}
                   </button>
@@ -682,7 +767,7 @@ export default function UrlBuilder({
             <h3 className="text-sm font-semibold uppercase tracking-wide text-orange-800">Your URL</h3>
             <button
               type="button"
-              onClick={() => copyText(finalUrl)}
+              onClick={() => { registerThisLink(); copyText(finalUrl); }}
               disabled={!canBuild}
               className="rounded-md bg-orange-500 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
