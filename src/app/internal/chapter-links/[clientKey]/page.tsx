@@ -250,6 +250,12 @@ export default async function ChapterLinksClientPage({
             📊 Analytics
           </Link>
           <Link
+            href={`/internal/chapter-links/${clientKey}/registry`}
+            style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}
+          >
+            🗂 Registry
+          </Link>
+          <Link
             href={`/internal/chapter-links/${clientKey}/new`}
             style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 18px", borderRadius: 10, whiteSpace: "nowrap" }}
           >

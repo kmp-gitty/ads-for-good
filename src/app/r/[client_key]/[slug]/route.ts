@@ -53,6 +53,7 @@ import { resolveCart, SKIPPED_CART } from "@/app/lib/redirect/cart";
 import { evaluateConditions, requiredContext, EvalContext } from "@/app/lib/redirect/conditions";
 import { interpolateTemplate, isValidDestination, appendIdentityHandoff } from "@/app/lib/redirect/template";
 import { logRedirectClick } from "@/app/lib/redirect/click-logger";
+import { appendHubspotCrossDomain } from "@/app/lib/redirect/hubspot-handoff";
 import { isEmailIgnored, isUaIgnored } from "@/app/lib/auth/tracking-ignore";
 import { readConsentState, applyConsentPolicy } from "@/app/lib/redirect/consent";
 import { isCollectionEnabled } from "@/app/lib/consent/collection-switch";
@@ -503,7 +504,18 @@ export async function GET(
   }
 
   const hostname = req.nextUrl.hostname;
-  const res = NextResponse.redirect(destination, { status: 302 });
+  // HubSpot cross-domain handoff. Built into a SEPARATE variable on purpose:
+  // `destination` is what the click logger writes to props.destination and
+  // page_url, and these are tracking identifiers that must not be recorded —
+  // same posture as the inbound ?rh / ?re / ?rid hints. Cookie read + string
+  // concat only; no DB, no await, nothing added to the pre-302 path.
+  const redirectTo = appendHubspotCrossDomain(
+    destination,
+    slug,
+    (name) => req.cookies.get(name)?.value,
+  );
+
+  const res = NextResponse.redirect(redirectTo, { status: 302 });
   // Cookies are part of the collection contract — skipped on opt-out so we
   // don't issue new identifiers. Existing cookies are NOT cleared here; that's
   // the consent banner's responsibility on the property where the visitor
