@@ -98,7 +98,18 @@ export type ClientRedirectConfig = {
   // into a third party's URL. Same-eTLD+1 links don't need them either: the
   // identity cookie already spans that hop.
   identity_handoff_enabled: boolean;
+  // Named URL params the click logger lifts out of the query string into
+  // pixel_events.dimensions, so they are filterable/joinable without parsing
+  // props.full_query. Rides on THIS already-cached config object, which is why
+  // dimension extraction costs zero extra round trips on the warm path — the
+  // same property that let the per-host fallback tier be added for free.
+  //
+  // Unlisted params still land in full_query exactly as before, so adding a
+  // param late is never lossy: re-run the dimensions backfill to recover it.
+  reportable_params: string[];
 };
+
+const DEFAULT_REPORTABLE_PARAMS = ["partner", "promo", "loc", "size", "creative", "link"];
 
 type ClientConfigEntry = { config: ClientRedirectConfig; fetchedAt: number };
 const clientConfigCache = new Map<string, ClientConfigEntry>();
@@ -165,7 +176,7 @@ export async function fetchClientRedirectConfig(
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("clients")
-    .select("default_redirect_destination, default_redirect_destinations, identity_handoff_enabled")
+    .select("default_redirect_destination, default_redirect_destinations, identity_handoff_enabled, reportable_params")
     .eq("client_key", client_key)
     .maybeSingle();
 
@@ -177,6 +188,7 @@ export async function fetchClientRedirectConfig(
       default_redirect_destination: null,
       default_redirect_destinations: null,
       identity_handoff_enabled: true,
+      reportable_params: DEFAULT_REPORTABLE_PARAMS,
     };
   }
 
@@ -184,6 +196,7 @@ export async function fetchClientRedirectConfig(
     default_redirect_destination: string | null;
     default_redirect_destinations: Record<string, string> | null;
     identity_handoff_enabled: boolean | null;
+    reportable_params: string[] | null;
   } | null;
   const config: ClientRedirectConfig = {
     default_redirect_destination: row?.default_redirect_destination ?? null,
@@ -191,6 +204,10 @@ export async function fetchClientRedirectConfig(
       row?.default_redirect_destinations ?? null,
     ),
     identity_handoff_enabled: row?.identity_handoff_enabled ?? true,
+    reportable_params:
+      row?.reportable_params && row.reportable_params.length > 0
+        ? row.reportable_params
+        : DEFAULT_REPORTABLE_PARAMS,
   };
   clientConfigCache.set(client_key, { config, fetchedAt: now });
   return config;
@@ -268,5 +285,60 @@ export async function incrementRuleHitCount(ruleId: string): Promise<void> {
   if (error) {
     console.error("[rules] hit_count increment failed:", error);
     throw error;
+  }
+}
+
+// ─── Disabled registered links ─────────────────────────────────────────────
+// Per-client set of link ids that chapter_config.generated_links marks
+// disabled. Same 5-min in-process cache shape as fetchRules.
+//
+// ⚠️ DO NOT replace this with a per-click lookup. Stage 0 removed every
+//    blocking DB call from the pre-302 path to get /r/ from ~1.1s to ~0.09s —
+//    "indistinguishable from the bot fast-path that does zero DB work" — and
+//    the iad1 region pin in vercel.json is conditional on that remaining true.
+//    A query here would silently undo both.
+//
+// Only DISABLED ids are cached, never the whole registry: disabled links are
+// rare, so the set stays tiny and the default answer is "not disabled".
+//
+// Fails OPEN (empty set = nothing disabled). A config read blip must never
+// break a link already in circulation — same reasoning as isCollectionEnabled
+// failing open to true, and the opposite of isPixelBatchingEnabled, which
+// fails safe to false because it gates an untested write path.
+type DisabledLinksEntry = { ids: Set<string>; fetchedAt: number };
+const disabledLinksCache = new Map<string, DisabledLinksEntry>();
+
+export async function fetchDisabledLinkIds(
+  client_key: string,
+): Promise<Set<string>> {
+  const now = Date.now();
+  const cached = disabledLinksCache.get(client_key);
+  if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.ids;
+  }
+
+  const { data, error } = await supabase
+    .schema("chapter_config")
+    .from("generated_links")
+    .select("link_id")
+    .eq("client_key", client_key)
+    .not("disabled_at", "is", null)
+    .is("valid_to", null);
+
+  if (error) {
+    console.error("[redirect-disabled-links] lookup failed:", error);
+    return new Set();           // fail open
+  }
+
+  const ids = new Set((data ?? []).map((r: { link_id: string }) => r.link_id));
+  disabledLinksCache.set(client_key, { ids, fetchedAt: now });
+  return ids;
+}
+
+export function clearDisabledLinksCache(client_key?: string): void {
+  if (client_key) {
+    disabledLinksCache.delete(client_key);
+  } else {
+    disabledLinksCache.clear();
   }
 }

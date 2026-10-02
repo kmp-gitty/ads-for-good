@@ -36,6 +36,7 @@
 // "one destination + exceptions" is the wrong model.
 
 import { useMemo, useState } from "react";
+import { registerGeneratedLinks, type RegistryRowInput } from "./_registry-actions";
 import { normalizeDestination } from "./UrlBuilder";
 
 export type MatrixSlug = { slug: string; description: string | null; needs_to: boolean };
@@ -131,6 +132,7 @@ export default function MatrixBuilder({
   const [fillValue, setFillValue] = useState("");
   // Which copy affordance last fired — "urls" | "tsv" | a row id.
   const [copied, setCopied] = useState<string | null>(null);
+  const [registered, setRegistered] = useState<string | null>(null);
 
   const block = (slug: string): Block => blocks[slug] ?? EMPTY_BLOCK;
 
@@ -214,6 +216,14 @@ export default function MatrixBuilder({
   }, [blocks, selectedHosts, hosts, slugs, utm]);
 
   const rows = useMemo(() => allRows.filter(r => !excluded.has(r.id)), [allRows, excluded]);
+
+  // Does any generated row carry a `link` id? That is what the registry keys on,
+  // so without it the export records nothing and zero-click placements stay
+  // invisible — the exact gap the registry exists to close.
+  const anyLinkId = useMemo(
+    () => rows.some(r => r.cells.some(c => c.param === "link" && c.value)),
+    [rows],
+  );
   const hiddenCount = allRows.length - rows.length;
 
   function urlFor(r: Row): string {
@@ -287,7 +297,61 @@ export default function MatrixBuilder({
 
   // TSV pastes into Sheets/Excel as real columns. Tabs and newlines inside a
   // value would silently shift every following cell, so they're stripped.
+  // ─── Link registry write ────────────────────────────────────────────────
+  // Fires on export. The builder stays a generator from the operator's point
+  // of view: the copy/download happens immediately and is NEVER blocked on
+  // this insert.
+  //
+  // This is the only record of links that were shipped but never clicked.
+  // pixel_events can only ever record demand, so without this a 240-link grid
+  // where 180 drew zero clicks is indistinguishable from a 60-link grid.
+  //
+  // link_id comes from the operator's `link` param, NOT from r.id — that one is
+  // derived from row content so adding a property cannot shuffle typed
+  // destinations, which means it changes whenever a dimension changes. Identity
+  // has to stay stable while attributes stay editable.
+  function registerRows() {
+    const payload: RegistryRowInput[] = [];
+    for (const r of rows) {
+      const linkCell = r.cells.find(c => c.param === "link");
+      if (!linkCell?.value) continue;
+      const dimensions: Record<string, string> = {};
+      for (const c of r.cells) {
+        if (c.param === "link") continue;   // identity lives in link_id
+        if (c.value) dimensions[c.param] = c.value;
+      }
+      payload.push({
+        link_id: linkCell.value,
+        link_host: hostLabel(r.host),
+        slug: r.slug,
+        // null means the rule supplies the destination, not the link.
+        destination: r.needsTo
+          ? normalizeDestination(destinations[r.id] ?? "") || null
+          : null,
+        dimensions,
+      });
+    }
+
+    if (payload.length === 0) {
+      setRegistered("no link ids set — nothing registered");
+      setTimeout(() => setRegistered(null), 4000);
+      return;
+    }
+
+    void registerGeneratedLinks(clientKey, payload).then(res => {
+      const n = res.inserted + res.updated;
+      setRegistered(
+        res.error
+          ? `registry error: ${res.error}`
+          : `registered ${n} link${n === 1 ? "" : "s"}` +
+            (res.skipped ? ` \u00b7 ${res.skipped} skipped` : ""),
+      );
+      setTimeout(() => setRegistered(null), 5000);
+    });
+  }
+
   async function copyTsv() {
+    registerRows();
     const { header, body } = buildTable();
     const clean = (v: string) => v.replace(/[\t\r\n]+/g, " ");
     const text = [header, ...body].map(r => r.map(clean).join("\t")).join("\n");
@@ -299,6 +363,7 @@ export default function MatrixBuilder({
   }
 
   function downloadCsv() {
+    registerRows();
     const { header, body } = buildTable();
     const lines = [header.map(csvCell).join(","), ...body.map(r => r.map(csvCell).join(","))];
     const blob = new Blob([`${lines.join("\n")}\n`], { type: "text/csv" });
@@ -362,6 +427,7 @@ export default function MatrixBuilder({
   const presentSlugs = slugs.map(s => s.slug).filter(sl => rows.some(r => r.slug === sl));
 
   async function copyAll() {
+    registerRows();
     try {
       await navigator.clipboard.writeText(rows.map(urlFor).join("\n"));
       setCopied("urls");
@@ -432,6 +498,16 @@ export default function MatrixBuilder({
           An axis is any query param you want to vary — the name is free text, the dropdown only
           suggests params this client&apos;s links have used before. Values are one per line; a single
           value just sets the param rather than multiplying rows.
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+          <span className="font-semibold text-neutral-600">partner</span>,{" "}
+          <span className="font-semibold text-neutral-600">promo</span>,{" "}
+          <span className="font-semibold text-neutral-600">loc</span>,{" "}
+          <span className="font-semibold text-neutral-600">size</span>,{" "}
+          <span className="font-semibold text-neutral-600">creative</span> and{" "}
+          <span className="font-semibold text-neutral-600">link</span> are reported as their own
+          columns, so you can filter and group on them directly. Any other param still gets recorded,
+          but only inside the full query string — fine for one-offs, awkward to report on.
         </p>
         <div className="mt-3 space-y-3">
           {slugs.map(s => {
@@ -762,6 +838,19 @@ export default function MatrixBuilder({
             <button type="button" className={btn} onClick={downloadCsv}>
               Download CSV
             </button>
+            {registered && (
+              <span className="text-xs text-neutral-600">{registered}</span>
+            )}
+            {!anyLinkId && (
+              <span className="w-full text-[11px] leading-relaxed text-amber-700">
+                No <strong>link</strong> param set, so nothing will be written to the link registry.
+                These URLs still work and the other dimensions are still reported — but only links
+                that get <em>clicked</em> will ever appear in reporting. Add a{" "}
+                <strong>link</strong> param carrying your inventory id (e.g. vista-ba-spotlite) and a
+                placement that draws zero clicks stays visible instead of looking like it was never
+                shipped.
+              </span>
+            )}
             {incomplete.length > 0 && (
               <span className="text-xs text-red-700">
                 {incomplete.length} row{incomplete.length === 1 ? "" : "s"} will fall through to the client default until a destination is set.

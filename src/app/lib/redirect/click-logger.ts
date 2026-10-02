@@ -46,6 +46,15 @@ export type RedirectClickRow = {
   // conversion counting.
   suspected_scanner?: boolean;
   suspected_scanner_reasons?: string[] | null;
+  // Named params to lift into pixel_events.dimensions. Passed in from the
+  // route's ALREADY-CACHED client config rather than re-fetched here, so
+  // extraction adds zero DB work. Omitted => nothing extracted, and every
+  // param still lands in props.full_query exactly as before.
+  reportable_params?: string[] | null;
+  // True when the click hit a registered link whose registry row is disabled.
+  // The reader is still routed (to the host/client default) — this flag is how
+  // dead-link traffic stays visible instead of silently vanishing.
+  link_disabled?: boolean;
 };
 
 export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
@@ -61,6 +70,18 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
     if (row.query[k]) partner_ids[k] = row.query[k];
   }
 
+  // Per-client reportable dimensions (partner / promo / loc / size / creative /
+  // link). Structured + indexable alongside utm and partner_ids, so reporting
+  // can filter and join on them without parsing props.full_query. Anything not
+  // on the client's list is untouched and still present in full_query, which
+  // keeps this non-lossy: add a param to the list later and re-run the
+  // dimensions backfill to recover history.
+  const dimensions: Record<string, string> = {};
+  for (const k of row.reportable_params ?? []) {
+    const v = row.query[k];
+    if (v) dimensions[k] = v;
+  }
+
   const props: Record<string, unknown> = {
     redirect_slug: row.slug,
     destination: row.destination,
@@ -70,6 +91,9 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
     device: row.device,
     full_query: row.query,
   };
+  if (row.link_disabled) {
+    props.link_disabled = true;
+  }
   if (row.suspected_scanner) {
     props.suspected_scanner = true;
     props.suspected_scanner_reasons = row.suspected_scanner_reasons ?? [];
@@ -137,6 +161,7 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
         referrer: row.referrer,
         utm,
         partner_ids,
+        dimensions,
         props,
         consent_status: "implicit", // Tier 1 redirects are server-side; explicit consent state isn't available
       });

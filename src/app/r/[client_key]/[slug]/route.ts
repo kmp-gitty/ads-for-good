@@ -42,7 +42,7 @@
 //   - Rate limiting: handled at the Vercel edge level
 
 import { NextRequest, NextResponse, after } from "next/server";
-import { fetchRules, fetchAbExperiments, fetchClientRedirectConfig, resolveHostDefaultDestination, incrementRuleHitCount } from "@/app/lib/redirect/rules";
+import { fetchRules, fetchAbExperiments, fetchClientRedirectConfig, resolveHostDefaultDestination, incrementRuleHitCount, fetchDisabledLinkIds } from "@/app/lib/redirect/rules";
 import { resolveIdentity, applyIdentityCookies } from "@/app/lib/redirect/identity";
 import { applyEntryRelayCookie, hasInboundAttribution, pickClickId } from "@/app/lib/redirect/entry-relay";
 import { readEntryClick, fetchGadsConfig, recordGadsConversion } from "@/app/lib/redirect/gads-conversion";
@@ -252,6 +252,51 @@ export async function GET(
     }
   }
 
+  // ─── Disabled registered link ──────────────────────────────────────────────
+  // When the click carries a registered link id (?link=) whose registry row is
+  // disabled, route the reader to the host/client default instead of the
+  // advertiser.
+  //
+  // Deliberately NOT a 404, and deliberately ABOVE ?to=: the same reasoning as
+  // default_redirect_destinations — a reader on a dead link was reading one of
+  // ACJ's papers, so they should land on that paper rather than an error page.
+  // Falling through the normal chain would hit ?to= first and route them
+  // straight to the advertiser, which is exactly what disabling is for.
+  //
+  // Only consulted when ?link= is actually present, so links without a
+  // registered id pay nothing, and a registered one costs a Map read on a warm
+  // lambda (see fetchDisabledLinkIds — cached 5 min, fails open).
+  //
+  // ⚠️ Disabling takes up to 5 MINUTES to take effect, and save-time cache
+  //    invalidation only reaches the lambda that handled the save. "Disabled"
+  //    is not instant; anything needing an instant kill needs a shorter TTL
+  //    for this one lookup.
+  let linkDisabled = false;
+  const linkId = query.link;
+  if (linkId) {
+    const disabledIds = await fetchDisabledLinkIds(client_key);
+    if (disabledIds.has(linkId)) {
+      linkDisabled = true;
+      const disabledHostDefault = resolveHostDefaultDestination(
+        clientConfig,
+        req.nextUrl.hostname,
+      );
+      if (disabledHostDefault && isValidDestination(disabledHostDefault)) {
+        destination = disabledHostDefault;
+      } else if (
+        clientConfig.default_redirect_destination &&
+        isValidDestination(clientConfig.default_redirect_destination)
+      ) {
+        destination = clientConfig.default_redirect_destination;
+      } else {
+        console.warn(
+          `[redirect] disabled link ${client_key}/${linkId} with no default destination`,
+        );
+        return new NextResponse("not_found", { status: 404 });
+      }
+    }
+  }
+
   // Tracking-ignore suppression. Two layers:
   //   1. UA substring match → skip ALL writes (click log + email-hint stitch).
   //      Lets operators mute known bot UAs (e.g. GoogleHypersonic) or QA tools
@@ -388,6 +433,12 @@ export async function GET(
         geo,
         device,
         user_agent: req.headers.get("user-agent"),
+        // Per-client reportable dimensions (partner / promo / loc / size /
+        // creative / link), read off the ALREADY-CACHED client config so
+        // extraction adds no DB work to the click path.
+        reportable_params: clientConfig.reportable_params,
+        // Dead-link traffic stays visible rather than silently vanishing.
+        link_disabled: linkDisabled,
         // Tag suspected scanner clicks so downstream analytics + attribution
         // can filter them out. Still logged (for observability + billing
         // audit) but distinguishable from real human clicks.
