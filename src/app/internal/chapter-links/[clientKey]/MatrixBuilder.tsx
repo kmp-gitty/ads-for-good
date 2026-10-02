@@ -79,6 +79,17 @@ function hostLabel(h: string): string {
   return h.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 }
 
+type DimKey = "promo" | "loc" | "size" | "creative";
+const DIM_KEYS: DimKey[] = ["promo", "loc", "size", "creative"];
+const DIM_PLACEHOLDER: Record<DimKey, string> = {
+  promo: "spotlite", loc: "above-fold", size: "970x250", creative: "heloc-spring",
+};
+
+// `go.vista.today` -> `vista`. The 1P host prefix is not the paper's name.
+function propertyToken(host: string): string {
+  return hostLabel(host).replace(/^(go|s)\./, "").split(".")[0];
+}
+
 function csvCell(v: string): string {
   return `"${String(v).replace(/"/g, '""')}"`;
 }
@@ -121,6 +132,17 @@ export default function MatrixBuilder({
   const [partner, setPartner] = useState("");
   const [utm, setUtm] = useState<Utm>({ ...EMPTY_UTM });
   const [constants, setConstants] = useState<Constant[]>([]);
+  // The reportable dimensions get first-class fields here, exactly as they do
+  // on the Generate URLs tab. They are the SAME params either way — the Matrix
+  // just applies them across a grid — so making the operator retype the param
+  // name as free text was gratuitous.
+  const [dims, setDims] = useState<Record<DimKey, string>>({
+    promo: "", loc: "", size: "", creative: "",
+  });
+  // Pattern expanded per row into the `link` id, e.g. {property}-{placement}-{pos}.
+  // A grid needs a DIFFERENT id per row, which neither a constant (same id on
+  // every row) nor an axis (multiplies rows rather than labelling them) can do.
+  const [linkPattern, setLinkPattern] = useState("");
 
   // Keyed by row id, NOT by index — so adding a property or a send later
   // doesn't shuffle destinations onto the wrong rows.
@@ -221,10 +243,32 @@ export default function MatrixBuilder({
   // so without it the export records nothing and zero-click placements stay
   // invisible — the exact gap the registry exists to close.
   const anyLinkId = useMemo(
-    () => rows.some(r => r.cells.some(c => c.param === "link" && c.value)),
-    [rows],
+    () => linkPattern.trim().length > 0
+      || rows.some(r => r.cells.some(c => c.param === "link" && c.value)),
+    [rows, linkPattern],
   );
   const hiddenCount = allRows.length - rows.length;
+
+  // Expand the pattern into this row's link id. Tokens: {property},
+  // {placement}, {partner}, any dimension name, and any axis param on the row.
+  // Sanitised to the shape the registry's CHECK constraint enforces.
+  function linkIdFor(r: Row): string {
+    const pat = linkPattern.trim();
+    if (!pat) return "";
+    const filled = pat.toLowerCase().replace(/\{([a-z0-9_]+)\}/g, (_m, key: string) => {
+      if (key === "property") return propertyToken(r.host);
+      if (key === "placement" || key === "slug") return r.slug;
+      if (key === "partner") return partner.trim();
+      const axis = r.cells.find(c => c.param.toLowerCase() === key);
+      if (axis) return axis.value;
+      if ((DIM_KEYS as string[]).includes(key)) return dims[key as DimKey].trim();
+      return "";
+    });
+    return filled
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+  }
 
   function urlFor(r: Row): string {
     const params = new URLSearchParams();
@@ -233,6 +277,9 @@ export default function MatrixBuilder({
     // destination comes from destination_template.
     if (r.needsTo && dest.trim()) params.set("to", normalizeDestination(dest));
     if (partner.trim()) params.set("partner", partner.trim());
+    for (const k of DIM_KEYS) if (dims[k].trim()) params.set(k, dims[k].trim());
+    const rowLinkId = linkIdFor(r);
+    if (rowLinkId) params.set("link", rowLinkId);
     for (const c of constants) if (c.param.trim() && c.value.trim()) params.set(c.param.trim(), c.value.trim());
     // Axes last among the custom params: they're the most specific scope, so
     // they win if a name collides with a global constant.
@@ -276,13 +323,18 @@ export default function MatrixBuilder({
       rows.some(r => r.utm[k]),
     );
 
+    const dimCols = DIM_KEYS.filter(k => dims[k].trim());
+    const linkCol = rows.some(r => linkIdFor(r)) ? ["link"] : [];
     const header = [
       "property", "placement", "partner",
+      ...dimCols, ...linkCol,
       ...constCols, ...axisCols, ...utmCols.map(k => `utm_${k}`),
       "destination", "url",
     ];
     const body = rows.map(r => {
       const cells = [hostLabel(r.host), r.slug, partner.trim()];
+      for (const k of dimCols) cells.push(dims[k].trim());
+      if (linkCol.length) cells.push(linkIdFor(r));
       for (const col of constCols) {
         cells.push(constants.find(c => c.param.trim() === col)?.value.trim() ?? "");
       }
@@ -313,15 +365,17 @@ export default function MatrixBuilder({
   function registerRows() {
     const payload: RegistryRowInput[] = [];
     for (const r of rows) {
-      const linkCell = r.cells.find(c => c.param === "link");
-      if (!linkCell?.value) continue;
+      const rowLinkId = linkIdFor(r) || r.cells.find(c => c.param === "link")?.value || "";
+      if (!rowLinkId) continue;
       const dimensions: Record<string, string> = {};
+      if (partner.trim()) dimensions.partner = partner.trim();
+      for (const k of DIM_KEYS) if (dims[k].trim()) dimensions[k] = dims[k].trim();
       for (const c of r.cells) {
         if (c.param === "link") continue;   // identity lives in link_id
         if (c.value) dimensions[c.param] = c.value;
       }
       payload.push({
-        link_id: linkCell.value,
+        link_id: rowLinkId,
         link_host: hostLabel(r.host),
         slug: r.slug,
         // null means the rule supplies the destination, not the link.
@@ -451,7 +505,12 @@ export default function MatrixBuilder({
         {knownPartners.map(p => <option key={p} value={p} />)}
       </datalist>
       <datalist id="matrix-params">
-        {knownParams.map(p => <option key={p} value={p} />)}
+        {/* Reportable dimensions first — they get their own column. Params this
+            client has used before follow, which is where test junk like `_t`
+            and `probe` lives. */}
+        {["pos", "article", "send", ...DIM_KEYS]
+          .concat(knownParams.filter(p => !["pos", "article", "send", "link", "partner", ...DIM_KEYS].includes(p)))
+          .map(p => <option key={p} value={p} />)}
       </datalist>
 
       {/* Properties */}
@@ -639,6 +698,17 @@ export default function MatrixBuilder({
             <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Partner</span>
             <input className={`${inputCls} mt-1`} list="matrix-partners" value={partner} onChange={e => setPartner(e.target.value)} placeholder="firstrust" />
           </label>
+          {DIM_KEYS.map(k => (
+            <label key={k} className="block">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">{k}</span>
+              <input
+                className={`${inputCls} mt-1`}
+                value={dims[k]}
+                onChange={e => setDims(d => ({ ...d, [k]: e.target.value }))}
+                placeholder={DIM_PLACEHOLDER[k]}
+              />
+            </label>
+          ))}
           {(["source", "medium", "campaign"] as const).map(k => (
             <label key={k} className="block">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">utm_{k}</span>
@@ -650,6 +720,33 @@ export default function MatrixBuilder({
             </label>
           ))}
         </div>
+
+        <label className="mt-3 block">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+            Link ID pattern
+          </span>
+          <input
+            className={`${inputCls} mt-1`}
+            value={linkPattern}
+            onChange={e => setLinkPattern(e.target.value)}
+            placeholder="{property}-{placement}-{pos}"
+          />
+          <p className="mt-1 text-[11px] leading-relaxed text-neutral-500">
+            Expands per row into that row&apos;s inventory id, which registers it so the placement
+            reports even with zero clicks. Tokens: <span className="font-mono">{"{property}"}</span>,{" "}
+            <span className="font-mono">{"{placement}"}</span>,{" "}
+            <span className="font-mono">{"{partner}"}</span>, any dimension above, or any axis name.{" "}
+            <span className="text-neutral-400">
+              Set it here rather than as an axis — an axis multiplies rows instead of labelling them,
+              and a constant would give every row the same id.
+            </span>
+          </p>
+          {linkPattern.trim() && rows[0] && (
+            <p className="mt-1 text-[11px] text-neutral-600">
+              First row resolves to <span className="font-mono font-semibold">{linkIdFor(rows[0]) || "(empty)"}</span>
+            </p>
+          )}
+        </label>
 
         {constants.length > 0 && (
           <div className="mt-3 space-y-2">
