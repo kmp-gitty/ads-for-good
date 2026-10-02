@@ -262,6 +262,11 @@ export default function MatrixBuilder({
       const axis = r.cells.find(c => c.param.toLowerCase() === key);
       if (axis) return axis.value;
       if ((DIM_KEYS as string[]).includes(key)) return dims[key as DimKey].trim();
+      // Free-form constants are addressable too — otherwise a constant like
+      // flight=q4 could not be referenced as {flight} and would silently
+      // resolve to nothing, which is how ids collide without an obvious cause.
+      const konst = constants.find(c => c.param.trim().toLowerCase() === key);
+      if (konst) return konst.value.trim();
       return "";
     });
     return filled
@@ -279,7 +284,7 @@ export default function MatrixBuilder({
     const unique = new Set(ids).size;
     return { total: ids.length, unique, dupes: ids.length - unique };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, linkPattern, partner, dims]);
+  }, [rows, linkPattern, partner, dims, constants]);
 
   function urlFor(r: Row): string {
     const params = new URLSearchParams();
