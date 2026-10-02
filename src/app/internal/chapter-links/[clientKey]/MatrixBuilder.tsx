@@ -270,6 +270,17 @@ export default function MatrixBuilder({
       .replace(/^-|-$/g, "");
   }
 
+  // A pattern that omits a token which varies per row resolves several rows to
+  // the SAME id. The registry upsert is keyed on the id, so those rows collapse
+  // into one registration — and the extras are silently skipped. Surface it.
+  const linkIdStats = useMemo(() => {
+    if (!linkPattern.trim()) return { total: 0, unique: 0, dupes: 0 };
+    const ids = rows.map(r => linkIdFor(r)).filter(Boolean);
+    const unique = new Set(ids).size;
+    return { total: ids.length, unique, dupes: ids.length - unique };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, linkPattern, partner, dims]);
+
   function urlFor(r: Row): string {
     const params = new URLSearchParams();
     const dest = destinations[r.id] ?? "";
@@ -741,9 +752,23 @@ export default function MatrixBuilder({
               and a constant would give every row the same id.
             </span>
           </p>
+          {!linkPattern.trim() && rows.length > 0 && (
+            <p className="mt-1 text-[11px] font-semibold text-amber-700">
+              Empty — the greyed text above is an example, not a value. Leave it blank and none of
+              these {rows.length} links will be registered.
+            </p>
+          )}
           {linkPattern.trim() && rows[0] && (
             <p className="mt-1 text-[11px] text-neutral-600">
-              First row resolves to <span className="font-mono font-semibold">{linkIdFor(rows[0]) || "(empty)"}</span>
+              First row resolves to{" "}
+              <span className="font-mono font-semibold">{linkIdFor(rows[0]) || "(empty)"}</span>
+            </p>
+          )}
+          {linkIdStats.dupes > 0 && (
+            <p className="mt-1 text-[11px] font-semibold text-red-700">
+              This pattern gives only {linkIdStats.unique} distinct ids for {linkIdStats.total} rows,
+              so {linkIdStats.dupes} would collapse into another row and be skipped. Add a token for
+              whatever varies between them — usually the axis you are grouping by.
             </p>
           )}
         </label>
