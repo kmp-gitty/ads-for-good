@@ -6,10 +6,13 @@
 // brand-new visitor. Forwarding the values as query params is HubSpot's own
 // documented cross-domain pattern and lets it stitch the session.
 //
-// SCOPE IS DELIBERATELY NARROW. Only slug === "partner", only when the
-// destination is acj.today. These are tracking identifiers, so forwarding them
-// anywhere else — another slug, or an advertiser's domain — would hand a third
-// party a visitor identifier they have no business receiving.
+// SCOPE IS DELIBERATELY NARROW. Only the slugs that point at ACJ's own
+// corporate site — partner, internal_lead, internal_spotlite — and only when
+// the destination really is acj.today. These are tracking identifiers, so
+// forwarding them anywhere else (another slug, or an advertiser's domain)
+// would hand a third party a visitor identifier they have no business
+// receiving. The host gate is the backstop: adding a slug here does nothing
+// unless that slug actually resolves to acj.today.
 //
 // ⚠️ NEVER LOGGED. Call this to build the 302 target ONLY, leaving the
 //    `destination` variable the click logger sees untouched. Same posture as
@@ -21,7 +24,8 @@
 // to the pre-302 path, which Stage 0 cleared of blocking work and the iad1
 // region pin depends on staying clear.
 
-const PARTNER_SLUG = "partner";
+// Slugs whose destination is ACJ's own HubSpot-tracked corporate site.
+const HUBSPOT_SLUGS = new Set(["partner", "internal_lead", "internal_spotlite"]);
 const HUBSPOT_COOKIES = ["__hstc", "__hssc"] as const;
 
 /** acj.today and www.acj.today only — never a subdomain, never another host. */
@@ -35,7 +39,7 @@ export function appendHubspotCrossDomain(
   slug: string,
   readCookie: (name: string) => string | undefined,
 ): string {
-  if (slug !== PARTNER_SLUG) return destination;
+  if (!HUBSPOT_SLUGS.has(slug)) return destination;
 
   let url: URL;
   try {
