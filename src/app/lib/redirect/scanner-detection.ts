@@ -116,6 +116,28 @@ const SOCIAL_CRAWLER_UAS: RegExp[] = [
 //    substitute for that signal.
 const CRAWLER_UA_FINGERPRINTS: RegExp[] = [
   /\(lanai\)/i,
+  // Self-identifying crawlers. "(+http..." inside a UA is the long-standing
+  // convention for a well-behaved bot pointing at its own documentation —
+  // Googlebot, bingbot, facebookexternalhit and most commercial crawlers all
+  // do it. No real browser puts a URL in its user agent, so this is high
+  // precision and, unlike a named list, it covers crawlers nobody has
+  // enumerated yet. Caught `Buck/2.6.0; (+https://app.hypefactors.com/...)`
+  // (Hypefactors media monitoring) on ACJ before anyone knew to look for it.
+  //
+  // Preceded by paren, semicolon OR space because the convention varies:
+  // Hypefactors and facebookexternalhit write `(+http`, Googlebot writes
+  // `; +http`. A first pass anchored on `(` alone missed Googlebot entirely —
+  // caught by falsification, not by reading.
+  //
+  // ⚠️ THIS REVERSES A DOCUMENTED DECISION. Search crawlers were deliberately
+  //    excluded from SOCIAL_CRAWLER_UAS, "held back only because nobody has
+  //    asked for it yet." The evidence asked: ACJ's wrapped links are live on
+  //    public pages and are being crawled globally — 14 of 18 clicks in one
+  //    24h window were non-human, from 7 countries. A search crawler hitting
+  //    a wrapped link mints a durable identity and receives an identity
+  //    handoff on the destination, which is strictly wrong whoever the
+  //    crawler belongs to.
+  /[(;\s]\+https?:\/\//i,
 ];
 
 // Rate-limit configuration. Any hashed IP hitting more than
