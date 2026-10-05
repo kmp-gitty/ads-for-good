@@ -18,6 +18,7 @@ import { listConditionTypes } from "@/app/lib/redirect/conditions";
 import RuleRowActions from "./RuleRowActions";
 import UrlBuilder, { type ClientOption } from "./UrlBuilder";
 import MatrixBuilder from "./MatrixBuilder";
+import RegistryPanel from "./RegistryPanel";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -109,7 +110,7 @@ type Rule = {
   last_hit_at: string | null;
 };
 
-type Tab = "links" | "generate" | "matrix";
+type Tab = "links" | "generate" | "matrix" | "registry";
 
 const subChip: React.CSSProperties = {
   fontSize: 11,
@@ -146,7 +147,10 @@ export default async function ChapterLinksClientPage({
   const { clientKey } = await params;
   const sp = await searchParams;
   const tab: Tab =
-    sp.tab === "generate" ? "generate" : sp.tab === "matrix" ? "matrix" : "links";
+    sp.tab === "generate" ? "generate"
+    : sp.tab === "matrix" ? "matrix"
+    : sp.tab === "registry" ? "registry"
+    : "links";
   const preselectSlug = typeof sp.slug === "string" ? sp.slug : undefined;
 
   const [{ data: rules, error }, { data: clientRow }, vocabulary] = await Promise.all([
@@ -250,12 +254,6 @@ export default async function ChapterLinksClientPage({
             📊 Analytics
           </Link>
           <Link
-            href={`/internal/chapter-links/${clientKey}/registry`}
-            style={{ fontSize: 13, color: MUTED, textDecoration: "none" }}
-          >
-            🗂 Registry
-          </Link>
-          <Link
             href={`/internal/chapter-links/${clientKey}/new`}
             style={{ background: ORANGE, color: "white", fontSize: 14, fontWeight: 600, textDecoration: "none", padding: "10px 18px", borderRadius: 10, whiteSpace: "nowrap" }}
           >
@@ -275,9 +273,17 @@ export default async function ChapterLinksClientPage({
         <Link href={`/internal/chapter-links/${clientKey}?tab=matrix`} style={tabStyle(tab === "matrix")}>
           Matrix
         </Link>
+        <Link href={`/internal/chapter-links/${clientKey}?tab=registry`} style={tabStyle(tab === "registry")}>
+          Registry
+        </Link>
       </div>
 
-      {tab === "matrix" ? (
+      {tab === "registry" ? (
+        <RegistryPanel
+          clientKey={clientKey}
+          daysKey={typeof sp.days === "string" ? sp.days : undefined}
+        />
+      ) : tab === "matrix" ? (
         <div>
           <p style={{ margin: "0 0 14px", fontSize: 13.5, color: MUTED, lineHeight: 1.5, maxWidth: 720 }}>
             Bulk-generate a campaign grid. Rows are the union across selected placements of
