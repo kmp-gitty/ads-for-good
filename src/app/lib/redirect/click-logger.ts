@@ -82,6 +82,37 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
     if (v) dimensions[k] = v;
   }
 
+  // A click that arrived with no link id, on a client that tags links with
+  // one. Such a click is UNATTRIBUTABLE by construction — there is nothing to
+  // join it to a registry row on — so it can never inflate a per-link count.
+  // Tagging it makes the population countable instead of invisible.
+  //
+  // Derived from the client config already in hand plus the query already
+  // parsed, so this costs nothing: no lookup, no round trip, nothing added to
+  // the pre-302 path.
+  //
+  // ⚠️ DELIBERATELY A TAG, NOT A BOT VERDICT, and the distinction is
+  //    load-bearing. "Unattributable" is a fact about the request;
+  //    "bot" is an inference about who sent it. Setting suspected_scanner
+  //    here would also suppress identity cookies and the HubSpot handoff —
+  //    so one false positive costs a real lead its attribution, which is a
+  //    worse failure than the noise it removes. It would also hide the error
+  //    the registry exists to surface: a placement that shipped WITHOUT its
+  //    link id is an operator mistake we want loudly visible, not silently
+  //    reclassified as traffic that never happened.
+  //
+  // Promote to a bot signal only with measurement behind it — the same
+  // discipline the bot-score bench enforces.
+  //
+  // NOTE: "no referrer" was considered as a second condition and REJECTED on
+  // evidence. Measured across every redirect_click ACJ has: 100% of clicks
+  // WITH a link id and 100% of clicks WITHOUT one carry a null referrer
+  // (93.8% across all clients, all time). Cross-origin referrers are stripped
+  // or dropped, so the clause reads as a narrowing condition while doing no
+  // narrowing at all.
+  const expectsLinkId = (row.reportable_params ?? []).includes("link");
+  const unregisteredLink = expectsLinkId && !row.query.link;
+
   const props: Record<string, unknown> = {
     redirect_slug: row.slug,
     destination: row.destination,
@@ -91,6 +122,9 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
     device: row.device,
     full_query: row.query,
   };
+  if (unregisteredLink) {
+    props.unregistered_link = true;
+  }
   if (row.link_disabled) {
     props.link_disabled = true;
   }

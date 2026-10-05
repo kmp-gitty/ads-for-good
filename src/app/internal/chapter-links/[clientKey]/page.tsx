@@ -36,8 +36,15 @@ const supabase = createClient(
 // value exported across the client boundary becomes a client-reference proxy
 // on the server. Reading it in server code throws at request time — which is
 // exactly what took this page down.
+//
+// `amp` is reserved for a different reason than the rest: it is not a param
+// anyone sets, it is an ARTIFACT. A link written into HTML with `&amp;` and
+// then read by a machine arrives carrying a stray `amp` key — observed on ACJ
+// 2026-10-05. Reserving it keeps the artifact out of the axis picker and out
+// of the param typeahead, so it can never be mistaken for a real dimension.
 const RESERVED_PARAMS = new Set([
   "to", "partner", "rh", "rid", "re", "chid", "jid",
+  "amp",
   "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
 ]);
 

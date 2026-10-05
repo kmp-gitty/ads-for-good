@@ -97,6 +97,27 @@ const SOCIAL_CRAWLER_UAS: RegExp[] = [
   /iframely/i,
 ];
 
+// Datacenter-crawler fingerprints. Not email scanners and not social preview
+// bots — these are generic crawlers that announce themselves through an
+// implausible UA rather than a named product string.
+//
+// `(Lanai)` was found on ACJ (2026-10-05): two clicks from Ashburn, VA on
+// identical coordinates claiming Safari 8.0.2 / OS X 10.10.1 — a 2014 browser
+// — one of which carried a stray `amp` param, the fingerprint of a machine
+// parsing an HTML-escaped href rather than a person clicking. Matched on the
+// parenthesised form specifically so a real UA containing the word (a device
+// or place name) cannot trip it.
+//
+// ⚠️ This list CANNOT catch the broader class. The same incident included a
+//    Vietnam click claiming Chrome 153 on a Galaxy S8 — a UA indistinguishable
+//    from a real one by pattern alone. That is the documented datacenter-ASN
+//    blind spot: behaviourally and lexically invisible, catchable only on
+//    network origin. Adding fingerprints here is worth doing and is not a
+//    substitute for that signal.
+const CRAWLER_UA_FINGERPRINTS: RegExp[] = [
+  /\(lanai\)/i,
+];
+
 // Rate-limit configuration. Any hashed IP hitting more than
 // RATE_LIMIT_MAX_CLICKS clicks within RATE_LIMIT_WINDOW_MS is flagged
 // suspicious for the remainder of the window.
@@ -175,6 +196,12 @@ export function classifyForScannerRisk(req: NextRequest): ScannerRiskAssessment 
     // 1b. Social / messaging link-preview crawler
     if (SOCIAL_CRAWLER_UAS.some((r) => r.test(ua))) {
       reasons.push("social_crawler_ua");
+    }
+
+    // 1c. Datacenter crawler fingerprint — kept as its own reason so crawler
+    // volume stays distinguishable from email-scanner volume in the audit log.
+    if (CRAWLER_UA_FINGERPRINTS.some((r) => r.test(ua))) {
+      reasons.push("crawler_ua");
     }
 
     // 2. Rapid same-IP clicks
