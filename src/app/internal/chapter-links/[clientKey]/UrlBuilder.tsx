@@ -428,7 +428,7 @@ export default function UrlBuilder({
           </Field>
         ) : null}
 
-        <Field label="Link" hint="Pick a configured rule, or Generic for an ad-hoc ?to= link">
+        <Field label="Placement (Link)" hint="Pick a configured rule, or Generic for an ad-hoc ?to= link">
           <select className={inputCls} value={slug} onChange={e => setSlug(e.target.value)}>
             <option value="">— Generic ad-hoc link (slug: {GENERIC_SLUG}) —</option>
             {availableSlugs.map(s => (
