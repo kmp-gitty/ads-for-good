@@ -65,6 +65,30 @@ export default async function RegistryPanel({
   const zero = rows.length - withClicks;
   const disabled = rows.filter(r => r.disabled_at).length;
 
+  // Group by slug — the placement. A slug is the unit an operator reasons
+  // about ("how is internal_lead doing?"), and a flat all-slugs list makes
+  // that question a visual scan instead of an answer.
+  //
+  // One table with full-width group header rows rather than a table per
+  // group: columns stay aligned across groups, which is the whole point of
+  // comparing links to each other.
+  const bySlug = new Map<string, Row[]>();
+  for (const r of rows) {
+    const list = bySlug.get(r.slug) ?? [];
+    list.push(r);
+    bySlug.set(r.slug, list);
+  }
+  const groups = Array.from(bySlug.entries())
+    .map(([slug, list]) => ({
+      slug,
+      list: [...list].sort((a, b) => b.clicks - a.clicks || a.link_id.localeCompare(b.link_id)),
+      clicks: list.reduce((n, r) => n + r.clicks, 0),
+      zero: list.filter(r => r.clicks === 0).length,
+    }))
+    // Busiest placement first; ties broken by name so the order is stable
+    // between loads rather than depending on Map insertion.
+    .sort((a, b) => b.clicks - a.clicks || a.slug.localeCompare(b.slug));
+
   const th: React.CSSProperties = {
     textAlign: "left", fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".06em",
     color: FAINT, fontWeight: 600, padding: "8px 12px", whiteSpace: "nowrap",
@@ -115,7 +139,10 @@ export default async function RegistryPanel({
       {rows.length > 0 && (
         <>
           <div style={{ display: "flex", gap: 22, marginBottom: 14, fontSize: 13, color: MUTED }}>
-            <span><strong style={{ color: INK }}>{rows.length}</strong> registered</span>
+            <span>
+              <strong style={{ color: INK }}>{rows.length}</strong> registered across{" "}
+              <strong style={{ color: INK }}>{groups.length}</strong> placement{groups.length === 1 ? "" : "s"}
+            </span>
             <span><strong style={{ color: TEAL }}>{withClicks}</strong> with clicks</span>
             <span><strong style={{ color: zero > 0 ? ORANGE : INK }}>{zero}</strong> at zero</span>
             {disabled > 0 && <span><strong style={{ color: INK }}>{disabled}</strong> disabled</span>}
@@ -127,7 +154,6 @@ export default async function RegistryPanel({
                 <thead style={{ background: PANEL }}>
                   <tr>
                     <th style={th}>Link ID</th>
-                    <th style={th}>Placement</th>
                     <th style={th}>Property</th>
                     <th style={th}>Dimensions</th>
                     <th style={th}>Destination</th>
@@ -137,13 +163,31 @@ export default async function RegistryPanel({
                     <th style={th}>Status</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {rows.map(r => {
+                {groups.map(g => (
+                <tbody key={g.slug}>
+                  <tr style={{ borderTop: `1px solid ${LINE}`, background: "#F4F1E8" }}>
+                    <th colSpan={8} style={{ textAlign: "left", padding: "9px 12px", fontWeight: 600 }}>
+                      <span style={{ fontSize: 13, color: INK, fontFamily: "ui-monospace, monospace" }}>
+                        {g.slug}
+                      </span>
+                      <span style={{ fontSize: 12, color: MUTED, fontWeight: 400, marginLeft: 10 }}>
+                        {g.list.length} link{g.list.length === 1 ? "" : "s"}
+                        {" · "}
+                        <strong style={{ color: g.clicks > 0 ? INK : MUTED, fontWeight: 600 }}>{g.clicks}</strong> click{g.clicks === 1 ? "" : "s"}
+                        {g.zero > 0 && (
+                          <>
+                            {" · "}
+                            <strong style={{ color: ORANGE, fontWeight: 600 }}>{g.zero}</strong> at zero
+                          </>
+                        )}
+                      </span>
+                    </th>
+                  </tr>
+                  {g.list.map(r => {
                     const dead = r.clicks === 0;
                     return (
                       <tr key={r.link_id} style={{ borderTop: `1px solid ${LINE}`, background: dead ? "#FFFBF7" : "#fff" }}>
                         <td style={{ ...td, fontFamily: "ui-monospace, monospace", fontSize: 12.5 }}>{r.link_id}</td>
-                        <td style={td}>{r.slug}</td>
                         <td style={{ ...td, color: MUTED, fontSize: 12.5 }}>{r.link_host ?? "—"}</td>
                         <td style={td}>
                           {r.dimensions && Object.keys(r.dimensions).length > 0 ? (
@@ -189,6 +233,7 @@ export default async function RegistryPanel({
                     );
                   })}
                 </tbody>
+                ))}
               </table>
             </div>
           </div>
