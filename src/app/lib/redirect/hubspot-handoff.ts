@@ -1,4 +1,5 @@
-// HubSpot cross-domain handoff — partner slug only, acj.today only.
+// HubSpot cross-domain handoff — allowlisted slugs, ACJ-owned HubSpot
+// destinations only (acj.today and HubSpot's own *.hsforms.com).
 //
 // WHY: HubSpot sets __hstc / __hssc on the APEX (.bucksco.today), so they are
 // sent to go.bucksco.today on the wrapped click. But acj.today is a different
@@ -7,12 +8,28 @@
 // documented cross-domain pattern and lets it stitch the session.
 //
 // SCOPE IS DELIBERATELY NARROW. Only the slugs that point at ACJ's own
-// corporate site — partner, internal_lead, internal_spotlite — and only when
-// the destination really is acj.today. These are tracking identifiers, so
-// forwarding them anywhere else (another slug, or an advertiser's domain)
-// would hand a third party a visitor identifier they have no business
-// receiving. The host gate is the backstop: adding a slug here does nothing
-// unless that slug actually resolves to acj.today.
+// HubSpot-tracked properties — partner, internal_lead, internal_spotlite —
+// and only when the destination is one of those properties. These are
+// tracking identifiers, so forwarding them to an advertiser's domain would
+// hand a third party a visitor identifier they have no business receiving.
+//
+// Two allowed destination shapes:
+//   acj.today / www.acj.today   ACJ's corporate site, HubSpot-tracked
+//   *.hsforms.com              HubSpot's own form hosting. A share link like
+//                              tf02j.share.hsforms.com/<id> is where an
+//                              embedded ACJ form actually lives, so the
+//                              session has to stitch there or the form sees
+//                              a brand-new visitor and the click that
+//                              produced the lead is lost.
+//
+// ⚠️ THE TWO GATES ARE NOT EQUALLY STRONG, and the difference is worth
+//    knowing. acj.today is ACJ's alone, so the host check was a genuinely
+//    independent backstop — a mis-added slug did nothing unless it also
+//    resolved to ACJ's domain. hsforms.com is MULTI-TENANT: every HubSpot
+//    customer's forms live there. So for that branch the host check only
+//    proves "this is HubSpot", not "this is ACJ's HubSpot", and the slug
+//    allowlist above carries the real weight. Add a slug here only when its
+//    destination is a property the client owns.
 //
 // ⚠️ NEVER LOGGED. Call this to build the 302 target ONLY, leaving the
 //    `destination` variable the click logger sees untouched. Same posture as
@@ -28,10 +45,22 @@
 const HUBSPOT_SLUGS = new Set(["partner", "internal_lead", "internal_spotlite"]);
 const HUBSPOT_COOKIES = ["__hstc", "__hssc"] as const;
 
-/** acj.today and www.acj.today only — never a subdomain, never another host. */
-function isAcjCorporate(host: string): boolean {
+/**
+ * ACJ's corporate site, or HubSpot's own form hosting.
+ *
+ * acj.today is matched exactly — never a subdomain, so a compromised or
+ * mistyped `foo.acj.today` gets nothing. hsforms.com is matched as the
+ * registrable domain plus any subdomain, because HubSpot share links are
+ * served from per-portal subdomains (tf02j.share.hsforms.com).
+ *
+ * The leading dot in the suffix test is load-bearing: a bare `endsWith`
+ * on "hsforms.com" would also match "hsforms.com.evil.com", handing the
+ * cookies to an attacker-controlled host.
+ */
+function isHubspotDestination(host: string): boolean {
   const h = host.toLowerCase();
-  return h === "acj.today" || h === "www.acj.today";
+  if (h === "acj.today" || h === "www.acj.today") return true;
+  return h === "hsforms.com" || h.endsWith(".hsforms.com");
 }
 
 export function appendHubspotCrossDomain(
@@ -47,7 +76,7 @@ export function appendHubspotCrossDomain(
   } catch {
     return destination;             // not parseable -> leave it exactly as-is
   }
-  if (!isAcjCorporate(url.hostname)) return destination;
+  if (!isHubspotDestination(url.hostname)) return destination;
 
   let changed = false;
   for (const name of HUBSPOT_COOKIES) {
