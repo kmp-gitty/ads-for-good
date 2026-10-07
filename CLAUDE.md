@@ -4343,6 +4343,48 @@ Remaining billing/usage build order (from [docs/chapter-billing-usage-handoff.md
   - **Cookie name change (`_ch` etc.)** — Chapter's `up_anon_<client_key>` + `up_journey_<client_key>` are already non-fingerprinty (neutral prefix + per-client suffix). Doc's suggestion doesn't apply.
 - **Cookie storage clarification (correcting the Claude Chat doc's assumption):** Chapter identity is stored PRIMARILY in `localStorage` (raw UUID via `getOrCreateId`) — NOT `document.cookie`. The SECONDARY server-set cookie (from pixel API `res.cookies.set` on the collect response) is server-issued via Set-Cookie header, `Max-Age=31536000`, `HttpOnly:false`. The `HttpOnly:false` is intentional and load-bearing — the pixel reads it as fallback when localStorage is empty (bridge for cross-subdomain visitors post-July 10 fix). This nuance matters for the Test 1 design.
 
+#### QUEUED BUILD — Source attribution on EOS identify calls (Oct 7, 2026 — NOT scheduled)
+- **Problem:** EOS's theme fires `identify` with `email_sha256` from three call sites and none pass a source. Every identify event has `props.source = null` and `props.method = null`, so Chapter records "an email was hashed here" with no provenance — a newsletter signup is indistinguishable from a login.
+- **Measured cost (Oct 7, eos_fabrics):** 282 distinct email identifies in Sep 20–30 alone, **98.2% matching real Shopify customers** — the data is good, it is just unattributed. Classifying FOUR of them took page-path + page-sequence + journey-position forensics plus a Shopify customer export, and **2 of the 4 remain unclassifiable**. Two conclusions were reached and retracted along the way purely because the source had to be inferred rather than read.
+- **⚠️ THE CODE IS NOT IN THIS REPO.** The snippets live in EOS's **Shopify theme**. This repo holds the canonical reference copy at [docs/theme-snippets.md](docs/theme-snippets.md) — update that too, or the documented version and the live version drift (which is the same gap that produced the June-19 queue-race and duplicate-block findings).
+- **The change** — add a source trait at each call site:
+  ```js
+  (window.ChapterPixel = window.ChapterPixel || []).push([
+    "identify",
+    { identity_key: "email_sha256:" + hash, traits: { source: "newsletter" } }
+  ]);
+  ```
+  Sites → values: footer/newsletter signup → `newsletter` · contact form → `contact_form` · login snippet (Liquid `{% if customer %}`) → `login`.
+- **Keep the QUEUE form (`.push([...])`), never a direct `.identify()`.** A direct call is silently dropped when it runs before pixel.js loads — the exact bug fixed across all four EOS snippets on Sep 2.
+- **⚠️ VERIFY BEFORE SHIPPING — `traits` may not persist.** Confirm `/api/identify` actually writes `traits` and where it lands (`pixel_events.props` vs `identity_links`). There was a **JSONB double-encoding bug on this exact field**: `${JSON.stringify(obj)}::jsonb` stores a quoted scalar, so `traits->>'x'` returns null. Correct form is `${tx.json(obj)}::jsonb` (Fix #26 Part 2). Re-check it is still right before trusting the output.
+- **⚠️ A FOURTH, DE-FACTO CALL SITE EXISTS.** Shop Pay / "Login with Shop" logs the customer in **without visiting `/account/*`**, which then trips the Liquid snippet mid-session. It will report `source: "login"`, which is correct — but it invalidated two assumptions during the investigation, so expect logins that have no `/account` pageview before them.
+- **TEST — in INCOGNITO.** The `chapter_ignore` flag silently drops every event on the operator's normal browser and has already cost multiple test cycles. Then:
+  ```sql
+  select props->>'source', count(*) from chapter_ingest.pixel_events
+  where client_key='eos_fabrics' and event_name='identify'
+    and identity_key like 'email_sha256:%' and ts > now() - interval '1 day'
+  group by 1;
+  ```
+  Expect non-null sources. Also confirm `pixel.js` still parses — it is a TS template literal, so **`tsc` cannot see syntax errors inside it** and backticks in it break the build. Extract the body and `node --check` it.
+
+#### QUEUED BUILD — robots.txt on the 1P redirect/collect hosts (Oct 5, 2026 — NOT scheduled)
+- **Found while diagnosing ACJ crawler traffic:** `go.vista.today/robots.txt` **307s to `vista.today/`**. A crawler asks for the rules, gets an HTML page, reads no restrictions, and crawls `/r/` freely. Same on all 8 hosts in `CLIENT_1P_HOSTS`.
+- **Worse, [src/app/robots.js](src/app/robots.js) says `allow: "/"`** — so even unredirected we would be explicitly *inviting* crawlers into the redirect path.
+- **The route already sets `X-Robots-Tag: noindex` on the 302** — the intent to keep crawlers out is already expressed, just at a layer that requires the crawl to happen first. By then the click has created a journey, minted an identity and landed a billable row. robots.txt moves the same intent one step earlier.
+- **The change:** add `robots.txt` to the exclusion regex in [next.config.ts:99](next.config.ts#L99) (currently `/:path((?!r/|api/|_next/|_vercel/|\.well-known/).*)`), and make `robots.js` host-aware — `Disallow: /` for the 8 `CLIENT_1P_HOSTS`, today's agency rules unchanged elsewhere. It must become a dynamic route; one static file cannot vary by Host.
+- **Only stops WELL-BEHAVED crawlers** (Googlebot, bingbot, Hypefactors). The Argentina/Brazil/Russia/Vietnam class ignores robots.txt entirely — that remains the datacenter-ASN problem. But it removes the whole self-identifying class at source, and a crawler that never fetches never creates a journey.
+- **⚠️ TRADE-OFF NEEDING AN OPERATOR CALL:** disallowing `/r/` means Google cannot follow a wrapped link to its destination, so **no link equity passes to the advertiser**. For sponsored placements that is arguably correct (Google's own guidance for paid links is `rel="sponsored"` precisely so equity does not pass) — but it is a deliberate choice, and the same axis on which ACJ already decided to leave internal editorial navigation unwrapped. A link that must pass equity has to live outside the disallowed path.
+
+#### QUEUED BUILD — Chapter Links reporting shape (Oct 6, 2026 — NOT scheduled)
+- **The gap, stated by the operator:** "how many block-ads clicks did internal_lead get on Philadelphia vs Montco last week" is currently a SQL query, not a page. The analytics surface offers fixed **single**-dimension breakdowns (by country, by device, by OS) for one slug; that question needs **three dimensions crossed**. Adding more breakdown lists does not help — they do not compose.
+- **Shape A — one pivot surface over clicks.** Window + filters + 1–3 group-bys + CSV, instead of N pre-built pages. Group-by vocabulary is what is already captured: slug, link_host, partner, promo, loc, size, creative, link, country/region/city, device, OS, day.
+  - **🔑 Cost is near zero and this is the unusual case.** `redirect_click` is **4,331 rows all-time across every client**, so this is a LIVE query — no MV, no snapshot, no cron. That looks like it violates the standing "pre-aggregate anything scanning >100k rows" forward rule; it is that same rule's own threshold saying live is fine here.
+- **Shape B — a click-level list** (one row per click: when, paper, placement, creative, city/region, device, whether that identity returned), exportable. Different question, different shape — conflating A and B is why neither is easy today.
+- **🔑 THE STRUCTURAL LIMIT ON THE OUTBOUND QUESTION.** An anonymous `redirect_click` yields *a city and a device* — a demand signal, not a lead. "Montco's sidebar drove 40 clicks from Norristown and 6 came back twice" is answerable; *who they are* is not. The **who** happens in **HubSpot** on `acj.today`, which is exactly why `internal_lead` / `internal_spotlite` carry the `__hstc`/`__hssc` passthrough.
+  - **That handoff is ONE-WAY today.** Chapter → HubSpot. HubSpot can attribute a contact back to the Chapter session; Chapter does not know the contact exists. So "which paper and placement produces actual leads, not just clicks" is answerable **in HubSpot now**, and needs a **read-back sync** to be answerable in Chapter. That is the higher-value half and a separate project from the pivot table.
+- **⚠️ PRECONDITION:** every number here is currently inflated by crawler traffic (Oct 5: 15 of 17 registry-counted ACJ clicks survived the UA filters; only 9 of 27 came from Philadelphia). A pivot table over unfiltered clicks produces confidently-wrong *detail*, which is worse than a bare count because it looks authoritative. **Bot filtering sits upstream of this being worth building.**
+- **Also open from the same conversation:** per-link drill-down (registry gives a count, not a breakdown — needs `smart_link_stats` filtered on `dimensions->>'link'` rather than slug), and making `/analytics/[slug]` link-aware so the two surfaces stop telling different stories about the same slug. **Note `smart_link_stats` and `smart_links_overview` reference neither `dimensions` nor `link_id`** — they predate that work entirely.
+
 #### QUEUED BUILD — Publisher-scale ingest (~2MM pageviews/month) (Sep 17, 2026)
 - **Trigger:** scoping a publisher / news-group prospect at ~2MM pageviews/month, expected soon. Question asked was "the current setup won't work?" — answered from a live measurement, not an estimate. **Verdict: not as-is, but this is NOT the warehouse migration.** Chapter's own migration trigger (see "Multi-tier scaling architecture") is >100M events/month for a single client; this prospect lands at ~17M. It is a few weeks of focused work, almost all of it in the pixel.
 - **The constraint is EVENTS PER PAGEVIEW, not pageviews.** Live query on `chapter_ingest.pixel_events`, trailing 30d (Sep 17):
