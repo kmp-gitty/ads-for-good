@@ -19,6 +19,7 @@ import RuleRowActions from "./RuleRowActions";
 import UrlBuilder, { type ClientOption } from "./UrlBuilder";
 import MatrixBuilder from "./MatrixBuilder";
 import RegistryPanel from "./RegistryPanel";
+import ImportBuilder from "./ImportBuilder";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -117,7 +118,7 @@ type Rule = {
   last_hit_at: string | null;
 };
 
-type Tab = "links" | "generate" | "matrix" | "registry";
+type Tab = "links" | "generate" | "matrix" | "import" | "registry";
 
 const subChip: React.CSSProperties = {
   fontSize: 11,
@@ -156,6 +157,7 @@ export default async function ChapterLinksClientPage({
   const tab: Tab =
     sp.tab === "generate" ? "generate"
     : sp.tab === "matrix" ? "matrix"
+    : sp.tab === "import" ? "import"
     : sp.tab === "registry" ? "registry"
     : "links";
   const preselectSlug = typeof sp.slug === "string" ? sp.slug : undefined;
@@ -280,12 +282,23 @@ export default async function ChapterLinksClientPage({
         <Link href={`/internal/chapter-links/${clientKey}?tab=matrix`} style={tabStyle(tab === "matrix")}>
           Matrix
         </Link>
+        <Link href={`/internal/chapter-links/${clientKey}?tab=import`} style={tabStyle(tab === "import")}>
+          Import
+        </Link>
         <Link href={`/internal/chapter-links/${clientKey}?tab=registry`} style={tabStyle(tab === "registry")}>
           Registry
         </Link>
       </div>
 
-      {tab === "registry" ? (
+      {tab === "import" ? (
+        <ImportBuilder
+          clientKey={clientKey}
+          hosts={hostOptions}
+          slugs={enabledSlugs}
+          knownPartners={vocabulary.partners}
+          defaultPattern="{property}-{partner}-{promo}-{loc}"
+        />
+      ) : tab === "registry" ? (
         <RegistryPanel
           clientKey={clientKey}
           daysKey={typeof sp.days === "string" ? sp.days : undefined}

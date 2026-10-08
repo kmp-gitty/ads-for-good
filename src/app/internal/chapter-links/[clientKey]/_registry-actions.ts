@@ -19,7 +19,7 @@ const supabase = createClient(
   { auth: { persistSession: false } },
 );
 
-const ID_SHAPE = /^[a-z0-9][a-z0-9_-]{1,63}$/;
+const ID_SHAPE = /^[a-z0-9][a-z0-9_-]{1,127}$/;
 
 export type RegistryRowInput = {
   // Operator-assigned, readable, lowercase. NEVER the builder's own row id:
