@@ -445,16 +445,17 @@ export default function ImportBuilder({
               </p>
             </div>
             <div>
-              <label style={{ fontSize: 12.5, color: INK, fontWeight: 600 }}>Cross-check (optional)</label>
+              <label style={{ fontSize: 12.5, color: INK, fontWeight: 600 }}>Check the pattern against old ids (optional)</label>
               <select value={crossCheckCol} onChange={e => setCrossCheckCol(e.target.value)} style={inp}>
                 <option value="">— none —</option>
                 {parsed.headers.map(h => <option key={h} value={h}>{h}</option>)}
               </select>
               <p style={{ margin: "5px 0 0", fontSize: 11.5, color: FAINT, lineHeight: 1.5 }}>
-                Only if your sheet already holds hand-made link ids. Each one is compared to the id
-                derived above and flagged where they differ — so you find out whether your old ids and
-                the pattern agree. The column is never used as the id. Leave as none if your sheet
-                has no such column.
+                <strong style={{ color: MUTED }}>This checks the pattern, not your data.</strong> The
+                pattern silently decides every id, so a wrong one makes every row wrong the same way
+                with nothing to compare against. Point this at a column of ids you already trust and
+                each is compared to what the pattern derives — no warnings means the pattern is right.
+                Never used as the id. Leave as none once your sheets stop carrying an id column.
               </p>
             </div>
           </div>
