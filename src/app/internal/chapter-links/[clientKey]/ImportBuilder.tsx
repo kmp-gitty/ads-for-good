@@ -28,9 +28,25 @@ const ORANGE = "#E36410", LINE = "#E5E0D4", PANEL = "#FBFAF6";
 const DANGER = "#B4232A", GREEN = "#2E7D5B";
 
 // Mapped independently of the sheet's own column names.
-const FIELDS = ["host", "slug", "destination", "partner", "promo", "loc", "size", "creative", "article"] as const;
+const FIELDS = [
+  "host", "slug", "destination",
+  "partner", "promo", "loc", "size", "creative", "article",
+  "utm_source", "utm_medium", "utm_campaign",
+] as const;
 type Field = (typeof FIELDS)[number];
+
+// Reportable dimensions — lifted by the click logger into pixel_events.dimensions
+// and recorded on the registry row.
 const DIMENSION_FIELDS: Field[] = ["partner", "promo", "loc", "size", "creative", "article"];
+
+// Campaign tagging. These are CHAPTER's own utm, landing in pixel_events.utm —
+// a different column from dimensions, so they are set as params but deliberately
+// NOT written into the registry row's dimensions.
+//
+// ⚠️ Not to be confused with a partner's own UTMs, which live INSIDE the
+//    destination and ride through ?to= untouched. Setting utm_source here does
+//    not alter the partner's URL.
+const UTM_FIELDS: Field[] = ["utm_source", "utm_medium", "utm_campaign"];
 
 type Mode = "none" | "const" | "col";
 type Mapping = Record<Field, { mode: Mode; value: string }>;
@@ -114,6 +130,7 @@ export default function ImportBuilder({
       if (needsTo && dest) params.set("to", dest);
       for (const f of DIMENSION_FIELDS) { const v = valueFor(i, f); if (v) params.set(f, v); }
       if (link_id) params.set("link", link_id);
+      for (const f of UTM_FIELDS) { const v = valueFor(i, f); if (v) params.set(f, v); }
       const qs = params.toString();
       const url = host && slug ? `${host}/r/${clientKey}/${slug}${qs ? `?${qs}` : ""}` : "";
 

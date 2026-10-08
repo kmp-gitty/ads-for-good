@@ -1,0 +1,5 @@
+property,slug,destination,partner,promo,loc,size,creative,article,utm_source,utm_medium,utm_campaign,link
+Montco,display,https://www.valleyforge.org/,valley_forge,founding_partner_logo,right_rail,300x157,vf_montco_full_color_vertical,,,,,montco-valley_forge-founding_partner_logo-right_rail
+Montco,display,https://www.peco.com/?utm_medium=digital&utm_source=acj&utm_campaign=exelon_peco_2025,peco,founding_partner_logo,right_rail,300x93,peco_logo,,,,,montco-peco-founding_partner_logo-right_rail
+Bucksco,display,https://www.firstrust.com/,firstrust_bank,affiliate_partner_logo,newsletter_top,728x90,firstrust_logo_rgb_png,,,,,bucksco-firstrust_bank-affiliate_partner_logo-newsletter_top
+Bucksco,article,https://www.firstrust.com/mortgages,firstrust_bank,affiliate_article_cta,end_of_article,,firstrust_inline_cta,best-diners,,,,bucksco-firstrust_bank-affiliate_article_cta-best-diners-end_of_article
