@@ -17,7 +17,7 @@
 
 import { useMemo, useState } from "react";
 import { normalizeDestination } from "./UrlBuilder";
-import { hostLabel, propertyToken, slugify, parseSheet, resolveHost } from "./import-parse";
+import { hostLabel, propertyToken, slugify, parseSheet, resolveHost, nearestPartner } from "./import-parse";
 import {
   planRegistryImport, commitRegistryImport,
   type ImportRow, type ImportPlan,
@@ -143,7 +143,6 @@ export default function ImportBuilder({
     const out: { row: number; level: "error" | "warn"; msg: string }[] = [];
     const idSeen = new Map<string, number>();
     const known = new Set(knownPartners.map(p => p.toLowerCase()));
-    const norm = (s: string) => s.replace(/[_-]/g, "");
     const ccIdx = crossCheckCol ? parsed.headers.indexOf(crossCheckCol) : -1;
 
     built.forEach(b => {
@@ -172,7 +171,7 @@ export default function ImportBuilder({
       if (size && !/^\d+x\d+$/i.test(size)) out.push({ row: n, level: "warn", msg: `size "${size}" is not WxH` });
       const p = (b.dims.partner ?? "").toLowerCase();
       if (p && !known.has(p)) {
-        const near = knownPartners.find(k => norm(k.toLowerCase()) === norm(p));
+        const near = nearestPartner(p, knownPartners);
         out.push({
           row: n, level: "warn",
           msg: near ? `partner "${p}" is new — did you mean "${near}"?`

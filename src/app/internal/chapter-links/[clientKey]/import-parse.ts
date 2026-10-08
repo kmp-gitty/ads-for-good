@@ -62,3 +62,27 @@ export function resolveHost(value: string, hosts: string[]): string {
     propertyToken(h).toLowerCase().includes(v) || v.includes(propertyToken(h).toLowerCase()));
   return loose ?? value.trim();
 }
+
+/**
+ * Nearest known partner slug to an unrecognised one, or null.
+ *
+ * Two kinds of near-miss, and the second is the one that matters:
+ *   separator-only  first_rust  vs firstrust       — caught by normalising
+ *   TRUNCATION      firstrust   vs firstrust_bank  — missed by normalising,
+ *                                                    because the strings do differ
+ *
+ * Truncation is the realistic error — reaching for the advertiser's name rather
+ * than the slug the client already uses. Bounded to an 8-character gap so a
+ * short slug does not match every longer one that happens to start the same way.
+ */
+export function nearestPartner(candidate: string, known: string[]): string | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[_-]/g, "");
+  const c = norm(candidate);
+  if (!c) return null;
+  const exactShape = known.find(k => norm(k) === c);
+  if (exactShape) return exactShape;
+  return known.find(k => {
+    const n = norm(k);
+    return n !== c && (n.startsWith(c) || c.startsWith(n)) && Math.abs(n.length - c.length) <= 8;
+  }) ?? null;
+}

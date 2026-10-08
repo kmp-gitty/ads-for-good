@@ -94,6 +94,40 @@ async function fetchClickVocabulary(
   return { partners: byFreq(partnerCounts), params: byFreq(paramCounts) };
 }
 
+// Partner slugs this client has ever USED — registry first, clicks second.
+//
+// ⚠️ CLICK HISTORY ALONE IS THE WRONG SOURCE and was a real bug: it records
+//    DEMAND, so a partner whose links were generated yesterday is invisible
+//    until somebody clicks one. ACJ had 30+ partners in the registry and
+//    exactly 4 in click history, so the importer's "partner never seen for
+//    this client" check fired on partners it already knew, and could not
+//    catch `firstrust` against the registered `firstrust_bank`.
+//
+//    Same distinction the registry exists for: supply vs demand.
+async function fetchPartnerVocabulary(
+  clientKey: string,
+  fromClicks: string[],
+): Promise<string[]> {
+  const { data } = await supabase
+    .schema("chapter_config")
+    .from("generated_links")
+    .select("dimensions")
+    .eq("client_key", clientKey)
+    .is("valid_to", null);
+
+  const out: string[] = [...fromClicks];
+  const seen = new Set(fromClicks.map(p => p.toLowerCase()));
+  const fromRegistry: string[] = [];
+  for (const row of (data ?? []) as Array<{ dimensions: Record<string, string> | null }>) {
+    const v = row.dimensions?.partner?.trim();
+    if (!v || seen.has(v.toLowerCase())) continue;
+    seen.add(v.toLowerCase());
+    fromRegistry.push(v);
+  }
+  // Click-proven first (ordered by frequency), then registry-only alphabetically.
+  return [...out, ...fromRegistry.sort((a, b) => a.localeCompare(b))];
+}
+
 export const dynamic = "force-dynamic";
 
 const INK = "#1F2D43";
@@ -188,6 +222,7 @@ export default async function ChapterLinksClientPage({
   }
 
   const allRules = (rules ?? []) as Rule[];
+  const knownPartners = await fetchPartnerVocabulary(clientKey, vocabulary.partners);
 
   const bySlug = new Map<string, Rule[]>();
   for (const r of allRules) {
@@ -295,7 +330,7 @@ export default async function ChapterLinksClientPage({
           clientKey={clientKey}
           hosts={hostOptions}
           slugs={enabledSlugs}
-          knownPartners={vocabulary.partners}
+          knownPartners={knownPartners}
           defaultPattern="{property}-{partner}-{promo}-{loc}"
         />
       ) : tab === "registry" ? (
@@ -315,7 +350,7 @@ export default async function ChapterLinksClientPage({
             clientKey={clientKey}
             hosts={hostOptions}
             slugs={enabledSlugs}
-            knownPartners={vocabulary.partners}
+            knownPartners={knownPartners}
             knownParams={vocabulary.params}
           />
         </div>
@@ -331,7 +366,7 @@ export default async function ChapterLinksClientPage({
             defaultClientKey={clientKey}
             defaultSlug={preselectSlug}
             redirectOrigin={origin}
-            knownPartners={vocabulary.partners}
+            knownPartners={knownPartners}
             lockClient
           />
         </div>
