@@ -64,7 +64,7 @@ export function resolveHost(value: string, hosts: string[]): string {
 }
 
 /**
- * Nearest known partner slug to an unrecognised one, or null.
+ * Known partner slugs closest to an unrecognised one, nearest first.
  *
  * Two kinds of near-miss, and the second is the one that matters:
  *   separator-only  first_rust  vs firstrust       — caught by normalising
@@ -74,15 +74,29 @@ export function resolveHost(value: string, hosts: string[]): string {
  * Truncation is the realistic error — reaching for the advertiser's name rather
  * than the slug the client already uses. Bounded to an 8-character gap so a
  * short slug does not match every longer one that happens to start the same way.
+ *
+ * ⚠️ RETURNS ALL MATCHES, NOT THE FIRST. Once a client has both `firstrust`
+ *    and `firstrust_bank` in its vocabulary, a typo like `firstrus` is near
+ *    BOTH — and naming only one of them hides the actual decision. Which one
+ *    .find() would have returned depended on array order, which the operator
+ *    has no way to reason about.
  */
-export function nearestPartner(candidate: string, known: string[]): string | null {
+export function nearestPartners(candidate: string, known: string[], limit = 3): string[] {
   const norm = (s: string) => s.toLowerCase().replace(/[_-]/g, "");
   const c = norm(candidate);
-  if (!c) return null;
-  const exactShape = known.find(k => norm(k) === c);
-  if (exactShape) return exactShape;
-  return known.find(k => {
+  if (!c) return [];
+  const scored: { slug: string; gap: number }[] = [];
+  for (const k of known) {
     const n = norm(k);
-    return n !== c && (n.startsWith(c) || c.startsWith(n)) && Math.abs(n.length - c.length) <= 8;
-  }) ?? null;
+    if (n === c) { scored.push({ slug: k, gap: 0 }); continue; }
+    if ((n.startsWith(c) || c.startsWith(n)) && Math.abs(n.length - c.length) <= 8) {
+      scored.push({ slug: k, gap: Math.abs(n.length - c.length) });
+    }
+  }
+  // Closest first; name ties broken alphabetically so the order is stable
+  // between renders rather than depending on how the vocabulary was assembled.
+  return scored
+    .sort((a, b) => a.gap - b.gap || a.slug.localeCompare(b.slug))
+    .slice(0, limit)
+    .map(x => x.slug);
 }

@@ -17,7 +17,7 @@
 
 import { useMemo, useState } from "react";
 import { normalizeDestination } from "./UrlBuilder";
-import { hostLabel, propertyToken, slugify, parseSheet, resolveHost, nearestPartner } from "./import-parse";
+import { hostLabel, propertyToken, slugify, parseSheet, resolveHost, nearestPartners } from "./import-parse";
 import {
   planRegistryImport, commitRegistryImport,
   type ImportRow, type ImportPlan,
@@ -171,11 +171,16 @@ export default function ImportBuilder({
       if (size && !/^\d+x\d+$/i.test(size)) out.push({ row: n, level: "warn", msg: `size "${size}" is not WxH` });
       const p = (b.dims.partner ?? "").toLowerCase();
       if (p && !known.has(p)) {
-        const near = nearestPartner(p, knownPartners);
+        const near = nearestPartners(p, knownPartners);
+        const suggestion =
+          near.length === 0 ? "" :
+          near.length === 1 ? `did you mean "${near[0]}"?` :
+          `did you mean ${near.map(s => `"${s}"`).join(" or ")}?`;
         out.push({
           row: n, level: "warn",
-          msg: near ? `partner "${p}" is new — did you mean "${near}"?`
-                    : `partner "${p}" has never been used for this client — new advertiser, or typo?`,
+          msg: suggestion
+            ? `partner "${p}" is new — ${suggestion}`
+            : `partner "${p}" has never been used for this client — new advertiser, or typo?`,
         });
       }
     });
