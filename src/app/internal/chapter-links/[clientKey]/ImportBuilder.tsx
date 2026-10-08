@@ -55,6 +55,45 @@ const EMPTY_MAPPING = Object.fromEntries(
   FIELDS.map(f => [f, { mode: "none" as Mode, value: "" }]),
 ) as Mapping;
 
+// Header names that mean a given field. The field's own name is always
+// implied. Matching ignores case, spaces, underscores and hyphens, so
+// "Link Host", "link_host" and "linkhost" all land.
+//
+// ⚠️ ONLY NAME VARIANTS, NEVER SEMANTIC GUESSES. "type" was briefly aliased to
+//    promo because ACJ's sheets carry a Type column holding Founding /
+//    Affiliate / Community. That is the right CONCEPT and the wrong VALUES —
+//    promo would have auto-filled as "Founding", deriving
+//    montco-valley_forge-founding-right_rail instead of
+//    ...-founding_partner_logo-right_rail. A field that looks mapped and is
+//    wrong is worse than one that is visibly unset, so a guess about meaning
+//    does not belong here. Map it by hand or set it on a selection.
+const ALIASES: Record<Field, string[]> = {
+  host: ["property", "linkhost", "site", "paper", "publication"],
+  slug: ["placement"],
+  destination: ["url", "to", "destinationurl", "landingpage", "target"],
+  partner: ["advertiser", "sponsor"],
+  promo: ["promotion"],
+  loc: ["location", "position", "slot", "placementloc"],
+  size: ["dimensions"],
+  creative: ["asset", "image", "file", "filename"],
+  article: ["articleslug", "post"],
+  utm_source: [], utm_medium: [], utm_campaign: [],
+};
+
+const key = (s: string) => s.toLowerCase().replace(/[\s_-]/g, "");
+
+/** Best header for a field, or "". Exact name wins over an alias. */
+function guessColumn(field: Field, headers: string[]): string {
+  const want = key(field);
+  const exact = headers.find(h => key(h) === want);
+  if (exact) return exact;
+  for (const a of ALIASES[field]) {
+    const hit = headers.find(h => key(h) === key(a));
+    if (hit) return hit;
+  }
+  return "";
+}
+
 // Advisory, not a limit — the DB hard-stops at 128. Surfaced with a character
 // count so the operator shortens by judgment rather than being forced to.
 const ID_WARN_LEN = 70;
@@ -88,6 +127,30 @@ export default function ImportBuilder({
   const [showAll, setShowAll] = useState(false);
 
   const parsed = useMemo(() => parseSheet(raw), [raw]);
+
+  // Auto-match on paste. Only fills fields still unset, so a manual choice is
+  // never overwritten; re-runs when the header row itself changes.
+  const headerKey = parsed.headers.join("\u0000");
+  const [autoFor, setAutoFor] = useState("");
+  if (headerKey && headerKey !== autoFor) {
+    const taken = new Set<string>();
+    const next = { ...mapping };
+    for (const f of FIELDS) {
+      if (next[f].mode !== "none") { if (next[f].mode === "col") taken.add(next[f].value); continue; }
+      const col = guessColumn(f, parsed.headers);
+      if (col && !taken.has(col)) { next[f] = { mode: "col", value: col }; taken.add(col); }
+    }
+    setAutoFor(headerKey);
+    setMapping(next);
+  }
+
+  // Columns already mapped to a field, plus the cross-check column.
+  const claimedColumns = useMemo(() => {
+    const out = new Set<string>();
+    for (const f of FIELDS) if (mapping[f].mode === "col" && mapping[f].value) out.add(mapping[f].value);
+    if (crossCheckCol) out.add(crossCheckCol);
+    return out;
+  }, [mapping, crossCheckCol]);
 
   function valueFor(rowIdx: number, f: Field): string {
     const o = overrides[rowIdx]?.[f];
@@ -180,7 +243,7 @@ export default function ImportBuilder({
           row: n, level: "warn",
           msg: suggestion
             ? `partner "${p}" is new — ${suggestion}`
-            : `partner "${p}" has never been used for this client — new advertiser, or typo?`,
+            : `partner "${p}" is new to this client, and nothing existing is close to it — expected for a new advertiser, otherwise check the spelling`,
         });
       }
     });
@@ -290,10 +353,39 @@ export default function ImportBuilder({
           style={{ ...inp, fontFamily: "ui-monospace, monospace", fontSize: 12 }}
         />
         {parsed.headers.length > 0 && (
-          <p style={{ margin: "8px 0 0", fontSize: 12.5, color: MUTED }}>
-            {parsed.rows.length} row{parsed.rows.length === 1 ? "" : "s"} · {parsed.headers.length} columns:{" "}
-            <span style={{ fontFamily: "ui-monospace, monospace", color: INK }}>{parsed.headers.join(" · ")}</span>
-          </p>
+          <>
+            <p style={{ margin: "9px 0 7px", fontSize: 12.5, color: MUTED }}>
+              Parsed <strong style={{ color: INK }}>{parsed.rows.length}</strong> row
+              {parsed.rows.length === 1 ? "" : "s"} ×{" "}
+              <strong style={{ color: INK }}>{parsed.headers.length}</strong> columns.
+              {" "}Check the grid below looks right before mapping.
+            </p>
+            {/* Shows the paste as a GRID so a wrong delimiter or a stray quote is
+                obvious here, rather than surfacing as odd values five steps on. */}
+            <div style={{ overflowX: "auto", border: `1px solid ${LINE}`, borderRadius: 6, maxHeight: 190 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead style={{ background: PANEL, position: "sticky", top: 0 }}>
+                  <tr>{parsed.headers.map((h, k) => <th key={k} style={th}>{h || <em style={{ color: DANGER }}>(blank)</em>}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {parsed.rows.slice(0, 4).map((r, ri) => (
+                    <tr key={ri} style={{ borderTop: `1px solid ${LINE}` }}>
+                      {parsed.headers.map((_h, ci) => (
+                        <td key={ci} style={{ ...td, fontSize: 11.5, maxWidth: 190, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {r[ci] ?? <span style={{ color: FAINT }}>—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {parsed.rows.length > 4 && (
+              <p style={{ margin: "6px 0 0", fontSize: 11.5, color: FAINT }}>
+                first 4 of {parsed.rows.length} — all {parsed.rows.length} appear in the preview below
+              </p>
+            )}
+          </>
         )}
       </Section>
 
@@ -316,7 +408,12 @@ export default function ImportBuilder({
                 {mapping[f].mode === "col" ? (
                   <select value={mapping[f].value} onChange={e => { setMapping(m => ({ ...m, [f]: { ...m[f], value: e.target.value } })); setPlan(null); }} style={inp}>
                     <option value="">— pick a column —</option>
-                    {parsed.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                    {/* A column claimed by another field is hidden — one column
+                        cannot feed two fields, and leaving it listed invites a
+                        silent double-map. This field's own choice always stays. */}
+                    {parsed.headers
+                      .filter(h => h === mapping[f].value || !claimedColumns.has(h))
+                      .map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 ) : mapping[f].mode === "const" ? (
                   f === "host" ? (
@@ -348,47 +445,25 @@ export default function ImportBuilder({
               </p>
             </div>
             <div>
-              <label style={{ fontSize: 12.5, color: INK, fontWeight: 600 }}>Cross-check against an existing id column</label>
+              <label style={{ fontSize: 12.5, color: INK, fontWeight: 600 }}>Cross-check (optional)</label>
               <select value={crossCheckCol} onChange={e => setCrossCheckCol(e.target.value)} style={inp}>
                 <option value="">— none —</option>
                 {parsed.headers.map(h => <option key={h} value={h}>{h}</option>)}
               </select>
               <p style={{ margin: "5px 0 0", fontSize: 11.5, color: FAINT, lineHeight: 1.5 }}>
-                Compared to the derived id and flagged on mismatch. Never used as the id.
+                Only if your sheet already holds hand-made link ids. Each one is compared to the id
+                derived above and flagged where they differ — so you find out whether your old ids and
+                the pattern agree. The column is never used as the id. Leave as none if your sheet
+                has no such column.
               </p>
             </div>
           </div>
         </Section>
       )}
 
-      {/* 3. Selection override */}
+      {/* 3. Findings */}
       {built.length > 0 && (
-        <Section n={3} title="Set a field on selected rows" sub="for values that vary by group but have no column — e.g. three promo tiers">
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12.5, color: sel.size ? INK : FAINT }}>{sel.size} selected</span>
-            <select value={bulkField} onChange={e => setBulkField(e.target.value as Field)} style={{ ...inp, width: 140 }}>
-              {FIELDS.map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
-            <input value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder="value" style={{ ...inp, width: 220 }} />
-            <button
-              onClick={() => { setForSelection(bulkField, bulkValue); setPlan(null); }}
-              disabled={sel.size === 0 || !bulkValue.trim()}
-              style={btn(sel.size > 0 && !!bulkValue.trim())}
-            >Set on {sel.size} row{sel.size === 1 ? "" : "s"}</button>
-            <button onClick={() => setSel(new Set(built.map(b => b.i)))} style={btn(true, true)}>Select all</button>
-            <button onClick={() => setSel(new Set())} style={btn(true, true)}>Clear</button>
-            {Object.keys(overrides).length > 0 && (
-              <button onClick={() => { setOverrides({}); setPlan(null); }} style={btn(true, true)}>
-                Reset {Object.keys(overrides).length} override{Object.keys(overrides).length === 1 ? "" : "s"}
-              </button>
-            )}
-          </div>
-        </Section>
-      )}
-
-      {/* 4. Findings */}
-      {built.length > 0 && (
-        <Section n={4} title="Check" sub="advisory — warnings never block">
+        <Section n={3} title="Check" sub="advisory — warnings never block">
           <div style={{ display: "flex", gap: 20, fontSize: 13, marginBottom: 10 }}>
             <span><strong style={{ color: errors.length ? DANGER : GREEN }}>{errors.length}</strong> error{errors.length === 1 ? "" : "s"}</span>
             <span><strong style={{ color: warns.length ? ORANGE : INK }}>{warns.length}</strong> warning{warns.length === 1 ? "" : "s"}</span>
@@ -410,9 +485,39 @@ export default function ImportBuilder({
         </Section>
       )}
 
-      {/* 5. Preview */}
+      {/* 4. Preview */}
       {built.length > 0 && (
-        <Section n={5} title="Preview" sub={`showing ${showAll ? built.length : Math.min(built.length, 15)} of ${built.length}`}>
+        <Section n={4} title="Preview" sub={`showing ${showAll ? built.length : Math.min(built.length, 15)} of ${built.length}`}>
+          {/* Selection lives HERE, not in a section of its own above the table.
+              It was unusable there: the checkboxes are in this table, so there
+              was nothing to select yet when the control was first encountered. */}
+          <div style={{
+            display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+            padding: "9px 11px", marginBottom: 10, borderRadius: 6,
+            background: sel.size ? "#FFF6EF" : PANEL, border: `1px solid ${sel.size ? ORANGE : LINE}`,
+          }}>
+            <span style={{ fontSize: 12.5, color: sel.size ? INK : MUTED, fontWeight: sel.size ? 600 : 400 }}>
+              {sel.size === 0
+                ? "Tick rows below to set a field on just those rows"
+                : `${sel.size} row${sel.size === 1 ? "" : "s"} selected — set`}
+            </span>
+            <select value={bulkField} onChange={e => setBulkField(e.target.value as Field)} style={{ ...inp, width: 130 }}>
+              {FIELDS.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+            <input value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder="value" style={{ ...inp, width: 190 }} />
+            <button
+              onClick={() => { setForSelection(bulkField, bulkValue); setPlan(null); }}
+              disabled={sel.size === 0 || !bulkValue.trim()}
+              style={btn(sel.size > 0 && !!bulkValue.trim())}
+            >Apply</button>
+            <button onClick={() => setSel(new Set(built.map(b => b.i)))} style={btn(true, true)}>All</button>
+            <button onClick={() => setSel(new Set())} style={btn(true, true)}>None</button>
+            {Object.keys(overrides).length > 0 && (
+              <button onClick={() => { setOverrides({}); setPlan(null); }} style={btn(true, true)}>
+                Reset {Object.keys(overrides).length} override{Object.keys(overrides).length === 1 ? "" : "s"}
+              </button>
+            )}
+          </div>
           <div style={{ overflowX: "auto", border: `1px solid ${LINE}`, borderRadius: 6 }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead style={{ background: PANEL }}>
@@ -452,9 +557,9 @@ export default function ImportBuilder({
         </Section>
       )}
 
-      {/* 6. Registry diff + commit */}
+      {/* 5. Registry diff + commit */}
       {built.length > 0 && (
-        <Section n={6} title="Check the registry, then register" sub="nothing is written until you confirm">
+        <Section n={5} title="Check the registry, then register" sub="nothing is written until you confirm">
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={runPlan} disabled={busy || errors.length > 0} style={btn(!busy && errors.length === 0)}>
               {busy ? "Working…" : "Check against registry"}
