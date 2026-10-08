@@ -271,9 +271,18 @@ export default function ImportBuilder({
 
       {/* 1. Paste */}
       <Section n={1} title="Paste the sheet" sub="header row included · tab or comma separated">
+        <p style={{ margin: "0 0 9px", fontSize: 12.5, color: MUTED, lineHeight: 1.55 }}>
+          <strong style={{ color: INK }}>Column order and names don&apos;t matter</strong> — you map them
+          to fields in step 2. Include a column only for what <em>varies</em>: anything the same on
+          every row (host, slug, often loc) is set once as a constant, and a value that varies by
+          group but has no column (three promo tiers, say) is set on a selection of rows.
+          <br />
+          You don&apos;t need a <code>link</code> column — ids are derived. Keep one only if your sheet
+          already has hand-made ids you want cross-checked.
+        </p>
         <textarea
           value={raw} onChange={e => { setRaw(e.target.value); setPlan(null); }}
-          rows={6} placeholder="Property&#9;Destination&#9;partner&#9;size&#9;creative…"
+          rows={6} placeholder={"destination\tpartner\tsize\tcreative\nhttps://example.com/\tacme_bank\t300x250\tacme_logo_rgb"}
           style={{ ...inp, fontFamily: "ui-monospace, monospace", fontSize: 12 }}
         />
         {parsed.headers.length > 0 && (
