@@ -53,11 +53,48 @@ export type FieldChange = {
 
 export type ImportPlan = {
   creates: ImportRow[];
+  /**
+   * Creates whose id is a NEAR-VARIANT of one already registered.
+   *
+   * ⚠️ THE QUIETEST WAY TO LOSE A PLACEMENT'S HISTORY. If a slot is registered
+   *    as ...-affiliate_partner_logo-right_rail and the pattern now derives
+   *    ...-affiliate_logo-right_rail, the plan sees an id it has never met and
+   *    reports "new". You register a second row, the original keeps every
+   *    click, and the placement is split with nothing to indicate it.
+   *
+   *    Almost always a changed pattern or a renamed dimension rather than a
+   *    genuinely new slot — so it is surfaced before the write, not after.
+   */
+  orphanRisk: { link_id: string; near: string[] }[];
   unchanged: string[];
   changes: { link_id: string; incoming: ImportRow; fields: FieldChange[] }[];
   invalid: { link_id: string; reason: string }[];
   error?: string;
 };
+
+/**
+ * Registered ids close enough to `candidate` that it is probably the same slot
+ * renamed rather than a new one.
+ *
+ * Compares the hyphen-separated segments: same count, and differing in at most
+ * one position. That maps onto how these ids are built — one segment per
+ * dimension — so a changed promo or loc shows up and a genuinely different
+ * placement (different partner AND loc) does not.
+ */
+function nearestLinkIds(candidate: string, known: string[], limit = 3): string[] {
+  const c = candidate.split("-");
+  const out: string[] = [];
+  for (const k of known) {
+    if (k === candidate) continue;
+    const p = k.split("-");
+    if (p.length !== c.length) continue;
+    let diff = 0;
+    for (let i = 0; i < c.length; i++) if (c[i] !== p[i]) diff++;
+    if (diff === 1) out.push(k);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
 
 type ExistingRow = {
   id: string;
@@ -102,7 +139,7 @@ export async function planRegistryImport(
   clientKey: string,
   rows: ImportRow[],
 ): Promise<ImportPlan> {
-  const plan: ImportPlan = { creates: [], unchanged: [], changes: [], invalid: [] };
+  const plan: ImportPlan = { creates: [], unchanged: [], changes: [], invalid: [], orphanRisk: [] };
   if (!clientKey || rows.length === 0) return plan;
 
   const valid: ImportRow[] = [];
@@ -146,6 +183,23 @@ export async function planRegistryImport(
     const fields = diffRow(r, prior);
     if (fields.length === 0) plan.unchanged.push(r.link_id);
     else plan.changes.push({ link_id: r.link_id, incoming: r, fields });
+  }
+
+  // Second read, over ALL of this client's ids rather than the incoming ones —
+  // the point is precisely to catch ids the import does NOT contain. Bounded by
+  // client and cheap (tens to low hundreds of rows).
+  if (plan.creates.length > 0) {
+    const { data: allRows } = await supabase
+      .schema("chapter_config")
+      .from("generated_links")
+      .select("link_id")
+      .eq("client_key", clientKey)
+      .is("valid_to", null);
+    const allIds = ((allRows ?? []) as { link_id: string }[]).map(r => r.link_id);
+    for (const r of plan.creates) {
+      const near = nearestLinkIds(r.link_id, allIds);
+      if (near.length > 0) plan.orphanRisk.push({ link_id: r.link_id, near });
+    }
   }
   return plan;
 }

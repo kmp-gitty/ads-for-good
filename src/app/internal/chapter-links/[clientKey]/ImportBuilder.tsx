@@ -116,7 +116,6 @@ export default function ImportBuilder({
   const [raw, setRaw] = useState("");
   const [mapping, setMapping] = useState<Mapping>(EMPTY_MAPPING);
   const [pattern, setPattern] = useState(defaultPattern);
-  const [crossCheckCol, setCrossCheckCol] = useState("");
   const [sel, setSel] = useState<Set<number>>(new Set());
   const [overrides, setOverrides] = useState<Record<number, Partial<Record<Field, string>>>>({});
   const [plan, setPlan] = useState<ImportPlan | null>(null);
@@ -148,9 +147,8 @@ export default function ImportBuilder({
   const claimedColumns = useMemo(() => {
     const out = new Set<string>();
     for (const f of FIELDS) if (mapping[f].mode === "col" && mapping[f].value) out.add(mapping[f].value);
-    if (crossCheckCol) out.add(crossCheckCol);
     return out;
-  }, [mapping, crossCheckCol]);
+  }, [mapping]);
 
   function valueFor(rowIdx: number, f: Field): string {
     const o = overrides[rowIdx]?.[f];
@@ -206,7 +204,6 @@ export default function ImportBuilder({
     const out: { row: number; level: "error" | "warn"; msg: string }[] = [];
     const idSeen = new Map<string, number>();
     const known = new Set(knownPartners.map(p => p.toLowerCase()));
-    const ccIdx = crossCheckCol ? parsed.headers.indexOf(crossCheckCol) : -1;
 
     built.forEach(b => {
       const n = b.i + 2;
@@ -216,11 +213,6 @@ export default function ImportBuilder({
         else idSeen.set(b.link_id, n);
         if (b.link_id.length > ID_MAX_LEN) out.push({ row: n, level: "error", msg: `link id is ${b.link_id.length} characters — over the ${ID_MAX_LEN} limit` });
         else if (b.link_id.length > ID_WARN_LEN) out.push({ row: n, level: "warn", msg: `link id is ${b.link_id.length} characters — long, consider shortening` });
-      }
-      if (ccIdx >= 0) {
-        const sheetId = (parsed.rows[b.i]?.[ccIdx] ?? "").trim().toLowerCase();
-        if (sheetId && b.link_id && sheetId !== b.link_id)
-          out.push({ row: n, level: "warn", msg: `sheet link id "${sheetId}" differs from derived "${b.link_id}"` });
       }
       if (!b.host) out.push({ row: n, level: "error", msg: "no link host" });
       if (!b.slug) out.push({ row: n, level: "error", msg: "no slug" });
@@ -248,7 +240,7 @@ export default function ImportBuilder({
       }
     });
     return out;
-  }, [built, knownPartners, crossCheckCol, parsed]);
+  }, [built, knownPartners]);
 
   const errors = findings.filter(f => f.level === "error");
   const warns = findings.filter(f => f.level === "warn");
@@ -434,7 +426,7 @@ export default function ImportBuilder({
             ))}
           </div>
 
-          <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ marginTop: 14, maxWidth: 560 }}>
             <div>
               <label style={{ fontSize: 12.5, color: INK, fontWeight: 600 }}>Link ID pattern</label>
               <input value={pattern} onChange={e => { setPattern(e.target.value); setPlan(null); }} style={{ ...inp, fontFamily: "ui-monospace, monospace" }} />
@@ -442,20 +434,6 @@ export default function ImportBuilder({
                 Built from what defines <em>which slot this is</em> — property, partner, promo, loc,
                 article. Never from what occupies it: putting <code>creative</code> here splits a
                 placement&apos;s click history every time the advertiser sends a new logo.
-              </p>
-            </div>
-            <div>
-              <label style={{ fontSize: 12.5, color: INK, fontWeight: 600 }}>Check the pattern against old ids (optional)</label>
-              <select value={crossCheckCol} onChange={e => setCrossCheckCol(e.target.value)} style={inp}>
-                <option value="">— none —</option>
-                {parsed.headers.map(h => <option key={h} value={h}>{h}</option>)}
-              </select>
-              <p style={{ margin: "5px 0 0", fontSize: 11.5, color: FAINT, lineHeight: 1.5 }}>
-                <strong style={{ color: MUTED }}>This checks the pattern, not your data.</strong> The
-                pattern silently decides every id, so a wrong one makes every row wrong the same way
-                with nothing to compare against. Point this at a column of ids you already trust and
-                each is compared to what the pattern derives — no warnings means the pattern is right.
-                Never used as the id. Leave as none once your sheets stop carrying an id column.
               </p>
             </div>
           </div>
@@ -588,6 +566,26 @@ export default function ImportBuilder({
                 <span><strong style={{ color: plan.changes.length ? ORANGE : MUTED }}>{plan.changes.length}</strong> changed</span>
                 {plan.invalid.length > 0 && <span><strong style={{ color: DANGER }}>{plan.invalid.length}</strong> invalid</span>}
               </div>
+
+              {plan.orphanRisk.length > 0 && (
+                <div style={{ border: `1px solid ${ORANGE}`, background: "#FFF6EF", borderRadius: 6, padding: "10px 12px", marginBottom: 10 }}>
+                  <p style={{ margin: "0 0 6px", fontSize: 12.5, fontWeight: 700, color: ORANGE }}>
+                    {plan.orphanRisk.length} new id{plan.orphanRisk.length === 1 ? " is" : "s are"} a near-variant of one already registered
+                  </p>
+                  <p style={{ margin: "0 0 8px", fontSize: 12, color: MUTED, lineHeight: 1.55 }}>
+                    Registering these creates a SECOND row for what is probably the same placement —
+                    the original keeps every click it has ever had, and the two report separately from
+                    here on. Usually a changed pattern or a renamed dimension rather than a new slot.
+                    If it is the same slot, fix the field that differs instead of registering the variant.
+                  </p>
+                  {plan.orphanRisk.map(o => (
+                    <div key={o.link_id} style={{ fontSize: 12, paddingTop: 3, fontFamily: "ui-monospace, monospace" }}>
+                      <span style={{ color: INK }}>{o.link_id}</span>
+                      <span style={{ color: MUTED }}> ~ registered: {o.near.join(", ")}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {plan.invalid.map(iv => (
                 <div key={iv.link_id} style={{ fontSize: 12.5, color: DANGER, padding: "3px 0" }}>
