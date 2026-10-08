@@ -511,6 +511,16 @@ export default function ImportBuilder({
               disabled={sel.size === 0 || !bulkValue.trim()}
               style={btn(sel.size > 0 && !!bulkValue.trim())}
             >Apply</button>
+            {/* Set and unset were asymmetric: a mapped column with stray values
+                in a few rows could be overridden but never emptied. An explicit
+                button rather than applying a blank value, because an empty input
+                is indistinguishable from not having typed yet. */}
+            <button
+              onClick={() => { setForSelection(bulkField, ""); setPlan(null); }}
+              disabled={sel.size === 0}
+              style={btn(sel.size > 0, true)}
+              title={`Blank ${bulkField} on the selected rows`}
+            >Clear {bulkField}</button>
             <button onClick={() => setSel(new Set(built.map(b => b.i)))} style={btn(true, true)}>All</button>
             <button onClick={() => setSel(new Set())} style={btn(true, true)}>None</button>
             {Object.keys(overrides).length > 0 && (
