@@ -294,15 +294,40 @@ export default function ImportBuilder({
     } finally { setBusy(false); }
   }
 
+  const csvCell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+
+  /**
+   * Your sheet back, unchanged, with link_id and wrapped_url appended.
+   *
+   * Echoes the ORIGINAL columns rather than emitting a tidy new shape: the file
+   * is only useful if it still lines up with the sheet it came from. Row order
+   * is input order for the same reason.
+   */
   function downloadCsv() {
-    const head = ["link_id", "link_host", "slug", "destination", "wrapped_url"];
-    const body = built.map(b => [b.link_id, hostLabel(b.host), b.slug, b.dest, b.url]
-      .map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","));
-    const blob = new Blob([`${head.join(",")}\n${body.join("\n")}\n`], { type: "text/csv" });
+    const head = [...parsed.headers, "link_id", "wrapped_url"];
+    const body = built.map(b => {
+      const src = parsed.rows[b.i] ?? [];
+      const cells = parsed.headers.map((_h, ci) => src[ci] ?? "");
+      return [...cells, b.link_id, b.url].map(csvCell).join(",");
+    });
+    const blob = new Blob([`${head.map(csvCell).join(",")}\n${body.join("\n")}\n`], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `chapter-links-${clientKey}-import.csv`;
     a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  /**
+   * Just the URLs, one per line, in input row order — so they paste straight
+   * down an empty "Wrapped Link" column beside the rows that produced them.
+   * Blank for any row that could not build one, to keep the alignment honest.
+   */
+  async function copyUrlColumn() {
+    try {
+      await navigator.clipboard.writeText(built.map(b => b.url).join("\n"));
+      setStatus(`copied ${built.length} url${built.length === 1 ? "" : "s"} — paste into your sheet's wrapped-link column`);
+      setTimeout(() => setStatus(null), 4000);
+    } catch { setStatus("clipboard blocked — use Download CSV instead"); }
   }
 
   function setForSelection(f: Field, v: string) {
@@ -553,6 +578,7 @@ export default function ImportBuilder({
             <button onClick={runPlan} disabled={busy || errors.length > 0} style={btn(!busy && errors.length === 0)}>
               {busy ? "Working…" : "Check against registry"}
             </button>
+            <button onClick={copyUrlColumn} style={btn(true, true)}>Copy URL column</button>
             <button onClick={downloadCsv} style={btn(true, true)}>Download CSV</button>
             {errors.length > 0 && <span style={{ fontSize: 12.5, color: DANGER }}>fix {errors.length} error{errors.length === 1 ? "" : "s"} first</span>}
             {status && <span style={{ fontSize: 12.5, color: status.startsWith("registered") ? GREEN : DANGER }}>{status}</span>}
