@@ -108,18 +108,18 @@ async function fetchPartnerVocabulary(
   clientKey: string,
   fromClicks: string[],
 ): Promise<string[]> {
+  // Distinct partners via RPC, not a row read: a plain select is silently
+  // truncated at PostgREST's 1,000-row cap, which at 19,132 registered links
+  // hid 26 of ACJ's 143 partners from the importer's known-partner check.
   const { data } = await supabase
-    .schema("chapter_config")
-    .from("generated_links")
-    .select("dimensions")
-    .eq("client_key", clientKey)
-    .is("valid_to", null);
+    .schema("chapter_reporting")
+    .rpc("link_registry_partners", { p_client_key: clientKey });
 
   const out: string[] = [...fromClicks];
   const seen = new Set(fromClicks.map(p => p.toLowerCase()));
   const fromRegistry: string[] = [];
-  for (const row of (data ?? []) as Array<{ dimensions: Record<string, string> | null }>) {
-    const v = row.dimensions?.partner?.trim();
+  for (const row of (data ?? []) as Array<{ partner: string | null }>) {
+    const v = row.partner?.trim();
     if (!v || seen.has(v.toLowerCase())) continue;
     seen.add(v.toLowerCase());
     fromRegistry.push(v);
@@ -337,6 +337,9 @@ export default async function ChapterLinksClientPage({
         <RegistryPanel
           clientKey={clientKey}
           daysKey={typeof sp.days === "string" ? sp.days : undefined}
+          slug={typeof sp.rslug === "string" ? sp.rslug : undefined}
+          q={typeof sp.rq === "string" ? sp.rq : undefined}
+          page={typeof sp.rpage === "string" ? sp.rpage : undefined}
         />
       ) : tab === "matrix" ? (
         <div>

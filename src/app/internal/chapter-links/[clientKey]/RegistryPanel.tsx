@@ -30,11 +30,31 @@ type Row = {
   url: string | null;
   dimensions: Record<string, string> | null;
   disabled_at: string | null;
-  valid_to: string | null;
   created_at: string;
   clicks: number;
   last_click: string | null;
+  total_matching: number;
 };
+
+type SlugSummary = {
+  slug: string;
+  links: number;
+  with_clicks: number;
+  zero: number;
+  disabled: number;
+  clicks: number;
+};
+
+// ⚠️ THE REGISTRY IS NEVER READ WHOLE. PostgREST caps a response at 1,000 rows
+//    and says nothing when it truncates. This panel used to fetch one row per
+//    link and count them in JS, which was fine at 67 links and silently wrong
+//    at 19,132: it showed the top 1,000 and reported "1,000 registered".
+//
+//    So totals come from link_registry_summary (aggregated in SQL over every
+//    row) and the table from link_registry_rows (always bounded). Never derive
+//    a count from rows.length here.
+const PER_SLUG = 25;   // overview: top links shown per placement
+const PAGE_SIZE = 200; // filtered view: rows per page
 
 export const REGISTRY_WINDOWS = [
   { key: "30", days: 30, label: "30 days" },
@@ -50,20 +70,54 @@ function fmtDate(v: string | null): string {
 export default async function RegistryPanel({
   clientKey,
   daysKey,
+  slug: slugProp,
+  q: qProp,
+  page: pageProp,
 }: {
   clientKey: string;
   daysKey?: string;
+  slug?: string;
+  q?: string;
+  page?: string;
 }) {
   const win = REGISTRY_WINDOWS.find(w => w.key === daysKey) ?? REGISTRY_WINDOWS[1];
+  const slug = (slugProp ?? "").trim();
+  const q = (qProp ?? "").trim();
+  const filtered = !!slug || !!q;
+  const page = Math.max(1, parseInt(pageProp ?? "1", 10) || 1);
 
-  const { data, error } = await supabase
-    .schema("chapter_reporting")
-    .rpc("link_registry_overview", { p_client_key: clientKey, p_days: win.days });
-  const rows = ((data ?? []) as Row[]).filter(r => !r.valid_to);
+  const [sumRes, rowRes] = await Promise.all([
+    supabase.schema("chapter_reporting")
+      .rpc("link_registry_summary", { p_client_key: clientKey, p_days: win.days }),
+    supabase.schema("chapter_reporting")
+      .rpc("link_registry_rows", {
+        p_client_key: clientKey, p_days: win.days,
+        p_slug: slug || null, p_q: q || null,
+        p_per_slug: PER_SLUG, p_limit: PAGE_SIZE, p_offset: (page - 1) * PAGE_SIZE,
+      }),
+  ]);
+  const error = sumRes.error ?? rowRes.error;
+  const summary = ((sumRes.data ?? []) as SlugSummary[]).map(s => ({
+    ...s, links: Number(s.links), with_clicks: Number(s.with_clicks), zero: Number(s.zero),
+    disabled: Number(s.disabled), clicks: Number(s.clicks),
+  }));
+  const rows = ((rowRes.data ?? []) as Row[]).map(r => ({ ...r, clicks: Number(r.clicks) }));
 
-  const withClicks = rows.filter(r => r.clicks > 0).length;
-  const zero = rows.length - withClicks;
-  const disabled = rows.filter(r => r.disabled_at).length;
+  // Whole-registry totals, from SQL — independent of how many rows are shown.
+  const total = summary.reduce((n, s) => n + s.links, 0);
+  const withClicks = summary.reduce((n, s) => n + s.with_clicks, 0);
+  const zero = summary.reduce((n, s) => n + s.zero, 0);
+  const disabled = summary.reduce((n, s) => n + s.disabled, 0);
+  const matching = filtered ? Number(rows[0]?.total_matching ?? 0) : 0;
+  const lastPage = Math.max(1, Math.ceil(matching / PAGE_SIZE));
+
+  const href = (o: { slug?: string; q?: string; page?: number; days?: string }) => {
+    const p = new URLSearchParams({ tab: "registry", days: o.days ?? win.key });
+    if (o.slug) p.set("rslug", o.slug);
+    if (o.q) p.set("rq", o.q);
+    if (o.page && o.page > 1) p.set("rpage", String(o.page));
+    return `/internal/chapter-links/${clientKey}?${p}`;
+  };
 
   // Group by slug — the placement. A slug is the unit an operator reasons
   // about ("how is internal_lead doing?"), and a flat all-slugs list makes
@@ -78,12 +132,16 @@ export default async function RegistryPanel({
     list.push(r);
     bySlug.set(r.slug, list);
   }
-  const groups = Array.from(bySlug.entries())
-    .map(([slug, list]) => ({
-      slug,
-      list: [...list].sort((a, b) => b.clicks - a.clicks || a.link_id.localeCompare(b.link_id)),
-      clicks: list.reduce((n, r) => n + r.clicks, 0),
-      zero: list.filter(r => r.clicks === 0).length,
+  const sumBySlug = new Map(summary.map(s => [s.slug, s]));
+  // Subtotals come from the summary, never from the rows on screen: a group
+  // showing 25 of 18,580 must still say 18,580.
+  const groups = (filtered ? Array.from(bySlug.keys()) : summary.map(s => s.slug))
+    .map(name => ({
+      slug: name,
+      list: bySlug.get(name) ?? [],
+      links: sumBySlug.get(name)?.links ?? 0,
+      clicks: sumBySlug.get(name)?.clicks ?? 0,
+      zero: sumBySlug.get(name)?.zero ?? 0,
     }))
     // Busiest placement first; ties broken by name so the order is stable
     // between loads rather than depending on Map insertion.
@@ -107,7 +165,7 @@ export default async function RegistryPanel({
         {REGISTRY_WINDOWS.map(w => (
           <Link
             key={w.key}
-            href={`/internal/chapter-links/${clientKey}?tab=registry&days=${w.key}`}
+            href={href({ slug, q, days: w.key })}
             style={{
               fontSize: 12, padding: "5px 11px", borderRadius: 999, textDecoration: "none",
               border: `1px solid ${w.key === win.key ? ORANGE : LINE}`,
@@ -124,7 +182,7 @@ export default async function RegistryPanel({
         <p style={{ fontSize: 13, color: "#B4232A" }}>Could not load the registry: {error.message}</p>
       )}
 
-      {!error && rows.length === 0 && (
+      {!error && total === 0 && (
         <div style={{ border: `1px solid ${LINE}`, borderRadius: 8, background: PANEL, padding: "28px 20px" }}>
           <p style={{ margin: 0, fontSize: 14, color: INK, fontWeight: 600 }}>No links registered yet.</p>
           <p style={{ margin: "6px 0 0", fontSize: 13, color: MUTED, lineHeight: 1.6, maxWidth: 620 }}>
@@ -136,17 +194,60 @@ export default async function RegistryPanel({
         </div>
       )}
 
-      {rows.length > 0 && (
+      {total > 0 && (
         <>
           <div style={{ display: "flex", gap: 22, marginBottom: 14, fontSize: 13, color: MUTED }}>
             <span>
-              <strong style={{ color: INK }}>{rows.length}</strong> registered across{" "}
-              <strong style={{ color: INK }}>{groups.length}</strong> placement{groups.length === 1 ? "" : "s"}
+              <strong style={{ color: INK }}>{total.toLocaleString()}</strong> registered across{" "}
+              <strong style={{ color: INK }}>{summary.length}</strong> placement{summary.length === 1 ? "" : "s"}
             </span>
-            <span><strong style={{ color: TEAL }}>{withClicks}</strong> with clicks</span>
-            <span><strong style={{ color: zero > 0 ? ORANGE : INK }}>{zero}</strong> at zero</span>
-            {disabled > 0 && <span><strong style={{ color: INK }}>{disabled}</strong> disabled</span>}
+            <span><strong style={{ color: TEAL }}>{withClicks.toLocaleString()}</strong> with clicks</span>
+            <span><strong style={{ color: zero > 0 ? ORANGE : INK }}>{zero.toLocaleString()}</strong> at zero</span>
+            {disabled > 0 && <span><strong style={{ color: INK }}>{disabled.toLocaleString()}</strong> disabled</span>}
           </div>
+
+          {/* Plain GET form: a server component, so no client JS is needed. */}
+          <form method="get" action={`/internal/chapter-links/${clientKey}`}
+                style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+            <input type="hidden" name="tab" value="registry" />
+            <input type="hidden" name="days" value={win.key} />
+            <select name="rslug" defaultValue={slug}
+                    style={{ fontSize: 13, padding: "6px 8px", border: `1px solid ${LINE}`, borderRadius: 6, color: INK, background: "#fff" }}>
+              <option value="">All placements</option>
+              {summary.map(s => (
+                <option key={s.slug} value={s.slug}>{s.slug} ({s.links.toLocaleString()})</option>
+              ))}
+            </select>
+            <input type="search" name="rq" defaultValue={q}
+                   placeholder="Find by link id, article, creative or destination"
+                   style={{ fontSize: 13, padding: "6px 10px", border: `1px solid ${LINE}`, borderRadius: 6, minWidth: 320, color: INK }} />
+            <button type="submit"
+                    style={{ fontSize: 13, padding: "6px 14px", borderRadius: 6, border: `1px solid ${INK}`, background: INK, color: "#fff", cursor: "pointer" }}>
+              Search
+            </button>
+            {filtered && <Link href={href({})} style={{ fontSize: 12.5, color: MUTED }}>Clear</Link>}
+          </form>
+
+          {filtered ? (
+            <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 10, fontSize: 12.5, color: MUTED }}>
+              <span>
+                {matching === 0 ? "No links match." : (
+                  <>
+                    Showing <strong style={{ color: INK }}>{((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{((page - 1) * PAGE_SIZE + rows.length).toLocaleString()}</strong>{" "}
+                    of <strong style={{ color: INK }}>{matching.toLocaleString()}</strong> matching, most-clicked first
+                  </>
+                )}
+              </span>
+              {page > 1 && <Link href={href({ slug, q, page: page - 1 })} style={{ color: ORANGE }}>← Previous</Link>}
+              {page < lastPage && <Link href={href({ slug, q, page: page + 1 })} style={{ color: ORANGE }}>Next →</Link>}
+              {lastPage > 1 && <span>Page {page} of {lastPage.toLocaleString()}</span>}
+            </div>
+          ) : (
+            <p style={{ margin: "0 0 10px", fontSize: 12.5, color: MUTED }}>
+              Showing the top {PER_SLUG} links of each placement. Subtotals cover every link; open a
+              placement or search to see the rest.
+            </p>
+          )}
 
           <div style={{ border: `1px solid ${LINE}`, borderRadius: 8, overflow: "hidden", background: "#fff" }}>
             <div style={{ overflowX: "auto" }}>
@@ -171,16 +272,22 @@ export default async function RegistryPanel({
                         {g.slug}
                       </span>
                       <span style={{ fontSize: 12, color: MUTED, fontWeight: 400, marginLeft: 10 }}>
-                        {g.list.length} link{g.list.length === 1 ? "" : "s"}
+                        {g.links.toLocaleString()} link{g.links === 1 ? "" : "s"}
                         {" · "}
                         <strong style={{ color: g.clicks > 0 ? INK : MUTED, fontWeight: 600 }}>{g.clicks}</strong> click{g.clicks === 1 ? "" : "s"}
                         {g.zero > 0 && (
                           <>
                             {" · "}
-                            <strong style={{ color: ORANGE, fontWeight: 600 }}>{g.zero}</strong> at zero
+                            <strong style={{ color: ORANGE, fontWeight: 600 }}>{g.zero.toLocaleString()}</strong> at zero
                           </>
                         )}
                       </span>
+                      {!filtered && g.links > g.list.length && (
+                        <Link href={href({ slug: g.slug })}
+                              style={{ fontSize: 12, fontWeight: 400, marginLeft: 12, color: ORANGE }}>
+                          showing top {g.list.length} — view all {g.links.toLocaleString()} →
+                        </Link>
+                      )}
                     </th>
                   </tr>
                   {g.list.map(r => {

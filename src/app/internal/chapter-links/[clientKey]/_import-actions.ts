@@ -162,20 +162,24 @@ export async function planRegistryImport(
   }
   if (valid.length === 0) return plan;
 
-  // ONE read for the whole batch.
+  // Read in chunks of 100 ids. .in() puts every id in the request URL, and the
+  // request is rejected past ~16 KB — measured 2026-10-12: 250 logo-length ids
+  // passed, 300 failed, and 107-character article ids failed at 150. It failed
+  // as an opaque "fetch failed", so the bound is kept well under the limit.
   const ids = valid.map(r => r.link_id);
-  const { data, error } = await supabase
-    .schema("chapter_config")
-    .from("generated_links")
-    .select("id, link_id, link_host, slug, destination, dimensions, url")
-    .eq("client_key", clientKey)
-    .is("valid_to", null)
-    .in("link_id", ids);
-
-  if (error) return { ...plan, error: error.message };
-
   const existing = new Map<string, ExistingRow>();
-  for (const row of (data ?? []) as ExistingRow[]) existing.set(row.link_id, row);
+  const IN_CHUNK = 100;
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const { data, error } = await supabase
+      .schema("chapter_config")
+      .from("generated_links")
+      .select("id, link_id, link_host, slug, destination, dimensions, url")
+      .eq("client_key", clientKey)
+      .is("valid_to", null)
+      .in("link_id", ids.slice(i, i + IN_CHUNK));
+    if (error) return { ...plan, error: error.message };
+    for (const row of (data ?? []) as ExistingRow[]) existing.set(row.link_id, row);
+  }
 
   for (const r of valid) {
     const prior = existing.get(r.link_id);
@@ -186,16 +190,29 @@ export async function planRegistryImport(
   }
 
   // Second read, over ALL of this client's ids rather than the incoming ones —
-  // the point is precisely to catch ids the import does NOT contain. Bounded by
-  // client and cheap (tens to low hundreds of rows).
+  // the point is precisely to catch ids the import does NOT contain.
+  //
+  // ⚠️ PAGED. A single select is silently truncated at PostgREST's 1,000-row
+  //    cap, so past 1,000 registered links this check compared against a
+  //    fraction of the registry and reported "no orphan risk" for the rest.
+  //    Ordered by link_id so the pages are stable and cannot skip or repeat.
   if (plan.creates.length > 0) {
-    const { data: allRows } = await supabase
-      .schema("chapter_config")
-      .from("generated_links")
-      .select("link_id")
-      .eq("client_key", clientKey)
-      .is("valid_to", null);
-    const allIds = ((allRows ?? []) as { link_id: string }[]).map(r => r.link_id);
+    const allIds: string[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data: pageRows, error: pageErr } = await supabase
+        .schema("chapter_config")
+        .from("generated_links")
+        .select("link_id")
+        .eq("client_key", clientKey)
+        .is("valid_to", null)
+        .order("link_id")
+        .range(from, from + PAGE - 1);
+      if (pageErr) return { ...plan, error: pageErr.message };
+      const batch = (pageRows ?? []) as { link_id: string }[];
+      for (const r of batch) allIds.push(r.link_id);
+      if (batch.length < PAGE) break;
+    }
     for (const r of plan.creates) {
       const near = nearestLinkIds(r.link_id, allIds);
       if (near.length > 0) plan.orphanRisk.push({ link_id: r.link_id, near });
