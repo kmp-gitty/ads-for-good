@@ -73,27 +73,53 @@ export type ImportPlan = {
 };
 
 /**
- * Registered ids close enough to `candidate` that it is probably the same slot
- * renamed rather than a new one.
+ * Index over registered ids for finding ones close enough to a candidate that
+ * it is probably the same slot rather than a new one. Two shapes:
  *
- * Compares the hyphen-separated segments: same count, and differing in at most
- * one position. That maps onto how these ids are built — one segment per
- * dimension — so a changed promo or loc shows up and a genuinely different
- * placement (different partner AND loc) does not.
+ *   ONE SEGMENT DIFFERS — same segment count, one position changed. One
+ *     segment per dimension, so a renamed promo or loc shows up while a
+ *     genuinely different placement (different partner AND loc) does not.
+ *   SAME SLOT, DIFFERENT TAIL — one id is the other plus extra trailing
+ *     segments. Added when fields became toggleable onto the end of the id:
+ *     registering montco-peco-x-right_rail-peco_logo beside an existing
+ *     montco-peco-x-right_rail is a second row for the same slot, and the
+ *     one-segment check cannot see it because the segment counts differ.
+ *
+ * Built once per check and looked up by key, not by scanning the registry for
+ * every candidate — at 19,000+ registered ids a nested scan is hundreds of
+ * millions of comparisons.
  */
-function nearestLinkIds(candidate: string, known: string[], limit = 3): string[] {
-  const c = candidate.split("-");
-  const out: string[] = [];
-  for (const k of known) {
-    if (k === candidate) continue;
-    const p = k.split("-");
-    if (p.length !== c.length) continue;
-    let diff = 0;
-    for (let i = 0; i < c.length; i++) if (c[i] !== p[i]) diff++;
-    if (diff === 1) out.push(k);
-    if (out.length >= limit) break;
+function buildNearIndex(known: string[]) {
+  const oneOff = new Map<string, string[]>();   // count|position|other segments -> ids
+  const byPrefix = new Map<string, string[]>(); // every leading run of segments -> longer ids
+  const exact = new Set(known);
+  const push = (m: Map<string, string[]>, k: string, v: string) => {
+    const a = m.get(k); if (a) a.push(v); else m.set(k, [v]);
+  };
+  for (const id of known) {
+    const s = id.split("-");
+    for (let i = 0; i < s.length; i++) {
+      push(oneOff, `${s.length}|${i}|${[...s.slice(0, i), ...s.slice(i + 1)].join("-")}`, id);
+    }
+    for (let n = 1; n < s.length; n++) push(byPrefix, s.slice(0, n).join("-"), id);
   }
-  return out;
+  return function nearestLinkIds(candidate: string, limit = 3): string[] {
+    const s = candidate.split("-");
+    const out = new Set<string>();
+    for (let i = 0; i < s.length; i++) {
+      for (const id of oneOff.get(`${s.length}|${i}|${[...s.slice(0, i), ...s.slice(i + 1)].join("-")}`) ?? []) {
+        if (id !== candidate) out.add(id);
+      }
+    }
+    // registered id is SHORTER: the candidate extends it
+    for (let n = 1; n < s.length; n++) {
+      const head = s.slice(0, n).join("-");
+      if (exact.has(head) && n >= 3) out.add(head);
+    }
+    // registered id is LONGER: it extends the candidate
+    if (s.length >= 3) for (const id of byPrefix.get(candidate) ?? []) out.add(id);
+    return [...out].slice(0, limit);
+  };
 }
 
 type ExistingRow = {
@@ -213,8 +239,9 @@ export async function planRegistryImport(
       for (const r of batch) allIds.push(r.link_id);
       if (batch.length < PAGE) break;
     }
+    const nearestLinkIds = buildNearIndex(allIds);
     for (const r of plan.creates) {
-      const near = nearestLinkIds(r.link_id, allIds);
+      const near = nearestLinkIds(r.link_id);
       if (near.length > 0) plan.orphanRisk.push({ link_id: r.link_id, near });
     }
   }

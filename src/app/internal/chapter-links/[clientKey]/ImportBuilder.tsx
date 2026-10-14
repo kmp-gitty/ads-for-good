@@ -48,6 +48,24 @@ const DIMENSION_FIELDS: Field[] = ["partner", "promo", "loc", "size", "creative"
 //    not alter the partner's URL.
 const UTM_FIELDS: Field[] = ["utm_source", "utm_medium", "utm_campaign"];
 
+// Fields that can be toggled onto the END of the link id for one import.
+// The pattern string stays the single source of truth: a chip is "on" when
+// its placeholder is in the pattern, and toggling appends or removes
+// "-{field}". So hand-edits to the pattern and the chips can never disagree.
+const ID_EXTRAS: { field: Field; label: string }[] = [
+  { field: "creative", label: "creative" },
+  { field: "size", label: "size" },
+  { field: "article", label: "article" },
+  { field: "slug", label: "slug" },
+];
+const hasPlaceholder = (pat: string, f: string) => pat.toLowerCase().includes(`{${f}}`);
+function toggleExtra(pat: string, f: string): string {
+  if (hasPlaceholder(pat, f)) {
+    return pat.replace(new RegExp(`-?\\{${f}\\}`, "i"), "").replace(/^-+|-+$/g, "");
+  }
+  return `${pat.trim().replace(/-+$/, "")}-{${f}}`;
+}
+
 type Mode = "none" | "const" | "col";
 type Mapping = Record<Field, { mode: Mode; value: string }>;
 
@@ -455,10 +473,36 @@ export default function ImportBuilder({
             <div>
               <label style={{ fontSize: 12.5, color: INK, fontWeight: 600 }}>Link ID pattern</label>
               <input value={pattern} onChange={e => { setPattern(e.target.value); setPlan(null); }} style={{ ...inp, fontFamily: "ui-monospace, monospace" }} />
-              <p style={{ margin: "5px 0 0", fontSize: 11.5, color: FAINT, lineHeight: 1.5 }}>
-                Built from what defines <em>which slot this is</em> — property, partner, promo, loc,
-                article. Never from what occupies it: putting <code>creative</code> here splits a
-                placement&apos;s click history every time the advertiser sends a new logo.
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+                <span style={{ fontSize: 11.5, color: MUTED }}>Also add to the id:</span>
+                {ID_EXTRAS.map(x => {
+                  const on = hasPlaceholder(pattern, x.field);
+                  return (
+                    <button key={x.field} type="button"
+                      onClick={() => { setPattern(p => toggleExtra(p, x.field)); setPlan(null); }}
+                      style={{
+                        fontSize: 12, padding: "3px 10px", borderRadius: 999, cursor: "pointer",
+                        fontFamily: "ui-monospace, monospace",
+                        border: `1px solid ${on ? ORANGE : LINE}`,
+                        background: on ? "#FFF6EF" : "#fff", color: on ? ORANGE : MUTED,
+                      }}>
+                      {on ? "✓ " : "+ "}{x.label}
+                    </button>
+                  );
+                })}
+                {pattern !== defaultPattern && (
+                  <button type="button" onClick={() => { setPattern(defaultPattern); setPlan(null); }}
+                    style={{ fontSize: 11.5, border: "none", background: "none", color: MUTED, textDecoration: "underline", cursor: "pointer" }}>
+                    reset to {defaultPattern}
+                  </button>
+                )}
+              </div>
+              <p style={{ margin: "6px 0 0", fontSize: 11.5, color: FAINT, lineHeight: 1.5 }}>
+                Fields are added to the end, in the order you turn them on, for this import only.
+                The base should be what defines <em>which slot this is</em>. Adding what
+                <em> occupies</em> it — <code>creative</code>, <code>size</code> — gives the slot a new
+                id whenever that value changes, so a new logo starts a fresh click history instead
+                of continuing the old one.
               </p>
             </div>
           </div>

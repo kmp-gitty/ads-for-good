@@ -206,6 +206,8 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - Registry tab: totals + subtotals from the summary, never from `rows.length`; placement filter + search via a plain GET form (params `rslug` / `rq` / `rpage`, distinct from the generate tab's `slug`). Importer: `.in()` chunked at 100, all-ids read paged with `.order('link_id').range()`. Tested through the API: totals reconcile to 19,132, pages don't overlap, 1,500 ids match in chunks, paged read returns all 19,132.
 - **Rule: never derive a registry count from a row read.** Any new reader of `generated_links` must aggregate in SQL or page.
 
+**Follow-up (Oct 14): optional id fields in the Import tab.** Chips under the pattern box (`creative` / `size` / `article` / `slug`) append `-{field}` to the end of the id for that import, in click order; the pattern string stays the single source of truth (a chip is on iff its placeholder is in the pattern), with a reset link back to `{property}-{partner}-{promo}-{loc}`. Base pattern unchanged. The near-variant check (`buildNearIndex` in `_import-actions.ts`) now also flags SAME SLOT, DIFFERENT TAIL — a new id that is a registered id plus extra trailing segments, or the reverse — which the one-segment-differs check could not see because segment counts differ. Indexed lookups, not a nested scan (18,580 lookups vs 19,132 ids: 125 ms). **Consequence:** turning on `creative` for rows already registered without it flags every one, correctly — appended fields are for placements never registered before.
+
 
 ### EOS batching reads GREEN · the bot-farm blind spot MEASURED · read-only classifier bench (Sep 29–30, 2026)
 
