@@ -39,6 +39,143 @@ export function postImage(post: Post): string {
 
 export const POSTS: Post[] = [
   {
+    slug: "marketing-measurement-framework",
+    title: "How to measure marketing properly: a plain-language framework",
+    metaTitle: "Marketing Measurement: A Simple Framework",
+    category: "Measurement Strategy",
+    date: "Nov 10, 2026",
+    publishAt: "2026-11-10T07:00:00-05:00",
+    excerpt:
+      "Dashboards everywhere, still no answer to 'is this working?' A plain-language marketing measurement framework: which metrics matter and how to connect them.",
+    image: "/images/OwnaBusinessWallpaper.png",
+    body: `Most marketing measurement is a pile of numbers nobody fully trusts. Dashboards everywhere, metrics for everything, and still no confident answer to the only question that matters: is this working, and what should we do more of? The problem usually isn't too little data — it's the lack of a framework for turning data into decisions. Here's how to think about measuring marketing properly, without the jargon.
+
+## Start with the question, not the metric
+
+The most common measurement mistake is collecting metrics first and looking for meaning later. You end up with fifty numbers and no idea which ones matter. Proper measurement runs the other way: start with the decision you need to make, then find the metric that informs it.
+
+"Should we spend more on this channel?" is a decision. "How long is our real sales cycle?" is a decision. "Which campaign should we cut?" is a decision. Each points to specific metrics worth watching — and, just as importantly, tells you which of the fifty numbers on your dashboard you can safely ignore. A metric that doesn't change a decision is decoration. If you can't name the action a number would trigger, stop tracking it.
+
+## The metrics that actually matter (and the ones that don't)
+
+Metrics fall into two rough camps. **Vanity metrics** look impressive and rarely change a decision: impressions, raw clicks, follower counts, page views. They go up and to the right and make reports look healthy without telling you much. **Actionable metrics** connect to money and behavior: cost to acquire a customer, customer lifetime value, conversion rate at each real step, revenue by channel, repeat-purchase rate.
+
+The test is simple. If a metric went up 20% tomorrow, would you do anything differently? If yes, it's actionable. If it would just feel nice, it's vanity. Most businesses drown in vanity metrics while under-measuring the handful of numbers that would actually change how they spend. The goal isn't more metrics. It's the right five.
+
+## A simple measurement framework
+
+You don't need a complicated system. A workable framework has four layers, and most businesses are missing one of the middle two:
+
+1. **Acquisition** — what's bringing people in, and what does it cost? Cost per acquisition and revenue by source live here.
+2. **Behavior** — what do people do once they arrive, and where do they drop off? This is the layer most dashboards handle worst, because it requires seeing the journey, not just the entry and the sale.
+3. **Conversion** — what share complete the outcome you care about, and at which step do they fall away?
+4. **Value** — what is a customer actually worth over time, and how does that vary by where they came from?
+
+The reason this matters: most businesses measure the first and third layers (traffic and conversions) and are nearly blind to the second and fourth (real behavior and long-term value). But that's where the money is — understanding the messy middle of the journey and the lifetime worth of a customer is what separates measurement that decorates from measurement that decides.
+
+## Set up the system so it can actually answer you
+
+A framework is only as good as the data underneath it, and this is where most setups quietly fail. If your tools can't connect a customer's acquisition to their behavior to their lifetime value — because each lives in a different platform that [counts a different way](/for-people/education/marketing-data-discrepancies) — then your beautiful framework has gaps exactly where the important questions are.
+
+Proper setup means being able to follow one customer across the four layers: see where they came from, what they did, whether they converted, and what they became worth, as one connected story rather than four disconnected reports. That's a data problem before it's a dashboard problem. You can't framework your way out of fragmented data; you have to connect the data first.
+
+## The measurement mindset
+
+- **Decisions before metrics.** If a number won't change an action, don't track it.
+- **Actionable over vanity.** Ask whether a 20% swing would change anything.
+- **Mind the middle and the long tail.** Behavior and lifetime value are where the money hides and where most measurement is blindest.
+- **Connect the layers.** A framework fails if the data underneath can't follow one customer end to end.
+
+That last requirement is the hard one, and it's the reason we built [Chapter](https://chapter.ads4good.com/). Proper measurement strategy needs a customer's whole story connected across acquisition, behavior, conversion, and value — and that only works when the same person is resolved into one journey instead of scattered across tools. Chapter is the layer that connects those four measurement layers to a single, real customer, so the framework you build can actually be answered. Get the framework right, then give it data it can trust.`,
+    faqs: [
+      {
+        q: "How do you measure marketing effectiveness?",
+        a: "Start with the decision you need to make, such as whether to spend more on a channel or which campaign to cut, then find the metric that informs it. Measure across four layers: acquisition, behavior, conversion, and customer value, and make sure your data can follow one customer through all of them.",
+      },
+      {
+        q: "Which marketing metrics actually matter?",
+        a: "The actionable ones that connect to money and behavior: cost to acquire a customer, customer lifetime value, conversion rate at each real step, revenue by channel, and repeat-purchase rate. Most businesses need the right five, not more.",
+      },
+      {
+        q: "What's the difference between vanity metrics and actionable metrics?",
+        a: "Vanity metrics like impressions, raw clicks, follower counts, and page views look impressive but rarely change a decision. A quick test: if the metric rose 20% tomorrow, would you do anything differently? If yes, it's actionable; if it would just feel nice, it's vanity.",
+      },
+      {
+        q: "What is a marketing measurement framework?",
+        a: "A structure for turning data into decisions. A simple one has four layers: acquisition (what brings people in and what it costs), behavior (what they do and where they drop off), conversion (who completes the outcome), and value (what a customer is worth over time).",
+      },
+      {
+        q: "Why doesn't my measurement framework give me clear answers?",
+        a: "Usually because the data underneath can't connect one customer across the layers. If acquisition, behavior, and lifetime value live in separate tools that count differently, the framework has gaps exactly where the important questions are. It's a data problem before it's a dashboard problem.",
+      },
+    ],
+    relatedSlugs: ["ad-fatigue-and-frequency", "marketing-data-discrepancies", "engagement-metrics-that-mean-something"],
+  },
+  {
+    slug: "ad-fatigue-and-frequency",
+    title: "Why you keep seeing ads for things you already bought (and what it reveals)",
+    metaTitle: "Ad Fatigue: Why Ads Follow You After You Buy",
+    category: "Measurement Strategy",
+    date: "Nov 17, 2026",
+    publishAt: "2026-11-17T07:00:00-05:00",
+    excerpt:
+      "You buy a mattress and the internet keeps selling it to you. What that ad, ad frequency and ad fatigue reveal about the data gaps behind your targeting.",
+    image: "/images/adNetworkWallpaper.png",
+    body: `Everyone has experienced it: you buy a mattress, and for the next three weeks the entire internet tries to sell you the exact mattress you already own. It's mildly annoying as a shopper. But if you run ads, it's a symptom worth paying attention to — because that wasted ad isn't just irritating a customer, it's revealing a gap in what the advertiser can actually see. Let's look at what's really going on, from both sides of the screen.
+
+## Why the ads keep coming after you've bought
+
+The simple version: the ad system serving you those mattress ads doesn't know you bought the mattress. It knows you looked at it — that signal fired loud and clear when you browsed. But the purchase either happened somewhere the ad platform couldn't see, or the "you bought it" signal never made it back to the system doing the targeting. So as far as the ad platform is concerned, you're still a hot prospect who looked and didn't buy. It keeps spending money chasing a sale that already happened.
+
+That gap between "saw you look" and "didn't see you buy" is the whole story. And it's not a rare glitch — it's one of the most common and most visible symptoms of broken measurement, playing out millions of times a day.
+
+## Frequency and ad fatigue: when repetition backfires
+
+Beyond the already-bought problem, there's the sheer repetition. **Ad frequency** is how many times the same person sees the same ad, and when it climbs too high, you get **ad fatigue** — the point where seeing an ad again does nothing, or actively annoys, or breeds resentment toward the brand.
+
+For advertisers, this is a double waste: you're paying to show ads that have stopped working, and you may be damaging how people feel about you in the process. The customer who's seen your ad twenty times isn't more likely to buy on the twenty-first; they're more likely to be irritated. **Frequency capping** — deliberately limiting how often someone sees an ad — exists precisely because past a certain point, more exposure is negative return. Yet a huge amount of ad spend goes to impressions well past that point, because the advertiser can't tell they've already saturated that person.
+
+## Poor targeting vs. data gaps: two different problems that look identical
+
+Here's the distinction that matters for anyone running ads. When your ads land badly — served to people who already bought, shown too many times, or aimed at the wrong audience entirely — there are two very different possible causes, and they look the same from the outside.
+
+The first is genuinely poor targeting: you chose the wrong audience settings. That's a strategy problem, and you fix it by changing your targeting. The second, and more common, is a data gap: your targeting logic is fine, but the system doesn't have the information it needs to apply it — it doesn't know this person bought, or that these two devices are the same human, or that this "new prospect" is actually an existing customer. That's not a strategy problem. It's a measurement problem, and no amount of tweaking your audience settings will fix it, because the settings were never the issue. The data feeding them was.
+
+Confusing these two is expensive. Businesses spend months "optimizing targeting" that was never broken, when the real issue was that the system couldn't see purchases, couldn't connect devices, and couldn't tell repeat customers from strangers. You can't target well on data that can't tell who someone is.
+
+## What the annoying ad is really telling you
+
+- **The already-bought ad means a purchase signal isn't reaching your targeting.** The system still thinks the sale hasn't happened.
+- **High frequency and fatigue mean you're paying to annoy.** Past a point, more exposure is negative return.
+- **Bad-looking targeting is often a data gap, not a strategy error.** Fix the data before you blame the settings.
+- **All of it traces to one question: does the system know who this person is?** Purchases, devices, and repeat customers all depend on identity.
+
+That last point is the thread running through every one of these annoyances. The reason you keep getting served a mattress you own is that the ad system can't connect "the person who looked" to "the person who bought" — because to it, they might be two different browsers, two different devices, two unconnected records. Close that gap — [resolve the person](/for-people/education/identity-resolution-explained) so the system knows the sale happened — and the wasted impressions stop. That's exactly what [Chapter](https://chapter.ads4good.com/) is built to do: resolve each customer to one identity so purchase signals, devices, and repeat visits all connect, and your ads stop chasing sales that already closed. For the bigger picture of measuring marketing properly, see [our guide to marketing measurement strategy](/for-people/education/marketing-measurement-framework).`,
+    faqs: [
+      {
+        q: "Why do I keep seeing ads for something I already bought?",
+        a: "Because the ad system doesn't know you bought it. It saw you look at the product, but the purchase happened somewhere it couldn't see, or the purchase signal never reached the system doing the targeting. As far as it knows, you're still a prospect who looked and didn't buy.",
+      },
+      {
+        q: "What is ad fatigue?",
+        a: "Ad fatigue is what happens when the same person sees the same ad too many times. Past a certain point, seeing it again does nothing or actively annoys them, so you're paying for impressions that have stopped working and may be hurting how people feel about your brand.",
+      },
+      {
+        q: "What is ad frequency and frequency capping?",
+        a: "Ad frequency is how many times the same person sees the same ad. Frequency capping deliberately limits that number, because beyond a certain point more exposure produces a negative return rather than more sales.",
+      },
+      {
+        q: "Is bad ad targeting a settings problem or a data problem?",
+        a: "Often a data problem. Ads can land badly because you chose the wrong audience, or because your targeting is fine but the system can't see purchases, connect two devices to one person, or tell an existing customer from a new prospect. Changing settings won't fix the second cause.",
+      },
+      {
+        q: "How do advertisers stop showing ads to people who already bought?",
+        a: "By making sure purchase signals reach the targeting system and that the person who browsed is connected to the person who bought, even across devices. That depends on resolving each customer to one identity, so the system knows the sale has already happened.",
+      },
+    ],
+    relatedSlugs: ["marketing-measurement-framework", "how-ads-track-you", "identity-resolution-explained"],
+  },
+  {
     slug: "marketing-data-discrepancies",
     title: "Why none of your marketing tools report the same revenue",
     metaTitle: "Revenue Attribution: Why Your Tools Disagree",
