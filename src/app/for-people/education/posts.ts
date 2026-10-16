@@ -46,7 +46,7 @@ export const POSTS: Post[] = [
     date: "Feb 10, 2027",
     publishAt: "2027-02-10T07:00:00-05:00",
     excerpt:
-      "The tidy funnel on the slide looks nothing like real customers. What the path to purchase really looks like, and what it takes to measure the journey people take.",
+      "The tidy funnel on the slide looks nothing like real customers. What the path to purchase really looks like, and what it takes to measure the real journey.",
     image: "/images/MarketingGuidebookWallpaper.png",
     body: `There's a tidy diagram of the customer journey that shows up in every marketing deck: a clean arrow from awareness to consideration to purchase, four neat stages, everyone moving left to right in an orderly line. It's useful for planning. It's also almost nothing like what real customers do. If you want to actually measure the journey — not just draw it — you have to start with what the path to purchase really looks like, which is messier, slower, and far more revealing.
 
@@ -114,7 +114,7 @@ That last point is the whole ballgame, and it's why we built [Chapter](https://c
     date: "Feb 24, 2027",
     publishAt: "2027-02-24T07:00:00-05:00",
     excerpt:
-      "Every marketing dashboard is confident and none are complete. What GA4, Shopify analytics, and ad platforms can't see, which way each leans, and how to read them.",
+      "Every marketing dashboard is confident; none are complete. What GA4, Shopify analytics, and ad platforms can't see, which way each leans, and how to read them.",
     image: "/images/DigitalAuditWallpaper.png",
     body: `A marketing dashboard feels like the truth. It's clean, it's confident, it's full of precise numbers, and it never once says "I'm not sure." That confidence is exactly the problem. Every analytics platform has real blind spots and quiet biases built into it, and none of them advertise those on the dashboard. Knowing what each tool can't see — and which direction it tends to lean — is how you stop taking a confident number at face value. Let's go platform by platform.
 
