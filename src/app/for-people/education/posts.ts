@@ -39,6 +39,144 @@ export function postImage(post: Post): string {
 
 export const POSTS: Post[] = [
   {
+    slug: "customer-journey-analytics",
+    title: "Customer journey analytics: what the path to purchase actually looks like",
+    metaTitle: "Customer Journey Analytics: The Real Path",
+    category: "Attribution Fundamentals",
+    date: "Feb 10, 2027",
+    publishAt: "2027-02-10T07:00:00-05:00",
+    excerpt:
+      "The tidy funnel on the slide looks nothing like real customers. What the path to purchase really looks like, and what it takes to measure the journey people take.",
+    image: "/images/MarketingGuidebookWallpaper.png",
+    body: `There's a tidy diagram of the customer journey that shows up in every marketing deck: a clean arrow from awareness to consideration to purchase, four neat stages, everyone moving left to right in an orderly line. It's useful for planning. It's also almost nothing like what real customers do. If you want to actually measure the journey — not just draw it — you have to start with what the path to purchase really looks like, which is messier, slower, and far more revealing.
+
+## The real journey is not a straight line
+
+A real customer journey is a tangle. Someone discovers you on Instagram, forgets about you, sees a retargeting ad two weeks later, clicks to your site, leaves, searches your name a week after that, reads a review on a third-party site, comes back through an email, and finally buys — three weeks and eight touches after that first Instagram glimpse. No arrow. No four clean stages. A loop that doubles back on itself across three devices and a month of calendar time.
+
+This matters because the tidy diagram leads to tidy measurement — attributing the sale to one clean "stage" or one channel — while the real journey is where the actual insight lives. The reason a channel worked or didn't usually isn't visible in any single stage; it's visible in the shape of the whole path. **Customer journey analytics** is the practice of measuring that real path, not the idealized one.
+
+## Multi-session behavior: almost nobody buys in one visit
+
+The single biggest gap between the diagram and reality is that the diagram implies one continuous trip, and real journeys are broken into many separate sessions over time. A customer visits, leaves, comes back tomorrow, leaves again, returns next week. Each of those is a separate session, and the purchase usually happens several sessions in.
+
+This wrecks any measurement that thinks in single visits. If your analytics evaluates each session on its own — did this visit convert? — it will conclude that most of your traffic "failed," when really those visits were early, necessary steps in a journey that converted later. The first visit didn't fail. It was chapter one. Judging it by whether it produced an immediate sale is like judging a first date by whether it ended in a wedding.
+
+## Time between touchpoints: the journey has a clock
+
+One of the most overlooked dimensions of the journey is time — specifically, the gaps between touches. Two customers can take the exact same path (ad → email → search → purchase) but one does it in two days and the other in two months, and those are completely different customers with completely different economics.
+
+The length of those gaps tells you things nothing else does: how considered the purchase is, how long your real sales cycle runs, how long a customer stays "warm" before going cold, when a follow-up would land versus annoy. Most reporting collapses time entirely — it shows you that the touches happened, not the rhythm they happened in. But the rhythm is often where the strategy is. A two-day journey and a two-month journey need completely different marketing, and you can't tell them apart if your analytics flattens the clock.
+
+## Fragmented journeys: the measurement problem underneath
+
+Here's why most businesses can't do any of this, even when they want to. The real journey is spread across sessions, devices, and channels — and that's exactly the kind of journey standard analytics can't hold together. Each session looks separate. Each device looks like a different person. Each channel reports its own slice. So the one continuous journey that actually happened gets shattered into fragments, and you're left analyzing shards instead of a story.
+
+A fragmented journey isn't just incomplete — it's actively misleading. It makes early touches look like dead ends, makes one customer look like several, and makes the connective tissue between touches invisible. You can't map a path you can only see in disconnected pieces. Which means the prerequisite for real customer journey analytics isn't a better chart — it's the ability to [stitch the fragments back](/for-people/education/identity-resolution-explained) into the single journey they came from.
+
+## What real journey analytics requires
+
+- **Measure the path, not the stage.** Insight lives in the shape of the whole journey, not in one tidy phase of it.
+- **Think in journeys, not sessions.** A visit that didn't convert wasn't a failure; it was probably an early step in a journey that did.
+- **Pay attention to timing.** The gaps between touches tell you your true sales cycle and when to act.
+- **Reassemble the fragments first.** You can't analyze a journey you can only see in pieces.
+
+That last point is the whole ballgame, and it's why we built [Chapter](https://chapter.ads4good.com/) to reconstruct the real journey rather than report on isolated sessions. By resolving each customer to one identity and stitching their sessions, devices, and channels back into a single timeline, it turns the shattered fragments into the actual path to purchase — with the timing intact — so you can finally measure the journey your customers really took instead of the tidy one on the slide.`,
+    faqs: [
+      {
+        q: "What is customer journey analytics?",
+        a: "It's the practice of measuring the real path customers take to a purchase, across every session, device, and channel, rather than the idealized four-stage funnel. The insight lives in the shape of the whole path, not in any single stage of it.",
+      },
+      {
+        q: "What does a real path to purchase look like?",
+        a: "Usually a tangle rather than a straight line: someone discovers you on social media, forgets, sees a retargeting ad weeks later, visits and leaves, searches your name, reads a review, returns through an email, and buys, often across several devices and weeks of time.",
+      },
+      {
+        q: "Why do most of my website visits look like they didn't convert?",
+        a: "Because almost nobody buys in one visit. Analytics that judges each session on its own treats early visits as failures, when they were necessary first steps in a journey that converted later. Measuring in journeys rather than sessions shows what those visits actually did.",
+      },
+      {
+        q: "Why does the time between touchpoints matter?",
+        a: "Two customers can take the same path, one in two days and the other in two months, and they need very different marketing. The gaps reveal your real sales cycle, how long customers stay warm, and when a follow-up will land rather than annoy.",
+      },
+      {
+        q: "Why can't my analytics show the full customer journey?",
+        a: "Because the journey is spread across sessions, devices, and channels that standard analytics treats separately. Each device looks like a different person and each channel reports its own slice, so the journey is broken into fragments that have to be stitched back together first.",
+      },
+    ],
+    relatedSlugs: ["marketing-dashboard-limitations", "attribution-models-compared", "engagement-metrics-that-mean-something"],
+  },
+  {
+    slug: "marketing-dashboard-limitations",
+    title: "What your marketing dashboard can't tell you (and won't admit)",
+    metaTitle: "What Your Marketing Dashboard Can't Tell You",
+    category: "Attribution Fundamentals",
+    date: "Feb 24, 2027",
+    publishAt: "2027-02-24T07:00:00-05:00",
+    excerpt:
+      "Every marketing dashboard is confident and none are complete. What GA4, Shopify analytics, and ad platforms can't see, which way each leans, and how to read them.",
+    image: "/images/DigitalAuditWallpaper.png",
+    body: `A marketing dashboard feels like the truth. It's clean, it's confident, it's full of precise numbers, and it never once says "I'm not sure." That confidence is exactly the problem. Every analytics platform has real blind spots and quiet biases built into it, and none of them advertise those on the dashboard. Knowing what each tool can't see — and which direction it tends to lean — is how you stop taking a confident number at face value. Let's go platform by platform.
+
+## The core issue: every dashboard is confident, none are complete
+
+Before the specifics, the pattern: no analytics tool tells you what it's missing. It reports what it can measure with total assurance and stays silent about everything it can't. So a dashboard showing 3% conversion isn't showing you "3%, give or take the 15% of events we lost and the customers we counted twice." It just shows 3%, in bold, and lets you assume that's the whole story. The confidence is a design choice, not a measure of accuracy.
+
+## GA4: powerful, free, and quietly limited
+
+Google Analytics 4 is the default analytics tool for much of the web, and it's genuinely capable. But it has real limits that rarely make it into the conversation. It relies heavily on browser-side tracking, so it systematically loses the events that ad blockers, privacy settings, and cookie rejections prevent from firing — meaning it almost always undercounts. It applies data thresholds and sampling on larger datasets, quietly estimating rather than counting when volumes get high. And its model of a "user" is fragile: the same person across devices or after clearing cookies frequently becomes several users.
+
+None of this makes GA4 useless. It makes it a tool with a known lean — toward undercounting real activity and overcounting distinct users — that it never flags on screen.
+
+## Shopify analytics: accurate about sales, blind about journeys
+
+Shopify's built-in analytics has the opposite strength and weakness. Because it sits on your actual transactions, it's excellent at the thing that matters most: it knows what actually sold, for how much. When [Shopify and a browser-based tool disagree](/for-people/education/marketing-data-discrepancies) on revenue, Shopify is usually closer to the truth.
+
+But Shopify sees your store, and mostly just your store. It has a limited view of everything that happened before the customer arrived — the ads, the emails, the research on other sites, the earlier anonymous visits. It can tell you what sold beautifully; it's far weaker at telling you what caused the sale. Lean on it for revenue truth, not for attribution.
+
+## Ad platforms: the tools grading their own homework
+
+Meta, Google Ads, and every other ad platform share a bias so structural it's almost unfair to call it a flaw: they are built to demonstrate their own value. Each one counts conversions generously, using its own attribution rules and windows, and each one claims credit for sales it merely touched. An ad platform's dashboard is the single most flattering possible account of that ad platform's performance.
+
+This isn't lying, exactly — it's a scoreboard kept by one of the players. The numbers are real; the framing is self-interested. Which is why [platform-reported ROAS](/for-people/education/how-to-calculate-roas) should always be read as the ceiling of what a channel might be doing, never the confirmed truth of what it did.
+
+## So "why do dashboards lie"?
+
+They mostly don't lie outright. They do something more subtle and harder to catch: they present a partial, biased view with complete confidence, and let you supply the false assumption that the confident number is the whole number. A dashboard's sin isn't usually a wrong figure — it's an unstated blind spot, dressed up as certainty. The lie is one of omission, and the omission is invisible precisely because the interface looks so authoritative.
+
+## How to read any dashboard without getting fooled
+
+- **Ask what this tool can't see.** GA4 misses blocked events; Shopify misses pre-site journey; ad platforms miss everything they didn't touch.
+- **Know each tool's lean.** GA4 undercounts activity; ad platforms overcount their own credit; Shopify undercredits everything upstream of the sale.
+- **Anchor on transactions for revenue.** Your store's real sales are the closest thing to ground truth.
+- **Treat confidence as a UI choice, not evidence.** The bold number isn't more true for being bold.
+
+The deeper fix is to stop relying on any single platform's self-view and put a layer underneath all of them — one that reconciles their conflicting accounts against real, deduplicated, identity-resolved data. That's what [Chapter](https://chapter.ads4good.com/) is built to do: not another confident dashboard, but an inspectable source of truth the platforms feed into, so you can finally see what each tool was hiding. For how the real customer journey gets reconstructed underneath all this, see [our guide to customer journey analytics](/for-people/education/customer-journey-analytics).`,
+    faqs: [
+      {
+        q: "Why can't I fully trust my marketing dashboard?",
+        a: "Because no analytics tool shows what it's missing. It reports what it can measure with total confidence and stays silent about lost events, double-counted customers, and everything outside its view. The bold number is a design choice, not a measure of accuracy.",
+      },
+      {
+        q: "What are the limitations of GA4?",
+        a: "GA4 relies heavily on browser-side tracking, so it loses events that ad blockers, privacy settings, and cookie rejections stop from firing, and it almost always undercounts. It also applies thresholds and sampling on larger datasets, and often splits one person across devices into several users.",
+      },
+      {
+        q: "Is Shopify analytics accurate?",
+        a: "For sales, yes. It sits on your actual transactions, so it's usually closer to the truth on revenue than browser-based tools. But it sees mostly your store, so it's far weaker at showing what happened before a customer arrived and what caused the sale.",
+      },
+      {
+        q: "Why do ad platforms report better results than my store shows?",
+        a: "Each ad platform is built to demonstrate its own value, counting conversions generously under its own rules and claiming credit for sales it only touched. Treat platform-reported results as the ceiling of what a channel might be doing, not confirmed truth.",
+      },
+      {
+        q: "How should I read a marketing dashboard?",
+        a: "Ask what the tool can't see, know which way it leans, anchor revenue on your real store transactions, and remember that a confident number isn't more accurate for being bold. GA4 tends to undercount activity, ad platforms overcount their own credit, and Shopify undercredits what happened before the sale.",
+      },
+    ],
+    relatedSlugs: ["customer-journey-analytics", "marketing-data-discrepancies", "how-to-calculate-roas"],
+  },
+  {
     slug: "pixel-tracking-explained",
     title: "Pixel tracking, explained: how your marketing actually gets measured",
     metaTitle: "Pixel Tracking, Explained (Client vs. Server)",
