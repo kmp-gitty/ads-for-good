@@ -39,6 +39,310 @@ export function postImage(post: Post): string {
 
 export const POSTS: Post[] = [
   {
+    slug: "marketing-data-discrepancies",
+    title: "Why none of your marketing tools report the same revenue",
+    metaTitle: "Revenue Attribution: Why Your Tools Disagree",
+    category: "Attribution Fundamentals",
+    date: "Oct 18, 2026",
+    publishAt: "2026-10-18T07:00:00-04:00",
+    excerpt:
+      "Shopify says $50K, Google Analytics $44K, and your ad platforms claim more than you sold. Why every tool reports different revenue, and which to trust.",
+    image: "/images/EducationWallpaper.png",
+    body: `Open Shopify: it says you made $50,000 last month. Open Google Analytics: $44,000. Open Meta Ads Manager: it's claiming $38,000 in revenue all on its own. Google Ads is claiming another $20,000. Add the ad platforms together and they've somehow driven more revenue than your store actually made.
+
+If this has ever made you feel like your data is broken, here's the reassuring part: it's not. Every one of those numbers is "correct" by its own rules. They disagree because they were never measuring the same thing in the same way. Once you see why, the discrepancies stop being alarming and start being readable. Let's walk through it.
+
+## The core reason: everyone counts from their own corner
+
+Every tool in your stack sees only the part of the world it touches, and counts revenue in a way that flatters its own role. That's not dishonesty — it's design. Each platform was built to prove its own value, so each one counts generously within its own boundary and ignores everything outside it.
+
+So the real question is never "which number is right?" It's "what is each number actually counting, and what is it blind to?" Here are the four discrepancies that trip up almost every business.
+
+## Shopify vs. Google Analytics: two honest tools, two different totals
+
+Your store platform and your analytics tool almost never match, and the gap is usually explainable. Shopify counts a sale the instant the order is placed. Google Analytics only counts it if its tracking successfully fired in the customer's browser — which fails a measurable share of the time thanks to ad blockers, cookie rejections, closed tabs, and people bouncing before the confirmation page loads.
+
+So GA almost always reports fewer orders and less revenue than Shopify. Shopify is closer to your true sales because it counts the actual transaction, not a browser event that had to load correctly to be seen. When these two disagree, trust the platform that recorded the money changing hands.
+
+## Meta vs. Google: both claiming the same sale
+
+Here's the one that makes the ad platforms add up to more than you actually sold. Meta and Google each count a conversion whenever they can plausibly connect it to one of their own ads — and a single customer often touched both.
+
+Someone sees your Meta ad, then later clicks a Google ad, then buys. Meta counts the sale (it saw the earlier touch). Google counts the sale (it saw the last click). One purchase, claimed twice, in two dashboards that never talk to each other. Multiply that across a month and the platforms collectively take credit for far more revenue than exists. This isn't a bug you can fix in the settings — it's the direct result of two walled gardens each grading their own homework.
+
+## Why your ROAS never matches
+
+This is the discrepancy that costs real money, because **ROAS** — return on ad spend — drives budget decisions. The ROAS in Meta's dashboard uses Meta's generous, self-counted conversions. Your actual ROAS, measured against real store revenue, is almost always lower, because the platform counted sales it didn't solely cause and sales that would have happened anyway.
+
+A platform reporting 4x while your blended numbers say 2x isn't necessarily lying — it's answering a narrower, kinder question. Knowing the difference between platform-reported ROAS and your true blended ROAS is worth an article of its own; it's the single most common way businesses over-invest in a channel that looks better than it is.
+
+## Revenue attribution: the inconsistency underneath all of it
+
+Step back and every one of these discrepancies is really the same problem wearing different clothes: **revenue attribution**. Assigning revenue to a cause is not a clean, factual operation. It's a series of judgment calls — which touch counts, whose tracking fired, which window applies, which platform gets to claim it — and every tool makes those calls differently.
+
+That's why the numbers will never reconcile by tightening a setting. They're the output of different rules applied to different slices of a customer who moved across all of them. The inconsistency isn't in your setup. It's structural.
+
+## What to actually do about it
+
+You can't make these tools agree. You can stop being misled by their disagreement:
+
+- **Anchor on the money.** Your store's actual revenue — the transactions, the bank — is your ground truth. Everything else is an estimate of who caused it.
+- **Never add platform revenue together.** Meta's claimed revenue plus Google's claimed revenue double-counts every customer who touched both. The sum is meaningless.
+- **Treat platform ROAS as a ceiling, not a fact.** It's the kindest possible version of each channel's performance.
+- **Expect GA to under-count.** It's not broken; it's missing the events that never fired.
+
+Underneath all four discrepancies is one missing capability: a single view of the customer that every tool could agree on, because it counts the person, not the platform's slice of them. That's what we built [Chapter](https://chapter.ads4good.com/) to be — one resolved identity per customer, so a sale is counted once, attributed across the whole journey, and reconciled against the revenue you actually banked. The tools stop arguing when there's finally one source of truth underneath them.`,
+    faqs: [
+      {
+        q: "Why doesn't Shopify revenue match Google Analytics?",
+        a: "Shopify counts a sale the moment the order is placed. Google Analytics only counts it if its tracking tag fired in the customer's browser, which fails a measurable share of the time because of ad blockers, cookie rejections, closed tabs, and people leaving before the confirmation page loads. GA almost always reports less, and Shopify is closer to your true sales.",
+      },
+      {
+        q: "Why do my ad platforms claim more revenue than I made?",
+        a: "Each platform counts a conversion whenever it can connect the sale to one of its own ads, and many customers touch more than one. Someone who saw a Meta ad and later clicked a Google ad gets counted by both. Added together, the platforms claim far more revenue than exists, so platform revenue should never be summed.",
+      },
+      {
+        q: "Which revenue number should I trust?",
+        a: "Your store's actual transactions, the money that reached your bank. Treat every other figure, from analytics or ad platforms, as an estimate of what caused that revenue rather than a count of the revenue itself.",
+      },
+      {
+        q: "What is revenue attribution?",
+        a: "It's the work of assigning revenue to the marketing that caused it. It isn't a clean factual count but a series of judgment calls: which touch counts, whose tracking fired, which time window applies, and which platform gets to claim the sale. Every tool makes those calls differently, which is why their numbers never match.",
+      },
+      {
+        q: "Can I fix data discrepancies by changing my settings?",
+        a: "No. The tools apply different rules to different slices of a customer who moved across all of them, so the gaps are structural rather than a setup error. The practical fix is to anchor on real revenue and use a single view of each customer underneath your tools, rather than trying to make the dashboards agree.",
+      },
+    ],
+    relatedSlugs: ["how-to-calculate-roas", "what-is-incrementality", "signal-loss-marketing-data", "why-your-marketing-reports-never-agree"],
+  },
+  {
+    slug: "how-to-calculate-roas",
+    title: "How to calculate ROAS — and why the number can still lie to you",
+    metaTitle: "How to Calculate ROAS (and What's Good)",
+    category: "Attribution Fundamentals",
+    date: "Oct 23, 2026",
+    publishAt: "2026-10-23T07:00:00-04:00",
+    excerpt:
+      "ROAS is ad revenue divided by ad spend. The math is honest; the inputs usually aren't. How to calculate it, what a good ROAS is, and how not to get fooled.",
+    image: "/images/adNetworkWallpaper.png",
+    body: `ROAS is the metric most businesses live and die by, and it's genuinely simple to calculate. It's also one of the easiest numbers to be misled by, because the formula is honest while the inputs usually aren't. Let's do both halves: how to calculate it correctly, and how to read it without getting fooled.
+
+## The formula
+
+**ROAS = Revenue from ads ÷ Ad spend.** That's it. Spend $1,000, make $4,000 from those ads, your ROAS is 4 (often written 4x or 400%). Every dollar spent returned four.
+
+A quick cousin you'll hear alongside it: what counts as a "good" ROAS depends entirely on your margins. A business with 80% margins can thrive at 2x. A business with thin margins might need 5x just to break even after the cost of the product itself. There's no universal "good" number — there's only good for your economics. Anyone quoting a magic ROAS target without knowing your margins is guessing.
+
+## Where the number starts lying: the revenue input
+
+The formula is clean. The word "revenue" in it is not. Because the revenue figure almost always comes from the ad platform itself — and the platform counts revenue generously, using its own conversions, its own attribution window, and its own habit of claiming sales it merely touched rather than caused.
+
+So when Meta reports a 4x ROAS, it's dividing Meta's self-counted revenue by your spend. That revenue includes sales that would have happened anyway, sales another channel actually closed, and the same customer counted more than once. The division is correct. The numerator is inflated. A correct formula on an inflated input gives you a confident, wrong answer.
+
+## Platform ROAS vs. blended ROAS
+
+**Platform ROAS** is what each dashboard reports for itself — Meta's ROAS, Google's ROAS — each using its own flattering count. **Blended ROAS** is your total real revenue divided by your total ad spend across everything. It can't double-count, because it starts from the actual money you made.
+
+The two diverge hard. Add up every platform's claimed ROAS and you'll "prove" you made more than your store actually took in — the same double-counting that makes [your dashboards disagree](/for-people/education/marketing-data-discrepancies) in the first place. Blended ROAS is the honest ceiling: it can't claim revenue that doesn't exist. The tradeoff is that it can't tell you which channel did the work — only that, together, they returned this much. Most healthy measurement uses blended as the truth anchor and platform numbers as directional hints, never the reverse.
+
+## ROAS vs. CAC: two questions, not one
+
+ROAS and **CAC** (customer acquisition cost) get used interchangeably, but they answer different questions. ROAS asks "how much revenue did this spend return?" CAC asks "how much did it cost to acquire a customer?"
+
+The gap between them is where a lot of businesses fool themselves. A campaign can post a strong ROAS while quietly acquiring almost no new customers — because it's being credited with revenue from people who already knew you and would have bought regardless. High ROAS, high hidden CAC for actual new customers. If you only watch ROAS, you can pour budget into a channel that's efficiently re-selling to people you already had.
+
+## The limit ROAS can't cross
+
+Here's the honest ceiling on the whole metric: ROAS, even calculated perfectly on blended numbers, tells you the ratio of revenue to spend. It does not tell you what would have happened without the spend. A channel showing 3x might be genuinely creating that revenue — or mostly harvesting demand that already existed and would have converted anyway.
+
+Separating "revenue that happened alongside the ads" from "revenue the ads actually caused" is a different measurement entirely, called incrementality — and it's the question ROAS was never built to answer. (We cover that in its own piece.) For now, the useful discipline is simpler: calculate ROAS on blended, real revenue; read it as directional; and never let a platform's self-graded number set your budget on its own. For the wider picture of why these numbers conflict across your tools, see [our guide to why your marketing tools never report the same revenue](/for-people/education/marketing-data-discrepancies).
+
+## The short version
+
+- **Calculate it right:** revenue from ads ÷ ad spend. "Good" depends on your margins, not a universal target.
+- **Distrust the numerator:** platform-reported revenue is inflated by design.
+- **Anchor on blended:** total real revenue ÷ total spend can't double-count.
+- **Watch CAC alongside it:** strong ROAS can hide weak new-customer acquisition.
+
+Every one of those problems traces back to the same root: the revenue in your ROAS was counted by tools that each see only their slice of the customer. Resolve the customer to one identity first — which is what [Chapter](https://chapter.ads4good.com/) does — and ROAS finally gets a numerator you can trust.`,
+    faqs: [
+      {
+        q: "How do you calculate ROAS?",
+        a: "Divide the revenue from your ads by what you spent on them. Spend $1,000 and make $4,000 from those ads and your ROAS is 4, often written 4x or 400%, meaning every dollar spent returned four.",
+      },
+      {
+        q: "What is a good ROAS?",
+        a: "It depends entirely on your margins. A business with 80% margins can do well at 2x, while a business with thin margins might need 5x just to break even after the cost of the product. There's no universal target, only what works for your economics.",
+      },
+      {
+        q: "Why is the ROAS in my ad platform higher than my real ROAS?",
+        a: "The platform calculates it from its own self-counted revenue, which includes sales that would have happened anyway, sales another channel actually closed, and customers counted more than once. The formula is right, but the revenue going into it is inflated.",
+      },
+      {
+        q: "What's the difference between platform ROAS and blended ROAS?",
+        a: "Platform ROAS is what each ad dashboard reports for itself using its own count. Blended ROAS is your total real revenue divided by your total ad spend across every channel. Blended can't double-count because it starts from the money you actually made, though it can't tell you which channel did the work.",
+      },
+      {
+        q: "What's the difference between ROAS and CAC?",
+        a: "ROAS measures how much revenue your ad spend returned. CAC measures what it cost to acquire a customer. A campaign can show strong ROAS while acquiring very few new customers, because it's credited with revenue from people who already knew you, so it's worth watching both.",
+      },
+    ],
+    relatedSlugs: ["marketing-data-discrepancies", "what-is-incrementality"],
+  },
+  {
+    slug: "what-is-incrementality",
+    title: "Incrementality: the one marketing question your dashboards can't answer",
+    metaTitle: "Incrementality in Marketing, Explained",
+    category: "Attribution Fundamentals",
+    date: "Oct 28, 2026",
+    publishAt: "2026-10-28T07:00:00-04:00",
+    excerpt:
+      "Dashboards show what happened. Incrementality asks what happened because of your marketing: what it means, how it differs from ROAS, and how it's measured.",
+    image: "/images/MarketingGuidebookWallpaper.png",
+    body: `Every metric in your ad account answers a version of "what happened?" Incrementality asks the harder question: "what happened *because of us* — and what would have happened anyway?" It's the most valuable question in marketing measurement, and the one your platforms are structurally worst at answering, because answering it honestly would usually make their numbers look smaller.
+
+## What incrementality actually means
+
+**Incrementality** is the share of your results that your marketing actually caused — the sales that would not have happened without it. The opposite of incremental is a sale you'd have made regardless: the loyal customer who was going to reorder, who clicked your retargeting ad on the way to checkout and let it take the credit.
+
+Here's the uncomfortable version. Retargeting ads famously post huge returns. But a large portion of the people they "convert" were already heading to buy — the ad just got in front of a decision that was already made. That doesn't mean retargeting is worthless. It means its reported ROAS and its incremental ROAS can be very different numbers, and only one of them should drive budget.
+
+## Why ROAS and incrementality aren't the same
+
+[ROAS](/for-people/education/how-to-calculate-roas) tells you the ratio of revenue to spend. It counts every sale the channel touched. Incrementality tells you how many of those sales the channel *added* — how many wouldn't exist otherwise. A channel can have a 5x ROAS and a 1.2x incremental return, because most of what it's credited with was going to happen anyway.
+
+This is the gap that quietly wastes budget. Teams scale the channel with the best ROAS, when the channel with the best incrementality — the one genuinely creating new demand — often looks worse on the dashboard precisely because it works upstream, early, before the last click that gets the credit.
+
+## How incrementality is really measured
+
+The honest answer: the gold standard is an experiment, not a report. You take a comparable group of people, deliberately withhold the marketing from some of them (a **holdout**, or control group), show it to the rest, and compare. The difference between the two groups — the lift the exposed group shows that the withheld group doesn't — is the incremental effect. That's a real, causal answer, and it's the only way to be truly certain.
+
+It's also genuinely hard to run well. You need enough volume, a clean control group that isn't contaminated, and the discipline to not market to a segment on purpose — which many teams are unwilling to do. That's why true holdout testing is rarer than the word "incrementality" being thrown around would suggest. When you can run one, it's the strongest evidence there is.
+
+## What you can learn without a full experiment
+
+Short of a randomized holdout, there's a spectrum of increasingly strong evidence you can build from your own data — and this is where most practical incrementality work actually lives:
+
+- **Observation:** compare journeys that included a channel against journeys that didn't. It's associational, not proof — the two groups differ in more ways than just the channel — but it's a real signal and a starting point.
+- **Correlation with matched audiences:** tighten the comparison to more similar groups, so you're comparing like with like as closely as your data allows. Stronger than raw observation, still short of a controlled experiment.
+- **Cross-channel impact:** look at how channels move together — whether a channel tends to appear before conversions on other channels (suggesting it lifts them), or performs on its own. This is how you catch the upstream channel that's quietly making everything else work.
+
+None of these are a substitute for a true holdout, and it's worth being honest about that distinction — anyone claiming certainty without a controlled test is overselling. But layered together, and read against real, deduplicated revenue rather than platform-inflated numbers, they get you a far more trustworthy picture than a raw ROAS column ever will.
+
+## The prerequisite nobody mentions
+
+Every method above — holdout included — depends on one thing being true first: you have to be able to see the whole journey, and count each person once. If your data counts the same customer as three people across three devices, your "with channel vs. without channel" comparison is already broken before you start, because you can't reliably tell which group anyone belongs to.
+
+This is why incrementality and [identity](/for-people/education/identity-resolution-explained) are the same project. You cannot measure what a channel added if you can't tell who was exposed to it. Resolving the customer to a single identity across every touch is the precondition for any honest incrementality work — not a nice-to-have alongside it.
+
+## How to think about it
+
+- **Separate the two numbers:** reported ROAS is what a channel touched; incremental return is what it added. Budget belongs to the second.
+- **Be suspicious of your best-looking channel:** high reported returns often mean it's harvesting existing demand, not creating it.
+- **Run a holdout when you can:** it's the only true proof, and it's worth the discomfort of withholding.
+- **When you can't, build layered evidence:** observation, matched comparison, and cross-channel patterns — read honestly as signal, not certainty.
+
+At [Chapter](https://chapter.ads4good.com/), incrementality is built on that identity-first foundation: because we resolve each customer to one journey across every touch, the comparisons — with a channel versus without it, matched audiences, cross-channel influence — run against a clean, deduplicated picture instead of a fragmented one. It's not a claim of certainty; it's a claim of honest, layered evidence measured against real revenue. For why your tools disagree in the first place, start with [the data-discrepancies guide](/for-people/education/marketing-data-discrepancies).`,
+    faqs: [
+      {
+        q: "What is incrementality in marketing?",
+        a: "It's the share of your results that your marketing actually caused, meaning the sales that would not have happened without it. A sale you'd have made anyway, such as a loyal customer reordering who happened to click an ad on the way, isn't incremental.",
+      },
+      {
+        q: "How is incrementality different from ROAS?",
+        a: "ROAS counts every sale a channel touched and divides by spend. Incrementality counts only the sales the channel added. A channel can show a 5x ROAS but a 1.2x incremental return because most of what it's credited with would have happened anyway.",
+      },
+      {
+        q: "How do you measure incrementality?",
+        a: "The gold standard is a holdout test: withhold the marketing from a comparable group, show it to everyone else, and compare the two. The lift the exposed group shows over the held-out group is the incremental effect, and it's the only way to be truly certain.",
+      },
+      {
+        q: "Can I measure incrementality without a holdout test?",
+        a: "You can build useful evidence from your own data by comparing journeys with and without a channel, tightening that to matched audiences, and looking at how channels influence each other. These are signals rather than proof, so they should be read as evidence, not certainty.",
+      },
+      {
+        q: "Is retargeting incremental?",
+        a: "Often less than its reported numbers suggest. Retargeting tends to post strong returns, but many of the people it reaches were already on their way to buy. That doesn't make it worthless; it means its reported and incremental returns can be very different, and budget should follow the incremental one.",
+      },
+    ],
+    relatedSlugs: ["marketing-data-discrepancies", "how-to-calculate-roas", "identity-resolution-explained"],
+  },
+  {
+    slug: "signal-loss-marketing-data",
+    title: "Why your marketing data keeps getting worse (and it's not your fault)",
+    metaTitle: "Signal Loss: Why Marketing Data Got Worse",
+    category: "Attribution Fundamentals",
+    date: "Nov 3, 2026",
+    publishAt: "2026-11-03T07:00:00-05:00",
+    excerpt:
+      "More unattributed sales, platforms drifting apart, performance falling while sales hold. How iOS privacy and cookie loss degraded your data, and what to do.",
+    image: "/images/PrivacyProtectionWallpaper.png",
+    body: `If it feels like your tracking has quietly gotten less reliable over the last few years — more "unattributed" traffic, more sales that appear from nowhere, platforms that used to agree now drifting apart — you're not imagining it. The raw signal underneath all marketing measurement has been degrading, on purpose, for years. Understanding why is the difference between blaming your setup and adapting to a changed world.
+
+## The old way tracking worked (and why it was fragile)
+
+For most of the last two decades, marketing measurement leaned on a simple, invisible mechanism: the **third-party cookie**. A little file that let advertisers recognize the same person across different websites — see them on a news site, recognize them on your store, connect the ad to the sale. The entire ad-tracking economy was built on it.
+
+It worked because it was silent and universal. It was also, in hindsight, a privacy problem hiding in plain sight: strangers' movements across the web, tracked and stitched by companies they'd never heard of. That was never going to last.
+
+## iOS privacy: the moment the ground shifted
+
+The first big crack was Apple. When iOS started asking users a simple question — essentially, "do you want this app to track you?" — the overwhelming majority said no. Overnight, a huge share of mobile users became invisible to the tracking that ad platforms depended on.
+
+This is why so many advertisers watched their reported performance drop around that time even though their actual sales hadn't changed. The sales were still happening. The ability to see and attribute them wasn't. Platforms started estimating and modeling the gaps — filling in with math what they could no longer observe — which is a polite way of saying the numbers got fuzzier.
+
+## Cookie loss: the slower, bigger wave
+
+Apple's change was sudden. The death of the third-party cookie has been slower but broader. Browsers have been phasing out third-party cookies, privacy regulations have tightened what you're allowed to collect, and users have grown quicker to reject tracking outright.
+
+Each of these chips away at the same thing: the ability to recognize a person as they move across the web. Every rejected cookie, every privacy setting, every blocked tracker is one more place where a customer's journey goes dark in the middle. You see them arrive, then lose them, then maybe see a sale later with no idea how it connected.
+
+## What "signal degradation" actually means for you
+
+**Signal degradation** is the industry's term for all of this at once: the steady erosion of the data marketing runs on. In practical terms, it shows up as:
+
+- **More "unattributed" or "direct" traffic** — sales you can't trace to a source, because the source got lost along the way.
+- **Platforms disagreeing more than they used to** — as each one models the gaps differently, their estimates drift further apart.
+- **Reported performance dropping without real performance dropping** — the sales are there; the visibility isn't.
+- **More guesswork dressed as data** — modeled conversions presented with the same confidence as observed ones.
+
+## The business implication nobody says out loud
+
+Here's the uncomfortable part. As observed signal degrades, platforms fill the gap with modeling — and they model in the direction that flatters them. The less a platform can actually see, the more it's estimating, and the more its estimates conveniently support spending more with that platform. Degraded signal doesn't just make measurement harder; it quietly shifts power to the platforms that get to invent the missing numbers.
+
+For a business, that means the era of trusting a platform's dashboard at face value is over — not because the platforms are villains, but because they're increasingly reporting estimates, about a world they can see less and less of, with an interest in what the estimate says.
+
+## The way through: own the signal you're allowed to keep
+
+The response to a degrading third-party world is to lean on **first-party data** — the information a customer shares directly with you, on your own site, with your own relationship. That signal doesn't degrade the same way, because it doesn't depend on tracking strangers across the web. It depends on recognizing your own customers, on your own property, with their consent.
+
+This is the shift underneath everything: from renting visibility through third-party trackers you don't control, to building it from first-party identity you do. It's also why the tools that survive this era are the ones designed for it from the start, rather than patching cookie-based systems after the fact. Resolving your own customers to a durable, consent-based identity — which is what [Chapter](https://chapter.ads4good.com/) is built to do — is how you keep a clear picture of the journey while the third-party signal around it keeps fading. For how this connects to the wider mess of disagreeing tools, see [our guide to marketing data discrepancies](/for-people/education/marketing-data-discrepancies).`,
+    faqs: [
+      {
+        q: "What is signal loss in marketing?",
+        a: "Signal loss, or signal degradation, is the steady erosion of the data marketing measurement runs on. Privacy changes, the phase-out of third-party cookies, and users rejecting tracking all mean fewer customer journeys can be seen and connected from first touch to sale.",
+      },
+      {
+        q: "Why did my ad performance drop after the iOS privacy changes?",
+        a: "Often your actual sales didn't change; your ability to see them did. When iOS began asking users whether apps could track them, most said no, so a large share of mobile users became invisible to ad platforms. Before cutting a channel, check whether sales fell or only your view of them.",
+      },
+      {
+        q: "Why is so much of my traffic showing as direct or unattributed?",
+        a: "Because the source got lost along the way. Rejected cookies, privacy settings, and blocked trackers create gaps in the middle of a customer's journey, so a sale arrives without a traceable origin and lands in the direct or unattributed bucket.",
+      },
+      {
+        q: "What are modeled conversions?",
+        a: "They're estimates ad platforms use to fill in conversions they can no longer observe directly. They're often presented with the same confidence as observed conversions, and because the platform does the estimating, they tend to support spending more with that platform.",
+      },
+      {
+        q: "How do I deal with signal loss?",
+        a: "Lean on first-party data, the information customers share with you directly on your own site with their consent. It doesn't depend on tracking people across the web, so it doesn't degrade the same way, and resolving your own customers to a durable identity keeps the journey visible as third-party signal fades.",
+      },
+    ],
+    relatedSlugs: ["marketing-data-discrepancies", "how-to-calculate-roas", "what-is-incrementality"],
+  },
+  {
     slug: "how-ads-track-you",
     title: "How ads follow you around the internet (explained by people who run them)",
     metaTitle: "How Ads Track You Across the Internet",
