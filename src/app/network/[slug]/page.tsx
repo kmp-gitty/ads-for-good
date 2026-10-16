@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 type SatellitePage = {
@@ -223,6 +224,47 @@ const SATELLITE_PAGES: Record<string, SatellitePage> = {
       },
 //Copy above and paste below for new satellite sites
 };
+
+// Plain-text <title> + meta description per satellite page. Kept separate from
+// SATELLITE_PAGES because those descriptions are JSX, not strings.
+const SATELLITE_META: Record<string, { title: string; description: string }> = {
+  steps2miles: {
+    title: "Steps2Miles: Free Steps to Miles Calculator",
+    description:
+      "Steps2Miles is a free ads for Good calculator that converts steps to miles several ways, plus kilometers, meters and yards, with step-length guidance.",
+  },
+  splitbillsfairly: {
+    title: "Split Bills Fairly: Free Bill Splitting Calculator",
+    description:
+      "Split Bills Fairly is a free ads for Good calculator for group bills, split evenly or itemized by who had what. Built for restaurants, trips and roommates.",
+  },
+  calculateovertimepay: {
+    title: "Overtime Pay Calculator: Free OT Calculator",
+    description:
+      "A free ads for Good calculator for hourly rate, overtime, normal and total pay in six currencies, with a guide to the US FLSA and other countries' OT laws.",
+  },
+  utilitycommons: {
+    title: "Utility Commons: Free Calculators and Conversions",
+    description:
+      "Utility Commons is a free ads for Good collection of calculators, conversions, reference charts and quizzes that answer everyday questions fast.",
+  },
+};
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug: rawSlug } = await params;
+  const slug = decodeURIComponent(rawSlug).trim().toLowerCase();
+  const meta = SATELLITE_META[slug];
+  if (!meta) return { title: "Site not found | ads for Good", robots: { index: false } };
+  return {
+    title: `${meta.title} | ads for Good`,
+    description: meta.description,
+    alternates: { canonical: `https://www.ads4good.com/network/${slug}` },
+  };
+}
 
 export default async function NetworkDetailPage({
   params,
