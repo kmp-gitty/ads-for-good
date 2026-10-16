@@ -39,6 +39,160 @@ export function postImage(post: Post): string {
 
 export const POSTS: Post[] = [
   {
+    slug: "how-ads-track-you",
+    title: "How ads follow you around the internet (explained by people who run them)",
+    metaTitle: "How Ads Track You Across the Internet",
+    category: "Data & Tracking",
+    date: "Oct 16, 2026",
+    excerpt:
+      "You looked at a pair of shoes once, and now they follow you everywhere. Retargeting, cookies and cross-site tracking explained plainly by people who run ads, without the spooky mythology.",
+    image: "/images/adNetworkWallpaper.png",
+    body: `You looked at a pair of shoes once. Now they're following you across every website, into your Instagram feed, onto news sites that have nothing to do with shoes. It feels a little like being watched — and a lot like your phone is listening to you. We work in advertising, and we're going to tell you exactly how this actually works, minus the spooky mythology. The real explanation is less sinister than "your phone is eavesdropping" and, honestly, a bit more interesting.
+
+## What actually happens when you click an ad (or even just visit a site)
+
+Here's the thing most people don't realize: you don't have to click anything for tracking to start. The moment you land on most websites, small pieces of code quietly note that you were there. If you click an ad, even more gets recorded — which ad, from which platform, what you looked at, whether you bought.
+
+None of this involves anyone watching you personally. It's automated. A tag on the page fires and files away "this browser looked at these shoes." That record is what makes everything that follows possible. No human is looking at you; a system is filing you.
+
+## Retargeting: why the shoes follow you
+
+The shoes chasing you across the internet have a name: **retargeting**. It's one of the most common advertising tactics there is, and once you understand it, it stops feeling magic.
+
+When you visited that shoe page, the site tagged your browser as "looked at shoes, didn't buy." Advertisers can then pay to show ads specifically to browsers carrying that tag. So as you move around to other sites that sell ad space, the system recognizes the tag and serves you — you guessed it — shoes. You're not being followed by a person. You're carrying a label, and advertisers are paying to show ads to everyone wearing that particular label. It feels personal. It's actually a category you got sorted into.
+
+## Cookies vs. device tracking: the two ways you get recognized
+
+For any of this to work, something has to recognize you as the same visitor across different sites. Historically, that was mostly done with **cookies** — small files a website stores in your browser. A cookie is like a coat-check ticket: the site hands your browser a tag so it can recognize you when you come back, or so partner sites can recognize the tag too.
+
+There's also **device-level tracking**, which identifies your specific phone or computer through characteristics of the device itself, rather than a file it stored. The distinction matters because cookies are easy to clear and increasingly blocked, while device signals are stickier. Both are just methods of answering the same question: "have we seen this visitor before?" When you clear your cookies and the ads briefly stop, then slowly return, you're watching one method get reset while others quietly re-recognize you.
+
+## Cross-site tracking: how they connect the dots between sites
+
+The piece that makes it feel omnipresent is **cross-site tracking** — the ability to recognize you as you move from one unrelated website to another. This is what lets a shoe you viewed on one store appear as an ad on a completely different news site.
+
+It works because many different websites use the same handful of big advertising networks. When lots of sites all embed the same network's code, that network can recognize your tag across all of them — stitching together a picture of where you've been from sites that otherwise have nothing to do with each other. That shared infrastructure is why it feels like "the internet" is tracking you, when really it's a few large networks whose code happens to be nearly everywhere.
+
+## "But my phone is definitely listening to me"
+
+We have to address this, because almost everyone believes it. You mention a product out loud, and an ad for it appears. Proof the microphone is spying, right?
+
+Almost certainly not. What's actually happening is usually more mundane and more impressive: the tracking we just described is so good at predicting what you're interested in — based on what you browsed, what people near you browsed, what someone with your patterns tends to want — that it can surface an ad for something you were only thinking or talking about. You didn't need to be overheard. Your behavior already gave you away. The coincidence feels like eavesdropping; it's usually just prediction that got uncomfortably accurate. (We dig into [the phone-listening myth](/for-people/education/is-my-phone-listening-to-me) in detail in its own piece.)
+
+## The honest summary
+
+None of this is a person watching you. It's automated systems that tag your browser or device, recognize those tags across many sites through shared ad networks, and use the resulting picture to show you ads for things you're likely to want. It's less creepy than eavesdropping and, in a way, more so — because no one had to listen. Your clicks said enough.
+
+If you'd rather not carry so many tags, the practical levers are real:
+
+- Clear cookies regularly.
+- Use browser privacy settings and tracker blockers.
+- Turn off ad personalization in your Google and social accounts.
+- Say no to non-essential cookies when sites ask.
+
+None of it makes you invisible, but all of it makes you harder to follow.
+
+*A note on us: we run ads for a living, which is exactly why we'd rather you understand how this works than be spooked by it. Advertising works better for everyone when it's honest about what it's doing.*`,
+    faqs: [
+      {
+        q: "Why do ads follow me around the internet?",
+        a: "It's called retargeting. When you look at a product, the site tags your browser as having viewed it without buying. Advertisers then pay to show ads to every browser carrying that tag, so the product appears on other sites you visit. You're not being followed by a person; you've been sorted into a category, and the category gets the ad.",
+      },
+      {
+        q: "Do I have to click an ad to be tracked?",
+        a: "No. Tracking usually starts the moment you land on a website, when small pieces of code note that your browser was there. Clicking an ad records more, such as which ad and platform it was and whether you bought, but simply visiting is enough to be tagged.",
+      },
+      {
+        q: "What's the difference between cookies and device tracking?",
+        a: "A cookie is a small file a website stores in your browser, like a coat-check ticket that lets it recognize you later. Device tracking identifies your phone or computer from characteristics of the device itself. Cookies are easy to clear and increasingly blocked; device signals are stickier. Both answer the same question: have we seen this visitor before?",
+      },
+      {
+        q: "What is cross-site tracking?",
+        a: "It's the ability to recognize you as you move between unrelated websites. It works because many sites embed code from the same handful of large ad networks, so those networks can recognize your tag across all of them. That's why a product you viewed on one store can show up as an ad on a news site.",
+      },
+      {
+        q: "How can I reduce how much ads track me?",
+        a: "Clear your cookies regularly, turn on browser privacy settings and tracker blockers, switch off ad personalization in your Google and social accounts, and decline non-essential cookies when sites ask. None of it makes you invisible, but all of it makes you harder to follow.",
+      },
+    ],
+    relatedSlugs: ["is-my-phone-listening-to-me"],
+  },
+  {
+    slug: "is-my-phone-listening-to-me",
+    title: "Is your phone actually listening to you? (An honest answer from ad people)",
+    metaTitle: "Is My Phone Listening to Me?",
+    category: "Data & Tracking",
+    date: "Oct 16, 2026",
+    excerpt:
+      "You talk about something and an ad for it appears the next day. Ad people give the straight answer on whether your phone is listening, what companies actually collect, and what they genuinely don't know.",
+    image: "/images/PrivacyProtectionWallpaper.png",
+    body: `Let's settle the question everyone has quietly wondered about. You talk about something you've never searched for — a specific vacation spot, a random product — and within a day, there's an ad for it. It really does feel like your phone heard you. We work in advertising, so we know exactly how the machinery works, and we're going to give you the straight answer: almost certainly, your phone is not listening. The truth is less creepy in one way and much more so in another.
+
+## The short answer
+
+Your phone is almost certainly not secretly recording your conversations to serve you ads. Constantly processing everyone's audio would be enormously expensive, technically messy, wildly illegal in most places, and — this is the key part — completely unnecessary. Advertisers don't need to hear you, because what they can already see about your behavior predicts your interests well enough without it. The microphone theory survives because the real explanation is actually harder to believe.
+
+## What companies actually collect
+
+Here's what's really being gathered, none of which requires a microphone. Which websites you visit and how long you stay. What you search for. What you buy, and what you almost bought. Your approximate location, from your phone and your network. What apps you use. And critically, patterns from people similar to you — same neighborhood, same age range, same browsing habits.
+
+That last one is the secret ingredient. Companies don't just know what you did; they know what people like you tend to do next. So if thousands of people who behave like you started searching for a specific vacation spot last week, the system can guess you might be interested too — before you've searched for anything. It's not reading your mind or your microphone. It's reading the crowd you belong to.
+
+## Why the "listening" coincidences happen
+
+So why the eerie moments? A few honest reasons. Sometimes you searched or browsed something related and forgot. Sometimes a person you're near — who shares your network or location — searched for it, and you got swept into the same targeting. Sometimes you were shown the ad many times before and only consciously noticed it after you talked about it. And sometimes the prediction is just that good: your behavior signaled the interest before you said it out loud.
+
+Notice that none of these require audio. They're all the ordinary result of very sophisticated behavioral prediction — which, when it lands, feels exactly like being overheard. The feeling is real. The eavesdropping usually isn't. (For the mechanics behind it, see [how ads follow you around the internet](/for-people/education/how-ads-track-you).)
+
+## What companies genuinely DON'T know
+
+The mythology cuts both ways. People imagine companies know everything, and they don't. Most advertisers don't know your name attached to your browsing — a lot of tracking is tied to anonymous browser tags, not your identity. They generally don't have the content of your private messages or calls. They don't have a single all-seeing profile; the picture is usually fragmented across many companies that don't share as much as you'd fear. The reality is messier and more piecemeal than the all-knowing-eye image suggests. It's powerful in aggregate and surprisingly blind in specifics.
+
+## First-party vs. third-party data: who knows what
+
+To understand who actually knows what about you, it helps to know two terms. **First-party data** is information a company collects directly from you, through your own relationship with them — the store you bought from knows what you bought. That's generally the least creepy kind, because you had a direct relationship and often knew you were sharing it.
+
+**Third-party data** is information collected about you by companies you've never directly interacted with — data brokers and ad networks that gather signals across many sites and package them up. This is the kind that powers the "how did they know?" moments, because it's assembled from places you didn't realize were connected, by companies whose names you'll never see. The whole industry has been shifting away from third-party data (the creepy, brokered kind) toward first-party data (the direct kind) — partly because of privacy laws, partly because people got uncomfortable, and partly because the third-party signals are simply degrading as browsers and phones clamp down.
+
+## The honest bottom line
+
+Your phone almost certainly isn't listening. What's actually happening is that your behavior — and the behavior of people like you — predicts your interests well enough that audio would be redundant. That's less invasive than eavesdropping in one sense (nobody's recording your conversations) and more in another (you revealed it without saying a word).
+
+If it bothers you, the levers are real and worth using:
+
+- Turn off ad personalization in your Google, Apple, and social accounts.
+- Deny apps microphone and location access they don't need.
+- Clear cookies and use tracker-blocking browser settings.
+- Decline non-essential cookies.
+
+You won't disappear, but you'll hand over a lot less — and you'll never have to wonder about the microphone again.
+
+*Why are ad people telling you this? Because we think advertising should be honest about how it works. The spooky mythology helps no one, and understanding the real mechanics puts the control back with you.*`,
+    faqs: [
+      {
+        q: "Is my phone listening to me to show me ads?",
+        a: "Almost certainly not. Constantly recording and processing everyone's audio would be enormously expensive, technically messy, illegal in most places, and unnecessary. What advertisers can already see about your behavior predicts your interests well enough that a microphone would add nothing.",
+      },
+      {
+        q: "Then why do I see ads for things I only talked about?",
+        a: "Usually for ordinary reasons: you searched or browsed something related and forgot, someone on your network or nearby searched for it, you'd seen the ad before and only noticed it after the conversation, or your behavior predicted the interest before you said it out loud. None of these need audio.",
+      },
+      {
+        q: "What data do companies actually collect about me?",
+        a: "Typically the sites you visit and how long you stay, what you search for, what you buy and almost buy, your approximate location, the apps you use, and patterns from people similar to you. That last one matters most: companies know what people like you tend to do next.",
+      },
+      {
+        q: "What's the difference between first-party and third-party data?",
+        a: "First-party data is collected directly by a company you have a relationship with, like the store you bought from knowing what you bought. Third-party data is gathered about you by companies you've never dealt with, such as data brokers and ad networks, and it powers most of the 'how did they know?' moments. The industry is shifting away from third-party data.",
+      },
+      {
+        q: "How do I stop my phone from sharing so much with advertisers?",
+        a: "Turn off ad personalization in your Google, Apple, and social accounts, deny apps microphone and location access they don't need, clear cookies and use tracker-blocking browser settings, and decline non-essential cookies. You won't disappear, but you'll hand over far less.",
+      },
+    ],
+    relatedSlugs: ["how-ads-track-you"],
+  },
+  {
     slug: "identity-resolution-explained",
     title: "Identity resolution: how one customer stops looking like five",
     metaTitle: "Identity Resolution, Explained",
