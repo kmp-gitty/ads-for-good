@@ -39,6 +39,217 @@ export function postImage(post: Post): string {
 
 export const POSTS: Post[] = [
   {
+    slug: "pixel-tracking-explained",
+    title: "Pixel tracking, explained: how your marketing actually gets measured",
+    metaTitle: "Pixel Tracking, Explained (Client vs. Server)",
+    category: "Data & Tracking",
+    date: "Dec 30, 2026",
+    publishAt: "2026-12-30T07:00:00-05:00",
+    excerpt:
+      "Every conversion in your ad account is counted by a tracking pixel. What pixels do, client-side vs. server-side tracking, event tracking, and why it breaks.",
+    image: "/images/DigitalAuditWallpaper.png",
+    body: `Behind every "conversion" number in your ad account is a small piece of invisible plumbing doing the counting. Most marketers use it every day without knowing how it works — which is fine, until it breaks and the numbers stop making sense. Here's what a tracking pixel actually does, the two ways tracking can happen, and why it fails more often than anyone admits.
+
+## What a tracking pixel actually does
+
+A **tracking pixel** is a tiny snippet of code you place on your website. When someone loads a page, the pixel quietly fires and reports back to a platform — Meta, Google, whoever — that a specific thing happened: a page was viewed, a product was added to cart, a purchase completed. It's called a "pixel" because the original version was a literal 1×1 transparent image, so small it was invisible; loading that image is what sent the signal. Modern versions do far more, but the job is the same: notice an action, and tell a platform about it.
+
+That's the entire foundation of ad measurement. When Meta says your campaign drove 40 purchases, it's because the pixel on your confirmation page fired 40 times and reported back. No pixel, no data — the platform is blind to what happens on your site.
+
+## Client-side vs. server-side: two ways to send the signal
+
+**Client-side tracking** is the classic pixel: the code runs in the visitor's browser and sends the signal from there. It's easy to set up, but it's fragile, because it depends on the visitor's browser cooperating — and browsers increasingly don't. Ad blockers, privacy settings, cookie rejections, and slow-loading pages all stop client-side pixels from firing. Every one that doesn't fire is a sale the platform never hears about.
+
+**Server-side tracking** moves the signal out of the browser. Instead of the visitor's browser reporting the event, your server reports it directly to the platform — often via something like a conversions API. Because it doesn't depend on the browser behaving, it's far more reliable and much harder to block. It's more work to set up, but it recovers a lot of the data that client-side tracking quietly loses.
+
+The short version: client-side is easy and leaky; server-side is sturdier and more work. Increasingly, serious setups use both — server-side as the reliable backbone, client-side for the richer browser-level detail — and then have to reconcile the two, which is its own challenge.
+
+## Event tracking: from "a page loaded" to "this specific thing happened"
+
+Early pixels just noted that a page was viewed. **Event tracking** is the upgrade: instead of only "someone was here," it captures what they did — added to cart, started checkout, watched a video, submitted a form. Each of these is an "event," a named action you've decided is worth recording.
+
+Good event tracking is what lets you move from "we got traffic" to "here's the path people took." Bad or inconsistent event tracking — events named differently across tools, or firing twice, or not at all — is one of the most common reasons two platforms report different numbers for the same store. If [your tools disagree](/for-people/education/marketing-data-discrepancies), mismatched event tracking is often hiding underneath.
+
+## Why tracking breaks (and it breaks a lot)
+
+Here's the part the setup guides gloss over: tracking fails constantly, and usually silently. The most common reasons:
+
+- **The browser blocked it.** Ad blockers and privacy settings stop client-side pixels before they fire.
+- **The page didn't finish loading.** Someone bounced before the confirmation page fully loaded, so the purchase event never fired.
+- **The pixel fired twice.** A misconfigured setup double-counts, inflating your numbers.
+- **Events are named inconsistently.** "Purchase" in one tool, "order_complete" in another — and now nothing reconciles.
+- **The identifier got lost.** The same person on a new device or after clearing cookies looks like a brand-new stranger, breaking the connection between touch and sale.
+
+The unsettling thing is that most of these failures are invisible. Your dashboard doesn't say "15% of your purchase events didn't fire." It just shows you a smaller, quietly wrong number, presented with total confidence.
+
+## What to do about it
+
+- **Assume some loss.** Client-side tracking always undercounts; the question is by how much.
+- **Move critical events server-side.** Purchases especially — you don't want your most important number depending on a browser cooperating.
+- **Standardize your event names.** Consistent naming across tools removes a huge source of disagreement.
+- **Watch for doubles.** Reported numbers higher than reality usually mean a pixel firing twice.
+
+But the deepest problem on that list is the last failure mode: the lost identifier. Even perfect pixels, firing reliably server-side, still count events, not people — so the same customer across two devices becomes two records, and the journey fractures. That's the layer [Chapter](https://chapter.ads4good.com/) is built for: taking reliable event tracking and [resolving it back to a single person](/for-people/education/identity-resolution-explained), so what your pixels capture becomes a real journey instead of a pile of disconnected events. Good tracking is the raw material. Identity is what turns it into truth.`,
+    faqs: [
+      {
+        q: "What is a tracking pixel?",
+        a: "A small snippet of code placed on your website that fires when someone loads a page and reports an action, such as a page view, add to cart, or purchase, back to a platform like Meta or Google. It's named after the original version, a 1×1 transparent image whose loading sent the signal.",
+      },
+      {
+        q: "What's the difference between client-side and server-side tracking?",
+        a: "Client-side tracking runs in the visitor's browser, so it's easy to set up but can be stopped by ad blockers, privacy settings, cookie rejections, and slow pages. Server-side tracking has your server report events directly to the platform, often through a conversions API, which is more reliable and harder to block but takes more work to set up.",
+      },
+      {
+        q: "What is event tracking?",
+        a: "Recording the specific actions people take on your site, such as adding to cart, starting checkout, watching a video, or submitting a form, rather than only noting that a page loaded. Each named action is an event, and consistent event tracking is what lets you see the path people took.",
+      },
+      {
+        q: "Why is my pixel tracking undercounting conversions?",
+        a: "Usually because the pixel didn't fire: a browser blocked it, the visitor left before the confirmation page finished loading, or a cookie was rejected. These failures are silent, so the dashboard simply shows a smaller number. Moving critical events like purchases server-side recovers much of the loss.",
+      },
+      {
+        q: "Why would my tracking report more conversions than I actually had?",
+        a: "The most common cause is a pixel firing twice because of a misconfigured setup, which double-counts events. If reported purchases are higher than your real orders, check for duplicate firing first.",
+      },
+    ],
+    relatedSlugs: ["paid-search-vs-paid-social", "data-silos-marketing", "first-party-click-tracking"],
+  },
+  {
+    slug: "paid-search-vs-paid-social",
+    title: "Paid search vs. paid social — and why every channel fights over the same sale",
+    metaTitle: "Paid Search vs. Paid Social: Who Gets Credit",
+    category: "Data & Tracking",
+    date: "Jan 13, 2027",
+    publishAt: "2027-01-13T07:00:00-05:00",
+    excerpt:
+      "Paid social creates demand; paid search captures it. Why judging them the same way misleads you, and how email, organic, and affiliates fight over each sale.",
+    image: "/images/ConsultingWallpaper.png",
+    body: `The two workhorses of most ad budgets are paid search and paid social, and they behave completely differently — different jobs, different moments in the journey, different ways of claiming credit. Understanding that difference is the first step. The second, harder step is seeing how every channel you run, these two included, ends up fighting over credit for the same customers. Let's do both.
+
+## Paid search vs. paid social: two different jobs
+
+**Paid social** — ads on Meta, TikTok, and the like — is mostly demand generation. People aren't searching for you; they're scrolling, and your ad interrupts them. It's how strangers first discover you. It works upstream, early in the journey, planting the interest.
+
+**Paid search** — ads on Google when someone types a query — is mostly demand capture. The person already has intent; they're actively looking. Search meets a customer who's already partway to buying.
+
+This difference is the root of a very common measurement mistake. Paid social starts journeys but rarely gets to be the last click, so last-click reporting makes it look weak. Paid search often gets the last click — but frequently for demand that paid social (or your brand, or an email) actually created. Judge them on the same last-click metric and you'll systematically overvalue capture and undervalue creation.
+
+## The overlap nobody accounts for: organic vs. paid
+
+Here's a discrepancy that quietly wastes money. When someone searches your brand name and clicks your paid ad — the ad sitting right above your own organic result — paid search takes the credit. But that customer was going to find you anyway; your organic listing was right there. You paid for a click you'd have gotten for free.
+
+The overlap runs the other way too: organic content and paid ads work on the same people, and both claim the conversions. Without a way to see the whole path, you can't tell which sales genuinely needed the paid click and which were organic wins wearing a paid costume. Most stores are paying some "brand tax" here without realizing it.
+
+## Email attribution: the credit that arrives late
+
+Email has the opposite problem from paid social: it's often the touch that quietly closes the sale, and it rarely gets full credit. Someone discovers you through an ad, joins your list, and buys three emails later. Last-click might hand the sale to whatever they clicked at the very end — or, if they typed your URL, to "direct" — while the email that actually did the persuading gets a footnote.
+
+Email is also where the same-person problem bites hardest. Your email tool knows the subscriber. Your analytics sees an anonymous session. Unless those two are [connected](/for-people/education/identity-resolution-explained), the email's role in the sale is invisible — not because it didn't matter, but because nothing linked the known subscriber to the anonymous buyer.
+
+## Affiliate attribution: the channel built to over-claim
+
+Affiliates get paid for conversions, which gives them every incentive to be the last click before a sale — and a lot of affiliate tactics exist precisely to slip into that last-click position, even for customers who were already going to buy. Coupon and loyalty sites are the classic example: someone's at checkout, searches for a discount code, clicks an affiliate link, and that affiliate collects a commission on a sale it did almost nothing to create.
+
+This isn't always fraud; it's often just last-click attribution rewarding whoever shows up last. But it means affiliate-reported conversions are among the most inflated numbers in marketing, and paying commissions on them is one of the easier ways to waste budget without noticing.
+
+## The pattern under all of it
+
+Paid social starts journeys and looks weak. Paid search captures demand others created. Organic and paid overlap and both claim it. Email closes quietly and goes uncredited. Affiliates engineer their way to the last click. Every one of these is the same underlying problem: each channel is judged on the credit it can grab, and the channels best at grabbing credit aren't always the ones doing the work.
+
+You can't fix that channel by channel, because the problem is the spaces between channels — the handoffs nobody owns. It only resolves when you can see one customer's whole path across every channel at once, and assign credit based on what actually moved them rather than who was standing closest to the sale. For the mechanics of how channels get tracked in the first place, see [our guide to tracking systems](/for-people/education/pixel-tracking-explained).
+
+Seeing that whole cross-channel path — and crediting the work, not the position — is exactly what [Chapter](https://chapter.ads4good.com/) is built to do.`,
+    faqs: [
+      {
+        q: "What's the difference between paid search and paid social?",
+        a: "Paid social, such as ads on Meta or TikTok, mostly creates demand by interrupting people who weren't looking for you. Paid search, such as Google ads, mostly captures demand from people already searching. They do opposite jobs at different points in the customer journey.",
+      },
+      {
+        q: "Why does paid social look weak in last-click reports?",
+        a: "Because it usually starts journeys rather than ending them. Last-click attribution gives the sale to the final touch, which is often paid search or email, even when paid social created the interest. Judging both channels on last click overvalues capture and undervalues creation.",
+      },
+      {
+        q: "Should I bid on my own brand name in paid search?",
+        a: "Check whether those clicks are genuinely needed. When someone searches your brand and clicks the paid ad above your own organic listing, paid search takes the credit for a customer who would likely have found you anyway. Many stores pay this kind of brand tax without realizing it.",
+      },
+      {
+        q: "Why doesn't email get credit for sales?",
+        a: "Email often closes a sale quietly, but last-click may hand the credit to whatever was clicked at the very end, or to direct if the customer typed your URL. And unless your email tool's known subscriber is connected to your analytics' anonymous session, email's role in the sale stays invisible.",
+      },
+      {
+        q: "Why are affiliate conversions often inflated?",
+        a: "Affiliates are paid for being the last click before a sale, so many tactics aim to land in that position, like coupon sites a shopper visits at checkout for a purchase they'd already decided on. It isn't always fraud; last-click attribution simply rewards whoever shows up last.",
+      },
+    ],
+    relatedSlugs: ["pixel-tracking-explained", "data-silos-marketing", "attribution-models-compared"],
+  },
+  {
+    slug: "data-silos-marketing",
+    title: "Data silos: why your marketing tools will never tell you the whole story",
+    metaTitle: "Data Silos: Why Marketing Tools Don't Connect",
+    category: "Data & Tracking",
+    date: "Jan 27, 2027",
+    publishAt: "2027-01-27T07:00:00-05:00",
+    excerpt:
+      "More data than ever, yet 'what drove that sale?' is harder to answer. How data silos and walled gardens fragment your data, and why integrations fall short.",
+    image: "/images/AskUsAnythingWallpaper.png",
+    body: `You have more marketing data than any business had a decade ago. Shopify, Meta, Google, your email platform, your CRM — each one overflowing with numbers. And yet the simplest question, "what actually drove that sale?", is somehow harder to answer than ever. The reason isn't a lack of data. It's that the data is trapped in silos, and the silos are that way by design.
+
+## What a data silo actually is
+
+A **data silo** is a store of information that's walled off from the rest of your tools — usable inside its own platform, but unable to connect to anything outside it. Your email platform knows everything about email behavior and nothing about what those subscribers did on your site. Your ad platform knows clicks and nothing about lifetime value. Each tool holds a rich, detailed picture of its own corner and is blind to every other corner.
+
+The result is that you don't have one view of your customer. You have five or ten partial views, none of which can see the others, and no way to lay them on top of each other to get the whole person. That fragmentation — the same customer scattered across tools that can't talk — is the quiet reason marketing measurement stays hard no matter how many dashboards you add.
+
+## Walled gardens: silos with a business model
+
+Some silos are accidental. The biggest ones are deliberate. A **walled garden** is a platform — Meta and Google are the definitive examples — that collects enormous amounts of data about your customers but only lets you see it in aggregate, inside their environment, on their terms. You can see that a campaign drove conversions. You generally can't export the person-level detail that would let you connect those conversions to what happened everywhere else.
+
+This is a feature, not an oversight. Walled gardens keep the data locked in because the lock is the point: if you can only measure Meta's impact inside Meta, using Meta's numbers, then Meta controls the story of its own value — and the story always seems to justify spending more. The walls aren't there to protect you. They're there to keep the most useful data where you can't independently check it.
+
+## Why your tools don't integrate (and "integrations" don't fix it)
+
+You'd think this would be solved by connecting the tools together, and every platform advertises "integrations." But most integrations are shallow: they pass a little summary data back and forth, not the full, person-level detail you'd need to actually reconstruct a customer's journey. They let two tools wave at each other; they don't merge what the tools know.
+
+There are real reasons for this beyond walled-garden self-interest: tools use different identifiers for the same person, different definitions for the same event, different time windows, different formats. Even when two systems are willing to share, making their data truly line up — same person, same event, same moment — is genuinely hard technical work. So "we integrate with X" usually means "we can pass a few fields to X," not "we give you one unified truth."
+
+## What fragmentation costs you
+
+- **Double-counting.** The same sale claimed by multiple tools, because none of them knows the others counted it.
+- **Invisible journeys.** A customer who moved across four platforms looks like four unrelated events — or four different people.
+- **Channel arguments you can't settle.** Every team points to its own tool's dashboard, and there's no shared source of truth to referee.
+- **Budget misallocation.** You fund the channels whose silos report the most flattering numbers, not the ones doing the most work.
+
+## The only real fix: a layer underneath the tools
+
+You can't win this by picking a better dashboard, because every dashboard is just another silo with a nicer chart. And you can't fully win it with integrations, because passing summaries between silos doesn't rebuild the customer. The only structural fix is a layer that sits underneath all your tools, pulls the fragments together, and resolves them to one customer — a single source of truth the individual platforms feed into, rather than compete to define.
+
+That layer is what [Chapter](https://chapter.ads4good.com/) is built to be: it takes the scattered signals from your walled gardens, your email tool, your store, and your CRM, resolves the same person across all of them, and gives you one journey instead of ten disconnected views. It doesn't replace your tools — it unifies what they each see. For how the underlying tracking that feeds these silos actually works, start with [our guide to tracking systems](/for-people/education/pixel-tracking-explained).`,
+    faqs: [
+      {
+        q: "What is a data silo in marketing?",
+        a: "A store of information walled off from your other tools: usable inside its own platform but unable to connect to anything outside it. Your email platform knows email behavior but not what subscribers did on your site; your ad platform knows clicks but not lifetime value.",
+      },
+      {
+        q: "What is a walled garden in advertising?",
+        a: "A platform, with Meta and Google as the main examples, that collects large amounts of data about your customers but only lets you see it in aggregate, inside its own environment. You can see that a campaign drove conversions but generally can't export the person-level detail needed to check that against everything else.",
+      },
+      {
+        q: "Why don't integrations fix data fragmentation?",
+        a: "Most integrations pass a little summary data between tools rather than the full person-level detail needed to rebuild a customer's journey. Tools also use different identifiers, event definitions, and time windows, so making their data truly line up is hard technical work.",
+      },
+      {
+        q: "What does fragmented marketing data cost a business?",
+        a: "Sales get double-counted across tools, customer journeys look like unrelated events or different people, teams argue from their own dashboards with no shared source of truth, and budget flows to the channels whose tools report the most flattering numbers.",
+      },
+      {
+        q: "How do you fix data silos?",
+        a: "Not with a better dashboard, which is just another silo. The structural fix is a layer underneath your tools that pulls the fragments together and resolves them to one customer, giving you a single source of truth the platforms feed into rather than compete to define.",
+      },
+    ],
+    relatedSlugs: ["pixel-tracking-explained", "paid-search-vs-paid-social", "marketing-data-discrepancies"],
+  },
+  {
     slug: "marketing-measurement-framework",
     title: "How to measure marketing properly: a plain-language framework",
     metaTitle: "Marketing Measurement: A Simple Framework",
