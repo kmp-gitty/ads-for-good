@@ -28,6 +28,7 @@ export default function SettingsClient({
   email,
   tools,
   planLabel,
+  canDelete,
 }: {
   clientKey: string;
   businessName: string;
@@ -36,6 +37,7 @@ export default function SettingsClient({
   email: string;
   tools: string[];
   planLabel: string;
+  canDelete: boolean;
 }) {
   const [businessName, setBusinessName] = useState(initialBusiness);
   const [fullName, setFullName] = useState(initialName);
@@ -104,7 +106,9 @@ export default function SettingsClient({
         </div>
       </div>
 
-      <DangerZone businessName={initialBusiness || clientKey} />
+      {/* Self-serve signups only — operator-managed clients are offboarded by
+          the operator. The server action enforces the same rule. */}
+      {canDelete && <DangerZone businessName={initialBusiness || clientKey} />}
     </div>
   );
 }

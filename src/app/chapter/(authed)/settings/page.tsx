@@ -50,6 +50,7 @@ export default async function SettingsPage({
       email={user?.email || ""}
       tools={tools}
       planLabel={planLabel}
+      canDelete={!!ent?.self_serve}
     />
   );
 }

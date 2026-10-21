@@ -25,7 +25,14 @@ async function selfServeTenant() {
   const user = await getCurrentChapterUser();
   if (!user || !user.client_key) return { ok: false as const, error: "Not authorized." };
   const ent = await getClientEntitlement(user.client_key);
-  if (!ent || !(ent.self_serve || !ent.tools_enabled.includes("chapter"))) {
+  // ⚠️ SELF-SERVE SIGNUPS ONLY. This used to also admit any tools-only workspace
+  //    (tools_enabled without "chapter"), which meant switching an OPERATOR-managed
+  //    client into the Smart Links view — done for acj_today, 2026-10-21 — handed
+  //    every one of its users a delete button. purge-deleted-accounts erases on
+  //    deletion_requested_at alone and does not check self_serve, so one click
+  //    would have irreversibly purged an operator client's entire history.
+  //    Operator clients are offboarded by the operator, never from inside the app.
+  if (!ent || !ent.self_serve) {
     return { ok: false as const, error: "This action isn’t available on this workspace." };
   }
   return { ok: true as const, user, ent, clientKey: user.client_key };
