@@ -20,6 +20,7 @@ import {
   getCurrentChapterUserOrLegacy,
   canAccessClient,
   getClientEntitlement,
+  clearClientEntitlementCache,
 } from "@/app/lib/auth/chapter-user";
 
 export type LinksAccess =
@@ -38,6 +39,9 @@ export async function authorizeLinksClient(clientKey: string): Promise<LinksAcce
   if (user.role === "chapter_staff") return { ok: true, staff: true, email: user.email ?? null };
 
   if (!(await canAccessClient(user, key))) return { ok: false, error: DENIED };
+  // Fresh read: switching the tool off must take effect immediately, not
+  // after each instance's 5-minute entitlement cache expires.
+  clearClientEntitlementCache(key);
   const ent = await getClientEntitlement(key);
   if (!ent || !ent.tools_enabled.includes("chapter_links")) return { ok: false, error: DENIED };
 
