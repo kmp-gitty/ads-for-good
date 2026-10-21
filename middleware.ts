@@ -7,6 +7,7 @@ import {
   canAccessGlobal,
   listAccessibleClientKeys,
   defaultLandingSlug,
+  getClientEntitlement,
 } from "./src/app/lib/auth/chapter-user";
 import { isPrimaryHost, brandedClientKey } from "./src/app/lib/redirect/branded-host";
 
@@ -255,9 +256,19 @@ async function gateChapter(req: NextRequest) {
     // under /chapter/* until Chapter is provisioned for them — the analytics
     // shell would render empty. Send them to their portal instead. Scoped to
     // client_employee on purpose: chapter_staff keep full /chapter/* access.
+    //
+    // ...unless the tenant has been given a tool to use here. acj_today was
+    // switched to the Smart Links view on 2026-10-21 (tools_enabled =
+    // {smart_links}); bouncing on the portal mapping alone sent its users to
+    // the bulletin board instead. "chapter" on its own still bounces, because
+    // the analytics shell is what renders empty for a links-only client.
+    // Only reached for portal tenants, so the extra (cached) lookup costs
+    // nothing for anyone else. Fails toward the portal if the read fails.
     if (chapterUser.role === "client_employee" && chapterUser.client_key) {
       const portalSlug = CLIENT_KEY_TO_PORTAL_SLUG[chapterUser.client_key];
-      if (portalSlug) {
+      const ent = portalSlug ? await getClientEntitlement(chapterUser.client_key) : null;
+      const hasTool = !!ent && ent.tools_enabled.some(t => t !== "chapter");
+      if (portalSlug && !hasTool) {
         const target = req.nextUrl.clone();
         target.pathname = `/for-clients/${portalSlug}`;
         target.search = "";
