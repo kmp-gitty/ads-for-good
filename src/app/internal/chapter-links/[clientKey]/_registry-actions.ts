@@ -12,6 +12,7 @@
 // actions, which likewise use the service-role client directly.
 
 import { createClient } from "@supabase/supabase-js";
+import { authorizeLinksClient } from "@/app/lib/auth/links-access";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -65,6 +66,10 @@ export async function registerGeneratedLinks(
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
+
+  // Authorized from the session — also callable from clients' dashboards.
+  const auth = await authorizeLinksClient(clientKey);
+  if (!auth.ok) return { inserted, updated, skipped: rows.length, error: auth.error };
 
   const seen = new Set<string>();
   for (const row of rows) {

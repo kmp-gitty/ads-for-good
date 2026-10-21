@@ -9,6 +9,7 @@
 // can show clients in good faith.
 
 import { createClient } from "@supabase/supabase-js";
+import { redirect } from "next/navigation";
 import BillingClient from "./BillingClient";
 import { getClientEntitlement, isToolsOnly } from "@/app/lib/auth/chapter-user";
 import SelfServeBilling from "./SelfServeBilling";
@@ -59,6 +60,9 @@ export default async function BillingPage({
   // Self-serve tenants don't have usage-snapshot analytics — they get a
   // trial/plan view instead of the operator transparency dashboard.
   const ent = await getClientEntitlement(clientKey);
+  // Operator-managed client in the tools-only view (e.g. acj_today): billing is
+  // handled by the operator, so there is no page here for them.
+  if (ent && !ent.self_serve && isToolsOnly(ent)) redirect(`/chapter/${clientKey}/home`);
   if (ent && (ent.self_serve || isToolsOnly(ent))) {
     const [billing, prices] = await Promise.all([getTenantBilling(), getToolPrices()]);
     return (

@@ -305,7 +305,7 @@ function SelfServeSidebar({
     }
   } else if (entitlement.billingStatus === "active") {
     planLabel = "Active plan";
-  } else if (entitlement.billingStatus) {
+  } else if (entitlement.billingStatus && entitlement.selfServe) {
     planLabel = entitlement.billingStatus;
   }
 
@@ -316,14 +316,21 @@ function SelfServeSidebar({
     { key: "prompts/responses", label: "Responses", icon: "journeys" },
     { key: "prompts/install", label: "Install", icon: "raw" },
   ];
+  // Operator-managed clients (selfServe false, e.g. acj_today) don't manage
+  // their own link domains, billing or workspace settings — the operator does.
+  const selfManaged = entitlement.selfServe;
   const links: SelfServeNavItem[] = [
     { key: "links", label: "Links", icon: "influence" },
     { key: "links/analytics", label: "Analytics", icon: "raw" },
-    { key: "links/domain", label: "Domain", icon: "paths" },
+    ...(selfManaged ? [{ key: "links/domain", label: "Domain", icon: "paths" } as SelfServeNavItem] : []),
   ];
   const account: SelfServeNavItem[] = [
-    { key: "billing", label: "Billing", icon: "attribution" },
-    { key: "settings", label: "Settings", icon: "channels" },
+    ...(selfManaged
+      ? ([
+          { key: "billing", label: "Billing", icon: "attribution" },
+          { key: "settings", label: "Settings", icon: "channels" },
+        ] as SelfServeNavItem[])
+      : []),
     {
       key: "inbox",
       label: "Support",

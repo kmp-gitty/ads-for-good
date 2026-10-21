@@ -145,6 +145,7 @@ export default function UrlBuilder({
   redirectOrigin,
   lockClient = false,
   knownPartners = [],
+  allowCrmSearch = true,
 }: {
   clients: ClientOption[];
   slugsByClient: Record<string, { slug: string; description: string | null; needs_to?: boolean }[]>;
@@ -155,6 +156,10 @@ export default function UrlBuilder({
   // workbench). The client is already established by the route, so the picker
   // renders as a static readout instead of a dropdown that can desync the URL.
   lockClient?: boolean;
+  // Agency CRM prospect search. Off when the builder renders in a client's own
+  // dashboard — that data is ours, not theirs. The server action is staff-only
+  // regardless; this just keeps the field from being offered.
+  allowCrmSearch?: boolean;
   // Partner values already seen in this client's click history. Free entry
   // still allowed — this exists so `firstrust` / `Firstrust` / `firstrust-bank`
   // don't fragment into three partners in reporting.
@@ -254,7 +259,7 @@ export default function UrlBuilder({
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (identityMode !== "rid" || !query.trim() || prospect) {
+    if (!allowCrmSearch || identityMode !== "rid" || !query.trim() || prospect) {
       setResults([]);
       return;
     }
@@ -267,7 +272,7 @@ export default function UrlBuilder({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, prospect, identityMode]);
+  }, [query, prospect, identityMode, allowCrmSearch]);
 
   function buildParams(over?: { identity?: { mode: IdentityMode; value: string }; source?: string; content?: string }) {
     const params = new URLSearchParams();
@@ -534,7 +539,7 @@ export default function UrlBuilder({
                 placeholder="e.g. 4f2a9c1b3e"
               />
             </Field>
-            <Field label="Or search CRM" hint="adsforgood_prod prospects only">
+            {allowCrmSearch && <Field label="Or search CRM" hint="adsforgood_prod prospects only">
               <>
                 <input
                   className={inputCls}
@@ -559,7 +564,7 @@ export default function UrlBuilder({
                   </ul>
                 )}
               </>
-            </Field>
+            </Field>}
           </div>
         )}
 

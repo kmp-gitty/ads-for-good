@@ -5,6 +5,7 @@
 import { getClientEntitlement, getCurrentChapterUser } from "@/app/lib/auth/chapter-user";
 import { createSupabaseServiceRoleClient } from "@/app/lib/auth/supabase-server";
 import SettingsClient from "./SettingsClient";
+import { redirect } from "next/navigation";
 
 export const metadata = { title: "Settings" };
 export const dynamic = "force-dynamic";
@@ -21,6 +22,12 @@ export default async function SettingsPage({
     clientKey ? getClientEntitlement(clientKey) : Promise.resolve(null),
     getCurrentChapterUser(),
   ]);
+
+  // Operator-managed clients in the tools-only view (e.g. acj_today) have no
+  // workspace settings to manage — the operator owns them.
+  if (ent && !ent.self_serve && !ent.tools_enabled.includes("chapter")) {
+    redirect(`/chapter/${clientKey}/home`);
+  }
 
   // Owner name/phone live on chapter_config.users.
   let fullName = "";

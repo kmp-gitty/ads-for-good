@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@supabase/supabase-js";
+import { authorizeStaffOnly } from "@/app/lib/auth/links-access";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -23,6 +24,9 @@ export type ActionResult<T = undefined> =
 export async function searchProspectsForOutreach(
   q: string,
 ): Promise<ActionResult<ProspectOption[]>> {
+  // Agency CRM data — staff only, never a client, even one with the workbench.
+  const auth = await authorizeStaffOnly();
+  if (!auth.ok) return { ok: false, message: auth.error };
   const query = q.trim();
   if (!query) return { ok: true, data: [] };
   const safe = query.replace(/[(),%]/g, "");

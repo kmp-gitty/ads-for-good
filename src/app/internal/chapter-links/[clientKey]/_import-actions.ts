@@ -20,6 +20,7 @@
 // Gated by the /internal/* middleware (gateInternal), same as its siblings.
 
 import { createClient } from "@supabase/supabase-js";
+import { authorizeLinksClient } from "@/app/lib/auth/links-access";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -167,6 +168,9 @@ export async function planRegistryImport(
 ): Promise<ImportPlan> {
   const plan: ImportPlan = { creates: [], unchanged: [], changes: [], invalid: [], orphanRisk: [] };
   if (!clientKey || rows.length === 0) return plan;
+  // Authorized from the session — also callable from clients' dashboards.
+  const auth = await authorizeLinksClient(clientKey);
+  if (!auth.ok) return { ...plan, error: auth.error };
 
   const valid: ImportRow[] = [];
   const seen = new Set<string>();
@@ -264,6 +268,8 @@ export async function commitRegistryImport(
 ): Promise<CommitResult> {
   let inserted = 0;
   let updated = 0;
+  const auth = await authorizeLinksClient(clientKey);
+  if (!auth.ok) return { inserted, updated, error: auth.error };
 
   // Chunked rather than one giant statement: a 250-row insert is fine, but the
   // bound keeps a future 2,000-row import from hitting a payload limit as a

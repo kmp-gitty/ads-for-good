@@ -73,13 +73,17 @@ export default async function RegistryPanel({
   slug: slugProp,
   q: qProp,
   page: pageProp,
+  basePath: basePathProp,
 }: {
   clientKey: string;
   daysKey?: string;
   slug?: string;
   q?: string;
   page?: string;
+  /** URL the workbench renders at — operator or the client's own dashboard. */
+  basePath?: string;
 }) {
+  const basePath = basePathProp ?? `/internal/chapter-links/${clientKey}`;
   const win = REGISTRY_WINDOWS.find(w => w.key === daysKey) ?? REGISTRY_WINDOWS[1];
   const slug = (slugProp ?? "").trim();
   const q = (qProp ?? "").trim();
@@ -116,7 +120,7 @@ export default async function RegistryPanel({
     if (o.slug) p.set("rslug", o.slug);
     if (o.q) p.set("rq", o.q);
     if (o.page && o.page > 1) p.set("rpage", String(o.page));
-    return `/internal/chapter-links/${clientKey}?${p}`;
+    return `${basePath}?${p}`;
   };
 
   // Group by slug — the placement. A slug is the unit an operator reasons
@@ -207,7 +211,7 @@ export default async function RegistryPanel({
           </div>
 
           {/* Plain GET form: a server component, so no client JS is needed. */}
-          <form method="get" action={`/internal/chapter-links/${clientKey}`}
+          <form method="get" action={basePath}
                 style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
             <input type="hidden" name="tab" value="registry" />
             <input type="hidden" name="days" value={win.key} />

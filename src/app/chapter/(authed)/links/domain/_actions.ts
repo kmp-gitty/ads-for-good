@@ -36,6 +36,13 @@ async function requireTenant(): Promise<{ clientKey: string; email: string } | {
   if (!ent || !ent.tools_enabled.includes("smart_links")) {
     return { error: "Smart Links isn’t enabled on this workspace." };
   }
+  // Operator-managed clients' link hosts are configured by the Chapter team.
+  // A branded_domains row makes middleware rewrite that host's paths to
+  // /r/<workspace>/..., so one connected from here would break every link
+  // already served on it (ACJ's go.<paper>.today hosts, for example).
+  if (!ent.self_serve) {
+    return { error: "Your link domains are managed by the Chapter team." };
+  }
   return { clientKey: user.client_key, email: user.email };
 }
 

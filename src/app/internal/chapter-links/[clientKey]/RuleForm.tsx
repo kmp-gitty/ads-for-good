@@ -68,6 +68,10 @@ export type RuleFormProps = {
   clientDefaultDestination?: string | null;
   /** Client's 1P links_host — the test panel must show the host real links use. */
   linksHost?: string | null;
+  /** Workbench URL to return to. Defaults to the operator surface. */
+  basePath?: string;
+  /** New-rule URL for the catch-all follow-up. Defaults to `${basePath}/new`. */
+  newRulePath?: string;
 };
 
 // Common destination-template patterns. Click a chip to populate the field.
@@ -154,8 +158,14 @@ export default function RuleForm({
   isCatchAllPreFill = false,
   clientDefaultDestination = null,
   linksHost = null,
+  basePath,
+  newRulePath,
 }: RuleFormProps) {
   const router = useRouter();
+  // Where this form lives: operator (/internal/chapter-links/<key>) or the
+  // client's own dashboard (/chapter/<key>/links, rules under /rules/new).
+  const base = basePath ?? `/internal/chapter-links/${client_key}`;
+  const newPath = newRulePath ?? `${base}/new`;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -296,9 +306,9 @@ export default function RuleForm({
         return;
       }
       if (shouldOfferCatchAll) {
-        router.push(`/internal/chapter-links/${client_key}/new?slug=${encodeURIComponent(savedSlug)}&catch_all=1`);
+        router.push(`${newPath}?slug=${encodeURIComponent(savedSlug)}&catch_all=1`);
       } else {
-        router.push(`/internal/chapter-links/${client_key}`);
+        router.push(base);
       }
     });
   }
@@ -552,7 +562,7 @@ export default function RuleForm({
               {pending ? "Saving…" : initial ? "Save changes" : "Create rule"}
             </PrimaryButton>
             <Link
-              href={`/internal/chapter-links/${client_key}`}
+              href={base}
               style={{
                 fontSize: 14,
                 fontWeight: 600,

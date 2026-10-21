@@ -11,6 +11,7 @@ import { getClientEntitlement } from "@/app/lib/auth/chapter-user";
 import { listPrompts, getActivationStatus } from "../prompts/_actions";
 import { listLinks } from "../links/_actions";
 import { getBrandedDomain } from "../links/domain/_actions";
+import { createSupabaseServiceRoleClient } from "@/app/lib/auth/supabase-server";
 
 export const metadata = { title: "Home" };
 export const dynamic = "force-dynamic";
@@ -60,7 +61,20 @@ export default async function HomePage({
     hasPrompts ? getActivationStatus() : Promise.resolve(null),
     hasLinks ? getBrandedDomain() : Promise.resolve(null),
   ]);
-  const brandedVerified = domain?.status === "verified";
+  // A client whose link hosts the operator configured (clients.links_host /
+  // links_hosts — e.g. ACJ's go.<paper>.today) already has its branded domain.
+  let operatorHosts = false;
+  if (hasLinks && clientKey && !ent?.self_serve) {
+    const { data } = await createSupabaseServiceRoleClient()
+      .schema("chapter_config")
+      .from("clients")
+      .select("links_host, links_hosts")
+      .eq("client_key", clientKey)
+      .maybeSingle();
+    const row = data as { links_host: string | null; links_hosts: string[] | null } | null;
+    operatorHosts = !!row?.links_host || (row?.links_hosts?.length ?? 0) > 0;
+  }
+  const brandedVerified = domain?.status === "verified" || operatorHosts;
 
   // Trial banner.
   let trialLine: string | null = null;
@@ -73,14 +87,16 @@ export default async function HomePage({
   // Getting-started checklist — dynamic + sectioned (General / per-tool). Each
   // tool section only renders if the tool is enabled; future items get a clear
   // home (payment → General, branded domain → Smart Links).
-  const sections: { title: string; steps: Step[] }[] = [
-    {
-      title: "General",
-      steps: [
-        { label: "Confirm your workspace details", href: `/chapter/${clientKey}/settings`, done: !!ent?.business_name },
-      ],
-    },
-  ];
+  const sections: { title: string; steps: Step[] }[] = ent?.self_serve
+    ? [
+        {
+          title: "General",
+          steps: [
+            { label: "Confirm your workspace details", href: `/chapter/${clientKey}/settings`, done: !!ent?.business_name },
+          ],
+        },
+      ]
+    : [];
   if (hasPrompts) {
     sections.push({
       title: "Smart Prompts",

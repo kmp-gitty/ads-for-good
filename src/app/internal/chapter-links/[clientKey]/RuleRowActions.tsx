@@ -33,11 +33,13 @@ export default function RuleRowActions({
   client_key,
   slug,
   enabled,
+  editHref,
 }: {
   id: string;
   client_key: string;
   slug: string;
   enabled: boolean;
+  editHref?: string;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -59,7 +61,7 @@ export default function RuleRowActions({
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
       <Link
-        href={`/internal/chapter-links/${client_key}/${id}`}
+        href={editHref ?? `/internal/chapter-links/${client_key}/${id}`}
         style={btnStyle(false)}
       >
         Edit
