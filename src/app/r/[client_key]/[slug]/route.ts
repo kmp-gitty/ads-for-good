@@ -104,6 +104,18 @@ export async function GET(
   for (const [k, v] of req.nextUrl.searchParams.entries()) {
     rawQuery[k] = v;
   }
+  // HTML-escaped hrefs arrive as "amp;link=…" (or "amp;amp;link" if escaped
+  // twice). Recover the real key so the link id and dimensions are recorded.
+  // These clicks are crawlers, not readers — classifyForScannerRisk flags them
+  // as "escaped_href" from the raw URL, so recovering the key here does NOT
+  // let them into partner counts. A real key, if also present, wins.
+  for (const k of Object.keys(rawQuery)) {
+    if (!k.startsWith("amp;")) continue;
+    const bare = k.replace(/^(amp;)+/, "");
+    if (bare && !(bare in rawQuery)) rawQuery[bare] = rawQuery[k];
+    delete rawQuery[k];
+  }
+  delete rawQuery.amp;
 
   // Extract identity hint (?rh / ?rid / ?re) BEFORE stripping. Solution 2 of
   // the cross-device stitching plan. Hint params are stripped from the
@@ -313,7 +325,7 @@ export async function GET(
   // opens it). Suspicious clicks still get logged (with a tag) but don't
   // pollute the identity graph — no cookie writes, no email-hint stitch, no
   // ?chid= handoff on the destination.
-  const scannerRisk = classifyForScannerRisk(req);
+  const scannerRisk = classifyForScannerRisk(req, { identityKey: identity.identityKey });
   const scannerSuspected = scannerRisk.suspicious && !suppressed;
 
   // Wrapped-link consented-channel measurement (policy flag, default off).

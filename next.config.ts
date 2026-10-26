@@ -96,7 +96,10 @@ const nextConfig: NextConfig = {
         { source: '/', has: [{ type: 'host' as const, value: host }], destination: home, permanent: false },
         // Everything else except the load-bearing prefixes above.
         {
-          source: '/:path((?!r/|api/|_next/|_vercel/|\\.well-known/).*)',
+          // robots.txt is excluded so crawlers get the host's real rules
+          // (src/app/robots.txt/route.ts: Disallow /r/) instead of a 307 to
+          // the client's homepage, which read as "no rules" and let them crawl.
+          source: '/:path((?!r/|api/|_next/|_vercel/|\\.well-known/|robots\\.txt$).*)',
           has: [{ type: 'host' as const, value: host }],
           destination: home,
           permanent: false,

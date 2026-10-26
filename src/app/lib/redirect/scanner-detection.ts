@@ -22,9 +22,10 @@
 // on the same email carry a fresh browser identity (via pixel localStorage)
 // and stitch cleanly.
 //
-// v2 candidates (deferred, need external inputs):
-//   - Datacenter ASN detection (needs an IP-to-ASN data source: IPinfo,
-//     ipapi.co, or hardcoded scanner IP ranges)
+// Added 2026-10-26: cloud-provider IP ranges (datacenter-ip.ts), a 60-second
+// burst rule, and HTML-escaped query detection. See each below.
+//
+// v2 candidates (deferred):
 //   - Corroborating-page_view gate (defer identity resolution until a real
 //     page_view lands from the same anonymous_id within N seconds — needs
 //     a pending-click state table + promotion mechanism)
@@ -37,6 +38,7 @@
 
 import type { NextRequest } from "next/server";
 import { hashIp, getClientIp } from "@/app/lib/audit/auth";
+import { datacenterProvider } from "./datacenter-ip";
 
 // Known email-scanner user-agent patterns. Case-insensitive. Additions
 // welcome — these fingerprints change over time, so treat as a live list
@@ -149,6 +151,55 @@ const RATE_LIMIT_MAX_CLICKS = 3;
 // At 5000 entries × ~32 bytes each ≈ 160KB — negligible.
 const RATE_LIMIT_MAP_MAX_ENTRIES = 5000;
 
+// Burst rule (added 2026-10-26). The 3-in-5s rule above misses crawlers that
+// pace themselves: on ACJ one crawler opened ~110 wrapped links in 4 minutes,
+// every hour, from a fresh session each time, and kept its cookie within a
+// session. Measured over 12 days of ACJ clicks: 6+ clicks inside 60 seconds
+// from one browser identity or one IP flags ~7,500 crawler clicks while
+// touching 19 clicks from identities with 10 or fewer clicks in total. A
+// reader does not open six different sponsor links in a minute.
+//
+// ⚠️ It ALSO flags operator verification sessions (clicking every logo on a
+//    paper to check it). That is intended: test clicks are not partner clicks.
+//    They are still logged with all their fields, so a "did my test land"
+//    query must not filter on suspected_scanner.
+//
+// Clicks before the threshold is crossed are not flagged — only the 6th onward.
+const BURST_WINDOW_MS = 60_000;
+const BURST_MAX_CLICKS = 5;
+const burstMap = new Map<string, number[]>();
+
+function checkBurst(key: string): boolean {
+  const now = Date.now();
+  const recent = (burstMap.get(key) ?? []).filter((t) => now - t < BURST_WINDOW_MS);
+  recent.push(now);
+  burstMap.set(key, recent);
+  if (burstMap.size > RATE_LIMIT_MAP_MAX_ENTRIES) {
+    for (const [k, ts] of burstMap) {
+      if (!ts.length || now - ts[ts.length - 1] >= BURST_WINDOW_MS) burstMap.delete(k);
+    }
+    if (burstMap.size > RATE_LIMIT_MAP_MAX_ENTRIES) {
+      const drop = burstMap.size - RATE_LIMIT_MAP_MAX_ENTRIES * 0.75;
+      let i = 0;
+      for (const k of burstMap.keys()) { if (i++ >= drop) break; burstMap.delete(k); }
+    }
+  }
+  return recent.length > BURST_MAX_CLICKS;
+}
+
+// HTML-escaped query string: keys arrive as "amp;link", "amp;partner". A
+// browser always decodes &amp; in an href before following it, so this is a
+// program reading the page source and requesting the raw text. Measured on ACJ
+// (Oct 15-26): 8,956 such clicks, ONE from Philadelphia, ONE whose identity
+// ever clicked again, versus 714 Philadelphia clicks and 39% repeat identities
+// among the clean ones. It is a crawler signature, not a broken link.
+function hasEscapedQuery(req: NextRequest): boolean {
+  for (const k of req.nextUrl.searchParams.keys()) {
+    if (k === "amp" || k.startsWith("amp;")) return true;
+  }
+  return false;
+}
+
 type RateLimitEntry = { count: number; window_start: number };
 
 const rateLimitMap = new Map<string, RateLimitEntry>();
@@ -204,7 +255,10 @@ export type ScannerRiskAssessment = {
  * caller uses to gate identity-graph writes. Always safe — returns
  * suspicious=false on any error path.
  */
-export function classifyForScannerRisk(req: NextRequest): ScannerRiskAssessment {
+export function classifyForScannerRisk(
+  req: NextRequest,
+  opts: { identityKey?: string | null } = {},
+): ScannerRiskAssessment {
   const reasons: string[] = [];
   let ipHash: string | null = null;
 
@@ -226,6 +280,11 @@ export function classifyForScannerRisk(req: NextRequest): ScannerRiskAssessment 
       reasons.push("crawler_ua");
     }
 
+    // 1d. Query string arrived HTML-escaped (see hasEscapedQuery).
+    if (hasEscapedQuery(req)) {
+      reasons.push("escaped_href");
+    }
+
     // 2. Rapid same-IP clicks
     const ip = getClientIp(req);
     if (ip) {
@@ -233,7 +292,17 @@ export function classifyForScannerRisk(req: NextRequest): ScannerRiskAssessment 
       if (ipHash && checkRateLimit(ipHash)) {
         reasons.push("rate_limited");
       }
+
+      // 3. Cloud provider address. Only the provider name is recorded.
+      const provider = datacenterProvider(ip);
+      if (provider) reasons.push(`datacenter_ip:${provider}`);
     }
+
+    // 4. Burst: same IP or same browser identity, 6+ clicks in 60s. Both are
+    //    counted every time, so either key alone can trip it.
+    const ipBurst = ipHash ? checkBurst(`ip:${ipHash}`) : false;
+    const idBurst = opts.identityKey ? checkBurst(`id:${opts.identityKey}`) : false;
+    if (ipBurst || idBurst) reasons.push("burst");
   } catch (err) {
     // Never let classification errors break the redirect path
     console.warn("[scanner-detection] classification threw:", err);
@@ -250,6 +319,8 @@ export function classifyForScannerRisk(req: NextRequest): ScannerRiskAssessment 
 export const SCANNER_DETECTION_CONFIG = {
   RATE_LIMIT_WINDOW_MS,
   RATE_LIMIT_MAX_CLICKS,
+  BURST_WINDOW_MS,
+  BURST_MAX_CLICKS,
   KNOWN_SCANNER_UA_PATTERNS: KNOWN_SCANNER_UAS.map((r) => r.source),
   SOCIAL_CRAWLER_UA_PATTERNS: SOCIAL_CRAWLER_UAS.map((r) => r.source),
 } as const;

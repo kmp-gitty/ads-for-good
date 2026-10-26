@@ -192,6 +192,18 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 
 ## ✅ Completed Fixes (as of September 28, 2026)
 
+### Crawler clicks on Chapter Links: three new flags + robots.txt on the link hosts (Oct 26, 2026)
+
+**Measured first, on 12 days of ACJ clicks (40,019).** All server-side; nothing on ACJ's sites, WordPress or the pixel changed.
+
+- **🔑 `&amp;` clicks are crawlers, not a broken link — this REVERSES the earlier reading.** 8,956 clicks arrived with keys like `amp;link`. Of those: **1** from Philadelphia and **1** whose identity ever clicked again, against 714 Philadelphia clicks and 39% repeat identities among clean clicks. A browser always decodes `&amp;` in an href; only a program reading page source sends it raw. The planned "recover the link id" fix alone would have **added** these to per-link counts. Now: the route still recovers the real key (so dimensions are recorded), AND the classifier flags the click `escaped_href` from the raw URL, so registry/stats counts (which filter `suspected_scanner`) exclude them.
+- **`burst`: 6+ clicks in 60 s from one IP or one browser identity.** Catches self-pacing crawlers the 3-in-5 s rule misses (e.g. ~110 links in 4 min, hourly, on go.vista.today, cookie kept within the session). Simulated: ~7,500 crawler clicks newly flagged; 19 clicks touched from identities with ≤10 total clicks. **⚠️ It also flags operator verification sessions** (the Oct 20–21 per-paper checks reached 17–27 clicks/min) — intended, test clicks are not partner clicks — **so "did my test land" queries must NOT filter on `suspected_scanner`.** Per-instance memory, like the existing rate limit.
+- **`datacenter_ip:<provider>`: IP inside a published cloud range.** Vercel gives functions city/country but no ASN (only its WAF sees ASN). Ranges come from the providers' own lists via `scripts/build-datacenter-ranges.mjs` → `src/app/lib/redirect/datacenter-ranges.data.ts` (17,256 prefixes → 1,682 IPv4 + 2,769 IPv6 ranges, ~45 ms per 100k lookups). In: AWS **EC2 only**, GCP **cloud.json** (not goog.json), Azure AzureCloud, Oracle, DigitalOcean. **Deliberately out: Cloudflare, Akamai, Fastly** — iCloud Private Relay / WARP send real Safari users through them. **Gap:** Hetzner, OVH, Linode, Vultr, Alibaba, Tencent publish no list. **Re-run the script every month or two.** Only the provider name is kept; the IP never is. **Could not be backtested** — Chapter stores no IPs, so the first week of `datacenter_ip` tags is the measurement.
+- **robots.txt is now per host** (`src/app/robots.txt/route.ts`, replacing `robots.js`): `Disallow: /r/` on the 8 `CLIENT_1P_HOSTS`, unchanged `Allow: /` + sitemap elsewhere; `robots.txt` added to the next.config.ts catch-all exclusion so it no longer 307s to the client homepage. **Trade-off taken:** wrapped links pass no search credit to partners — correct for paid placements per Google's paid-link guidance; reverse by deleting one line. Keep its `LINK_HOSTS` in step with `CLIENT_1P_HOSTS`.
+- **Not backfilled.** Historical `props` are append-only; the old `amp;` clicks never carried a `link` key, so they were never in per-link counts anyway.
+- **Still uncaught:** single-click crawlers on residential-looking IPs with rotating identities (the French small-city cluster). That is residential proxy traffic; no list catches it.
+- **Ops note:** during measurement a `pg_cancel_backend` sweep filtered only on `state='active'` and also cancelled the replica's `START_REPLICATION` walsender. It reconnected within seconds (lag ms). **Exclude `backend_type='walsender'` from any cancel sweep.**
+
 ### ACJ gets the Chapter Links workbench in its own dashboard (Oct 21, 2026)
 
 - **ACJ (`acj_today`) is now a tools-only client:** `tools_enabled = {smart_links, chapter_links}`, `self_serve = false`. Its users (mphillips@acj.today, katoa.ahau@gmail.com, any auto-provisioned @acj.today) see Home + Smart Links + Support only. Revert: `tools_enabled = '{chapter}'`.
@@ -4430,7 +4442,7 @@ Remaining billing/usage build order (from [docs/chapter-billing-usage-handoff.md
   ```
   Expect non-null sources. Also confirm `pixel.js` still parses — it is a TS template literal, so **`tsc` cannot see syntax errors inside it** and backticks in it break the build. Extract the body and `node --check` it.
 
-#### QUEUED BUILD — robots.txt on the 1P redirect/collect hosts (Oct 5, 2026 — NOT scheduled)
+#### ~~QUEUED BUILD~~ SHIPPED Oct 26, 2026 — robots.txt on the 1P redirect/collect hosts (see the Oct 26 entry in Completed Fixes; the trade-off below was decided as Disallow /r/ only)
 - **Found while diagnosing ACJ crawler traffic:** `go.vista.today/robots.txt` **307s to `vista.today/`**. A crawler asks for the rules, gets an HTML page, reads no restrictions, and crawls `/r/` freely. Same on all 8 hosts in `CLIENT_1P_HOSTS`.
 - **Worse, [src/app/robots.js](src/app/robots.js) says `allow: "/"`** — so even unredirected we would be explicitly *inviting* crawlers into the redirect path.
 - **The route already sets `X-Robots-Tag: noindex` on the 302** — the intent to keep crawlers out is already expressed, just at a layer that requires the crawl to happen first. By then the click has created a journey, minted an identity and landed a billable row. robots.txt moves the same intent one step earlier.
