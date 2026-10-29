@@ -39,6 +39,7 @@
 import type { NextRequest } from "next/server";
 import { hashIp, getClientIp } from "@/app/lib/audit/auth";
 import { datacenterProvider } from "./datacenter-ip";
+import { hostingNetwork } from "./hosting-asn";
 
 // Known email-scanner user-agent patterns. Case-insensitive. Additions
 // welcome — these fingerprints change over time, so treat as a live list
@@ -296,6 +297,13 @@ export function classifyForScannerRisk(
       // 3. Cloud provider address. Only the provider name is recorded.
       const provider = datacenterProvider(ip);
       if (provider) reasons.push(`datacenter_ip:${provider}`);
+      // 3b. Hosting network that publishes no list (Hetzner, OVH, Google's
+      //     own network, ...). Kept as its own reason so its precision can be
+      //     measured separately. Only the network label is recorded.
+      else {
+        const network = hostingNetwork(ip);
+        if (network) reasons.push(`hosting_asn:${network}`);
+      }
     }
 
     // 4. Burst: same IP or same browser identity, 6+ clicks in 60s. Both are
