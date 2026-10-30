@@ -60,6 +60,10 @@
       "schedule": "30 5 * * *"
     },
     {
+      "path": "/api/internal/cron/refresh-click-classification",
+      "schedule": "15 5 * * *"
+    },
+    {
       "path": "/api/internal/monitoring/prompt-attack-alert",
       "schedule": "*/15 * * * *"
     },
