@@ -1,7 +1,8 @@
 # ACJ slide impressions: install and rollout
 
-Counts impressions and viewable impressions for every MetaSlider slide on the
-five ACJ papers, joined to Chapter Links clicks by the slide's `link` ID.
+Counts impressions and viewable impressions for every MetaSlider slide (Block Ads,
+End of Story) and every static wrapped image link (partner logos, fixed banners) on
+the five ACJ papers, joined to Chapter Links clicks by the `link` ID.
 
 ## For ACJ's developer: the snippet
 
@@ -40,6 +41,12 @@ Per slide, per page view:
 
 MetaSlider's fade mode stacks all slides in one box and hides inactive ones with
 opacity, so only the slide marked `flex-active-slide` is measured.
+
+Static placements (a wrapped Chapter Link around an image, outside any slider, e.g.
+the right-rail logos) have one showing per page view: an impression once the image
+has 1px in view, viewable once it has been 50% in view for 1 continuous second. A
+logo further down the page that the reader never scrolls to is on the page but gets
+no impression. Text links are not measured.
 
 ## Cross-paper readers
 

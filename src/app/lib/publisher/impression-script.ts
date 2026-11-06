@@ -100,14 +100,17 @@ export const IMPRESSION_SCRIPT = String.raw`(function () {
   var ratioByLi = new WeakMap();
 
   function readSlide(li, sliderId) {
-    var a = li.querySelector("a[href]");
+    return readLink(li.querySelector("a[href]"), sliderId, li);
+  }
+
+  function readLink(a, sliderId, el) {
     if (!a) return null;
     var u;
     try { u = new URL(a.getAttribute("href"), location.href); } catch (e) { return null; }
     if (u.pathname.indexOf("/r/" + CFG.k + "/") !== 0) return null;
     var p = u.searchParams;
     var link = p.get("link") || "";
-    var creative = p.get("creative") || ((li.className.match(/slide-(\d+)/) || [])[1] || "");
+    var creative = p.get("creative") || (((el.className || "").match(/slide-(\d+)/) || [])[1] || "");
     var key = sliderId + "|" + (link || "c" + creative);
     if (!recs[key]) {
       recs[key] = {
@@ -172,7 +175,29 @@ export const IMPRESSION_SCRIPT = String.raw`(function () {
   }
   function evaluateAll() { for (var i = 0; i < sliders.length; i++) evaluate(sliders[i]); }
 
+  // Static placements (partner logos, fixed banners): a wrapped link around an
+  // image, outside any slider. Always "active", so one showing per page view;
+  // impression and viewability use the same rules as slides, measured on the image.
+  function setupStatic() {
+    var as = document.querySelectorAll("a[href]");
+    for (var i = 0; i < as.length; i++) {
+      var a = as[i];
+      if (a.__chapterImp || (a.closest && a.closest(".metaslider"))) continue;
+      var img = a.querySelector("img");
+      if (!img) continue;
+      a.__chapterImp = true;
+      var key = readLink(a, "static", img);
+      if (!key) continue;
+      img.__chapterKey = key;
+      var s = { el: a, lis: [img], activeLi: null, showing: null };
+      sliders.push(s);
+      io.observe(img);
+      startShowing(s, img);
+    }
+  }
+
   function setup() {
+    setupStatic();
     var els = document.querySelectorAll(".metaslider");
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
