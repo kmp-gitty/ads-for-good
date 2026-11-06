@@ -107,6 +107,11 @@ export type ClientRedirectConfig = {
   // Unlisted params still land in full_query exactly as before, so adding a
   // param late is never lossy: re-run the dimensions backfill to recover it.
   reportable_params: string[];
+  // Papers where the slide impression script is live (bare hosts). A wrapped
+  // link whose destination is one of these, on a different paper from the one
+  // serving the click, carries chx/chxf so the landing paper links the reader's
+  // two per-paper IDs. Empty for single-property clients.
+  impression_hosts: string[];
 };
 
 const DEFAULT_REPORTABLE_PARAMS = ["partner", "promo", "loc", "size", "creative", "link"];
@@ -176,7 +181,7 @@ export async function fetchClientRedirectConfig(
   const { data, error } = await supabase
     .schema("chapter_config")
     .from("clients")
-    .select("default_redirect_destination, default_redirect_destinations, identity_handoff_enabled, reportable_params")
+    .select("default_redirect_destination, default_redirect_destinations, identity_handoff_enabled, reportable_params, impression_hosts")
     .eq("client_key", client_key)
     .maybeSingle();
 
@@ -189,6 +194,7 @@ export async function fetchClientRedirectConfig(
       default_redirect_destinations: null,
       identity_handoff_enabled: true,
       reportable_params: DEFAULT_REPORTABLE_PARAMS,
+      impression_hosts: [],
     };
   }
 
@@ -197,6 +203,7 @@ export async function fetchClientRedirectConfig(
     default_redirect_destinations: Record<string, string> | null;
     identity_handoff_enabled: boolean | null;
     reportable_params: string[] | null;
+    impression_hosts: string[] | null;
   } | null;
   const config: ClientRedirectConfig = {
     default_redirect_destination: row?.default_redirect_destination ?? null,
@@ -208,6 +215,7 @@ export async function fetchClientRedirectConfig(
       row?.reportable_params && row.reportable_params.length > 0
         ? row.reportable_params
         : DEFAULT_REPORTABLE_PARAMS,
+    impression_hosts: (row?.impression_hosts ?? []).map((h) => normalizeHostKey(h).replace(/^www\./, "")),
   };
   clientConfigCache.set(client_key, { config, fetchedAt: now });
   return config;

@@ -323,6 +323,22 @@ export function classifyForScannerRisk(
   };
 }
 
+/**
+ * User-agent-only bot reasons (no rate limits, no bursts). For ingest paths
+ * that are not clicks, e.g. the slide impression beacon, where per-IP burst
+ * rules would misfire on legitimate repeat beacons.
+ */
+export function userAgentBotReasons(ua: string | null | undefined): string[] {
+  const reasons: string[] = [];
+  const u = ua || "";
+  if (!u) return ["no_user_agent"];
+  if (KNOWN_SCANNER_UAS.some((r) => r.test(u))) reasons.push("scanner_ua");
+  if (SOCIAL_CRAWLER_UAS.some((r) => r.test(u))) reasons.push("social_crawler_ua");
+  if (CRAWLER_UA_FINGERPRINTS.some((r) => r.test(u))) reasons.push("crawler_ua");
+  if (/\b(headlesschrome|phantomjs|bot|crawler|spider)\b/i.test(u)) reasons.push("bot_ua");
+  return reasons;
+}
+
 // Exported so tests / diagnostic pages can inspect config values.
 export const SCANNER_DETECTION_CONFIG = {
   RATE_LIMIT_WINDOW_MS,

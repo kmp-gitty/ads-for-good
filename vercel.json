@@ -64,6 +64,10 @@
       "schedule": "15 5 * * *"
     },
     {
+      "path": "/api/internal/cron/refresh-slide-impressions",
+      "schedule": "45 5 * * *"
+    },
+    {
       "path": "/api/internal/monitoring/prompt-attack-alert",
       "schedule": "*/15 * * * *"
     },

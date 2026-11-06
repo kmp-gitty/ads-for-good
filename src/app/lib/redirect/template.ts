@@ -102,3 +102,32 @@ export function appendIdentityHandoff(
     return url;
   }
 }
+
+/**
+ * Cross-paper identity handoff for multi-paper clients. When the destination is
+ * another of the client's papers with the impression script live, append
+ * chx=<visitor uuid>&chxf=<serving paper>. The landing paper's script strips
+ * them and its beacon links the two per-paper IDs as one reader.
+ */
+export function appendPaperHandoff(
+  url: string,
+  rawAnonymousId: string,
+  servingHostname: string,
+  liveHosts: string[],
+  allow: boolean,
+): string {
+  if (!allow || liveHosts.length === 0) return url;
+  if (!isValidDestination(url)) return url;
+  try {
+    const u = new URL(url);
+    const dest = u.hostname.toLowerCase().replace(/^www\./, "");
+    const serving = servingHostname.toLowerCase().replace(/^(go|s|www)\./, "");
+    if (dest === serving || !liveHosts.includes(dest)) return url;
+    if (u.searchParams.has("chx")) return url;
+    u.searchParams.set("chx", rawAnonymousId);
+    u.searchParams.set("chxf", serving);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}

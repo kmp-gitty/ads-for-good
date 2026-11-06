@@ -51,7 +51,7 @@ import { classifyUA } from "@/app/lib/redirect/device";
 import { resolveSegments, SKIPPED_SEGMENTS } from "@/app/lib/redirect/segments";
 import { resolveCart, SKIPPED_CART } from "@/app/lib/redirect/cart";
 import { evaluateConditions, requiredContext, EvalContext } from "@/app/lib/redirect/conditions";
-import { interpolateTemplate, isValidDestination, appendIdentityHandoff } from "@/app/lib/redirect/template";
+import { interpolateTemplate, isValidDestination, appendIdentityHandoff, appendPaperHandoff } from "@/app/lib/redirect/template";
 import { logRedirectClick } from "@/app/lib/redirect/click-logger";
 import { appendHubspotCrossDomain } from "@/app/lib/redirect/hubspot-handoff";
 import { isEmailIgnored, isUaIgnored } from "@/app/lib/auth/tracking-ignore";
@@ -377,6 +377,17 @@ export async function GET(
     identity.identityKey,
     identity.journeyId,
     consent.allowCollection && !scannerSuspected && clientConfig.identity_handoff_enabled,
+  );
+
+  // Cross-paper handoff (multi-paper clients only): a link to another of the
+  // client's papers carries the reader's ID so the landing paper's impression
+  // script links the two per-paper IDs. Same gates as the identity cookie.
+  destination = appendPaperHandoff(
+    destination,
+    identity.rawAnonymousId,
+    req.nextUrl.hostname,
+    clientConfig.impression_hosts,
+    consent.allowCollection && !scannerSuspected,
   );
 
   // Solution 2: stitch the redirect's identity to a known email_sha256 at
