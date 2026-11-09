@@ -15,6 +15,9 @@
 // Slides are identified by their wrapped Chapter Link (link= param), never by
 // position: MetaSlider shuffles order on each load.
 //
+// Wrapped links get cpv=<page view>&cpath=<page path> when pressed, so clicks
+// record the page they came from and join that page view's impressions.
+//
 // Also: cross-paper identity handoff. A click on a plain link to another of the
 // client's papers gets chx=<visitor id>&chxf=<this paper> appended; the landing
 // paper's beacon records both IDs as the same reader.
@@ -78,11 +81,22 @@ export const IMPRESSION_SCRIPT = String.raw`(function () {
   function decorate(ev) {
     var a = ev.target && ev.target.closest ? ev.target.closest("a[href]") : null;
     if (!a) return;
-    var id = visitorId();
-    if (!id) return;
     try {
       var u = new URL(a.href, location.href);
       var h = u.hostname.replace(/^www\./, "").toLowerCase();
+      // Wrapped Chapter Link: record the page it was clicked on and this page
+      // view, so the click joins the impressions counted on the same page.
+      // ACJ's rules pass ?to= through untouched, so these never reach the partner.
+      if (u.pathname.indexOf("/r/" + CFG.k + "/") === 0) {
+        if (u.searchParams.get("cpv")) return;
+        u.searchParams.set("cpv", pvId);
+        u.searchParams.set("cpath", location.pathname.slice(0, 200));
+        a.href = u.toString();
+        return;
+      }
+      // Plain link to another of the client's papers: carry the visitor ID.
+      var id = visitorId();
+      if (!id) return;
       if (h === host || CFG.papers.indexOf(h) < 0) return;
       if (u.searchParams.get("chx")) return;
       u.searchParams.set("chx", id);
