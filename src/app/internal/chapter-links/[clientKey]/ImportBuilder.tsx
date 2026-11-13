@@ -393,6 +393,12 @@ export default function ImportBuilder({
         its old link column, map it as a cross-check below — it is compared, never used.
       </p>
 
+      {enforcePartners && (
+        <datalist id="import-wp-partners">
+          {partnerCatalog.reserved.map(k => <option key={k} value={k}>ACJ house link</option>)}
+          {partnerCatalog.partners.map(p => <option key={p.key} value={p.key}>{p.name}</option>)}
+        </datalist>
+      )}
       {/* 1. Paste */}
       <Section n={1} title="Paste the sheet" sub="header row included · tab or comma separated">
         <p style={{ margin: "0 0 9px", fontSize: 12.5, color: MUTED, lineHeight: 1.55 }}>
@@ -484,7 +490,9 @@ export default function ImportBuilder({
                       {slugs.map(s => <option key={s.slug} value={s.slug}>{s.slug}</option>)}
                     </select>
                   ) : (
-                    <input value={mapping[f].value} onChange={e => { setMapping(m => ({ ...m, [f]: { ...m[f], value: e.target.value } })); setPlan(null); }} style={inp} placeholder="value for every row" />
+                    <input value={mapping[f].value} onChange={e => { setMapping(m => ({ ...m, [f]: { ...m[f], value: e.target.value } })); setPlan(null); }} style={inp}
+                      list={f === "partner" && enforcePartners ? "import-wp-partners" : undefined}
+                      placeholder={f === "partner" && enforcePartners ? "pick a WordPress partner" : "value for every row"} />
                   )
                 ) : <span style={{ fontSize: 12, color: FAINT }}>—</span>}
               </div>
@@ -574,7 +582,9 @@ export default function ImportBuilder({
             <select value={bulkField} onChange={e => setBulkField(e.target.value as Field)} style={{ ...inp, width: 130 }}>
               {FIELDS.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
-            <input value={bulkValue} onChange={e => setBulkValue(e.target.value)} placeholder="value" style={{ ...inp, width: 190 }} />
+            <input value={bulkValue} onChange={e => setBulkValue(e.target.value)} style={{ ...inp, width: 190 }}
+              list={bulkField === "partner" && enforcePartners ? "import-wp-partners" : undefined}
+              placeholder={bulkField === "partner" && enforcePartners ? "pick a WordPress partner" : "value"} />
             <button
               onClick={() => { setForSelection(bulkField, bulkValue); setPlan(null); }}
               disabled={sel.size === 0 || !bulkValue.trim()}

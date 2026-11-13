@@ -136,7 +136,13 @@ export default function MatrixBuilder({
   const [partner, setPartner] = useState("");
   const [partnerOverride, setPartnerOverride] = useState(false);
   const enforcePartners = partnerCatalog?.mode === "enforce";
-  const partnerOk = !partnerCatalog || partnerAllowed(checkPartner(partner, partnerCatalog), partnerOverride);
+  // Partner values from the constant AND from any axis named "partner": every
+  // one must pass (or the override is ticked) before URLs can be copied.
+  const axisPartners = Object.values(blocks)
+    .filter(b => b.on)
+    .flatMap(b => b.axes.filter(a => a.param.trim().toLowerCase() === "partner").flatMap(a => splitValues(a.values)));
+  const partnerOk = !partnerCatalog || [partner, ...axisPartners].every(
+    v => partnerAllowed(checkPartner(v, partnerCatalog), partnerOverride));
   const [utm, setUtm] = useState<Utm>({ ...EMPTY_UTM });
   const [constants, setConstants] = useState<Constant[]>([]);
   // The reportable dimensions get first-class fields here, exactly as they do
@@ -674,6 +680,16 @@ export default function MatrixBuilder({
                             value={a.values}
                             onChange={e => setAxis(s.slug, i, { values: e.target.value })}
                           />
+                          {enforcePartners && partnerCatalog && a.param.trim().toLowerCase() === "partner" && (
+                            <AxisPartnerPicker
+                              catalog={partnerCatalog}
+                              listId={`axis-wp-partners-${s.slug}-${i}`}
+                              values={a.values}
+                              override={partnerOverride}
+                              onOverride={setPartnerOverride}
+                              onAdd={v => setAxis(s.slug, i, { values: a.values.trim() ? `${a.values.trim()}\n${v}` : v })}
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1039,3 +1055,59 @@ const chip =
   "rounded-full border border-neutral-300 bg-white px-2.5 py-1 font-mono text-[11px] text-neutral-600 hover:border-orange-400 hover:text-neutral-900";
 
 const linkBtn = "text-neutral-500 underline underline-offset-2";
+
+// Picker shown under an axis named "partner": choose from the WordPress list
+// and append to the axis values; flags values that would be blocked.
+function AxisPartnerPicker({
+  catalog, listId, values, override, onOverride, onAdd,
+}: {
+  catalog: PartnerCatalog;
+  listId: string;
+  values: string;
+  override: boolean;
+  onOverride: (v: boolean) => void;
+  onAdd: (v: string) => void;
+}) {
+  const [pick, setPick] = useState("");
+  const bad = splitValues(values).filter(v => !partnerAllowed(checkPartner(v, catalog), override));
+  const legacy = splitValues(values).filter(v => checkPartner(v, catalog).kind === "legacy");
+  return (
+    <div className="mt-1">
+      <div className="flex gap-2">
+        <input
+          className={`${inputCls} text-xs`}
+          list={listId}
+          value={pick}
+          onChange={e => setPick(e.target.value)}
+          placeholder="add a WordPress partner"
+        />
+        <datalist id={listId}>
+          {catalog.reserved.map(k => <option key={k} value={k}>ACJ house link</option>)}
+          {catalog.partners.map(p => <option key={p.key} value={p.key}>{p.name}</option>)}
+        </datalist>
+        <button
+          type="button"
+          className={btn}
+          disabled={!pick.trim()}
+          onClick={() => { onAdd(pick.trim()); setPick(""); }}
+        >
+          Add
+        </button>
+      </div>
+      {bad.length > 0 && (
+        <p className="mt-1 text-[11px] font-semibold text-red-700">
+          Not WordPress partners: {bad.join(", ")}. Pick from the list instead.
+        </p>
+      )}
+      {splitValues(values).some(v => checkPartner(v, catalog).kind === "unknown") && (
+        <label className="mt-1 flex items-center gap-2 text-[11px] text-neutral-700">
+          <input type="checkbox" checked={override} onChange={e => onOverride(e.target.checked)} />
+          Not in WordPress yet — use these keys anyway (recorded on each link)
+        </label>
+      )}
+      {legacy.length > 0 && (
+        <p className="mt-1 text-[11px] text-amber-700">Older keys (allowed): {legacy.join(", ")}.</p>
+      )}
+    </div>
+  );
+}
