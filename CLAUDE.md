@@ -214,6 +214,15 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - **No IP memory exists, by design** (Oct 29 decision): only network labels are kept. Clusters are the memory, re-applied to all history nightly.
 - **IP lists refresh monthly, automatically:** GitHub Action `.github/workflows/refresh-bot-ip-lists.yml` (1st of the month, 12:00 UTC, also runnable by hand) rebuilds both lists and commits to main; refuses to commit if either file shrinks >25%. Last manual refresh Nov 13. **`hashIp` is now keyed** (HMAC with `CHAPTER_IP_HASH_KEY`, set in Vercel Nov 13); hashes before that are reversible plain SHA-256.
 
+### ACJ partner keys come from WordPress (Nov 13, 2026)
+
+- **Rule (operator decision):** a NEW `acj_today` link's `partner` must be the WordPress `affiliate-partner` slug with `-` → `_` (`trumark-credit-union` → `trumark_credit_union`). Existing links, ids and clicks are never renamed; ACJ reporting maps old keys via `acj.chapter_partner_map` in the ACJ Database.
+- **Config:** `chapter_config.clients.partner_catalog_mode` (`off` default, `enforce` for acj_today). Any other client is unaffected.
+- **Data:** `chapter_config.partner_catalog` (merged across the 5 papers by slug; VISTA's name wins; `active=false` when a tag disappears) and `chapter_config.partner_legacy_keys` (copy of `acj.chapter_partner_map`). Filled by `chapter_config.sync_partner_catalog(client, tags, legacy)`, which refuses to write if the list shrinks >25%. SQL: `~/chapter-scripts/snapshots/2026-11-13-acj-wp-partner-catalog.sql`.
+- **Refresh:** n8n "ACJ – WordPress partners → Chapter (daily)" (`dxDRKqJ6Ut0TCwta`, folder ACJ, 4:40 AM ET). Reads `/wp-json/wp/v2/affiliate-partner` through the "ACJ – WordPress + Cloudflare" credential. **Chapter cannot call WordPress itself: the sites return a Cloudflare challenge (403) to server requests.**
+- **Check** (`src/app/lib/links/partner-check.ts`, pure; loader `partner-catalog.ts`): WordPress key or `acj_internal` → ok; key in the legacy map or already used by registered links → warning + suggested WordPress key; not normalised → blocked; anything else → blocked unless the operator ticks "not in WordPress yet". Enforced server-side on CREATE only (`registerGeneratedLinks`, `commitRegistryImport`); updates to existing links are never checked. The outcome is stored in `generated_links.partner_check` (wp | legacy | reserved | override).
+- **UI:** `PartnerField.tsx` in Generate and Matrix (pick by name, stores the key, copy disabled while blocked); Import turns unknown partners into errors with a batch override. Ids over 128 characters are now reported (were skipped silently in `registerGeneratedLinks`).
+
 ### Crawler clicks on Chapter Links: three new flags + robots.txt on the link hosts (Oct 26, 2026)
 
 **Measured first, on 12 days of ACJ clicks (40,019).** All server-side; nothing on ACJ's sites, WordPress or the pixel changed.

@@ -38,6 +38,8 @@
 import { useMemo, useState } from "react";
 import { registerGeneratedLinks, type RegistryRowInput } from "./_registry-actions";
 import { normalizeDestination } from "./UrlBuilder";
+import PartnerField from "./PartnerField";
+import { checkPartner, partnerAllowed, type PartnerCatalog } from "@/app/lib/links/partner-check";
 
 export type MatrixSlug = { slug: string; description: string | null; needs_to: boolean };
 
@@ -109,12 +111,14 @@ export default function MatrixBuilder({
   slugs,
   knownPartners = [],
   knownParams = [],
+  partnerCatalog,
 }: {
   clientKey: string;
   hosts: string[];
   slugs: MatrixSlug[];
   knownPartners?: string[];
   knownParams?: string[];
+  partnerCatalog?: PartnerCatalog;
 }) {
   // Properties AND placements both default to ALL — an ACJ buy routinely spans
   // every paper and every placement type, so unchecking is less work than
@@ -130,6 +134,9 @@ export default function MatrixBuilder({
     ),
   );
   const [partner, setPartner] = useState("");
+  const [partnerOverride, setPartnerOverride] = useState(false);
+  const enforcePartners = partnerCatalog?.mode === "enforce";
+  const partnerOk = !partnerCatalog || partnerAllowed(checkPartner(partner, partnerCatalog), partnerOverride);
   const [utm, setUtm] = useState<Utm>({ ...EMPTY_UTM });
   const [constants, setConstants] = useState<Constant[]>([]);
   // The reportable dimensions get first-class fields here, exactly as they do
@@ -279,10 +286,11 @@ export default function MatrixBuilder({
   // the SAME id. The registry upsert is keyed on the id, so those rows collapse
   // into one registration — and the extras are silently skipped. Surface it.
   const linkIdStats = useMemo(() => {
-    if (!linkPattern.trim()) return { total: 0, unique: 0, dupes: 0 };
+    if (!linkPattern.trim()) return { total: 0, unique: 0, dupes: 0, tooLong: 0 };
     const ids = rows.map(r => linkIdFor(r)).filter(Boolean);
     const unique = new Set(ids).size;
-    return { total: ids.length, unique, dupes: ids.length - unique };
+    const tooLong = ids.filter(id => id.length > 128).length;
+    return { total: ids.length, unique, dupes: ids.length - unique, tooLong };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, linkPattern, partner, dims, constants]);
 
@@ -400,6 +408,7 @@ export default function MatrixBuilder({
           : null,
         dimensions,
         url: urlFor(r),
+        partner_override: partnerOverride,
       });
     }
 
@@ -415,9 +424,11 @@ export default function MatrixBuilder({
         res.error
           ? `registry error: ${res.error}`
           : `registered ${n} link${n === 1 ? "" : "s"}` +
-            (res.skipped ? ` \u00b7 ${res.skipped} skipped` : ""),
+            (res.skipped ? ` \u00b7 ${res.skipped} skipped` : "") +
+            (res.problems?.length ? ` \u00b7 ${res.problems[0]}` +
+              (res.problems.length > 1 ? ` (+${res.problems.length - 1} more)` : "") : ""),
       );
-      setTimeout(() => setRegistered(null), 5000);
+      setTimeout(() => setRegistered(null), res.problems?.length ? 15000 : 5000);
     });
   }
 
@@ -713,7 +724,21 @@ export default function MatrixBuilder({
         <div className="mt-3 grid gap-3 sm:grid-cols-4">
           <label className="block">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">Partner</span>
-            <input className={`${inputCls} mt-1`} list="matrix-partners" value={partner} onChange={e => setPartner(e.target.value)} placeholder="firstrust" />
+            {enforcePartners && partnerCatalog ? (
+              <div className="mt-1">
+                <PartnerField
+                  value={partner}
+                  onChange={v => { setPartner(v); setPartnerOverride(false); }}
+                  catalog={partnerCatalog}
+                  override={partnerOverride}
+                  onOverride={setPartnerOverride}
+                  listId="matrix-wp-partners"
+                  inputClassName={inputCls}
+                />
+              </div>
+            ) : (
+              <input className={`${inputCls} mt-1`} list="matrix-partners" value={partner} onChange={e => setPartner(e.target.value)} placeholder="firstrust" />
+            )}
           </label>
           {DIM_KEYS.map(k => (
             <label key={k} className="block">
@@ -768,6 +793,12 @@ export default function MatrixBuilder({
             <p className="mt-1 text-[11px] text-neutral-600">
               First row resolves to{" "}
               <span className="font-mono font-semibold">{linkIdFor(rows[0]) || "(empty)"}</span>
+            </p>
+          )}
+          {linkIdStats.tooLong > 0 && (
+            <p className="mt-1 text-[11px] font-semibold text-red-700">
+              {linkIdStats.tooLong} id{linkIdStats.tooLong === 1 ? " is" : "s are"} over the 128-character
+              limit and will not register. Shorten a part (often the promo or loc) by hand.
             </p>
           )}
           {linkIdStats.dupes > 0 && (
@@ -957,13 +988,18 @@ export default function MatrixBuilder({
 
         {rows.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-t border-neutral-200 px-4 py-3">
-            <button type="button" className={btnPrimary} onClick={copyAll}>
+            {!partnerOk && (
+              <span className="w-full text-xs font-semibold text-red-700">
+                The partner is not in the WordPress list. Pick one, or tick the override, before copying.
+              </span>
+            )}
+            <button type="button" className={btnPrimary} onClick={copyAll} disabled={!partnerOk}>
               {copied === "urls" ? "Copied" : `Copy ${rows.length} URLs`}
             </button>
-            <button type="button" className={btn} onClick={copyTsv}>
+            <button type="button" className={btn} onClick={copyTsv} disabled={!partnerOk}>
               {copied === "tsv" ? "Copied" : "Copy as table"}
             </button>
-            <button type="button" className={btn} onClick={downloadCsv}>
+            <button type="button" className={btn} onClick={downloadCsv} disabled={!partnerOk}>
               Download CSV
             </button>
             {registered && (

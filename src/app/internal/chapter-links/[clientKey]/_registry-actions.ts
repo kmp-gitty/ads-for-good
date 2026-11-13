@@ -13,6 +13,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { authorizeLinksClient } from "@/app/lib/auth/links-access";
+import { loadPartnerCatalog, gateNewLinkPartner } from "@/app/lib/links/partner-catalog";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -38,12 +39,17 @@ export type RegistryRowInput = {
   // reconstruction drifts if URL assembly ever changes — and it cannot be
   // backfilled, so a link registered without it loses the string permanently.
   url?: string | null;
+  // Operator ticked "not in WordPress yet" for this link's partner. Only read
+  // for clients whose partner_catalog_mode is 'enforce', and only on create.
+  partner_override?: boolean;
 };
 
 export type RegisterResult = {
   inserted: number;
   updated: number;
   skipped: number;
+  // Per-row reasons a link was not registered (bad id, blocked partner).
+  problems?: string[];
   error?: string;
 };
 
@@ -71,11 +77,27 @@ export async function registerGeneratedLinks(
   const auth = await authorizeLinksClient(clientKey);
   if (!auth.ok) return { inserted, updated, skipped: rows.length, error: auth.error };
 
+  const problems: string[] = [];
+  const catalog = await loadPartnerCatalog(clientKey).catch(err => {
+    console.error("[link-registry] partner catalog load failed:", err);
+    return null;
+  });
+
   const seen = new Set<string>();
   for (const row of rows) {
     const linkId = (row.link_id ?? "").trim().toLowerCase();
-    if (!linkId || !row.slug || !ID_SHAPE.test(linkId) || seen.has(linkId)) {
+    if (!linkId || !row.slug || seen.has(linkId)) {
       skipped++;
+      continue;
+    }
+    if (linkId.length > 128) {
+      skipped++;
+      problems.push(`${linkId.slice(0, 40)}…: link id is ${linkId.length} characters, over the 128 limit — shorten a part by hand`);
+      continue;
+    }
+    if (!ID_SHAPE.test(linkId)) {
+      skipped++;
+      problems.push(`${linkId}: link id may only use lowercase letters, numbers, - and _`);
       continue;
     }
     seen.add(linkId);
@@ -113,6 +135,19 @@ export async function registerGeneratedLinks(
         }
         updated++;
       } else {
+        // New link: the partner must pass the client's partner rule.
+        let partnerCheck: string | null = null;
+        if (catalog?.mode === "enforce") {
+          const gate = gateNewLinkPartner(catalog, row.dimensions?.partner, !!row.partner_override);
+          if (!gate.ok) {
+            skipped++;
+            problems.push(`${linkId}: ${gate.error}`);
+            continue;
+          }
+          partnerCheck = gate.partner_check;
+        } else if (!catalog) {
+          return { inserted, updated, skipped, problems, error: "could not load the partner list; nothing new was registered" };
+        }
         const { error } = await supabase
           .schema("chapter_config")
           .from("generated_links")
@@ -125,6 +160,7 @@ export async function registerGeneratedLinks(
             dimensions: row.dimensions,
             url: row.url ?? null,
             created_by: "matrix_builder",
+            ...(partnerCheck ? { partner_check: partnerCheck } : {}),
           });
         if (error) {
           console.error("[link-registry] insert failed:", error);
@@ -143,5 +179,5 @@ export async function registerGeneratedLinks(
     }
   }
 
-  return { inserted, updated, skipped };
+  return { inserted, updated, skipped, ...(problems.length ? { problems } : {}) };
 }

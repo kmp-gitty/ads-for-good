@@ -20,6 +20,8 @@ import UrlBuilder, { type ClientOption } from "./UrlBuilder";
 import MatrixBuilder from "./MatrixBuilder";
 import RegistryPanel from "./RegistryPanel";
 import ImportBuilder from "./ImportBuilder";
+import { loadPartnerCatalog } from "@/app/lib/links/partner-catalog";
+import { emptyCatalog } from "@/app/lib/links/partner-check";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -237,7 +239,14 @@ export default async function ChapterLinksWorkbench({
   }
 
   const allRules = (rules ?? []) as Rule[];
-  const knownPartners = await fetchPartnerVocabulary(clientKey, vocabulary.partners);
+  const [knownPartners, partnerCatalog] = await Promise.all([
+    fetchPartnerVocabulary(clientKey, vocabulary.partners),
+    // WordPress partner list for clients in 'enforce' mode; empty otherwise.
+    loadPartnerCatalog(clientKey).catch(err => {
+      console.error("[chapter-links] partner catalog load failed:", err);
+      return emptyCatalog("off");
+    }),
+  ]);
 
   const bySlug = new Map<string, Rule[]>();
   for (const r of allRules) {
@@ -350,6 +359,7 @@ export default async function ChapterLinksWorkbench({
           hosts={hostOptions}
           slugs={enabledSlugs}
           knownPartners={knownPartners}
+          partnerCatalog={partnerCatalog}
           defaultPattern="{property}-{partner}-{promo}-{loc}"
         />
       ) : tab === "registry" ? (
@@ -374,6 +384,7 @@ export default async function ChapterLinksWorkbench({
             hosts={hostOptions}
             slugs={enabledSlugs}
             knownPartners={knownPartners}
+            partnerCatalog={partnerCatalog}
             knownParams={vocabulary.params}
           />
         </div>
@@ -390,6 +401,7 @@ export default async function ChapterLinksWorkbench({
             defaultSlug={preselectSlug}
             redirectOrigin={origin}
             knownPartners={knownPartners}
+            partnerCatalog={partnerCatalog}
             lockClient
             allowCrmSearch={isOperator}
           />

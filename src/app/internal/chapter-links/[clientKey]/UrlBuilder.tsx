@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { registerGeneratedLinks } from "./_registry-actions";
+import PartnerField from "./PartnerField";
+import { checkPartner, partnerAllowed, type PartnerCatalog } from "@/app/lib/links/partner-check";
 import {
   searchProspectsForOutreach,
   type ProspectOption,
@@ -145,6 +147,7 @@ export default function UrlBuilder({
   redirectOrigin,
   lockClient = false,
   knownPartners = [],
+  partnerCatalog,
   allowCrmSearch = true,
 }: {
   clients: ClientOption[];
@@ -164,6 +167,9 @@ export default function UrlBuilder({
   // still allowed — this exists so `firstrust` / `Firstrust` / `firstrust-bank`
   // don't fragment into three partners in reporting.
   knownPartners?: string[];
+  // WordPress partner list (partner catalog mode 'enforce'). When set, the
+  // partner field picks from it and an unknown key needs an explicit override.
+  partnerCatalog?: PartnerCatalog;
 }) {
   const [clientKey, setClientKey] = useState(defaultClientKey);
   const availableSlugs = slugsByClient[clientKey] ?? [];
@@ -194,6 +200,10 @@ export default function UrlBuilder({
 
   const [slug, setSlug] = useState<string>(defaultSlug ?? "");
   const [partner, setPartner] = useState("");
+  const [partnerOverride, setPartnerOverride] = useState(false);
+  const enforcePartners = partnerCatalog?.mode === "enforce";
+  const partnerVerdict = partnerCatalog ? checkPartner(partner, partnerCatalog) : { kind: "none" as const };
+  const partnerOk = partnerAllowed(partnerVerdict, partnerOverride);
   // Reporting dimensions. These are lifted out of the query string into their
   // own column (pixel_events.dimensions) per the client's reportable_params,
   // so they filter and group directly instead of being parsed out of the blob.
@@ -365,9 +375,14 @@ export default function UrlBuilder({
         : normalizeDestination(destination) || null,
       dimensions,
       url: finalUrl,
+      partner_override: partnerOverride,
     }]).then(res => {
-      setRegistered(res.error ? `registry error: ${res.error}` : "link registered");
-      setTimeout(() => setRegistered(null), 4000);
+      setRegistered(
+        res.error ? `registry error: ${res.error}`
+          : res.problems?.length ? `not registered: ${res.problems[0]}`
+          : "link registered",
+      );
+      setTimeout(() => setRegistered(null), res.problems?.length ? 12000 : 4000);
     });
   }
 
@@ -395,7 +410,7 @@ export default function UrlBuilder({
   // What the reader actually lands on. Only knowable client-side for a
   // pass-through link; a rule-supplied destination resolves server-side.
   const resolvedDestination = ruleSuppliesDestination ? null : normalizeDestination(destination);
-  const canBuild = ruleSuppliesDestination || destState === "ok";
+  const canBuild = (ruleSuppliesDestination || destState === "ok") && partnerOk;
 
   return (
     <div className="mt-6 grid gap-5">
@@ -587,7 +602,20 @@ export default function UrlBuilder({
         )}
       </div>
 
-      <Field label="Partner" hint="Who the placement is for — reporting groups on this exact text">
+      <Field label="Partner" hint={enforcePartners
+        ? "Who the placement is for — from the WordPress partner list"
+        : "Who the placement is for — reporting groups on this exact text"}>
+        {enforcePartners && partnerCatalog ? (
+          <PartnerField
+            value={partner}
+            onChange={v => { setPartner(v); setPartnerOverride(false); }}
+            catalog={partnerCatalog}
+            override={partnerOverride}
+            onOverride={setPartnerOverride}
+            listId="wp-partners"
+            inputClassName={inputCls}
+          />
+        ) : (
         <>
           <input
             className={inputCls}
@@ -608,6 +636,7 @@ export default function UrlBuilder({
             </span>
           </p>
         </>
+        )}
       </Field>
 
       <Field
@@ -646,6 +675,11 @@ export default function UrlBuilder({
               ? "Registered when you copy — this placement appears in reporting whether or not anyone clicks it."
               : "Optional, but without it only CLICKED links ever appear in reporting, so a placement that draws zero clicks looks like it was never shipped."}{" "}
             <span className="text-neutral-400">Lowercase letters, numbers and dashes.</span>
+            {linkId.trim().length > 128 && (
+              <span className="ml-2 font-semibold text-red-700">
+                {linkId.trim().length} characters — over the 128 limit, so it will not register. Shorten a part by hand.
+              </span>
+            )}
             {registered && <span className="ml-2 font-semibold text-neutral-600">{registered}</span>}
           </p>
         </>

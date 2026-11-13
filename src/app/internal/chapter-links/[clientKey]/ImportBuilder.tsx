@@ -17,6 +17,7 @@
 
 import { useMemo, useState } from "react";
 import { normalizeDestination } from "./UrlBuilder";
+import { checkPartner, describeVerdict, emptyCatalog, type PartnerCatalog } from "@/app/lib/links/partner-check";
 import { hostLabel, propertyToken, slugify, parseSheet, resolveHost, nearestPartners } from "./import-parse";
 import {
   planRegistryImport, commitRegistryImport,
@@ -123,14 +124,19 @@ const inp: React.CSSProperties = {
 };
 
 export default function ImportBuilder({
-  clientKey, hosts, slugs, knownPartners, defaultPattern,
+  clientKey, hosts, slugs, knownPartners, defaultPattern, partnerCatalog = emptyCatalog(),
 }: {
   clientKey: string;
   hosts: string[];
   slugs: { slug: string; description: string | null; needs_to: boolean }[];
   knownPartners: string[];
   defaultPattern: string;
+  // WordPress partner list (mode 'enforce'). Unknown partners become errors
+  // unless the operator ticks the "not in WordPress yet" override.
+  partnerCatalog?: PartnerCatalog;
 }) {
+  const [partnerOverride, setPartnerOverride] = useState(false);
+  const enforcePartners = partnerCatalog.mode === "enforce";
   const [raw, setRaw] = useState("");
   const [mapping, setMapping] = useState<Mapping>(EMPTY_MAPPING);
   const [pattern, setPattern] = useState(defaultPattern);
@@ -242,6 +248,22 @@ export default function ImportBuilder({
       }
       const size = b.dims.size;
       if (size && !/^\d+x\d+$/i.test(size)) out.push({ row: n, level: "warn", msg: `size "${size}" is not WxH` });
+      if (enforcePartners) {
+        const raw = (b.dims.partner ?? "").trim();
+        const v = checkPartner(raw, partnerCatalog);
+        if (v.kind === "malformed") out.push({ row: n, level: "error", msg: describeVerdict(raw, v) });
+        else if (v.kind === "legacy") out.push({ row: n, level: "warn", msg: `partner "${raw}": ${describeVerdict(raw, v)}` });
+        else if (v.kind === "unknown") {
+          out.push({
+            row: n,
+            level: partnerOverride ? "warn" : "error",
+            msg: partnerOverride
+              ? `partner "${raw}" is not in WordPress — allowed by the override, and recorded on the link`
+              : describeVerdict(raw, v),
+          });
+        }
+        return;
+      }
       const p = (b.dims.partner ?? "").toLowerCase();
       if (p && !known.has(p)) {
         const near = nearestPartners(p, knownPartners);
@@ -258,7 +280,7 @@ export default function ImportBuilder({
       }
     });
     return out;
-  }, [built, knownPartners]);
+  }, [built, knownPartners, enforcePartners, partnerCatalog, partnerOverride]);
 
   const errors = findings.filter(f => f.level === "error");
   const warns = findings.filter(f => f.level === "warn");
@@ -305,7 +327,7 @@ export default function ImportBuilder({
     setBusy(true); setStatus(null);
     try {
       const updates = plan.changes.filter(c => applyRow[c.link_id]).map(mergedUpdate);
-      const res = await commitRegistryImport(clientKey, plan.creates, updates);
+      const res = await commitRegistryImport(clientKey, plan.creates, updates, { partnerOverride });
       setStatus(res.error ? `register failed: ${res.error}`
         : `registered — ${res.inserted} created, ${res.updated} updated`);
       if (!res.error) await runPlan();
@@ -618,6 +640,12 @@ export default function ImportBuilder({
       {/* 5. Registry diff + commit */}
       {built.length > 0 && (
         <Section n={5} title="Check the registry, then register" sub="nothing is written until you confirm">
+          {enforcePartners && built.some(b => checkPartner(b.dims.partner ?? "", partnerCatalog).kind === "unknown") && (
+            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: INK, marginBottom: 10 }}>
+              <input type="checkbox" checked={partnerOverride} onChange={e => setPartnerOverride(e.target.checked)} />
+              Some partners are not in WordPress yet — use them anyway (recorded on each new link)
+            </label>
+          )}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={runPlan} disabled={busy || errors.length > 0} style={btn(!busy && errors.length === 0)}>
               {busy ? "Working…" : "Check against registry"}

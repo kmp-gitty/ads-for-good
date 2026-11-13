@@ -21,6 +21,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { authorizeLinksClient } from "@/app/lib/auth/links-access";
+import { loadPartnerCatalog, gateNewLinkPartner } from "@/app/lib/links/partner-catalog";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -265,11 +266,30 @@ export async function commitRegistryImport(
   clientKey: string,
   creates: ImportRow[],
   updates: ImportRow[],
+  opts: { partnerOverride?: boolean } = {},
 ): Promise<CommitResult> {
   let inserted = 0;
   let updated = 0;
   const auth = await authorizeLinksClient(clientKey);
   if (!auth.ok) return { inserted, updated, error: auth.error };
+
+  // New links must pass the client's partner rule (WordPress names for ACJ).
+  // All-or-nothing: if any new row is blocked, nothing is written.
+  const catalog = await loadPartnerCatalog(clientKey).catch(() => null);
+  if (!catalog) return { inserted, updated, error: "could not load the partner list; nothing was written" };
+  const partnerCheck = new Map<string, string | null>();
+  const blocked: string[] = [];
+  for (const r of creates) {
+    const gate = gateNewLinkPartner(catalog, r.dimensions?.partner, !!opts.partnerOverride);
+    if (!gate.ok) blocked.push(`${r.link_id}: ${gate.error}`);
+    else partnerCheck.set(r.link_id, gate.partner_check);
+  }
+  if (blocked.length) {
+    return {
+      inserted, updated,
+      error: `${blocked.length} new link${blocked.length === 1 ? "" : "s"} blocked by the partner rule, nothing written. ${blocked.slice(0, 3).join(" · ")}`,
+    };
+  }
 
   // Chunked rather than one giant statement: a 250-row insert is fine, but the
   // bound keeps a future 2,000-row import from hitting a payload limit as a
@@ -284,6 +304,9 @@ export async function commitRegistryImport(
       destination: r.destination,
       dimensions: r.dimensions,
       url: r.url ?? null,
+      // Column exists only once the partner-catalog SQL is applied, which is
+      // also what turns enforce mode on; every row gets the same keys.
+      ...(catalog.mode === "enforce" ? { partner_check: partnerCheck.get(r.link_id) ?? null } : {}),
     }));
     if (slice.length === 0) continue;
     const { error } = await supabase.schema("chapter_config").from("generated_links").insert(slice);
