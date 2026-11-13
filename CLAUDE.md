@@ -203,6 +203,16 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - **Rollout:** one snippet for all papers (`docs/acj-slide-impressions.md`); switch papers on by adding to `impression_hosts` (Delco first, check vs GA, then the rest; remove = kill switch).
 - **⚠️ Deploy-order trap:** `fetchClientRedirectConfig` now selects `impression_hosts`; if the column were missing the config read fails and falls back to `identity_handoff_enabled: true`, appending chid/jid to ACJ partner URLs. Column applied before push.
 
+### Click classification v3 + weekly bot-cluster review in Slack (Nov 13, 2026)
+
+- **New suspect rule `search_referrer_onsite`:** a search-engine referrer on an on-site placement (`logo`, `display`, `article`, `internal_*`) is suspect. The papers send no referrer on real rail/banner clicks (1 of ~1,690 counted carried a paper referrer), and wrapped links are noindex + robots-disallowed. Evidence: 253 counted Google-referred clicks outside San Jose, 253 browsers, **0 on a phone**. Limited to those slugs on purpose: NSC `google-ads` clicks legitimately come from Google. Suspect, not bot (operator call). 1,798 clicks moved all-time.
+- **San Jose cluster (bot), from 2026-11-05 18:00 UTC, window to Dec 15:** stealth crawler, 992 clicks / 992 browsers / 0 repeats / 0 page events / all 5 papers / 268 links / up to 30 per minute. 341 previously counted clicks moved. ACJ counted all-time 14,916 -> 12,963.
+- **Clusters gained `verdict` (bot | suspect | ignore).** `cluster` rule = bot, new `cluster_suspect` = suspect, `ignore` records a rejected candidate and never changes a level.
+- **`chapter_reporting.click_cluster_candidates(client, days)`:** city groups (15+ counted human_likely clicks, not covered by any cluster) meeting 2 of 3 signals: desktop >= 75%, browser strings <= 35% of clicks, links >= 50% of clicks. "One click per browser" is NOT a signal for ACJ (links-only, so real readers are one-click too). `decide_click_cluster(...)` records a decision.
+- **n8n (folder ACJ):** "ACJ bot review: weekly (Mondays 9am ET)" (`glbZJQKUx1kRZ3E9`) posts each candidate to Slack #chapter-link-new-bot-rules via sub-workflow "ACJ bot review: decide one cluster" (`V6Ch2h3wi1TP1Nja`, form: Bot / Suspect / Ignore + note, expires after 6 days). Postgres via "Supabase - afG". Failures -> "ACJ - Automation Builds Error Alerts" -> #acj-n8n-error-notifications. Decisions take effect at the 05:15 UTC nightly re-sort.
+- SQL: `~/chapter-scripts/snapshots/2026-11-13-search-referrer-onsite-and-san-jose.sql`, `...-weekly-cluster-review.sql`.
+- **No IP memory exists, by design** (Oct 29 decision): only network labels are kept. Clusters are the memory, re-applied to all history nightly.
+
 ### Crawler clicks on Chapter Links: three new flags + robots.txt on the link hosts (Oct 26, 2026)
 
 **Measured first, on 12 days of ACJ clicks (40,019).** All server-side; nothing on ACJ's sites, WordPress or the pixel changed.

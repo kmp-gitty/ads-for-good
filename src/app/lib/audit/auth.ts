@@ -37,9 +37,26 @@ export async function logAuthAttempt(attempt: AuthAttempt): Promise<void> {
   }
 }
 
+// IP hashes are keyed (HMAC-SHA256 with CHAPTER_IP_HASH_KEY). A plain SHA-256
+// of an IP is reversible: there are only ~4 billion IPv4 addresses, so every
+// hash can be precomputed in minutes. With a secret key the stored value can
+// still group repeat requests from one IP but cannot be turned back into it.
+// Missing key: a random per-instance key is used instead, so hashes are never
+// unkeyed (they just stop matching across server instances until it is set).
+let fallbackKey: string | null = null;
+function ipHashKey(): string {
+  const k = process.env.CHAPTER_IP_HASH_KEY;
+  if (k) return k;
+  if (!fallbackKey) {
+    fallbackKey = crypto.randomBytes(32).toString("hex");
+    console.warn("[audit] CHAPTER_IP_HASH_KEY not set; using a per-instance key");
+  }
+  return fallbackKey;
+}
+
 export function hashIp(ip: string | null | undefined): string | null {
   if (!ip) return null;
-  return crypto.createHash("sha256").update(ip).digest("hex");
+  return crypto.createHmac("sha256", ipHashKey()).update(ip).digest("hex");
 }
 
 export function getClientIp(req: {

@@ -1,10 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import crypto from "crypto";
 import { coreSchemas } from "@/app/lib/chapter-db";
-
-function sha256(input) {
-  return crypto.createHash("sha256").update(input).digest("hex");
-}
+import { hashIp } from "@/app/lib/audit/auth";
 
 export async function GET(req, ctx) {
   const { click_slug } = await ctx.params;
@@ -56,7 +52,7 @@ export async function GET(req, ctx) {
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
     "";
-  const ip_hash = ip ? sha256(ip) : null;
+  const ip_hash = hashIp(ip);
 
   const { searchParams } = new URL(req.url);
   const source = searchParams.get("source") || "unknown";
