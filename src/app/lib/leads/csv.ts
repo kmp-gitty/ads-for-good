@@ -6,6 +6,11 @@ export function csvCell(v: unknown): string {
   let s: string;
   if (typeof v === "object") s = JSON.stringify(v);
   else s = String(v);
+  // Visitor-typed values can start with = + - @ (or a tab/CR), which Excel and
+  // Google Sheets run as a formula when the file is opened (CSV injection).
+  // A leading apostrophe makes the spreadsheet treat it as plain text. Plain
+  // numbers and phone numbers (+15551234567, -3) are left alone.
+  if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?[\d\s().-]+$/.test(s)) s = "'" + s;
   if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
