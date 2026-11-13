@@ -212,6 +212,7 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - **n8n (folder ACJ):** "ACJ bot review: weekly (Mondays 9am ET)" (`glbZJQKUx1kRZ3E9`) posts each candidate to Slack #chapter-link-new-bot-rules via sub-workflow "ACJ bot review: decide one cluster" (`V6Ch2h3wi1TP1Nja`, form: Bot / Suspect / Ignore + note, expires after 6 days). Postgres via "Supabase - afG". Failures -> "ACJ - Automation Builds Error Alerts" -> #acj-n8n-error-notifications. Decisions take effect at the 05:15 UTC nightly re-sort.
 - SQL: `~/chapter-scripts/snapshots/2026-11-13-search-referrer-onsite-and-san-jose.sql`, `...-weekly-cluster-review.sql`.
 - **No IP memory exists, by design** (Oct 29 decision): only network labels are kept. Clusters are the memory, re-applied to all history nightly.
+- **IP lists refresh monthly, automatically:** GitHub Action `.github/workflows/refresh-bot-ip-lists.yml` (1st of the month, 12:00 UTC, also runnable by hand) rebuilds both lists and commits to main; refuses to commit if either file shrinks >25%. Last manual refresh Nov 13. **`hashIp` is now keyed** (HMAC with `CHAPTER_IP_HASH_KEY`, set in Vercel Nov 13); hashes before that are reversible plain SHA-256.
 
 ### Crawler clicks on Chapter Links: three new flags + robots.txt on the link hosts (Oct 26, 2026)
 

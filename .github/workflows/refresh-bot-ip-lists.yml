@@ -1,0 +1,52 @@
+# Monthly refresh of the cloud and hosting-network IP lists used to flag bot
+# clicks (src/app/lib/redirect/*-ranges.data.*). Rebuilds both lists from their
+# public sources and commits to main, which redeploys on Vercel.
+# Guard: if either file shrinks by more than 25% (a source failed or changed
+# format), nothing is committed and the run fails, so the old lists stay live.
+name: Refresh bot IP lists
+
+on:
+  schedule:
+    - cron: "0 12 1 * *" # 1st of each month, 12:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Rebuild lists
+        run: |
+          node scripts/build-datacenter-ranges.mjs
+          node scripts/build-hosting-asn-ranges.mjs
+
+      - name: Refuse a large shrink
+        run: |
+          for f in src/app/lib/redirect/datacenter-ranges.data.ts src/app/lib/redirect/hosting-asn-ranges.data.json; do
+            old=$(git show HEAD:"$f" | wc -c)
+            new=$(wc -c < "$f")
+            echo "$f: $old -> $new bytes"
+            if [ "$new" -lt $(( old * 75 / 100 )) ]; then
+              echo "::error::$f shrank by more than 25%; not committing"
+              exit 1
+            fi
+          done
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- src/app/lib/redirect; then
+            echo "No changes."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/lib/redirect/datacenter-ranges.data.ts src/app/lib/redirect/hosting-asn-ranges.data.json
+          git commit -m "Refresh cloud and hosting-network IP lists ($(date -u +%Y-%m-%d))"
+          git push
