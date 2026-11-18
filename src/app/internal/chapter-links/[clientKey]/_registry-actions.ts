@@ -14,6 +14,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { authorizeLinksClient } from "@/app/lib/auth/links-access";
 import { loadPartnerCatalog, gateNewLinkPartner } from "@/app/lib/links/partner-catalog";
+import { approveDestinations } from "@/app/lib/redirect/approved-destinations";
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -76,6 +77,11 @@ export async function registerGeneratedLinks(
   // Authorized from the session — also callable from clients' dashboards.
   const auth = await authorizeLinksClient(clientKey);
   if (!auth.ok) return { inserted, updated, skipped: rows.length, error: auth.error };
+
+  // Links made here approve their own ?to= destinations (open-redirect guard).
+  // Never blocks registration.
+  await approveDestinations(clientKey, rows.map(r => r.destination), "registry", auth.email)
+    .catch(err => console.error("[registry] approve destinations failed:", err));
 
   const problems: string[] = [];
   const catalog = await loadPartnerCatalog(clientKey).catch(err => {

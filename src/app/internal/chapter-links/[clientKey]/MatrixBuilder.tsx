@@ -37,6 +37,7 @@
 
 import { useMemo, useState } from "react";
 import { registerGeneratedLinks, type RegistryRowInput } from "./_registry-actions";
+import { approveLinkDestinations } from "./_allowlist-actions";
 import { normalizeDestination } from "./UrlBuilder";
 import PartnerField from "./PartnerField";
 import { checkPartner, partnerAllowed, type PartnerCatalog } from "@/app/lib/links/partner-check";
@@ -392,7 +393,18 @@ export default function MatrixBuilder({
   // derived from row content so adding a property cannot shuffle typed
   // destinations, which means it changes whenever a dimension changes. Identity
   // has to stay stable while attributes stay editable.
+  // Approve the ?to= destinations being handed out (open-redirect guard),
+  // whether or not the rows carry link ids.
+  function approveRows(list: Row[]) {
+    const dests = list
+      .filter(r => r.needsTo)
+      .map(r => normalizeDestination(destinations[r.id] ?? ""))
+      .filter(Boolean);
+    if (dests.length) void approveLinkDestinations(clientKey, dests, "matrix");
+  }
+
   function registerRows() {
+    approveRows(rows);
     const payload: RegistryRowInput[] = [];
     for (const r of rows) {
       const rowLinkId = linkIdFor(r) || r.cells.find(c => c.param === "link")?.value || "";
@@ -526,6 +538,7 @@ export default function MatrixBuilder({
   // Per-row copy is the workflow that actually happens: paste THIS url into
   // THAT slot of THAT send.
   async function copyRow(r: Row) {
+    approveRows([r]);
     try {
       await navigator.clipboard.writeText(urlFor(r));
       setCopied(r.id);

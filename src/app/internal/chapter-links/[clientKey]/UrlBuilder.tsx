@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { registerGeneratedLinks } from "./_registry-actions";
+import { approveLinkDestinations } from "./_allowlist-actions";
 import PartnerField from "./PartnerField";
 import { checkPartner, partnerAllowed, type PartnerCatalog } from "@/app/lib/links/partner-check";
 import {
@@ -386,7 +387,16 @@ export default function UrlBuilder({
     });
   }
 
+  // Approve this link's ?to= destination so it is forwarded (open-redirect
+  // guard). Runs on every copy/download, with or without a link id.
+  function approveThisDestination() {
+    if (ruleSuppliesDestination) return;
+    const d = normalizeDestination(destination);
+    if (d) void approveLinkDestinations(clientKey, [d], "generate");
+  }
+
   async function copyText(text: string) {
+    approveThisDestination();
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -395,6 +405,7 @@ export default function UrlBuilder({
   }
 
   function downloadCsv() {
+    approveThisDestination();
     const header = bulkMode === "placement" ? "placement,url" : "recipient,url";
     const body = bulkRows.map(r => `"${r.key.replace(/"/g, '""')}","${r.url}"`).join("\n");
     const blob = new Blob([`${header}\n${body}\n`], { type: "text/csv" });

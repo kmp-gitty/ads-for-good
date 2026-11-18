@@ -55,6 +55,8 @@ export type RedirectClickRow = {
   // The reader is still routed (to the host/client default) — this flag is how
   // dead-link traffic stays visible instead of silently vanishing.
   link_disabled?: boolean;
+  // Approval key of a ?to= destination that is not on the client's approved list.
+  unapproved_destination?: string | null;
 };
 
 export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
@@ -124,6 +126,9 @@ export async function logRedirectClick(row: RedirectClickRow): Promise<void> {
   };
   if (unregisteredLink) {
     props.unregistered_link = true;
+  }
+  if (row.unapproved_destination) {
+    props.unapproved_destination = row.unapproved_destination;
   }
   if (row.link_disabled) {
     props.link_disabled = true;

@@ -20,6 +20,7 @@
 // Gated by the /internal/* middleware (gateInternal), same as its siblings.
 
 import { createClient } from "@supabase/supabase-js";
+import { approveDestinations } from "@/app/lib/redirect/approved-destinations";
 import { authorizeLinksClient } from "@/app/lib/auth/links-access";
 import { loadPartnerCatalog, gateNewLinkPartner } from "@/app/lib/links/partner-catalog";
 
@@ -272,6 +273,10 @@ export async function commitRegistryImport(
   let updated = 0;
   const auth = await authorizeLinksClient(clientKey);
   if (!auth.ok) return { inserted, updated, error: auth.error };
+
+  // Approve the imported ?to= destinations (open-redirect guard).
+  await approveDestinations(clientKey, [...creates, ...updates].map(r => r.destination), "import", auth.email)
+    .catch(err => console.error("[import] approve destinations failed:", err));
 
   // New links must pass the client's partner rule (WordPress names for ACJ).
   // All-or-nothing: if any new row is blocked, nothing is written.

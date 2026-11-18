@@ -214,6 +214,15 @@ chapter_reporting (dashboard outputs — EOS-specific for now)
 - **No IP memory exists, by design** (Oct 29 decision): only network labels are kept. Clusters are the memory, re-applied to all history nightly.
 - **IP lists refresh monthly, automatically:** GitHub Action `.github/workflows/refresh-bot-ip-lists.yml` (1st of the month, 12:00 UTC, also runnable by hand) rebuilds both lists and commits to main; refuses to commit if either file shrinks >25%. Last manual refresh Nov 13. **`hashIp` is now keyed** (HMAC with `CHAPTER_IP_HASH_KEY`, set in Vercel Nov 13); hashes before that are reversible plain SHA-256.
 
+### Chapter Links ?to= allowlist — open-redirect guard (Nov 18, 2026)
+
+- **Problem:** pass-through links (`go.<paper>.today/r/acj_today/<slug>?to=<anything>`) forwarded to any address, so anyone could borrow a paper's name for a phishing link.
+- **`chapter_config.clients.destination_allowlist_mode`** off (default) | log | enforce. `log` forwards and tags the click `props.unapproved_destination`; `enforce` sends the reader to the paper's homepage (per-host default → client default). Applies only when the destination came from `?to=` (fallback or a rule template starting with `{`), and also on the bot fast-path. The client's own defaults are always trusted. Mode is read separately from `fetchClientRedirectConfig`, failing open, so a missing column can't break links.
+- **`chapter_config.approved_destinations`** (kind `host` = whole site, `www.` ignored, no subdomains; kind `url` = host + path for open platforms where anyone can publish: shorteners, link-in-bio, social, forms, events — list `OPEN_PLATFORM_HOSTS` in `lib/redirect/destination-allowlist.ts`). Matching parses the URL and compares hostnames exactly; `user@host` URLs never match.
+- **Auto-approval:** every copy/download in Generate, Matrix and Import (with or without a link id) and every register/import approves its destinations via `approveLinkDestinations` / `approveDestinations`. Cache 5 min; a miss is re-checked live and remembered 60 s.
+- **Approved sites tab** in the workbench: list, manual approve, remove, and clicks to unapproved destinations in the last 30 days (`chapter_reporting.unapproved_destination_clicks`).
+- SQL: `~/chapter-scripts/snapshots/2026-11-18-acj-approved-destinations.sql` (seed: 526 keys from the registry + papers + acj.today + goodwillde.org / montgomerycountychamber.org / citadelbanking.com). ACJ starts in `log`; flip to `enforce` after the tab shows nothing real left unapproved.
+
 ### ACJ partner keys come from WordPress (Nov 13, 2026)
 
 - **Rule (operator decision):** a NEW `acj_today` link's `partner` must be the WordPress `affiliate-partner` slug with `-` → `_` (`trumark-credit-union` → `trumark_credit_union`). Existing links, ids and clicks are never renamed; ACJ reporting maps old keys via `acj.chapter_partner_map` in the ACJ Database.

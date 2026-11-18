@@ -23,6 +23,7 @@ import {
   planRegistryImport, commitRegistryImport,
   type ImportRow, type ImportPlan,
 } from "./_import-actions";
+import { approveLinkDestinations } from "./_allowlist-actions";
 
 const INK = "#1F2D43", MUTED = "#5C6B82", FAINT = "#8A98AD";
 const ORANGE = "#E36410", LINE = "#E5E0D4", PANEL = "#FBFAF6";
@@ -343,7 +344,14 @@ export default function ImportBuilder({
    * is only useful if it still lines up with the sheet it came from. Row order
    * is input order for the same reason.
    */
+  // Approve the ?to= destinations being handed out (open-redirect guard).
+  function approveBuilt() {
+    const dests = built.filter(b => b.needsTo && b.dest).map(b => b.dest);
+    if (dests.length) void approveLinkDestinations(clientKey, dests, "import");
+  }
+
   function downloadCsv() {
+    approveBuilt();
     const head = [...parsed.headers, "link_id", "wrapped_url"];
     const body = built.map(b => {
       const src = parsed.rows[b.i] ?? [];
@@ -363,6 +371,7 @@ export default function ImportBuilder({
    * Blank for any row that could not build one, to keep the alignment honest.
    */
   async function copyUrlColumn() {
+    approveBuilt();
     try {
       await navigator.clipboard.writeText(built.map(b => b.url).join("\n"));
       setStatus(`copied ${built.length} url${built.length === 1 ? "" : "s"} — paste into your sheet's wrapped-link column`);

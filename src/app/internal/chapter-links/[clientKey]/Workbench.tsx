@@ -20,6 +20,8 @@ import UrlBuilder, { type ClientOption } from "./UrlBuilder";
 import MatrixBuilder from "./MatrixBuilder";
 import RegistryPanel from "./RegistryPanel";
 import ImportBuilder from "./ImportBuilder";
+import AllowlistPanel from "./AllowlistPanel";
+import { listApprovedDestinations } from "./_allowlist-actions";
 import { loadPartnerCatalog } from "@/app/lib/links/partner-catalog";
 import { emptyCatalog } from "@/app/lib/links/partner-check";
 
@@ -152,7 +154,7 @@ type Rule = {
   last_hit_at: string | null;
 };
 
-type Tab = "links" | "generate" | "matrix" | "import" | "registry";
+type Tab = "links" | "generate" | "matrix" | "import" | "registry" | "approved";
 
 const subChip: React.CSSProperties = {
   fontSize: 11,
@@ -210,6 +212,7 @@ export default async function ChapterLinksWorkbench({
     : sp.tab === "matrix" ? "matrix"
     : sp.tab === "import" ? "import"
     : sp.tab === "registry" ? "registry"
+    : sp.tab === "approved" ? "approved"
     : "links";
   const preselectSlug = typeof sp.slug === "string" ? sp.slug : undefined;
 
@@ -351,9 +354,14 @@ export default async function ChapterLinksWorkbench({
         <Link href={`${basePath}?tab=registry`} style={tabStyle(tab === "registry")}>
           Registry
         </Link>
+        <Link href={`${basePath}?tab=approved`} style={tabStyle(tab === "approved")}>
+          Approved sites
+        </Link>
       </div>
 
-      {tab === "import" ? (
+      {tab === "approved" ? (
+        <AllowlistPanel clientKey={clientKey} {...(await listApprovedDestinations(clientKey))} />
+      ) : tab === "import" ? (
         <ImportBuilder
           clientKey={clientKey}
           hosts={hostOptions}

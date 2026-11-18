@@ -52,6 +52,7 @@ import { resolveSegments, SKIPPED_SEGMENTS } from "@/app/lib/redirect/segments";
 import { resolveCart, SKIPPED_CART } from "@/app/lib/redirect/cart";
 import { evaluateConditions, requiredContext, EvalContext } from "@/app/lib/redirect/conditions";
 import { interpolateTemplate, isValidDestination, appendIdentityHandoff, appendPaperHandoff } from "@/app/lib/redirect/template";
+import { checkDestination } from "@/app/lib/redirect/approved-destinations";
 import { logRedirectClick } from "@/app/lib/redirect/click-logger";
 import { appendHubspotCrossDomain } from "@/app/lib/redirect/hubspot-handoff";
 import { isEmailIgnored, isUaIgnored } from "@/app/lib/auth/tracking-ignore";
@@ -140,6 +141,15 @@ export async function GET(
   if (device.device_type === "bot") {
     const defaultDest = query.to;
     if (defaultDest && isValidDestination(defaultDest)) {
+      // Same allowlist as humans: a bot UA must not turn this into an open
+      // redirect. Unapproved -> the paper's homepage (or 404 if none).
+      const verdict = await checkDestination(client_key, defaultDest);
+      if (verdict.mode === "enforce" && !verdict.approved) {
+        const cfg = await fetchClientRedirectConfig(client_key);
+        const safe = resolveHostDefaultDestination(cfg, req.nextUrl.hostname) ?? cfg.default_redirect_destination;
+        if (safe && isValidDestination(safe)) return NextResponse.redirect(safe, { status: 302 });
+        return new NextResponse("not_found", { status: 404 });
+      }
       return NextResponse.redirect(defaultDest, { status: 302 });
     }
     return new NextResponse("not_found", { status: 404 });
@@ -219,10 +229,16 @@ export async function GET(
   // Walk rules priority-ascending, first match wins.
   let matchedRuleId: string | null = null;
   let destination: string | null = null;
+  // True when the reader-facing destination was supplied by the URL (?to=),
+  // either through a pass-through rule ({q:to}...) or the fallback below. Only
+  // those are checked against the approved list: a fixed rule destination was
+  // written by an operator.
+  let destinationFromQuery = false;
   for (const rule of rules) {
     if (evaluateConditions(rule.condition_jsonb, ctx)) {
       matchedRuleId = rule.id;
       destination = interpolateTemplate(rule.destination_template, ctx);
+      destinationFromQuery = /^\s*\{/.test(rule.destination_template);
       break;
     }
   }
@@ -252,6 +268,7 @@ export async function GET(
     const hostDefault = resolveHostDefaultDestination(clientConfig, req.nextUrl.hostname);
     if (fallback && isValidDestination(fallback)) {
       destination = fallback;
+      destinationFromQuery = true;
     } else if (hostDefault && isValidDestination(hostDefault)) {
       destination = hostDefault;
     } else if (
@@ -262,6 +279,34 @@ export async function GET(
     } else {
       console.warn(`[redirect] no destination for ${client_key}/${slug}; rules=${rules.length}`);
       return new NextResponse("not_found", { status: 404 });
+    }
+  }
+
+  // ─── Approved destinations (open-redirect guard) ───────────────────────────
+  // Clients in allowlist mode only forward ?to= to approved sites (see
+  // lib/redirect/destination-allowlist.ts). 'log' forwards and tags the click;
+  // 'enforce' sends the reader to the paper they were on instead. The client's
+  // own defaults are always trusted. Cached per client; a miss costs one
+  // indexed lookup, remembered for a minute.
+  let unapprovedDestination: string | null = null;
+  if (destinationFromQuery && destination) {
+    const hostDefaultForCheck = resolveHostDefaultDestination(clientConfig, req.nextUrl.hostname);
+    const verdict = await checkDestination(client_key, destination, [
+      hostDefaultForCheck,
+      clientConfig.default_redirect_destination,
+      ...Object.values(clientConfig.default_redirect_destinations ?? {}),
+    ]);
+    if (verdict.mode !== "off" && !verdict.approved) {
+      unapprovedDestination = verdict.key;
+      if (verdict.mode === "enforce") {
+        const safe = hostDefaultForCheck ?? clientConfig.default_redirect_destination;
+        if (safe && isValidDestination(safe)) {
+          destination = safe;
+        } else {
+          console.warn(`[redirect] unapproved destination for ${client_key}/${slug} and no default`);
+          return new NextResponse("not_found", { status: 404 });
+        }
+      }
     }
   }
 
@@ -463,6 +508,9 @@ export async function GET(
         reportable_params: clientConfig.reportable_params,
         // Dead-link traffic stays visible rather than silently vanishing.
         link_disabled: linkDisabled,
+        // ?to= destination not on the approved list (forwarded in 'log' mode,
+        // replaced with the paper in 'enforce' mode).
+        unapproved_destination: unapprovedDestination,
         // Tag suspected scanner clicks so downstream analytics + attribution
         // can filter them out. Still logged (for observability + billing
         // audit) but distinguishable from real human clicks.
